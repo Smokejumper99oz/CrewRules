@@ -13,15 +13,29 @@ export async function submitAccessRequest(
     return { error: "Email is required" };
   }
 
-  const { error } = await supabase.from("access_requests").insert({
-    email: email.trim(),
-    airline: airline?.trim() || null,
-  });
+  try {
+    const { error } = await supabase.from("access_requests").insert({
+      email: email.trim(),
+      airline: airline?.trim() || null,
+    });
 
-  if (error) {
-    console.error(error);
-    return { error: "Something went wrong. Please try again." };
+    if (error) {
+      console.error("Supabase error:", error);
+      return {
+        error: `${error.message}${error.code ? ` (code: ${error.code})` : ""}`,
+      };
+    }
+
+    return { success: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Request failed:", err);
+    if (message.includes("fetch failed")) {
+      return {
+        error:
+          "Could not reach the server. Check that Supabase URL and API key are set in Vercel (Settings → Environment Variables), and that your Supabase project is not paused.",
+      };
+    }
+    return { error: message };
   }
-
-  return { success: true };
 }
