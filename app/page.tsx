@@ -393,46 +393,46 @@ export default function HomePage() {
       {/* Pricing */}
       <section id="pricing" className="mx-auto max-w-6xl px-6 py-16">
         <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight">Pricing</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Crew<span className="text-[#75C043]">Rules</span>™ Access Levels</h2>
         </div>
 
         <div className="mt-10 grid gap-6 md:grid-cols-2">
           <div className="rounded-3xl border border-white/10 bg-white/5 p-7">
             <div className="text-sm text-slate-400">Pilot</div>
-            <div className="mt-2 text-2xl font-bold">Early Access</div>
+            <div className="mt-2 text-2xl font-bold">Crew<span className="text-[#75C043]">Rules</span>™ Access</div>
             <div className="mt-3 text-slate-300 text-sm">
-              Perfect for launching with contract Q&A + references.
+              Get clear contract answers with direct citations — built specifically for airline pilots.
             </div>
 
             <ul className="mt-6 space-y-3 text-sm text-slate-300">
-              <li>✓ Contract AI search with citations</li>
-              <li>✓ Bookmarks &amp; saved notes</li>
-              <li>✓ Update-ready document library</li>
+              <li><span className="text-[#75C043]">✓</span> Plain-English answers with source references</li>
+              <li><span className="text-[#75C043]">✓</span> Save key sections and personal notes</li>
+              <li><span className="text-[#75C043]">✓</span> Always-current contract documents</li>
             </ul>
 
             <Link
               href="/request-access"
               className="mt-8 inline-flex w-full items-center justify-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-100"
             >
-              Request Access
+              Get Crew<span className="text-[#75C043]">Rules</span>™ Access
             </Link>
           </div>
 
-          <div className="relative rounded-3xl border border-emerald-500/30 bg-gradient-to-b from-emerald-500/15 to-white/[0.03] p-7">
+          <div className="relative rounded-3xl border border-emerald-500/30 bg-gradient-to-b from-[#75C043]/10 to-white/[0.03] p-7">
             <div className="absolute right-6 top-6 rounded-full bg-emerald-500/20 px-3 py-1 text-xs text-emerald-200 ring-1 ring-emerald-500/30">
-              Coming Next
+              Pro Features Coming Soon
             </div>
 
-            <div className="text-sm text-slate-300">Mentor + Pro</div>
+            <div className="text-sm text-slate-300">Pilot + Mentor</div>
             <div className="mt-2 text-2xl font-bold">Crew<span className="text-[#75C043]">Rules</span>™ Pro</div>
             <div className="mt-3 text-slate-200 text-sm">
-              Designed for mentoring, career support, and deeper tools.
+              Advanced tools for mentoring, career progression, and deeper contract insights — built specifically for airline pilots.
             </div>
 
             <ul className="mt-6 space-y-3 text-sm text-slate-200">
-              <li>✓ Mentor/mentee workflows</li>
-              <li>✓ Progress tracking &amp; notes history</li>
-              <li>✓ Advanced search &amp; update alerts</li>
+              <li><span className="text-[#75C043]">✓</span> Mentor/mentee workflows</li>
+              <li><span className="text-[#75C043]">✓</span> Progress tracking and notes history</li>
+              <li><span className="text-[#75C043]">✓</span> Advanced search and update alerts</li>
             </ul>
 
             <Link
