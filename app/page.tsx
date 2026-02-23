@@ -16,10 +16,9 @@ export default function HomePage() {
       <header className="sticky top-0 z-50 border-b border-white/5 bg-slate-950/30 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-400/30 to-cyan-400/20 ring-1 ring-white/10" />
             <div className="leading-tight">
               <div className="font-semibold tracking-tight">
-                CrewRules<span className="align-super text-xs">™</span>
+                Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-xs">™</span>
               </div>
               <div className="text-xs text-slate-400">
                 For Airline Pilots
@@ -43,7 +42,7 @@ export default function HomePage() {
             </Link>
             <Link
               href="/request-access"
-              className="inline-flex rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+              className="inline-flex rounded-xl bg-[#75C043] px-4 py-2 text-sm font-semibold text-slate-950 hover:brightness-110 transition"
             >
               Request Access
             </Link>
@@ -78,12 +77,12 @@ export default function HomePage() {
           <div className="grid gap-10 md:grid-cols-2 md:items-center">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-slate-300">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              <span className="h-2 w-2 rounded-full bg-[#75C043]" />
               Answers with contract references • Built by airline pilots
             </div>
 
             <h1 className="mt-6 text-4xl font-bold tracking-tight md:text-5xl">
-              CrewRules<span className="align-super text-base">™</span> — The Smart Knowledge Platform{" "}
+              Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-base">™</span> — The Smart Knowledge Platform{" "}
               <span className="text-slate-300">for Airline Pilots</span>
             </h1>
 
@@ -135,7 +134,7 @@ export default function HomePage() {
                   <div className="h-2.5 w-2.5 rounded-full bg-yellow-300/80" />
                   <div className="h-2.5 w-2.5 rounded-full bg-green-400/80" />
                 </div>
-                <div className="text-xs text-slate-400">CrewRules™ • Contract AI</div>
+                <div className="text-xs text-slate-400">Crew<span className="text-[#75C043]">Rules</span>™ • Contract AI</div>
                 <div className="text-xs text-slate-400">Secure</div>
               </div>
 
@@ -153,7 +152,7 @@ export default function HomePage() {
                     <div className="text-xs text-emerald-300">Citations included</div>
                   </div>
                   <p className="mt-2 text-sm text-slate-200 leading-relaxed">
-                    CrewRules™ returns a plain-English answer and links it back to the specific
+                    Crew<span className="text-[#75C043]">Rules</span>™ returns a plain-English answer and links it back to the specific
                     contract paragraph(s) so you can verify instantly.
                   </p>
 
@@ -226,30 +225,47 @@ export default function HomePage() {
             {
               title: "Contract AI Search",
               desc: "Ask questions in plain English and get cited answers back to the source text.",
+              icon: "/icons/contract-ai.png",
             },
             {
               title: "Mentor Workflows",
               desc: "Mentor/mentee notes, progress tracking, and structured guidance for new hires and upgrades.",
+              icon: "/icons/mentor.png",
             },
             {
               title: "Knowledge & Notes Hub",
               desc: "Bookmark sections, save personal notes, and keep your own references organized.",
+              icon: "/icons/knowledge.png",
             },
             {
               title: "Continuous Updates",
               desc: "Upload updated documents and re-index instantly so the system stays current.",
+              icon: "/icons/updates.png",
             },
           ].map((c) => (
             <div
               key={c.title}
-              className="group rounded-3xl border border-white/10 bg-gradient-to-b from-white/5 to-white/[0.03] p-6 shadow-lg shadow-black/20"
+              className="group rounded-3xl border border-white/10 bg-gradient-to-b from-white/5 to-white/[0.03] p-6 shadow-lg shadow-black/20 transition-all duration-200 hover:-translate-y-1 hover:border-[#75C043]/20 hover:bg-white/[0.06]"
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start justify-between gap-6">
                 <div>
-                  <h3 className="text-lg font-semibold">{c.title}</h3>
+                  <h3 className="text-lg font-semibold text-white">{c.title}</h3>
                   <p className="mt-2 text-sm text-slate-300 leading-relaxed">{c.desc}</p>
                 </div>
-                <div className="h-10 w-10 rounded-2xl bg-emerald-500/15 ring-1 ring-emerald-500/25 group-hover:bg-emerald-500/20" />
+                {c.icon ? (
+                  <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur transition-all duration-200 group-hover:border-[#75C043]/30 group-hover:bg-white/10">
+                    <div className="absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-hover:shadow-[0_0_28px_rgba(117,192,67,0.18)]" />
+                    <Image
+                      src={c.icon}
+                      alt=""
+                      fill
+                      className="rounded-2xl object-cover opacity-95"
+                      sizes="80px"
+                    />
+                  </div>
+                ) : (
+                  <div className="h-10 w-10 rounded-2xl bg-emerald-500/15 ring-1 ring-emerald-500/25 group-hover:bg-emerald-500/20 shrink-0" />
+                )}
               </div>
             </div>
           ))}
@@ -336,7 +352,7 @@ export default function HomePage() {
             </div>
 
             <div className="text-sm text-slate-300">Mentor + Pro</div>
-            <div className="mt-2 text-2xl font-bold">CrewRules™ Pro</div>
+            <div className="mt-2 text-2xl font-bold">Crew<span className="text-[#75C043]">Rules</span>™ Pro</div>
             <div className="mt-3 text-slate-200 text-sm">
               Designed for mentoring, career support, and deeper tools.
             </div>
@@ -349,7 +365,7 @@ export default function HomePage() {
 
             <Link
               href="/request-access"
-              className="mt-8 inline-flex w-full items-center justify-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+              className="mt-8 inline-flex w-full items-center justify-center rounded-xl bg-[#75C043] px-5 py-3 text-sm font-semibold text-slate-950 hover:brightness-110 transition"
             >
               Join the Waitlist
             </Link>
@@ -357,7 +373,7 @@ export default function HomePage() {
         </div>
 
         <p className="mt-8 text-center text-xs text-slate-500">
-          CrewRules™ is an independent pilot resource and is not affiliated with any airline, union, or regulatory authority.
+          Crew<span className="text-[#75C043]">Rules</span>™ is an independent pilot resource and is not affiliated with any airline, union, or regulatory authority.
           Always consult official documents for authoritative guidance.
         </p>
       </section>
@@ -373,23 +389,27 @@ export default function HomePage() {
           <div className="mt-10 grid gap-6 md:grid-cols-2">
             {[
               {
-                q: "Does CrewRules™ replace the contract?",
+                key: "replace",
+                q: <>Does Crew<span className="text-[#75C043]">Rules</span>™ replace the contract?</>,
                 a: "No. It provides fast answers with citations back to the official source so you can verify instantly.",
               },
               {
+                key: "multi-airline",
                 q: "Can this work for multiple airlines later?",
                 a: "Yes. The platform can be structured by airline \"tenant\" so each carrier has its own documents and rules.",
               },
               {
+                key: "mentoring",
                 q: "Will you offer mentoring features?",
                 a: "Yes. Mentoring tools and notes workflows are planned as a Pro feature set once the core platform is stable.",
               },
               {
+                key: "updates",
                 q: "How do updates work?",
                 a: "Admins upload the latest documents; the system re-indexes so questions reference the newest version.",
               },
             ].map((item) => (
-              <div key={item.q} className="rounded-3xl border border-white/10 bg-slate-950/40 p-6">
+              <div key={item.key ?? item.q} className="rounded-3xl border border-white/10 bg-slate-950/40 p-6">
                 <div className="text-sm font-semibold">{item.q}</div>
                 <div className="mt-2 text-sm text-slate-300 leading-relaxed">{item.a}</div>
               </div>
@@ -399,7 +419,7 @@ export default function HomePage() {
           <div className="mt-12 flex justify-center">
             <Link
               href="/request-access"
-              className="inline-flex items-center justify-center rounded-xl bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+              className="inline-flex items-center justify-center rounded-xl bg-[#75C043] px-6 py-3 text-sm font-semibold text-slate-950 hover:brightness-110 transition"
             >
               Request Access
             </Link>
@@ -413,7 +433,7 @@ export default function HomePage() {
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="font-semibold">
-                CrewRules<span className="align-super text-xs">™</span>
+                Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-xs">™</span>
               </div>
               <div className="mt-1 text-sm text-slate-400">
                 The Smart Knowledge Platform for Airline Pilots
@@ -429,8 +449,8 @@ export default function HomePage() {
           </div>
 
           <div className="mt-8 text-xs text-slate-500 leading-relaxed">
-            © {new Date().getFullYear()} CrewRules™. All rights reserved. <br />
-            CrewRules™ is an independent pilot resource and is not affiliated with any airline, union, or regulatory authority.
+            © {new Date().getFullYear()} Crew<span className="text-[#75C043]">Rules</span>™. All rights reserved. <br />
+            Crew<span className="text-[#75C043]">Rules</span>™ is an independent pilot resource and is not affiliated with any airline, union, or regulatory authority.
             Information provided is for reference only. Always consult official documents for authoritative guidance.
           </div>
         </div>

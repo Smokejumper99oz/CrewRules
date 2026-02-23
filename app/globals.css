@@ -2,6 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-html {
-  scroll-behavior: smooth;
+/* === CrewRules™ Sky Glow Animation === */
+@keyframes skyGlow {
+  0% {
+    opacity: 0.32;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0.32;
+    transform: scale(1);
+  }
+}
+
+.sky-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 72% 38%,
+    rgba(255, 170, 80, 0.38),
+    transparent 52%
+  );
+  animation: skyGlow 24s ease-in-out infinite;
 }

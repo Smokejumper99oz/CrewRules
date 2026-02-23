@@ -6,7 +6,7 @@ export default function LoginPage() {
       <div className="max-w-xl w-full text-center">
         <h1 className="text-4xl font-bold">Pilot Login</h1>
         <p className="mt-4 text-slate-300">
-          CrewRules™ pilot access is coming soon.
+          Crew<span className="text-[#75C043]">Rules</span>™ pilot access is coming soon.
         </p>
 
         <div className="mt-10 flex justify-center gap-4">
@@ -18,14 +18,14 @@ export default function LoginPage() {
           </Link>
           <Link
             href="/request-access"
-            className="px-6 py-3 rounded-xl bg-emerald-500 text-black font-semibold hover:bg-emerald-400 transition"
+            className="px-6 py-3 rounded-xl bg-[#75C043] text-slate-950 font-semibold hover:brightness-110 transition"
           >
             Request Access
           </Link>
         </div>
 
         <p className="mt-10 text-xs text-slate-500">
-          CrewRules™ is an independent pilot resource and is not affiliated with any airline, union, or
+          Crew<span className="text-[#75C043]">Rules</span>™ is an independent pilot resource and is not affiliated with any airline, union, or
           regulatory authority.
         </p>
       </div>

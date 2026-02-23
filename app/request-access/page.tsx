@@ -12,7 +12,7 @@ export default function RequestAccessPage() {
       <div className="max-w-xl w-full">
         <h1 className="text-4xl font-bold text-center">Request Access</h1>
         <p className="mt-4 text-slate-300 text-center">
-          Join the CrewRules™ early access list. We&apos;ll reach out with next steps.
+          Join the Crew<span className="text-[#75C043]">Rules</span>™ early access list. We&apos;ll reach out with next steps.
         </p>
 
         <form action={formAction} className="mt-10 space-y-4">
@@ -51,7 +51,7 @@ export default function RequestAccessPage() {
           <button
             type="submit"
             disabled={isPending}
-            className="w-full mt-2 px-6 py-3 rounded-xl bg-emerald-500 text-black font-semibold hover:bg-emerald-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full mt-2 px-6 py-3 rounded-xl bg-[#75C043] text-slate-950 font-semibold hover:brightness-110 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isPending ? "Submitting…" : "Request Access"}
           </button>
