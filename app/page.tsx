@@ -14,7 +14,7 @@ export default function HomePage() {
 
       {/* Top Nav */}
       <header className="sticky top-0 z-50 border-b border-white/5 bg-slate-950/30 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="relative mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="leading-tight">
               <div className="font-semibold tracking-tight">
@@ -26,7 +26,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <nav className="hidden items-center gap-6 text-sm text-slate-300 md:flex">
+          <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-6 text-sm text-slate-300 md:flex">
             <a className="hover:text-white" href="#features">Features</a>
             <a className="hover:text-white" href="#how">How it Works</a>
             <a className="hover:text-white" href="#pricing">Pricing</a>
@@ -266,7 +266,13 @@ export default function HomePage() {
       </section>
 
       {/* How it works */}
-      <section id="how" className="border-y border-white/5 bg-white/[0.03]">
+      <section id="how" className="relative border-y border-white/5 bg-white/[0.03]">
+        {/* subtle background glow */}
+        <div className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute left-1/2 top-0 h-64 w-[900px] -translate-x-1/2 rounded-full bg-[#75C043]/10 blur-3xl" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.06),transparent_55%)]" />
+        </div>
+
         <div className="mx-auto max-w-6xl px-6 py-16">
           <div className="text-center">
             <h2 className="text-3xl font-bold tracking-tight">How it Works</h2>
@@ -275,35 +281,110 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
-            {[
-              {
-                step: "1",
-                title: "Login",
-                desc: "Secure access for verified pilots and admins.",
-              },
-              {
-                step: "2",
-                title: "Ask or Explore",
-                desc: "Search the contract, browse topics, or use mentoring tools.",
-              },
-              {
-                step: "3",
-                title: "Get Trusted Answers",
-                desc: "Plain-English responses with the source citations attached.",
-              },
-            ].map((s) => (
-              <div
-                key={s.step}
-                className="rounded-3xl border border-white/10 bg-slate-950/40 p-6"
-              >
-                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-sm font-bold ring-1 ring-white/10">
-                  {s.step}
+          {/* flow line (desktop) */}
+          <div className="relative mt-12">
+            <div className="grid gap-6 md:grid-cols-3">
+              {[
+                {
+                  step: "1",
+                  title: "Login",
+                  desc: "Secure access for verified pilots and admins.",
+                  icon: (
+                    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none">
+                      <path
+                        d="M10 7V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-1"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M3 12h10m0 0-3-3m3 3-3 3"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  ),
+                },
+                {
+                  step: "2",
+                  title: "Ask or Explore",
+                  desc: "Search the contract, browse topics, or use mentoring tools.",
+                  icon: (
+                    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none">
+                      <path
+                        d="M10.5 6.5h-4A2.5 2.5 0 0 0 4 9v8a2.5 2.5 0 0 0 2.5 2.5h11A2.5 2.5 0 0 0 20 17v-4"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M14 10l6-6"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M15.5 4h4.5v4.5"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  ),
+                },
+                {
+                  step: "3",
+                  title: "Get Trusted Answers",
+                  desc: "Plain-English responses with the source citations attached.",
+                  icon: (
+                    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none">
+                      <path
+                        d="M7 12l3 3 7-7"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10Z"
+                        stroke="currentColor"
+                        strokeWidth="1.2"
+                        strokeOpacity="0.6"
+                      />
+                    </svg>
+                  ),
+                },
+              ].map((s) => (
+                <div
+                  key={s.step}
+                  className="group relative overflow-hidden rounded-3xl border border-white/10 bg-slate-950/40 p-7 shadow-lg shadow-black/20 transition-all duration-200 hover:-translate-y-1 hover:border-[#75C043]/20 hover:bg-white/[0.05]"
+                >
+                  {/* top highlight */}
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#75C043]/35 to-transparent" />
+
+                  {/* corner glow */}
+                  <div className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full bg-[#75C043]/10 blur-2xl opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+
+                  <div className="flex items-center justify-between">
+                    <div className="inline-flex items-center gap-2 text-xs text-slate-400">
+                      <span className="font-semibold text-[#75C043]">Step {s.step}</span>
+                      <span className="h-1 w-1 rounded-full bg-white/20" />
+                      <span>{s.title}</span>
+                    </div>
+
+                    <div className="grid h-11 w-11 place-items-center rounded-2xl border border-white/10 bg-white/5 text-[#75C043]">
+                      {s.icon}
+                    </div>
+                  </div>
+
+                  <h3 className="mt-6 text-xl font-semibold">{s.title}</h3>
+                  <p className="mt-2 text-sm text-slate-300 leading-relaxed">{s.desc}</p>
                 </div>
-                <h3 className="mt-4 text-lg font-semibold">{s.title}</h3>
-                <p className="mt-2 text-sm text-slate-300 leading-relaxed">{s.desc}</p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </section>
