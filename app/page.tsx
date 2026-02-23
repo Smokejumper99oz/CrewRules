@@ -283,6 +283,7 @@ export default function HomePage() {
 
           {/* flow line (desktop) */}
           <div className="relative mt-12">
+            <div className="pointer-events-none absolute left-1/2 top-1/2 hidden h-px w-[92%] -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-transparent via-white/8 to-transparent md:block" aria-hidden />
             <div className="grid gap-6 md:grid-cols-3">
               {[
                 {
@@ -368,14 +369,14 @@ export default function HomePage() {
                   {/* corner glow */}
                   <div className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full bg-[#75C043]/10 blur-2xl opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
 
-                  <div className="flex items-center justify-between">
-                    <div className="inline-flex items-center gap-2 text-xs text-slate-400">
+                  <div className="flex min-h-[44px] items-center justify-between gap-4">
+                    <div className="inline-flex min-w-0 flex-1 items-center gap-2 text-xs text-slate-400">
                       <span className="font-semibold text-[#75C043]">Step {s.step}</span>
-                      <span className="h-1 w-1 rounded-full bg-white/20" />
-                      <span>{s.title}</span>
+                      <span className="h-1 w-1 shrink-0 rounded-full bg-white/20" />
+                      <span className="truncate">{s.title}</span>
                     </div>
 
-                    <div className="grid h-11 w-11 place-items-center rounded-2xl border border-white/10 bg-white/5 text-[#75C043]">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/5 text-[#75C043] transition-all duration-200 group-hover:border-[#75C043]/30 group-hover:bg-white/[0.08]">
                       {s.icon}
                     </div>
                   </div>
@@ -393,9 +394,6 @@ export default function HomePage() {
       <section id="pricing" className="mx-auto max-w-6xl px-6 py-16">
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight">Pricing</h2>
-          <p className="mt-3 text-slate-300">
-            Start simple now. Expand to Mentor tools and airline licensing later.
-          </p>
         </div>
 
         <div className="mt-10 grid gap-6 md:grid-cols-2">
@@ -525,7 +523,8 @@ export default function HomePage() {
           <div className="mt-8 text-xs text-slate-500 leading-relaxed">
             © {new Date().getFullYear()} Crew<span className="text-[#75C043]">Rules</span>™. All rights reserved. <br />
             Crew<span className="text-[#75C043]">Rules</span>™ is an independent pilot resource and is not affiliated with any airline, union, or regulatory authority.
-            Information provided is for reference only. Always consult official documents for authoritative guidance.
+            Information provided is for reference only.<br />
+            Always consult official documents for authoritative guidance.
           </div>
         </div>
       </footer>
