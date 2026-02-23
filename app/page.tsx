@@ -59,22 +59,18 @@ export default function HomePage() {
             alt="CrewRules background"
             fill
             priority
-            className="object-cover object-center opacity-90 blur-[0.5px]"
+            className="object-cover object-center opacity-90"
           />
           {/* Lighter overlay for text readability - allows image to show through */}
           <div className="absolute inset-0 bg-slate-950/40" />
           {/* Softer vignette - darker at edges, transparent in center */}
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,rgba(2,6,23,0.4)_70%,rgba(2,6,23,0.75)_100%)]" />
-          {/* Aviation HUD-style subtle grid */}
-          <div className="absolute inset-0 opacity-[0.06] mix-blend-screen pointer-events-none">
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.4)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.4)_1px,transparent_1px)] bg-[size:90px_90px]" />
-          </div>
           {/* Bottom fade into next section */}
           <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent" />
         </div>
 
-        <div className="relative z-10 mx-auto max-w-6xl px-6 pb-10 pt-16 md:pb-16 md:pt-20">
-          <div className="grid gap-10 md:grid-cols-2 md:items-center">
+        <div className="relative z-10 mx-auto max-w-6xl px-6 pb-10 pt-8 md:pb-16 md:pt-10">
+          <div className="grid gap-10 md:grid-cols-2 md:items-end">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-slate-300">
               <span className="h-2 w-2 rounded-full bg-[#75C043]" />
@@ -181,9 +177,6 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="mt-4 text-center text-xs text-slate-500">
-              Tip: Once deployed, your link preview uses your OpenGraph image automatically.
-            </div>
           </div>
         </div>
         </div>
