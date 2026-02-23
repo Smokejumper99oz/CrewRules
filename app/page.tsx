@@ -29,7 +29,7 @@ export default function HomePage() {
           <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-6 text-sm text-slate-300 md:flex">
             <a className="hover:text-white" href="#features">Features</a>
             <a className="hover:text-white" href="#how">How it Works</a>
-            <a className="hover:text-white" href="#pricing">Pricing</a>
+            <a className="hover:text-white" href="#levels">Levels</a>
             <a className="hover:text-white" href="#faq">FAQ</a>
           </nav>
 
@@ -390,8 +390,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="pricing" className="mx-auto max-w-6xl px-6 py-16">
+      {/* Levels */}
+      <section id="levels" className="mx-auto max-w-6xl px-6 py-16">
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight">Crew<span className="text-[#75C043]">Rules</span>™ Access Levels</h2>
         </div>
@@ -515,7 +515,7 @@ export default function HomePage() {
             <div className="flex flex-wrap gap-4 text-sm text-slate-400">
               <a className="hover:text-white" href="#features">Features</a>
               <a className="hover:text-white" href="#how">How it Works</a>
-              <a className="hover:text-white" href="#pricing">Pricing</a>
+              <a className="hover:text-white" href="#levels">Levels</a>
               <Link className="hover:text-white" href="/login">Login</Link>
             </div>
           </div>
