@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     siteName: "CrewRules™",
     images: [
       {
-        url: "/og/crewrules-og.png",
+        url: "https://www.crewrules.com/og/crewrules-og.png",
         width: 1792,
         height: 1024,
         alt: "CrewRules™ Pilot Knowledge Platform",
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     title: "CrewRules™ — The Smart Knowledge Platform for Airline Pilots",
     description:
       "Contract clarity, mentoring support, and trusted answers.",
-    images: ["/og/crewrules-og.png"],
+    images: ["https://www.crewrules.com/og/crewrules-og.png"],
   },
 
   icons: {
