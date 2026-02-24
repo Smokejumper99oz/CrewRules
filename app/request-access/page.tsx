@@ -39,8 +39,42 @@ export default function RequestAccessPage() {
             />
           </label>
 
+          <label className="block">
+            <span className="text-sm text-slate-300">Employee Number</span>
+            <input
+              name="employee_number"
+              type="text"
+              placeholder="Your Employee ID"
+              disabled={isPending}
+              className="mt-2 w-full rounded-xl bg-slate-800 border border-slate-600 px-4 py-3 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
+            />
+          </label>
+
           {state?.error && (
-            <p className="text-sm text-red-400">{state.error}</p>
+            <div className="space-y-2">
+              <p className="text-sm text-red-400">{state.error}</p>
+              <p className="text-xs text-slate-500">
+                Debug: Try{" "}
+                <a
+                  href="/api/supabase-health"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#75C043] hover:underline"
+                >
+                  /api/supabase-health
+                </a>{" "}
+                and{" "}
+                <a
+                  href="/api/supabase-health?raw=1"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#75C043] hover:underline"
+                >
+                  /api/supabase-health?raw=1
+                </a>{" "}
+                (raw fetch). Check the terminal for logs.
+              </p>
+            </div>
           )}
           {state?.success && (
             <p className="text-sm text-emerald-400">
