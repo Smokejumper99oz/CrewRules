@@ -44,6 +44,12 @@ export const metadata: Metadata = {
       },
     ],
   },
+
+  applicationName: "CrewRules™",
+
+  appleWebApp: {
+    title: "CrewRules™",
+  },
 };
 
 export default function RootLayout({
