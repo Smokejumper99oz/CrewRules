@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Touch-friendly: remove tap highlight on iOS/Android */
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
 /* === CrewRules™ Sky Glow Animation === */
 @keyframes skyGlow {
   0% {

@@ -3,45 +3,67 @@ import Link from "next/link";
 const TENANT = "frontier";
 const PORTAL = "pilots";
 
+const QUICK_TILES = [
+  { label: "Reserve", href: "ask" },
+  { label: "Pay", href: "ask" },
+  { label: "Library", href: "library" },
+  { label: "Updates", href: "updates" },
+];
+
 export default function PortalDashboard() {
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="mt-2 text-slate-300">
-          Tenant: <span className="text-white">{TENANT}</span> • Portal:{" "}
-          <span className="text-white">{PORTAL}</span>
-        </p>
+      {/* HERO: Ask CrewRules™ */}
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
+        <h1 className="text-2xl font-bold">
+          Ask Crew<span className="text-[#75C043]">Rules</span>™
+        </h1>
 
-        <div className="mt-5">
-          <label className="text-sm text-slate-200">Ask Crew<span className="text-[#75C043]">Rules</span>™</label>
-          <div className="mt-2 flex gap-2">
-            <input
-              placeholder="Ask a contract, training, or union question…"
-              className="flex-1 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
-            />
-            <Link
-              href={`/${TENANT}/${PORTAL}/portal/ask`}
-              className="rounded-xl bg-[#75C043] px-5 py-3 font-semibold text-slate-950 hover:opacity-95 transition"
-            >
-              Ask
-            </Link>
-          </div>
+        <div className="mt-6">
+          <Link
+            href={`/${TENANT}/${PORTAL}/portal/ask`}
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#75C043] px-5 py-3 font-semibold text-slate-950 hover:opacity-95 transition touch-manipulation"
+          >
+            Open Ask Workspace
+          </Link>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {[
-          { t: "Library", d: "Contracts, LOAs, training docs, memos" },
-          { t: "Forum", d: "Discourse discussions (embedded)" },
-          { t: "Notes", d: "Saved Q&As, bookmarks, personal notes" },
-          { t: "Updates", d: "Union + committee communications hub" },
-        ].map((x) => (
-          <div key={x.t} className="rounded-3xl border border-white/10 bg-slate-950/40 p-6">
-            <div className="text-lg font-semibold">{x.t}</div>
-            <div className="mt-2 text-sm text-slate-300">{x.d}</div>
-          </div>
+      {/* Quick Tiles (2x2) */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        {QUICK_TILES.map((tile) => (
+          <Link
+            key={tile.label}
+            href={`/${TENANT}/${PORTAL}/portal/${tile.href}`}
+            className="flex min-h-[88px] items-center justify-center rounded-2xl border border-white/10 bg-slate-950/40 p-4 font-semibold text-white hover:border-[#75C043]/20 hover:bg-white/5 transition touch-manipulation"
+          >
+            {tile.label}
+          </Link>
         ))}
+      </div>
+
+      {/* Recent Q&A (3 items) */}
+      <div className="rounded-3xl border border-white/10 bg-slate-950/40 p-6">
+        <h2 className="text-lg font-semibold">Recent Q&A</h2>
+        <ul className="mt-3 space-y-2 text-sm text-slate-300">
+          {["Q1…", "Q2…", "Q3…"].map((item, i) => (
+            <li key={i} className="rounded-lg px-3 py-2 hover:bg-white/5">
+              {item}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Saved (3 items) */}
+      <div className="rounded-3xl border border-white/10 bg-slate-950/40 p-6">
+        <h2 className="text-lg font-semibold">Saved</h2>
+        <ul className="mt-3 space-y-2 text-sm text-slate-300">
+          {["Bookmark…", "Note…", "Item…"].map((item, i) => (
+            <li key={i} className="rounded-lg px-3 py-2 hover:bg-white/5">
+              {item}
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );

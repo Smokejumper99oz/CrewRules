@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
-import { submitLogin } from "./actions";
+import { submitSignUp } from "./actions";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
 
-export default function LoginPage() {
-  const [state, formAction, isPending] = useActionState(submitLogin, null);
+export default function SignUpPage() {
+  const [state, formAction, isPending] = useActionState(submitSignUp, null);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -19,12 +19,11 @@ export default function LoginPage() {
           </div>
 
           <h1 className="mt-3 text-3xl font-bold tracking-tight">
-            Crew<span className="text-[#75C043]">Rules</span>
-            <span className="align-super text-sm">™</span> Login
+            Create account
           </h1>
 
           <p className="mt-3 text-slate-300">
-            Secure access for verified crew members. This portal is tenant-specific.
+            Create your CrewRules™ portal account. You must use your company email.
           </p>
 
           <form action={formAction} className="mt-8 space-y-4">
@@ -33,7 +32,7 @@ export default function LoginPage() {
               <input
                 name="email"
                 type="email"
-                placeholder="name@company.com"
+                placeholder="name@flyfrontier.com"
                 required
                 disabled={isPending}
                 className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
@@ -47,13 +46,20 @@ export default function LoginPage() {
                 type="password"
                 placeholder="••••••••"
                 required
+                minLength={6}
                 disabled={isPending}
                 className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
               />
+              <p className="mt-1 text-xs text-slate-500">At least 6 characters</p>
             </div>
 
             {state?.error && (
               <p className="text-sm text-red-400">{state.error}</p>
+            )}
+            {state?.success && (
+              <p className="text-sm text-emerald-400">
+                Account created. Check your email to confirm, or go to login.
+              </p>
             )}
 
             <button
@@ -61,31 +67,16 @@ export default function LoginPage() {
               disabled={isPending}
               className="block w-full rounded-xl bg-[#75C043] px-4 py-3 font-semibold text-slate-950 hover:opacity-95 transition text-center disabled:opacity-50"
             >
-              {isPending ? "Logging in…" : "Login"}
+              {isPending ? "Creating…" : "Create account"}
             </button>
 
-            <div className="flex justify-center gap-4 text-sm">
-              <Link
-                href={`/${TENANT}/${PORTAL}/sign-up`}
-                className="text-slate-300 hover:text-white"
-              >
-                Create account
-              </Link>
-              <span className="text-slate-500">•</span>
-              <Link
-                href={`/${TENANT}/${PORTAL}/request-access`}
-                className="text-slate-300 hover:text-white"
-              >
-                Request Access
-              </Link>
-            </div>
+            <Link
+              href={`/${TENANT}/${PORTAL}/login`}
+              className="block text-center text-sm text-slate-300 hover:text-white"
+            >
+              Already have an account? Log in
+            </Link>
           </form>
-
-          <p className="mt-8 text-xs text-slate-500 leading-relaxed">
-            Crew<span className="text-[#75C043]">Rules</span>™ is an independent pilot/crew
-            resource and is not affiliated with any airline, union, or regulator. Always consult
-            official sources for authoritative guidance.
-          </p>
         </div>
       </div>
     </main>

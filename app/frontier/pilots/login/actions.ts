@@ -1,6 +1,18 @@
 "use server";
 
-export type LoginState = { error?: string; success?: boolean } | null;
+import { redirect, unstable_rethrow } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+
+export type LoginState = { error?: string } | null;
+
+function getSupabaseEnvCheck(): string | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key || url === "https://your-project-ref.supabase.co") {
+    return "Supabase not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local, then restart the dev server.";
+  }
+  return null;
+}
 
 export async function submitLogin(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const email = (formData.get("email") as string)?.trim();
@@ -10,16 +22,49 @@ export async function submitLogin(_prev: LoginState, formData: FormData): Promis
     return { error: "Email and password are required" };
   }
 
-  const devEmail = process.env.DEV_LOGIN_EMAIL;
-  const devPassword = process.env.DEV_LOGIN_PASSWORD;
-
-  if (!devEmail || !devPassword) {
-    return { error: "Login not configured. Add DEV_LOGIN_EMAIL and DEV_LOGIN_PASSWORD to .env.local" };
+  const envError = getSupabaseEnvCheck();
+  if (envError) {
+    return { error: envError };
   }
 
-  if (email === devEmail && password === devPassword) {
-    return { success: true };
-  }
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-  return { error: "Invalid email or password" };
+    if (error) {
+      return { error: error.message };
+    }
+
+    redirect("/frontier/pilots/portal");
+  } catch (err) {
+    unstable_rethrow(err);
+    const message = err instanceof Error ? err.message : String(err);
+    const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : "";
+
+    console.error("[Login] Error:", { message, cause });
+
+    const causeMsg = cause || "";
+    const fullErr = `${message} ${causeMsg}`.toLowerCase();
+    const isNetworkError =
+      message.includes("fetch failed") ||
+      message.includes("Failed to fetch") ||
+      message.includes("ECONNREFUSED") ||
+      message.includes("ENOTFOUND") ||
+      fullErr.includes("enotfound") ||
+      fullErr.includes("getaddrinfo");
+
+    if (isNetworkError) {
+      if (fullErr.includes("enotfound") || fullErr.includes("getaddrinfo")) {
+        return {
+          error:
+            "Cannot resolve Supabase host (ENOTFOUND). Try: (1) Flush DNS: ipconfig /flushdns. (2) Use different DNS (e.g. 8.8.8.8). (3) Disable VPN if on.",
+        };
+      }
+      return {
+        error:
+          "Supabase unreachable. Go to supabase.com/dashboard → Restore project if paused. Or check firewall/VPN.",
+      };
+    }
+    return { error: message };
+  }
 }

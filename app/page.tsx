@@ -14,7 +14,7 @@ export default function HomePage() {
 
       {/* Top Nav */}
       <header className="sticky top-0 z-50 border-b border-white/5 bg-slate-950/30 backdrop-blur-md">
-        <div className="relative mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="relative mx-auto flex max-w-6xl items-center justify-between px-6 pt-4 pb-6">
           <div className="flex items-center gap-3">
             <div className="leading-tight">
               <div className="font-semibold tracking-tight">
@@ -204,7 +204,7 @@ export default function HomePage() {
       </section>
 
       {/* Features */}
-      <section id="features" className="mx-auto max-w-6xl px-6 py-16">
+      <section id="features" className="scroll-mt-16 mx-auto max-w-6xl px-6 py-16">
         <div className="flex flex-col items-center text-center">
           <h2 className="text-3xl font-bold tracking-tight">Designed for Real Airline Operations</h2>
           <p className="mt-3 max-w-2xl text-slate-300">
@@ -266,7 +266,7 @@ export default function HomePage() {
       </section>
 
       {/* How it works */}
-      <section id="how" className="relative border-y border-white/5 bg-white/[0.03]">
+      <section id="how" className="scroll-mt-16 relative border-y border-white/5 bg-white/[0.03]">
         {/* subtle background glow */}
         <div className="pointer-events-none absolute inset-0 -z-10">
           <div className="absolute left-1/2 top-0 h-64 w-[900px] -translate-x-1/2 rounded-full bg-[#75C043]/10 blur-3xl" />
@@ -391,7 +391,7 @@ export default function HomePage() {
       </section>
 
       {/* Levels */}
-      <section id="levels" className="mx-auto max-w-6xl px-6 py-16">
+      <section id="levels" className="scroll-mt-16 mx-auto max-w-6xl px-6 py-16">
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight">Crew<span className="text-[#75C043]">Rules</span>™ Access Levels</h2>
         </div>
@@ -451,7 +451,7 @@ export default function HomePage() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="border-t border-white/5 bg-white/[0.02]">
+      <section id="faq" className="scroll-mt-16 border-t border-white/5 bg-white/[0.02]">
         <div className="mx-auto max-w-6xl px-6 py-16">
           <div className="text-center">
             <h2 className="text-3xl font-bold tracking-tight">FAQ</h2>
