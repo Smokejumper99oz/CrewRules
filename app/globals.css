@@ -25,6 +25,11 @@
   }
 }
 
+@keyframes loading-bar {
+  0%, 100% { transform: translateX(-100%); }
+  50% { transform: translateX(200%); }
+}
+
 .sky-glow {
   position: absolute;
   inset: 0;

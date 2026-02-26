@@ -12,9 +12,10 @@ export async function updateSession(request: NextRequest) {
 
   let user: { id: string } | null = null;
   let isAdmin = false;
+  let supabase: ReturnType<typeof createServerClient> | null = null;
 
   try {
-    const supabase = createServerClient(
+    supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
@@ -64,6 +65,12 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/frontier/pilots/portal";
     return NextResponse.redirect(url);
+  }
+
+  // Log out when navigating away from portal/admin to public pages
+  // Prevents bookmarking portal and returning without re-login
+  if (user && supabase && !isPortalRoute && !isAdminRoute && !isAuthRoute) {
+    await supabase.auth.signOut();
   }
 
   return supabaseResponse;

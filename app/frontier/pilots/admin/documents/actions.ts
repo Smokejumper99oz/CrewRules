@@ -48,5 +48,7 @@ export async function uploadDocument(
     return { error: error.message };
   }
 
-  return { success: `Uploaded "${file.name}" to ${category}` };
+  const displayName = file.name.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  const displayCategory = category.split("-").map((p) => p.toUpperCase()).join(" ");
+  return { success: `${displayName} added to ${displayCategory}.` };
 }

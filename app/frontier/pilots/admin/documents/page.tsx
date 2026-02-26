@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { indexDocuments } from "./index-actions";
 
 const ALLOWED_TYPES = [
   "application/pdf",
@@ -11,10 +13,41 @@ const ALLOWED_TYPES = [
   "text/csv",
 ];
 
+function LoaderBar({ percent }: { percent?: number | null }) {
+  const isIndeterminate = percent == null;
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+      {isIndeterminate ? (
+        <div className="h-full w-1/2 animate-[loading-bar_1.2s_ease-in-out_infinite] rounded-full bg-[#75C043]/70" />
+      ) : (
+        <div
+          className="h-full rounded-full bg-[#75C043]/70 transition-all duration-300"
+          style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadingFileName, setUploadingFileName] = useState<string | null>(null);
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
+  const [indexError, setIndexError] = useState<string | null>(null);
+  const [indexSuccess, setIndexSuccess] = useState<string | null>(null);
+  const [indexing, setIndexing] = useState(false);
+
+  async function handleIndex() {
+    setIndexError(null);
+    setIndexSuccess(null);
+    setIndexing(true);
+    const result = await indexDocuments();
+    setIndexing(false);
+    if (result.error) setIndexError(result.error);
+    if (result.success) setIndexSuccess(result.success);
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -43,27 +76,61 @@ export default function DocumentsPage() {
     }
 
     setUploading(true);
+    setUploadingFileName(file.name);
+    setUploadPercent(0);
     try {
       const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setError("Not signed in");
+        return;
+      }
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+      const projectId = new URL(url).hostname.split(".")[0];
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const path = `${category}/${Date.now()}_${safeName}`;
 
-      const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, {
-        cacheControl: "3600",
-        upsert: false,
+      const { Upload } = await import("tus-js-client");
+      await new Promise<void>((resolve, reject) => {
+        const upload = new Upload(file, {
+          endpoint: `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`,
+          retryDelays: [0, 3000, 5000],
+          headers: {
+            authorization: `Bearer ${session.access_token}`,
+            "x-upsert": "false",
+          },
+          uploadDataDuringCreation: true,
+          removeFingerprintOnSuccess: true,
+          metadata: {
+            bucketName: "documents",
+            objectName: path,
+            contentType: file.type,
+            cacheControl: "3600",
+          },
+          chunkSize: 6 * 1024 * 1024,
+          onError: (err) => reject(err),
+          onProgress: (bytesUploaded, bytesTotal) => {
+            const pct = bytesTotal > 0 ? (bytesUploaded / bytesTotal) * 100 : 0;
+            setUploadPercent(Math.round(pct));
+          },
+          onSuccess: () => resolve(),
+        });
+        upload.findPreviousUploads().then((prev) => {
+          if (prev.length) upload.resumeFromPreviousUpload(prev[0]);
+          upload.start();
+        }).catch(reject);
       });
 
-      if (uploadError) {
-        setError(uploadError.message);
-        return;
-      }
-
-      setSuccess(`Uploaded "${file.name}" to ${category}`);
+      const displayName = file.name.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+      const displayCategory = category.split("-").map((p) => p.toUpperCase()).join(" ");
+      setSuccess(`${displayName} added to ${displayCategory}.`);
       form.reset();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);
+      setUploadingFileName(null);
+      setUploadPercent(null);
     }
   }
 
@@ -72,11 +139,23 @@ export default function DocumentsPage() {
       <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
         <h1 className="text-2xl font-bold">Documents</h1>
         <p className="mt-2 text-slate-300">
-          Upload CBA (Collective Bargaining Agreement), LOAs, training docs, memos. Supported: PDF, Word, TXT, CSV. Files upload directly to Supabase (no size limit).
+          Upload CBA (Collective Bargaining Agreement), LOAs, training docs, memos. Supported: PDF, Word, TXT, CSV. Upload files, then click Index to make them searchable.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="rounded-3xl border border-white/10 bg-slate-950/40 p-6 space-y-4">
+        {(uploading || indexing) && (
+          <div className="rounded-xl border border-[#75C043]/20 bg-[#75C043]/5 p-4 space-y-2">
+            <LoaderBar percent={uploading ? uploadPercent : null} />
+            <p className="text-sm text-slate-300">
+              {uploading && uploadingFileName
+                ? `Uploading ${uploadingFileName}… ${uploadPercent != null ? `${uploadPercent}%` : ""}`
+                : indexing
+                  ? "Indexing documents for AI search…"
+                  : "Processing…"}
+            </p>
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium text-slate-200">File</label>
           <input
@@ -94,7 +173,7 @@ export default function DocumentsPage() {
           <input
             name="category"
             type="text"
-            placeholder="e.g. CBA, LOA, Training"
+            placeholder="CBA"
             disabled={uploading}
             className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40 disabled:opacity-50"
           />
@@ -111,6 +190,41 @@ export default function DocumentsPage() {
           {uploading ? "Uploading…" : "Upload"}
         </button>
       </form>
+
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <p className="text-sm font-medium text-emerald-200">Try Ask AI with CBA</p>
+          <ol className="mt-2 list-decimal list-inside space-y-1 text-sm text-slate-300">
+            <li>Upload your CBA (PDF or Word) — use category <strong>CBA</strong></li>
+            <li>Click <strong>Index Documents for AI Search</strong> below</li>
+            <li>Go to Portal → Ask and ask a contract question</li>
+          </ol>
+        </div>
+        <div className="mt-4 space-y-3">
+          {indexing && (
+            <div className="space-y-2">
+              <LoaderBar />
+              <p className="text-sm text-slate-400">Indexing documents for AI search…</p>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleIndex}
+            disabled={indexing}
+            className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+          >
+            {indexing ? "Indexing…" : "Index Documents for AI Search"}
+          </button>
+          {indexError && <p className="text-sm text-red-400">{indexError}</p>}
+          {indexSuccess && <p className="text-sm text-emerald-400">{indexSuccess}</p>}
+          <p className="mt-2 text-sm text-slate-400">
+            View and manage documents in{" "}
+            <Link href="/frontier/pilots/portal/library" className="text-[#75C043] hover:underline">
+              Portal → Library
+            </Link>
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

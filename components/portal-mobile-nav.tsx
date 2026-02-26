@@ -11,12 +11,16 @@ export function PortalMobileNav({
   admin,
   signOut,
   portalName,
+  displayName,
+  roleLabel,
 }: {
   base: string;
   nav: NavItem[];
   admin: boolean;
   signOut: () => Promise<void>;
   portalName: string;
+  displayName: string;
+  roleLabel: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -85,12 +89,19 @@ export function PortalMobileNav({
                       Admin →
                     </Link>
                   )}
-                  <form action={signOut}>
+                  <div className="rounded-xl px-3 py-2">
+                    <div className="font-medium text-white">{displayName}</div>
+                    <div className="text-xs text-slate-400">{roleLabel}</div>
+                  </div>
+                  <form action={signOut} className="mt-2">
                     <button
                       type="submit"
-                      className="flex w-full min-h-[44px] items-center rounded-xl px-3 py-3 text-left text-sm text-slate-400 hover:bg-white/5 hover:text-white transition touch-manipulation"
+                      className="flex w-full min-h-[44px] items-center gap-2 rounded-xl px-3 py-3 text-left text-sm text-white hover:bg-white/5 hover:text-white transition touch-manipulation"
                     >
-                      Log out
+                      Sign Out
+                      <svg className="ml-auto h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                      </svg>
                     </button>
                   </form>
                 </div>

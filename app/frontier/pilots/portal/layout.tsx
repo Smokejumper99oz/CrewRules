@@ -1,9 +1,19 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { getTenantPortalConfig } from "@/lib/tenant-config";
-import { isAdmin } from "@/lib/profile";
+import { getProfile, isAdmin } from "@/lib/profile";
 import { signOut } from "./actions";
 import { PortalMobileNav } from "@/components/portal-mobile-nav";
+import { PortalUserMenu } from "@/components/portal-user-menu";
+
+function emailToDisplayName(email: string | null): string {
+  if (!email) return "User";
+  const local = email.split("@")[0] || "";
+  return local
+    .split(/[._-]/)
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
+    .join(" ") || email;
+}
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -23,8 +33,11 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   const cfg = getTenantPortalConfig(TENANT, PORTAL);
   if (!cfg) return null;
 
+  const profile = await getProfile();
   const admin = await isAdmin();
   const base = `/${TENANT}/${PORTAL}/portal`;
+  const displayName = emailToDisplayName(profile?.email ?? null);
+  const roleLabel = admin ? "System Administrator" : "Member";
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -61,12 +74,19 @@ export default async function PortalLayout({ children }: { children: ReactNode }
                   Admin →
                 </Link>
               )}
-              <form action={signOut}>
+              <div className="rounded-xl px-3 py-2">
+                <div className="font-medium text-white">{displayName}</div>
+                <div className="text-xs text-slate-400">{roleLabel}</div>
+              </div>
+              <form action={signOut} className="mt-2">
                 <button
                   type="submit"
-                  className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-400 hover:bg-white/5 hover:text-white transition"
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-white hover:bg-white/5 hover:text-white transition"
                 >
-                  Log out
+                  Sign Out
+                  <svg className="ml-auto h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
                 </button>
               </form>
             </div>
@@ -83,6 +103,8 @@ export default async function PortalLayout({ children }: { children: ReactNode }
                   admin={admin ?? false}
                   signOut={signOut}
                   portalName={cfg.portal.displayName}
+                  displayName={displayName}
+                  roleLabel={roleLabel}
                 />
                 <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                   <span className="font-semibold">
@@ -95,13 +117,11 @@ export default async function PortalLayout({ children }: { children: ReactNode }
                 </div>
               </div>
 
-              <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-                <span className="text-xs text-slate-400">Role: {admin ? "admin" : "member"}</span>
-                <span className="hidden text-slate-500 sm:inline">|</span>
-                <Link
-                  href={`${base}/settings`}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10 hover:bg-white/10 transition"
-                  aria-label="Profile & Settings"
+              <div className="flex shrink-0 items-center">
+                <PortalUserMenu
+                  email={profile?.email ?? null}
+                  role={admin ? "admin" : "member"}
+                  signOut={signOut}
                 />
               </div>
             </div>
