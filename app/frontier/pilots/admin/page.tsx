@@ -19,7 +19,7 @@ export default function AdminDashboard() {
           className="group rounded-3xl border border-white/10 bg-slate-950/40 p-6 transition hover:-translate-y-1 hover:border-[#75C043]/20"
         >
           <div className="text-lg font-semibold text-white group-hover:text-[#75C043]">
-            Documents
+            Uploads
           </div>
           <div className="mt-2 text-sm text-slate-300">
             Upload CBA, LOAs, training docs, memos. PDF, Word, or text.

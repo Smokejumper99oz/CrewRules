@@ -8,7 +8,8 @@ const PORTAL = "pilots";
 
 const ADMIN_NAV = [
   { label: "Dashboard", href: "" },
-  { label: "Documents", href: "documents" },
+  { label: "Uploads", href: "documents" },
+  { label: "Library", href: "library" },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {

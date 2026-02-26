@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { indexDocuments } from "./index-actions";
+import { checkDuplicateDocument } from "./actions";
 
 const ALLOWED_TYPES = [
   "application/pdf",
@@ -14,17 +15,13 @@ const ALLOWED_TYPES = [
 ];
 
 function LoaderBar({ percent }: { percent?: number | null }) {
-  const isIndeterminate = percent == null;
+  const pct = percent == null ? 0 : Math.min(100, Math.max(0, percent));
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-      {isIndeterminate ? (
-        <div className="h-full w-1/2 animate-[loading-bar_1.2s_ease-in-out_infinite] rounded-full bg-[#75C043]/70" />
-      ) : (
-        <div
-          className="h-full rounded-full bg-[#75C043]/70 transition-all duration-300"
-          style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
-        />
-      )}
+      <div
+        className="h-full rounded-full bg-[#75C043]/70 transition-all duration-500"
+        style={{ width: `${pct}%` }}
+      />
     </div>
   );
 }
@@ -38,13 +35,23 @@ export default function DocumentsPage() {
   const [indexError, setIndexError] = useState<string | null>(null);
   const [indexSuccess, setIndexSuccess] = useState<string | null>(null);
   const [indexing, setIndexing] = useState(false);
+  const [indexPercent, setIndexPercent] = useState<number | null>(null);
 
   async function handleIndex() {
     setIndexError(null);
     setIndexSuccess(null);
     setIndexing(true);
+    setIndexPercent(0);
+    // Simulated progress: advances to ~90% over ~12s to show activity
+    const interval = setInterval(() => {
+      setIndexPercent((p) => (p == null ? 5 : Math.min(90, p + 8)));
+    }, 1500);
     const result = await indexDocuments();
+    clearInterval(interval);
+    setIndexPercent(100);
+    await new Promise((r) => setTimeout(r, 300)); // brief 100% before hiding
     setIndexing(false);
+    setIndexPercent(null);
     if (result.error) setIndexError(result.error);
     if (result.success) setIndexSuccess(result.success);
   }
@@ -75,6 +82,13 @@ export default function DocumentsPage() {
       return;
     }
 
+    const { duplicate } = await checkDuplicateDocument(category, file.name);
+    if (duplicate) {
+      const displayCategory = category.split("-").map((p) => p.toUpperCase()).join(" ");
+      setError(`This file already exists in ${displayCategory}. Use Replace in Library to update it.`);
+      return;
+    }
+
     setUploading(true);
     setUploadingFileName(file.name);
     setUploadPercent(0);
@@ -88,7 +102,7 @@ export default function DocumentsPage() {
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
       const projectId = new URL(url).hostname.split(".")[0];
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `${category}/${Date.now()}_${safeName}`;
+      const path = `${category}/${Date.now()}_${category}_${safeName}`;
 
       const { Upload } = await import("tus-js-client");
       await new Promise<void>((resolve, reject) => {
@@ -121,9 +135,10 @@ export default function DocumentsPage() {
         }).catch(reject);
       });
 
-      const displayName = file.name.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+      const base = file.name.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+      const withoutExt = base.includes(".") ? base.replace(/\.[^.]+$/, "") : base;
       const displayCategory = category.split("-").map((p) => p.toUpperCase()).join(" ");
-      setSuccess(`${displayName} added to ${displayCategory}.`);
+      setSuccess(`${withoutExt} added to ${displayCategory}.`);
       form.reset();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -137,22 +152,18 @@ export default function DocumentsPage() {
   return (
     <div className="space-y-6">
       <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <h1 className="text-2xl font-bold">Documents</h1>
+        <h1 className="text-2xl font-bold">Uploads</h1>
         <p className="mt-2 text-slate-300">
           Upload CBA (Collective Bargaining Agreement), LOAs, training docs, memos. Supported: PDF, Word, TXT, CSV. Upload files, then click Index to make them searchable.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="rounded-3xl border border-white/10 bg-slate-950/40 p-6 space-y-4">
-        {(uploading || indexing) && (
+        {uploading && (
           <div className="rounded-xl border border-[#75C043]/20 bg-[#75C043]/5 p-4 space-y-2">
-            <LoaderBar percent={uploading ? uploadPercent : null} />
+            <LoaderBar percent={uploadPercent} />
             <p className="text-sm text-slate-300">
-              {uploading && uploadingFileName
-                ? `Uploading ${uploadingFileName}… ${uploadPercent != null ? `${uploadPercent}%` : ""}`
-                : indexing
-                  ? "Indexing documents for AI search…"
-                  : "Processing…"}
+              Uploading {uploadingFileName}… {uploadPercent != null ? `${uploadPercent}%` : ""}
             </p>
           </div>
         )}
@@ -197,14 +208,16 @@ export default function DocumentsPage() {
           <ol className="mt-2 list-decimal list-inside space-y-1 text-sm text-slate-300">
             <li>Upload your CBA (PDF or Word) — use category <strong>CBA</strong></li>
             <li>Click <strong>Index Documents for AI Search</strong> below</li>
-            <li>Go to Portal → Ask and ask a contract question</li>
+            <li>Go to Portal → Ask to search your contract</li>
           </ol>
         </div>
         <div className="mt-4 space-y-3">
           {indexing && (
             <div className="space-y-2">
-              <LoaderBar />
-              <p className="text-sm text-slate-400">Indexing documents for AI search…</p>
+              <LoaderBar percent={indexPercent} />
+              <p className="text-sm text-slate-300">
+                Indexing documents for AI search… {indexPercent != null ? `${indexPercent}%` : ""}
+              </p>
             </div>
           )}
           <button
@@ -219,8 +232,8 @@ export default function DocumentsPage() {
           {indexSuccess && <p className="text-sm text-emerald-400">{indexSuccess}</p>}
           <p className="mt-2 text-sm text-slate-400">
             View and manage documents in{" "}
-            <Link href="/frontier/pilots/portal/library" className="text-[#75C043] hover:underline">
-              Portal → Library
+            <Link href="/frontier/pilots/admin/library" className="text-[#75C043] hover:underline">
+              Admin → Library
             </Link>
           </p>
         </div>

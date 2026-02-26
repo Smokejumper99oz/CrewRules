@@ -78,7 +78,7 @@ export async function renameDocument(
     const ext = fileName.includes(".") ? "." + fileName.split(".").pop() : "";
     const base = safe.endsWith(ext) ? safe : safe + (ext || "");
     const ts = parts[1]?.match(/^(\d+)_/)?.[1] ?? Date.now();
-    const newPath = `${category}/${ts}_${base}`;
+    const newPath = `${category}/${ts}_${category}_${base}`;
     if (newPath === oldPath) return {};
     const { error } = await supabase.storage.from("documents").move(oldPath, newPath);
     if (error) return { error: error.message };
