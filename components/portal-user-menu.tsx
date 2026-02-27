@@ -42,7 +42,7 @@ export function PortalUserMenu({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-white/5 transition touch-manipulation min-h-[44px]"
+        className="flex items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-white/5 transition touch-manipulation min-h-[44px]"
         aria-expanded={open}
         aria-haspopup="true"
         aria-label="User menu"
@@ -56,7 +56,7 @@ export function PortalUserMenu({
             sizes="36px"
           />
         </div>
-        <div className="hidden min-w-0 sm:block">
+        <div className="hidden min-w-0 space-y-0.5 sm:block">
           <div className="truncate text-sm font-medium text-white">{displayName}</div>
           <div className="truncate text-xs text-slate-400">{roleLabel}</div>
         </div>

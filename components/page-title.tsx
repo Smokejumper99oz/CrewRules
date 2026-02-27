@@ -33,7 +33,7 @@ type PageTitleProps = {
 export function PageTitle({ portalDisplayName = "", isAdmin = false }: PageTitleProps) {
   const pathname = usePathname();
 
-  const parts = pathname.split("/").filter(Boolean);
+  const parts = (pathname ?? "").split("/").filter(Boolean);
   const inAdmin = parts.includes("admin") || isAdmin;
   const segmentIndex = inAdmin ? parts.indexOf("admin") + 1 : parts.indexOf("portal") + 1;
   const currentSegment = parts[segmentIndex] ?? "";
@@ -46,9 +46,10 @@ export function PageTitle({ portalDisplayName = "", isAdmin = false }: PageTitle
   const context = inAdmin && role ? `${role} Admin` : role || (inAdmin ? "Admin" : "");
 
   return (
-    <h1 className="text-xl font-semibold tracking-tight border-b border-white/5">
+    <h1 className="text-xl font-semibold tracking-normal border-b border-white/5 pb-1">
       {pageTitle}
-      {context && <span className="text-slate-400 font-normal"> | {context}</span>}
+      {context && <span className="text-slate-400 font-normal mx-1.5">|</span>}
+      {context && <span className="text-slate-400 font-normal">{context}</span>}
     </h1>
   );
 }

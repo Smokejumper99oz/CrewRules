@@ -64,7 +64,15 @@ export default function LoginPage() {
               {isPending ? "Logging in…" : "Login"}
             </button>
 
-            <div className="flex justify-center gap-4 text-sm">
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
+              <Link href="/" className="text-slate-300 hover:text-white">
+                Back to Home
+              </Link>
+              <span className="text-slate-500">•</span>
+              <Link href="/login" className="text-slate-300 hover:text-white">
+                Choose different role
+              </Link>
+              <span className="text-slate-500">•</span>
               <Link
                 href={`/${TENANT}/${PORTAL}/sign-up`}
                 className="text-slate-300 hover:text-white"

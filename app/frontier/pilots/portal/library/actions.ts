@@ -7,6 +7,7 @@ export type LibraryDocument = {
   path: string;
   name: string;
   category: string;
+  displayName?: string;
   size?: number;
   updatedAt?: string;
 };
@@ -42,6 +43,22 @@ export async function listDocuments(): Promise<{ docs: LibraryDocument[]; error?
     };
     await scan("");
 
+    if (allFiles.length > 0) {
+      try {
+        const { data: displayRows } = await supabase
+          .from("document_display_names")
+          .select("path, display_name")
+          .in("path", allFiles.map((d) => d.path));
+        const displayByPath = new Map((displayRows ?? []).map((r) => [r.path, r.display_name]));
+        for (const d of allFiles) {
+          const dn = displayByPath.get(d.path);
+          if (dn) d.displayName = dn;
+        }
+      } catch {
+        /* document_display_names may not exist before migration 012 */
+      }
+    }
+
     return { docs: allFiles };
   } catch (err) {
     return { docs: [], error: err instanceof Error ? err.message : "Failed to list documents" };
@@ -55,6 +72,9 @@ export async function deleteDocument(path: string): Promise<{ error?: string }> 
     const supabase = await createClient();
     const { error } = await supabase.storage.from("documents").remove([path]);
     if (error) return { error: error.message };
+    await supabase.from("document_chunks").delete().eq("source_path", path);
+    await supabase.from("document_display_names").delete().eq("path", path);
+    await supabase.from("document_ai_settings").delete().eq("path", path);
     return {};
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Delete failed" };
@@ -82,6 +102,18 @@ export async function renameDocument(
     if (newPath === oldPath) return {};
     const { error } = await supabase.storage.from("documents").move(oldPath, newPath);
     if (error) return { error: error.message };
+    await supabase.from("document_chunks").delete().eq("source_path", oldPath);
+    await supabase.from("document_display_names").delete().eq("path", oldPath);
+    await supabase.from("document_display_names").upsert({
+      path: newPath,
+      display_name: newDisplayName.trim(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "path" });
+    const { data: aiRow } = await supabase.from("document_ai_settings").select("ai_enabled").eq("path", oldPath).single();
+    if (aiRow) {
+      await supabase.from("document_ai_settings").delete().eq("path", oldPath);
+      await supabase.from("document_ai_settings").upsert({ path: newPath, ai_enabled: aiRow.ai_enabled });
+    }
     return {};
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Rename failed" };

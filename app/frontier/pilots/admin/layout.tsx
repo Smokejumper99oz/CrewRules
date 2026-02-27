@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getTenantPortalConfig } from "@/lib/tenant-config";
-import { getProfile } from "@/lib/profile";
+import { getProfile, isAdmin } from "@/lib/profile";
 import { signOut } from "../portal/actions";
 import { AdminMobileNav } from "@/components/admin-mobile-nav";
 import { PortalUserMenu } from "@/components/portal-user-menu";
@@ -21,8 +22,13 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const cfg = getTenantPortalConfig(TENANT, PORTAL);
   if (!cfg) return null;
 
-  const base = `/${TENANT}/${PORTAL}/admin`;
   const userProfile = await getProfile();
+  const admin = await isAdmin(TENANT, PORTAL);
+  if (!admin || !userProfile) {
+    redirect(`/${TENANT}/${PORTAL}/portal`);
+  }
+
+  const base = `/${TENANT}/${PORTAL}/admin`;
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -33,7 +39,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               Crew<span className="text-[#75C043]">Rules</span>
               <span className="align-super text-xs">™</span>
             </div>
-            <div className="mt-0.5 space-y-0.5 text-xs text-slate-400">
+            <div className="mt-1 space-y-1 text-xs text-slate-400">
               <div>{cfg.tenant.displayName}</div>
               <div>{cfg.portal.displayName}</div>
             </div>
@@ -65,14 +71,14 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
         <section className="flex-1">
           <header className="sticky top-0 z-40 border-b border-white/5 bg-slate-950/70 backdrop-blur">
-            <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
+            <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-4 py-4 sm:px-6">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <AdminMobileNav
                   base={`/${TENANT}/${PORTAL}/admin`}
                   nav={ADMIN_NAV}
                   portalBase={`/${TENANT}/${PORTAL}/portal`}
                 />
-                <div className="min-w-0">
+                <div className="min-w-0 space-y-0.5">
                   <PageTitle portalDisplayName={cfg.portal.displayName} isAdmin={true} />
                   <div className="hidden text-xs text-slate-400 sm:block">
                     Manage content, roles, and portal configuration

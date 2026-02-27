@@ -2,10 +2,12 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/profile";
+import { sanitizeDisplayNameForPath } from "@/lib/document-utils";
 
 export async function checkDuplicateDocument(
   category: string,
-  fileName: string
+  fileName: string,
+  displayName?: string
 ): Promise<{ duplicate: boolean; error?: string }> {
   const admin = await isAdmin();
   if (!admin) return { duplicate: false };
@@ -13,6 +15,9 @@ export async function checkDuplicateDocument(
     const supabase = await createClient();
     const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
     const logicalSuffix = `_${category}_${safeName}`;
+    const displaySuffix = displayName
+      ? `_${category}_${sanitizeDisplayNameForPath(displayName)}`
+      : null;
 
     const scan = async (prefix: string): Promise<boolean> => {
       const { data } = await supabase.storage.from("documents").list(prefix, { limit: 500 });
@@ -22,8 +27,12 @@ export async function checkDuplicateDocument(
         if (item.id != null) {
           const cat = path.split("/")[0] ?? "";
           const fn = path.split("/").pop() ?? "";
-          if (cat === category && /^\d+_/.test(fn) && fn.endsWith(logicalSuffix)) {
-            return true;
+          if (cat === category && /^\d+_/.test(fn)) {
+            const fnAfterTs = fn.replace(/^\d+_/, "");
+            if (displaySuffix && fnAfterTs.toLowerCase().startsWith(displaySuffix.toLowerCase().slice(1))) {
+              return true;
+            }
+            if (fn.endsWith(logicalSuffix)) return true;
           }
         } else {
           if (await scan(path)) return true;
@@ -49,9 +58,13 @@ export async function uploadDocument(
 
   const file = formData.get("file") as File;
   const category = (formData.get("category") as string)?.trim() || "general";
+  const fileDisplayName = (formData.get("file_name") as string)?.trim();
 
   if (!file || file.size === 0) {
     return { error: "Please select a file" };
+  }
+  if (!fileDisplayName) {
+    return { error: "File name is required" };
   }
 
   const allowedTypes = [
@@ -69,14 +82,15 @@ export async function uploadDocument(
     return { error: "File size must be under 50 MB" };
   }
 
-  const { duplicate } = await checkDuplicateDocument(category, file.name);
+  const { duplicate } = await checkDuplicateDocument(category, file.name, fileDisplayName);
   if (duplicate) {
     const displayCategory = category.split("-").map((p) => p.toUpperCase()).join(" ");
-    return { error: `This file already exists in ${displayCategory}. Use Replace in Library to update it.` };
+    return { error: `A document named "${fileDisplayName}" already exists in ${displayCategory}. Use Replace in Library to update it.` };
   }
 
   const supabase = await createClient();
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const ext = file.name.includes(".") ? "." + file.name.split(".").pop() : "";
+  const safeName = sanitizeDisplayNameForPath(fileDisplayName) + ext;
   const path = `${category}/${Date.now()}_${category}_${safeName}`;
 
   const { error } = await supabase.storage.from("documents").upload(path, file, {
@@ -89,10 +103,25 @@ export async function uploadDocument(
     return { error: error.message };
   }
 
-  const base = file.name.replace(/_/g, " ").replace(/\s+/g, " ").trim();
-  const withoutExt = base.includes(".") ? base.replace(/\.[^.]+$/, "") : base;
+  await setDocumentDisplayName(path, fileDisplayName);
   const displayCategory = category.split("-").map((p) => p.toUpperCase()).join(" ");
-  return { success: `${withoutExt} added to ${displayCategory}.` };
+  return { success: `${fileDisplayName} added to ${displayCategory}.` };
+}
+
+export async function setDocumentDisplayName(path: string, displayName: string): Promise<{ error?: string }> {
+  const admin = await isAdmin();
+  if (!admin) return { error: "Admin access required" };
+  if (!displayName?.trim()) return { error: "Display name is required" };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("document_display_names")
+      .upsert({ path, display_name: displayName.trim(), updated_at: new Date().toISOString() }, { onConflict: "path" });
+    if (error) return { error: error.message };
+    return {};
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to save display name" };
+  }
 }
 
 export async function setDocumentAISetting(

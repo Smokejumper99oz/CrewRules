@@ -4,15 +4,15 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.crewrules.com"),
 
-  title: "CrewRules™ — The Smart Knowledge Platform for Airline Pilots",
+  title: "CrewRules™ — The Smart Knowledge Platform for Airline Crew",
 
   description:
-    "Contract clarity, mentoring support, and trusted answers — all in one place. Built by airline pilots.",
+    "Contract clarity and real-world answers for pilots and flight attendants — with verified source citations. Built by airline crew.",
 
   openGraph: {
-    title: "CrewRules™ — The Smart Knowledge Platform for Airline Pilots",
+    title: "CrewRules™ — The Smart Knowledge Platform for Airline Crew",
     description:
-      "Contract clarity, mentoring support, and trusted answers for airline pilots.",
+      "Contract clarity and real-world answers for pilots and flight attendants — with verified source citations.",
     url: "https://www.crewrules.com",
     siteName: "CrewRules™",
     images: [
@@ -29,9 +29,9 @@ export const metadata: Metadata = {
 
   twitter: {
     card: "summary_large_image",
-    title: "CrewRules™ — The Smart Knowledge Platform for Airline Pilots",
+    title: "CrewRules™ — The Smart Knowledge Platform for Airline Crew",
     description:
-      "Contract clarity, mentoring support, and trusted answers.",
+      "Contract clarity and real-world answers for pilots and flight attendants — with verified source citations.",
     images: ["https://www.crewrules.com/og/crewrules-og.png"],
   },
 

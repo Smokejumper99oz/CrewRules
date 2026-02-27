@@ -48,7 +48,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
             <div className="text-lg font-semibold">
               Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-xs">™</span>
             </div>
-            <div className="mt-0.5 space-y-0.5 text-xs text-slate-400">
+            <div className="mt-1 space-y-1 text-xs text-slate-400">
               <div>{cfg.tenant.displayName}</div>
               <div>{cfg.portal.displayName}</div>
             </div>
@@ -97,7 +97,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
 
         <section className="flex-1">
           <header className="sticky top-0 z-40 border-b border-white/5 bg-slate-950/70 backdrop-blur">
-            <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+            <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-4 py-3 sm:px-6">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <PortalMobileNav
                   base={base}

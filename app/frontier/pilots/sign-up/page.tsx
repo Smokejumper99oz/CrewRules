@@ -70,12 +70,18 @@ export default function SignUpPage() {
               {isPending ? "Creating…" : "Create account"}
             </button>
 
-            <Link
-              href={`/${TENANT}/${PORTAL}/login`}
-              className="block text-center text-sm text-slate-300 hover:text-white"
-            >
-              Already have an account? Log in
-            </Link>
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
+              <Link href="/" className="text-slate-300 hover:text-white">
+                Back to Home
+              </Link>
+              <span className="text-slate-500">•</span>
+              <Link
+                href={`/${TENANT}/${PORTAL}/login`}
+                className="text-slate-300 hover:text-white"
+              >
+                Already have an account? Log in
+              </Link>
+            </div>
           </form>
         </div>
       </div>

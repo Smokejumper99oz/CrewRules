@@ -16,7 +16,14 @@ export default function RequestAccessPage() {
             Go to Request Access Form
           </Link>
         </div>
-        <div className="mt-8">
+        <div className="mt-8 flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
+          <Link
+            href="/"
+            className="text-slate-300 hover:text-white underline underline-offset-4"
+          >
+            Back to Home
+          </Link>
+          <span className="text-slate-500">•</span>
           <Link
             href="/frontier/pilots/login"
             className="text-slate-300 hover:text-white underline underline-offset-4"

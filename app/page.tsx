@@ -17,11 +17,11 @@ export default function HomePage() {
         <div className="relative mx-auto flex max-w-6xl items-center justify-between px-6 pt-4 pb-6">
           <div className="flex items-center gap-3">
             <div className="leading-tight">
-              <div className="font-semibold tracking-tight">
+              <div className="text-lg font-semibold tracking-tight">
                 Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-xs">™</span>
               </div>
               <div className="text-xs text-slate-400">
-                For Airline Pilots
+                For Airline Pilots & Flight Attendants
               </div>
             </div>
           </div>
@@ -38,7 +38,7 @@ export default function HomePage() {
               href="/login"
               className="hidden rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10 md:inline-flex"
             >
-              Pilot Login
+              Login
             </Link>
             <Link
               href="/request-access"
@@ -74,16 +74,16 @@ export default function HomePage() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-slate-300">
               <span className="h-2 w-2 rounded-full bg-[#75C043]" />
-              Answers with contract references • Built by airline pilots
+              Answers with contract references • Built by airline crew
             </div>
 
             <h1 className="mt-6 text-4xl font-bold tracking-tight md:text-5xl">
               Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-base">™</span> — The Smart Knowledge Platform{" "}
-              <span className="text-slate-300">for Airline Pilots</span>
+              <span className="text-slate-300">for Airline Crew</span>
             </h1>
 
             <p className="mt-5 text-lg text-slate-300">
-              Contract clarity, mentoring support, and trusted answers — all in one place.
+              Contract clarity and real-world answers for pilots and flight attendants — with verified source citations.
               Ask questions in plain English and get citations back to the source.
             </p>
 
@@ -92,7 +92,7 @@ export default function HomePage() {
                 href="/login"
                 className="inline-flex items-center justify-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-100"
               >
-                Pilot Login
+                Login
               </Link>
               <Link
                 href="/request-access"
@@ -190,7 +190,7 @@ export default function HomePage() {
               "Contract answers with references",
               "Pilot mentoring tools",
               "Always up-to-date documents",
-              "Built by airline pilots",
+              "Built by airline crew",
             ].map((t) => (
               <div key={t} className="flex items-center gap-3 text-sm text-slate-200">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/15 ring-1 ring-emerald-500/25">
@@ -401,7 +401,7 @@ export default function HomePage() {
             <div className="text-sm text-slate-400">Pilot</div>
             <div className="mt-2 text-2xl font-bold">Crew<span className="text-[#75C043]">Rules</span>™ Access</div>
             <div className="mt-3 text-slate-300 text-sm">
-              Get clear contract answers with direct citations — built specifically for airline pilots.
+              Get clear contract answers with direct citations — built specifically for airline crew.
             </div>
 
             <ul className="mt-6 space-y-3 text-sm text-slate-300">
@@ -426,7 +426,7 @@ export default function HomePage() {
             <div className="text-sm text-slate-300">Pilot + Mentor</div>
             <div className="mt-2 text-2xl font-bold">Crew<span className="text-[#75C043]">Rules</span>™ Pro</div>
             <div className="mt-3 text-slate-200 text-sm">
-              Advanced tools for mentoring, career progression, and deeper contract insights — built specifically for airline pilots.
+              Advanced tools for mentoring, career progression, and deeper contract insights — built specifically for airline crew.
             </div>
 
             <ul className="mt-6 space-y-3 text-sm text-slate-200">
@@ -508,7 +508,7 @@ export default function HomePage() {
                 Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-xs">™</span>
               </div>
               <div className="mt-1 text-sm text-slate-400">
-                The Smart Knowledge Platform for Airline Pilots
+                The Smart Knowledge Platform for Airline Crew
               </div>
             </div>
 

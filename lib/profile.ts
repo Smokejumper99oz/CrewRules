@@ -6,6 +6,7 @@ export type Profile = {
   tenant: string;
   portal: string;
   role: "admin" | "member";
+  crew_role: "pilot" | "flight_attendant";
   created_at: string;
   updated_at: string;
 };

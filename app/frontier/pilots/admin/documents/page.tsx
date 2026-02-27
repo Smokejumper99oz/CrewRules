@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { indexDocuments } from "./index-actions";
-import { checkDuplicateDocument, setDocumentAISetting } from "./actions";
+import { checkDuplicateDocument, setDocumentAISetting, setDocumentDisplayName } from "./actions";
+import { sanitizeDisplayNameForPath } from "@/lib/document-utils";
 
 const ALLOWED_TYPES = [
   "application/pdf",
@@ -63,14 +64,21 @@ export default function DocumentsPage() {
 
     const form = e.currentTarget;
     const fileInput = form.querySelector<HTMLInputElement>('input[name="file"]');
+    const fileNameInput = form.querySelector<HTMLInputElement>('input[name="file_name"]');
     const categoryInput = form.querySelector<HTMLInputElement>('input[name="category"]');
     const aiCheckbox = form.querySelector<HTMLInputElement>('input[name="ai_enabled"]');
     const file = fileInput?.files?.[0];
+    const fileDisplayName = (fileNameInput?.value ?? "").trim();
     const category = (categoryInput?.value?.trim() || "general").toLowerCase().replace(/\s+/g, "-") || "general";
     const makeAvailableForAI = aiCheckbox?.checked ?? false;
 
     if (!file || file.size === 0) {
       setError("Please select a file");
+      return;
+    }
+
+    if (!fileDisplayName) {
+      setError("File name is required");
       return;
     }
 
@@ -84,15 +92,15 @@ export default function DocumentsPage() {
       return;
     }
 
-    const { duplicate } = await checkDuplicateDocument(category, file.name);
+    const { duplicate } = await checkDuplicateDocument(category, file.name, fileDisplayName);
     if (duplicate) {
       const displayCategory = category.split("-").map((p) => p.toUpperCase()).join(" ");
-      setError(`This file already exists in ${displayCategory}. Use Replace in Library to update it.`);
+      setError(`A document named "${fileDisplayName}" already exists in ${displayCategory}. Use Replace in Library to update it.`);
       return;
     }
 
     setUploading(true);
-    setUploadingFileName(file.name);
+    setUploadingFileName(fileDisplayName);
     setUploadPercent(0);
     try {
       const supabase = createClient();
@@ -103,7 +111,8 @@ export default function DocumentsPage() {
       }
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
       const projectId = new URL(url).hostname.split(".")[0];
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const ext = file.name.includes(".") ? "." + file.name.split(".").pop() : "";
+      const safeName = sanitizeDisplayNameForPath(fileDisplayName) + ext;
       const path = `${category}/${Date.now()}_${category}_${safeName}`;
 
       const { Upload } = await import("tus-js-client");
@@ -138,11 +147,11 @@ export default function DocumentsPage() {
       });
 
       await setDocumentAISetting(path, makeAvailableForAI);
+      const { error: dnError } = await setDocumentDisplayName(path, fileDisplayName);
+      if (dnError) console.warn("[Upload] Display name save:", dnError);
 
-      const base = file.name.replace(/_/g, " ").replace(/\s+/g, " ").trim();
-      const withoutExt = base.includes(".") ? base.replace(/\.[^.]+$/, "") : base;
       const displayCategory = category.split("-").map((p) => p.toUpperCase()).join(" ");
-      setSuccess(`${withoutExt} added to ${displayCategory}.`);
+      setSuccess(`${fileDisplayName} added to ${displayCategory}.`);
       form.reset();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -158,9 +167,7 @@ export default function DocumentsPage() {
       <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-6">
         <h1 className="text-xl font-semibold tracking-tight border-b border-white/5">Uploads</h1>
         <p className="mt-2 text-slate-300">
-          Upload documents for download access. Enable AI Questions only for documents you want the AI to reference.
-          <br />
-          <span className="text-slate-400">Cleaner. Clearer. Safer.</span>
+          Upload documents for pilot access. AI usage is optional.
         </p>
       </div>
 
@@ -186,28 +193,45 @@ export default function DocumentsPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-200">Category (optional)</label>
+          <label className="block text-sm font-medium text-slate-200">File name</label>
+          <input
+            name="file_name"
+            type="text"
+            required
+            placeholder="e.g. Frontier Airlines CBA"
+            disabled={uploading}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40 disabled:opacity-50"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-200">Document category (optional)</label>
           <input
             name="category"
             type="text"
-            placeholder="CBA"
+            placeholder="Used to organize documents in the Library (CBA, LOA, Training, Memo)"
             disabled={uploading}
             className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40 disabled:opacity-50"
           />
         </div>
 
         <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
-          <p className="mb-2 text-sm font-medium text-slate-200">Default: Download only</p>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+          <p className="mb-2 text-sm font-medium text-slate-200">AI Access</p>
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-300">
             <input
               name="ai_enabled"
               type="checkbox"
               defaultChecked={false}
               disabled={uploading}
-              className="h-4 w-4 rounded border-white/20 bg-slate-950/40 text-[#75C043] focus:ring-[#75C043]/50"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/20 bg-slate-950/40 text-[#75C043] focus:ring-[#75C043]/50"
             />
-            Make available for AI questions
+            <span>
+              Allow CrewRules AI to reference this document
+            </span>
           </label>
+          <p className="mt-2 text-xs text-slate-500">
+            When enabled, this document may be used to answer pilot questions. When disabled, the document is download-only.
+          </p>
         </div>
 
         {error && <p className="text-sm text-red-400">{error}</p>}

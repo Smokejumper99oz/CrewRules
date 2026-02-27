@@ -15,6 +15,7 @@ import {
 import { setDocumentAISetting } from "@/app/frontier/pilots/admin/documents/actions";
 import { FileTypeIcon } from "@/components/file-type-icon";
 import { AIStatusBadge } from "@/components/ai-status-badge";
+import { AccessBadge } from "@/components/access-badge";
 
 function LoaderBar({ percent }: { percent?: number | null }) {
   const pct = percent == null ? 0 : Math.min(100, Math.max(0, percent));
@@ -159,6 +160,7 @@ export default function AdminLibraryPage() {
   }
 
   const displayName = (d: LibraryDocument) => {
+    if (d.displayName) return d.displayName;
     const m = d.name.match(/^\d+_(?:[^_]+_)?(.+)$/);
     const raw = m ? m[1] : d.name;
     const withoutExt = raw.includes(".") ? raw.replace(/\.[^.]+$/, "") : raw;
@@ -246,6 +248,7 @@ export default function AdminLibraryPage() {
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 <FileTypeIcon fileName={doc.name} />
                 <span className="font-medium text-white">{displayName(doc)}</span>
+                <AccessBadge aiEnabled={aiEnabledByPath[doc.path] ?? false} />
                 <AIStatusBadge status={aiStatusByPath[doc.path] ?? "not_enabled"} indexing={indexing} />
                 <label className="flex items-center gap-1.5 text-xs text-slate-400">
                   <input

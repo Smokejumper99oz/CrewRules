@@ -10,12 +10,14 @@ import {
 } from "./actions";
 import { FileTypeIcon } from "@/components/file-type-icon";
 import { AIStatusBadge } from "@/components/ai-status-badge";
+import { AccessBadge } from "@/components/access-badge";
 
 export default function LibraryPage() {
   const [docs, setDocs] = useState<LibraryDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [aiStatusByPath, setAiStatusByPath] = useState<Record<string, "active" | "not_enabled">>({});
+  const [aiEnabledByPath, setAiEnabledByPath] = useState<Record<string, boolean>>({});
 
   async function load() {
     setLoading(true);
@@ -24,10 +26,12 @@ export default function LibraryPage() {
     setDocs(list);
     if (err) setError(err);
     if (list.length > 0) {
-      const { statusByPath } = await getDocumentAIStatus(list.map((d) => d.path));
+      const { statusByPath, aiEnabledByPath } = await getDocumentAIStatus(list.map((d) => d.path));
       setAiStatusByPath(statusByPath);
+      setAiEnabledByPath(aiEnabledByPath);
     } else {
       setAiStatusByPath({});
+      setAiEnabledByPath({});
     }
     setLoading(false);
   }
@@ -43,6 +47,7 @@ export default function LibraryPage() {
   }
 
   const displayName = (d: LibraryDocument) => {
+    if (d.displayName) return d.displayName;
     const m = d.name.match(/^\d+_(?:[^_]+_)?(.+)$/);
     const raw = m ? m[1] : d.name;
     const withoutExt = raw.includes(".") ? raw.replace(/\.[^.]+$/, "") : raw;
@@ -85,6 +90,7 @@ export default function LibraryPage() {
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <FileTypeIcon fileName={doc.name} />
                 <span className="font-medium text-white">{displayName(doc)}</span>
+                <AccessBadge aiEnabled={aiEnabledByPath[doc.path] ?? false} />
                 <AIStatusBadge status={aiStatusByPath[doc.path] ?? "not_enabled"} />
               </div>
               <button
