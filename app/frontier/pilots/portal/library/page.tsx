@@ -5,14 +5,17 @@ import Link from "next/link";
 import {
   listDocuments,
   getDocumentDownloadUrl,
+  getDocumentAIStatus,
   type LibraryDocument,
 } from "./actions";
 import { FileTypeIcon } from "@/components/file-type-icon";
+import { AIStatusBadge } from "@/components/ai-status-badge";
 
 export default function LibraryPage() {
   const [docs, setDocs] = useState<LibraryDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [aiStatusByPath, setAiStatusByPath] = useState<Record<string, "active" | "not_enabled">>({});
 
   async function load() {
     setLoading(true);
@@ -20,6 +23,12 @@ export default function LibraryPage() {
     const { docs: list, error: err } = await listDocuments();
     setDocs(list);
     if (err) setError(err);
+    if (list.length > 0) {
+      const { statusByPath } = await getDocumentAIStatus(list.map((d) => d.path));
+      setAiStatusByPath(statusByPath);
+    } else {
+      setAiStatusByPath({});
+    }
     setLoading(false);
   }
 
@@ -43,8 +52,8 @@ export default function LibraryPage() {
   };
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-      <h1 className="text-2xl font-bold">Library</h1>
+    <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-6">
+      <h1 className="text-xl font-semibold tracking-tight border-b border-white/5">Library</h1>
       <p className="mt-2 text-slate-300">
         Documents available for Ask AI and download.
       </p>
@@ -71,11 +80,12 @@ export default function LibraryPage() {
           {docs.map((doc) => (
             <div
               key={doc.path}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 px-4 py-3"
             >
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <FileTypeIcon fileName={doc.name} />
                 <span className="font-medium text-white">{displayName(doc)}</span>
+                <AIStatusBadge status={aiStatusByPath[doc.path] ?? "not_enabled"} />
               </div>
               <button
                 onClick={() => handleDownload(doc)}

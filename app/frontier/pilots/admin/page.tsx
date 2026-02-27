@@ -6,19 +6,12 @@ const PORTAL = "pilots";
 export default function AdminDashboard() {
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-        <p className="mt-2 text-slate-300">
-          Manage documents and settings for {TENANT} {PORTAL} portal.
-        </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <Link
           href={`/${TENANT}/${PORTAL}/admin/documents`}
-          className="group rounded-3xl border border-white/10 bg-slate-950/40 p-6 transition hover:-translate-y-1 hover:border-[#75C043]/20"
+          className="group rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20"
         >
-          <div className="text-lg font-semibold text-white group-hover:text-[#75C043]">
+          <div className="text-xl font-semibold tracking-tight border-b border-white/5 text-white group-hover:text-[#75C043]">
             Uploads
           </div>
           <div className="mt-2 text-sm text-slate-300">
@@ -26,12 +19,29 @@ export default function AdminDashboard() {
           </div>
         </Link>
 
-        <div className="rounded-3xl border border-white/10 bg-slate-950/40 p-6 opacity-60">
-          <div className="text-lg font-semibold">Indexing</div>
-          <div className="mt-2 text-sm text-slate-400">
-            Re-index documents for AI search (coming soon)
+        <Link
+          href={`/${TENANT}/${PORTAL}/admin/library`}
+          className="group rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20"
+        >
+          <div className="text-xl font-semibold tracking-tight border-b border-white/5 text-white group-hover:text-[#75C043]">
+            Library
           </div>
-        </div>
+          <div className="mt-2 text-sm text-slate-300">
+            Enable AI questions, re-index documents, and manage the document library.
+          </div>
+        </Link>
+
+        <Link
+          href={`/${TENANT}/${PORTAL}/admin/people`}
+          className="group rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20"
+        >
+          <div className="text-xl font-semibold tracking-tight border-b border-white/5 text-white group-hover:text-[#75C043]">
+            People & Permissions
+          </div>
+          <div className="mt-2 text-sm text-slate-300">
+            Manage user access, roles, and admin permissions.
+          </div>
+        </Link>
       </div>
     </div>
   );

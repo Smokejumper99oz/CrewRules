@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useRef, useEffect } from "react";
 
 function emailToDisplayName(email: string | null): string {
@@ -46,8 +47,14 @@ export function PortalUserMenu({
         aria-haspopup="true"
         aria-label="User menu"
       >
-        <div className="h-9 w-9 shrink-0 rounded-xl bg-white/5 ring-1 ring-white/10 flex items-center justify-center text-sm font-semibold text-slate-300">
-          {displayName.charAt(0).toUpperCase()}
+        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5 p-1 shadow-[0_0_25px_rgba(117,192,67,0.15)]">
+          <Image
+            src="/icons/f9-icon.png"
+            alt=""
+            fill
+            className="rounded-lg object-contain"
+            sizes="36px"
+          />
         </div>
         <div className="hidden min-w-0 sm:block">
           <div className="truncate text-sm font-medium text-white">{displayName}</div>

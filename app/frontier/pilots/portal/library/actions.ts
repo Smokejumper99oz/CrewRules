@@ -117,6 +117,40 @@ export async function replaceDocument(
   }
 }
 
+export async function getDocumentAIStatus(
+  paths: string[]
+): Promise<{
+  statusByPath: Record<string, "active" | "not_enabled">;
+  aiEnabledByPath: Record<string, boolean>;
+}> {
+  const statusByPath: Record<string, "active" | "not_enabled"> = {};
+  const aiEnabledByPath: Record<string, boolean> = {};
+  for (const p of paths) {
+    statusByPath[p] = "not_enabled";
+    aiEnabledByPath[p] = false;
+  }
+  if (paths.length === 0) return { statusByPath, aiEnabledByPath };
+  try {
+    const supabase = await createClient();
+    const chunksRes = await supabase.from("document_chunks").select("source_path").in("source_path", paths);
+    const indexed = new Set((chunksRes.data ?? []).map((r) => r.source_path).filter(Boolean));
+    for (const p of paths) {
+      if (indexed.has(p)) statusByPath[p] = "active";
+    }
+    try {
+      const settingsRes = await supabase.from("document_ai_settings").select("path, ai_enabled").in("path", paths);
+      for (const r of settingsRes.data ?? []) {
+        if (r.path) aiEnabledByPath[r.path] = r.ai_enabled === true;
+      }
+    } catch {
+      /* document_ai_settings may not exist before migration 011 */
+    }
+    return { statusByPath, aiEnabledByPath };
+  } catch {
+    return { statusByPath, aiEnabledByPath };
+  }
+}
+
 export async function getDocumentDownloadUrl(path: string): Promise<{ url?: string; error?: string }> {
   try {
     const supabase = await createClient();

@@ -5,10 +5,53 @@ import { getProfile } from "@/lib/profile";
 import { getEmbedding } from "@/lib/ai/embed";
 import OpenAI from "openai";
 
+/** Converts storage path/category into a plain-English citation. */
+function formatCitationDisplay(
+  sourcePath?: string,
+  sourceCategory?: string,
+  answer?: string
+): string {
+  if (!sourcePath && !sourceCategory) {
+    return "Source document";
+  }
+
+  // Parse source: "fft-cba-loa-31" → "Source: Frontier Airlines CBA – LOA 31"
+  const cat = (sourceCategory || sourcePath?.split("/")[0] || "").toLowerCase();
+  let sourceLabel = "Source: Document";
+  if (cat.includes("cba") && cat.includes("loa")) {
+    const loaMatch = cat.match(/loa[-_]?(\d+)/i);
+    const loaNum = loaMatch?.[1] ?? "";
+    sourceLabel = `Source: Frontier Airlines CBA – LOA ${loaNum || "—"}`;
+  } else if (cat) {
+    const friendly = cat
+      .split(/[-_]/)
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(" ");
+    sourceLabel = `Source: ${friendly}`;
+  }
+
+  // Try to extract Section and Page from the answer
+  const sectionMatch = answer?.match(/\b[Ss]ection\s+([0-9]+(?:\.[A-Z0-9]+)?)/i);
+  const pageMatch = answer?.match(/\b[Pp](?:age|\.)\s*(\d+)/i) ?? answer?.match(/\b[Pp]age\s+(\d+)/i);
+  const section = sectionMatch?.[1] ?? null;
+  const page = pageMatch?.[1] ?? null;
+
+  const lines: string[] = [sourceLabel];
+  if (section) lines.push(`Section ${section}`);
+  if (page) lines.push(`Page ${page}`);
+  if (!section && !page) {
+    lines.push("Section —");
+    lines.push("Page —");
+  }
+
+  return lines.join("\n");
+}
+
 export type AskResult = {
   error?: string;
   answer?: string;
   citation?: string;
+  citationPath?: string;
 };
 
 export async function askQuestion(question: string): Promise<AskResult> {
@@ -44,8 +87,8 @@ export async function askQuestion(question: string): Promise<AskResult> {
 
     if (searchError) {
       const hint =
-        searchError.message?.includes("function") || searchError.message?.includes("does not exist")
-          ? " Run migrations 005 and 006 in Supabase SQL Editor."
+        searchError.message?.includes("function") || searchError.message?.includes("does not exist") || searchError.message?.includes("operator")
+          ? " Run migrations 005, 006, and 010 in Supabase SQL Editor."
           : "";
       return {
         error: `Vector search not ready: ${searchError.message ?? "Unknown error"}${hint}`,
@@ -81,15 +124,30 @@ export async function askQuestion(question: string): Promise<AskResult> {
 
     const answer = completion.choices[0]?.message?.content?.trim() ?? "Could not generate answer.";
     const topChunk = contextChunks[0];
-    const citation = topChunk?.source_path
-      ? `${topChunk.source_category || "Document"}: ${topChunk.source_path}`
-      : "Source document";
+    const searchText = [answer, topChunk?.content].filter(Boolean).join(" ");
+    const citation = formatCitationDisplay(
+      topChunk?.source_path,
+      topChunk?.source_category,
+      searchText
+    );
+    const citationPath = topChunk?.source_path ?? undefined;
 
-    return { answer, citation };
+    return { answer, citation, citationPath };
   } catch (err) {
     console.error("[Ask] Error:", err);
     return {
       error: err instanceof Error ? err.message : "Search failed",
     };
+  }
+}
+
+export async function getCitationDownloadUrl(path: string): Promise<{ url?: string; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.storage.from("documents").createSignedUrl(path, 60);
+    if (error) return { error: error.message };
+    return { url: data.signedUrl };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Download failed" };
   }
 }

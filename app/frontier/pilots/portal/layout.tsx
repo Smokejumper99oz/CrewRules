@@ -5,6 +5,7 @@ import { getProfile, isAdmin } from "@/lib/profile";
 import { signOut } from "./actions";
 import { PortalMobileNav } from "@/components/portal-mobile-nav";
 import { PortalUserMenu } from "@/components/portal-user-menu";
+import { PageTitle } from "@/components/page-title";
 
 function emailToDisplayName(email: string | null): string {
   if (!email) return "User";
@@ -44,11 +45,12 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       <div className="flex">
         <aside className="hidden md:flex md:w-72 md:flex-col md:gap-4 border-r border-white/5 bg-slate-950/70 backdrop-blur">
           <div className="px-6 pt-6">
-            <div className="text-sm font-semibold">
+            <div className="text-lg font-semibold">
               Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-xs">™</span>
             </div>
-            <div className="mt-1 text-xs text-slate-400">
-              {cfg.tenant.displayName} • {cfg.portal.displayName}
+            <div className="mt-0.5 space-y-0.5 text-xs text-slate-400">
+              <div>{cfg.tenant.displayName}</div>
+              <div>{cfg.portal.displayName}</div>
             </div>
           </div>
 
@@ -106,15 +108,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
                   displayName={displayName}
                   roleLabel={roleLabel}
                 />
-                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                  <span className="font-semibold">
-                    Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-xs">™</span>
-                  </span>
-                  <span className="hidden text-slate-500 sm:inline">|</span>
-                  <span className="hidden truncate text-slate-400 sm:inline">
-                    Tenant: {cfg.tenant.displayName}
-                  </span>
-                </div>
+                <PageTitle portalDisplayName={cfg.portal.displayName} isAdmin={false} />
               </div>
 
               <div className="flex shrink-0 items-center">

@@ -11,7 +11,7 @@ export default function TenantPortalLayout({ children }: { children: ReactNode }
     return (
       <main className="min-h-screen bg-slate-950 text-white grid place-items-center p-8">
         <div className="max-w-lg text-center">
-          <h1 className="text-2xl font-bold">Portal not found</h1>
+          <h1 className="text-xl font-semibold tracking-tight border-b border-white/5">Portal not found</h1>
           <p className="mt-3 text-slate-300">
             Unknown tenant or portal. Check your URL (ex: /frontier/pilots/login).
           </p>

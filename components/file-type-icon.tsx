@@ -47,7 +47,17 @@ function DocIcon({ className }: { className?: string }) {
 
 export function FileTypeIcon({ fileName, className = "h-5 w-5 shrink-0" }: { fileName: string; className?: string }) {
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
-  if (ext === "pdf") return <PdfIcon className={className} />;
-  if (ext === "doc" || ext === "docx") return <WordIcon className={className} />;
-  return <DocIcon className={className} />;
+  const icon =
+    ext === "pdf" ? (
+      <PdfIcon className={className} />
+    ) : ext === "doc" || ext === "docx" ? (
+      <WordIcon className={className} />
+    ) : (
+      <DocIcon className={className} />
+    );
+  return (
+    <span className="inline-flex shrink-0 items-center justify-center rounded-lg p-1.5 shadow-[0_0_25px_rgba(117,192,67,0.15)]">
+      {icon}
+    </span>
+  );
 }

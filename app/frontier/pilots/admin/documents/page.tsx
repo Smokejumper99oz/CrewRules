@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { indexDocuments } from "./index-actions";
-import { checkDuplicateDocument } from "./actions";
+import { checkDuplicateDocument, setDocumentAISetting } from "./actions";
 
 const ALLOWED_TYPES = [
   "application/pdf",
@@ -64,8 +64,10 @@ export default function DocumentsPage() {
     const form = e.currentTarget;
     const fileInput = form.querySelector<HTMLInputElement>('input[name="file"]');
     const categoryInput = form.querySelector<HTMLInputElement>('input[name="category"]');
+    const aiCheckbox = form.querySelector<HTMLInputElement>('input[name="ai_enabled"]');
     const file = fileInput?.files?.[0];
     const category = (categoryInput?.value?.trim() || "general").toLowerCase().replace(/\s+/g, "-") || "general";
+    const makeAvailableForAI = aiCheckbox?.checked ?? false;
 
     if (!file || file.size === 0) {
       setError("Please select a file");
@@ -135,6 +137,8 @@ export default function DocumentsPage() {
         }).catch(reject);
       });
 
+      await setDocumentAISetting(path, makeAvailableForAI);
+
       const base = file.name.replace(/_/g, " ").replace(/\s+/g, " ").trim();
       const withoutExt = base.includes(".") ? base.replace(/\.[^.]+$/, "") : base;
       const displayCategory = category.split("-").map((p) => p.toUpperCase()).join(" ");
@@ -151,14 +155,16 @@ export default function DocumentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <h1 className="text-2xl font-bold">Uploads</h1>
+      <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-6">
+        <h1 className="text-xl font-semibold tracking-tight border-b border-white/5">Uploads</h1>
         <p className="mt-2 text-slate-300">
-          Upload CBA (Collective Bargaining Agreement), LOAs, training docs, memos. Supported: PDF, Word, TXT, CSV. Upload files, then click Index to make them searchable.
+          Upload documents for download access. Enable AI Questions only for documents you want the AI to reference.
+          <br />
+          <span className="text-slate-400">Cleaner. Clearer. Safer.</span>
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="rounded-3xl border border-white/10 bg-slate-950/40 p-6 space-y-4">
+      <form onSubmit={handleSubmit} className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-6 space-y-4">
         {uploading && (
           <div className="rounded-xl border border-[#75C043]/20 bg-[#75C043]/5 p-4 space-y-2">
             <LoaderBar percent={uploadPercent} />
@@ -190,6 +196,20 @@ export default function DocumentsPage() {
           />
         </div>
 
+        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+          <p className="mb-2 text-sm font-medium text-slate-200">Default: Download only</p>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+            <input
+              name="ai_enabled"
+              type="checkbox"
+              defaultChecked={false}
+              disabled={uploading}
+              className="h-4 w-4 rounded border-white/20 bg-slate-950/40 text-[#75C043] focus:ring-[#75C043]/50"
+            />
+            Make available for AI questions
+          </label>
+        </div>
+
         {error && <p className="text-sm text-red-400">{error}</p>}
         {success && <p className="text-sm text-emerald-400">{success}</p>}
 
@@ -202,12 +222,12 @@ export default function DocumentsPage() {
         </button>
       </form>
 
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+      <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-6">
         <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
           <p className="text-sm font-medium text-emerald-200">Try Ask AI with CBA</p>
           <ol className="mt-2 list-decimal list-inside space-y-1 text-sm text-slate-300">
             <li>Upload your CBA (PDF or Word) — use category <strong>CBA</strong></li>
-            <li>Click <strong>Index Documents for AI Search</strong> below</li>
+            <li>Click <strong>Enable AI Questions</strong> below</li>
             <li>Go to Portal → Ask to search your contract</li>
           </ol>
         </div>
@@ -226,7 +246,7 @@ export default function DocumentsPage() {
             disabled={indexing}
             className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
           >
-            {indexing ? "Indexing…" : "Index Documents for AI Search"}
+            {indexing ? "Enabling…" : "Enable AI Questions"}
           </button>
           {indexError && <p className="text-sm text-red-400">{indexError}</p>}
           {indexSuccess && <p className="text-sm text-emerald-400">{indexSuccess}</p>}

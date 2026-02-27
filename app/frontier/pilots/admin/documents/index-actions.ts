@@ -42,9 +42,18 @@ export async function indexDocuments(): Promise<{ error?: string; success?: stri
     };
     await scan("");
 
+    const { data: settingsRows } = await supabase
+      .from("document_ai_settings")
+      .select("path, ai_enabled");
+    const aiEnabledPaths = new Set(
+      (settingsRows ?? []).filter((r) => r.ai_enabled === true).map((r) => r.path)
+    );
+
+    const filesToIndex = allFiles.filter((f) => aiEnabledPaths.has(f.path));
+
     let totalChunks = 0;
 
-    for (const file of allFiles) {
+    for (const file of filesToIndex) {
       const { data: blob, error: downloadError } = await supabase.storage
         .from("documents")
         .download(file.path);
@@ -95,7 +104,7 @@ export async function indexDocuments(): Promise<{ error?: string; success?: stri
     }
 
     return {
-      success: `Indexed ${totalChunks} chunks for Pilot & Flight Attendant AI from ${allFiles.length} files.`,
+      success: "Documents processed. AI can now answer contract questions.",
     };
   } catch (err) {
     console.error("[Index] Error:", err);

@@ -29,7 +29,7 @@ export function PortalMobileNav({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="md:hidden flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10 touch-manipulation"
+        className="md:hidden flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10 shadow-[0_0_25px_rgba(117,192,67,0.15)] touch-manipulation"
         aria-label="Open menu"
       >
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -51,7 +51,7 @@ export function PortalMobileNav({
           >
             <div className="flex h-full flex-col">
               <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
-                <div className="text-sm font-semibold">
+                <div className="text-lg font-semibold">
                   Crew<span className="text-[#75C043]">Rules</span>
                   <span className="align-super text-xs">™</span> · {portalName}
                 </div>

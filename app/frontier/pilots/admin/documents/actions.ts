@@ -94,3 +94,21 @@ export async function uploadDocument(
   const displayCategory = category.split("-").map((p) => p.toUpperCase()).join(" ");
   return { success: `${withoutExt} added to ${displayCategory}.` };
 }
+
+export async function setDocumentAISetting(
+  path: string,
+  aiEnabled: boolean
+): Promise<{ error?: string }> {
+  const admin = await isAdmin();
+  if (!admin) return { error: "Admin access required" };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("document_ai_settings")
+      .upsert({ path, ai_enabled: aiEnabled, updated_at: new Date().toISOString() }, { onConflict: "path" });
+    if (error) return { error: error.message };
+    return {};
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to update setting" };
+  }
+}

@@ -9,15 +9,39 @@ import {
   renameDocument,
   replaceDocument,
   getDocumentDownloadUrl,
+  getDocumentAIStatus,
   type LibraryDocument,
 } from "@/app/frontier/pilots/portal/library/actions";
+import { setDocumentAISetting } from "@/app/frontier/pilots/admin/documents/actions";
 import { FileTypeIcon } from "@/components/file-type-icon";
+import { AIStatusBadge } from "@/components/ai-status-badge";
+
+function LoaderBar({ percent }: { percent?: number | null }) {
+  const pct = percent == null ? 0 : Math.min(100, Math.max(0, percent));
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+      <div
+        className="h-full rounded-full bg-[#75C043]/70 transition-all duration-500"
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
+function formatTime(seconds: number) {
+  if (seconds <= 0) return "finishing…";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `${s}s`;
+}
 
 export default function AdminLibraryPage() {
   const [docs, setDocs] = useState<LibraryDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [indexing, setIndexing] = useState(false);
+  const [indexPercent, setIndexPercent] = useState<number | null>(null);
+  const [indexSecondsRemaining, setIndexSecondsRemaining] = useState<number | null>(null);
   const [indexResult, setIndexResult] = useState<{ success?: string; error?: string } | null>(null);
   const [action, setAction] = useState<{
     type: "rename" | "replace" | null;
@@ -26,6 +50,8 @@ export default function AdminLibraryPage() {
   const [renameValue, setRenameValue] = useState("");
   const [replaceFile, setReplaceFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [aiStatusByPath, setAiStatusByPath] = useState<Record<string, "active" | "not_enabled">>({});
+  const [aiEnabledByPath, setAiEnabledByPath] = useState<Record<string, boolean>>({});
 
   async function load() {
     setLoading(true);
@@ -33,6 +59,14 @@ export default function AdminLibraryPage() {
     const { docs: list, error: err } = await listDocuments();
     setDocs(list);
     if (err) setError(err);
+    if (list.length > 0) {
+      const { statusByPath, aiEnabledByPath } = await getDocumentAIStatus(list.map((d) => d.path));
+      setAiStatusByPath(statusByPath);
+      setAiEnabledByPath(aiEnabledByPath);
+    } else {
+      setAiStatusByPath({});
+      setAiEnabledByPath({});
+    }
     setLoading(false);
   }
 
@@ -77,6 +111,14 @@ export default function AdminLibraryPage() {
     setBusy(false);
   }
 
+  async function handleToggleAI(doc: LibraryDocument, enabled: boolean) {
+    setBusy(true);
+    const { error: err } = await setDocumentAISetting(doc.path, enabled);
+    if (err) setError(err);
+    else setAiEnabledByPath((prev) => ({ ...prev, [doc.path]: enabled }));
+    setBusy(false);
+  }
+
   async function handleDownload(doc: LibraryDocument) {
     const { url, error: err } = await getDocumentDownloadUrl(doc.path);
     if (err) setError(err);
@@ -87,10 +129,33 @@ export default function AdminLibraryPage() {
     setIndexing(true);
     setIndexResult(null);
     setError(null);
+    setIndexPercent(0);
+    const estimatedSec = Math.max(60, Math.min(180, docs.length * 45));
+    setIndexSecondsRemaining(estimatedSec);
+
+    const progressInterval = setInterval(() => {
+      setIndexPercent((p) => {
+        if (p == null) return 5;
+        if (p < 90) return Math.min(90, p + 4);
+        return Math.min(98, p + 1);
+      });
+    }, 1200);
+    const timeInterval = setInterval(() => {
+      setIndexSecondsRemaining((s) => (s == null ? 0 : Math.max(0, s - 1)));
+    }, 1000);
+
     const result = await indexDocuments();
+    clearInterval(progressInterval);
+    clearInterval(timeInterval);
+    setIndexPercent(100);
+    setIndexSecondsRemaining(0);
+    await new Promise((r) => setTimeout(r, 400));
     setIndexing(false);
+    setIndexPercent(null);
+    setIndexSecondsRemaining(null);
     setIndexResult(result);
     if (result.error) setError(result.error);
+    if (result.success) await load();
   }
 
   const displayName = (d: LibraryDocument) => {
@@ -103,8 +168,8 @@ export default function AdminLibraryPage() {
   };
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-      <h1 className="text-2xl font-bold">Library</h1>
+    <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-6">
+      <h1 className="text-xl font-semibold tracking-tight border-b border-white/5">Library</h1>
       <p className="mt-2 text-slate-300">
         View and manage uploaded documents. Upload files in{" "}
         <Link href="/frontier/pilots/admin/documents" className="text-[#75C043] hover:underline">
@@ -125,22 +190,38 @@ export default function AdminLibraryPage() {
       )}
 
       {docs.length > 0 && (
-        <div className="mt-6 flex flex-wrap items-center gap-3">
-          <button
-            onClick={handleIndex}
-            disabled={indexing}
-            className="rounded-xl border border-[#75C043]/50 bg-[#75C043]/10 px-4 py-2.5 text-sm font-semibold text-[#75C043] hover:bg-[#75C043]/20 disabled:opacity-50"
-          >
-            {indexing ? "Indexing…" : "Index for AI Search"}
-          </button>
+        <div className="mt-6 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleIndex}
+              disabled={indexing}
+              className="rounded-xl border border-[#75C043]/50 bg-[#75C043]/10 px-4 py-2.5 text-sm font-semibold text-[#75C043] hover:bg-[#75C043]/20 disabled:opacity-50"
+            >
+              {indexing ? "Enabling…" : "Enable AI Questions"}
+            </button>
+            {indexResult?.success && (
+              <span className="text-sm text-emerald-400">{indexResult.success}</span>
+            )}
+          </div>
           {indexing && (
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#75C043]/40 border-t-[#75C043]" />
-              <span>Making documents searchable…</span>
+            <div className="rounded-xl border border-[#75C043]/20 bg-[#75C043]/5 p-4 space-y-2">
+              <LoaderBar percent={indexPercent} />
+              <div className="flex items-center justify-between text-sm text-slate-300">
+                <span>Making documents searchable…</span>
+                <span>
+                  {indexPercent != null ? `${indexPercent}%` : ""}
+                  {indexSecondsRemaining != null && (
+                    <span className="ml-2 text-slate-400">
+                      {indexPercent === 100
+                        ? "Complete"
+                        : indexSecondsRemaining > 0
+                          ? `~${formatTime(indexSecondsRemaining)} left`
+                          : "still processing…"}
+                    </span>
+                  )}
+                </span>
+              </div>
             </div>
-          )}
-          {indexResult?.success && (
-            <span className="text-sm text-emerald-400">{indexResult.success}</span>
           )}
         </div>
       )}
@@ -160,11 +241,22 @@ export default function AdminLibraryPage() {
           {docs.map((doc) => (
             <div
               key={doc.path}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 px-4 py-3"
             >
-              <div className="flex min-w-0 flex-1 items-center gap-2">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 <FileTypeIcon fileName={doc.name} />
                 <span className="font-medium text-white">{displayName(doc)}</span>
+                <AIStatusBadge status={aiStatusByPath[doc.path] ?? "not_enabled"} indexing={indexing} />
+                <label className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <input
+                    type="checkbox"
+                    checked={aiEnabledByPath[doc.path] ?? false}
+                    onChange={(e) => handleToggleAI(doc, e.target.checked)}
+                    disabled={busy}
+                    className="h-3.5 w-3.5 rounded border-white/20 text-[#75C043]"
+                  />
+                  AI
+                </label>
               </div>
               <div className="flex items-center gap-2">
                 {action.type === "rename" && action.doc?.path === doc.path ? (

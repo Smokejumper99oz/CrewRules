@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { getTenantPortalConfig } from "@/lib/tenant-config";
+import { getProfile } from "@/lib/profile";
+import { signOut } from "../portal/actions";
 import { AdminMobileNav } from "@/components/admin-mobile-nav";
+import { PortalUserMenu } from "@/components/portal-user-menu";
+import { PageTitle } from "@/components/page-title";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -10,25 +14,28 @@ const ADMIN_NAV = [
   { label: "Dashboard", href: "" },
   { label: "Uploads", href: "documents" },
   { label: "Library", href: "library" },
+  { label: "People & Permissions", href: "people" },
 ];
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
+export default async function AdminLayout({ children }: { children: ReactNode }) {
   const cfg = getTenantPortalConfig(TENANT, PORTAL);
   if (!cfg) return null;
 
   const base = `/${TENANT}/${PORTAL}/admin`;
+  const userProfile = await getProfile();
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="flex">
         <aside className="hidden md:flex md:w-72 md:flex-col md:gap-4 border-r border-white/5 bg-slate-950/70 backdrop-blur">
           <div className="px-6 pt-6">
-            <div className="text-sm font-semibold">
+            <div className="text-lg font-semibold">
               Crew<span className="text-[#75C043]">Rules</span>
-              <span className="align-super text-xs">™</span> Admin
+              <span className="align-super text-xs">™</span>
             </div>
-            <div className="mt-1 text-xs text-slate-400">
-              {cfg.tenant.displayName} • {cfg.portal.displayName}
+            <div className="mt-0.5 space-y-0.5 text-xs text-slate-400">
+              <div>{cfg.tenant.displayName}</div>
+              <div>{cfg.portal.displayName}</div>
             </div>
           </div>
 
@@ -66,17 +73,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                   portalBase={`/${TENANT}/${PORTAL}/portal`}
                 />
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold truncate">Admin Portal</div>
+                  <PageTitle portalDisplayName={cfg.portal.displayName} isAdmin={true} />
                   <div className="hidden text-xs text-slate-400 sm:block">
-                    {cfg.tenant.displayName} • Upload CBA & documents
+                    Manage content, roles, and portal configuration
                   </div>
                 </div>
               </div>
 
-              <div className="flex shrink-0 items-center gap-3">
-                <div className="rounded-full bg-amber-500/20 px-3 py-1 text-xs text-amber-200 ring-1 ring-amber-500/30">
-                  Admin
-                </div>
+              <div className="flex shrink-0 items-center">
+                <PortalUserMenu
+                  email={userProfile?.email ?? null}
+                  role="admin"
+                  signOut={signOut}
+                />
               </div>
             </div>
           </header>
