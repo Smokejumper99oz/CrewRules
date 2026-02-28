@@ -1,9 +1,9 @@
 "use server";
 
-import { redirect, unstable_rethrow } from "next/navigation";
+import { unstable_rethrow } from "next/navigation";
 import { createActionClient } from "@/lib/supabase/server-action";
 
-export type LoginState = { error?: string } | null;
+export type LoginState = { error?: string; ok?: boolean } | null;
 
 function getSupabaseEnvCheck(): string | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -35,7 +35,7 @@ export async function submitLogin(_prev: LoginState, formData: FormData): Promis
       return { error: error.message };
     }
 
-    redirect("/frontier/pilots/portal");
+    return { ok: true };
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);

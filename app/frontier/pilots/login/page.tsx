@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useActionState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useActionState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { submitLogin } from "./actions";
 import { signOut } from "../portal/actions";
 import { SignOutButton } from "@/components/sign-out-button";
@@ -22,10 +22,18 @@ const GATE_ERROR_MESSAGES: Record<string, string> = {
 };
 
 function LoginForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectError = searchParams?.get("error");
   const gateMessage = redirectError ? GATE_ERROR_MESSAGES[redirectError] : null;
   const [state, formAction, isPending] = useActionState(submitLogin, null);
+
+  useEffect(() => {
+    if (state?.ok) {
+      router.push("/frontier/pilots/portal");
+      router.refresh();
+    }
+  }, [state?.ok, router]);
 
   const formErrorMessage =
     state?.error ??
