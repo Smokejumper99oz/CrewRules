@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect, unstable_rethrow } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createActionClient } from "@/lib/supabase/server-action";
 
 export type LoginState = { error?: string } | null;
 
@@ -28,7 +28,7 @@ export async function submitLogin(_prev: LoginState, formData: FormData): Promis
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = await createActionClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {

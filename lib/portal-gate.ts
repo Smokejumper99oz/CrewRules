@@ -2,6 +2,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/profile";
 
+/** Belt-and-suspenders: these emails can bypass domain/tenant/portal checks if profile is messed up. */
+const SUPER_ADMIN_EMAIL_ALLOWLIST = ["svenfolmer92@gmail.com"];
+
 /**
  * Required email domain per tenant. Non-company emails get company_email_required.
  * Optional: In Supabase Auth settings, restrict signups to @flyfrontier.com
@@ -41,9 +44,24 @@ export async function gateUserForPortal(
     redirect(`${loginPath}?error=not_signed_in`);
   }
 
+  const email = (user.email ?? "").toLowerCase().trim();
+  const isAllowlisted = SUPER_ADMIN_EMAIL_ALLOWLIST.some((e) => e.toLowerCase() === email);
+
+  const { data: minimalProfile } = await supabase
+    .from("profiles")
+    .select("id, role, tenant, portal, email")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (minimalProfile && (minimalProfile.role === "super_admin" || isAllowlisted)) {
+    return {
+      user: { id: user.id, email: user.email ?? undefined },
+      profile: minimalProfile as Profile,
+    };
+  }
+
   const requiredDomain = TENANT_EMAIL_DOMAIN[tenant];
   if (requiredDomain) {
-    const email = user.email?.toLowerCase().trim() ?? "";
     if (!email || !email.endsWith(requiredDomain.toLowerCase())) {
       redirect(`${loginPath}?error=company_email_required`);
     }
