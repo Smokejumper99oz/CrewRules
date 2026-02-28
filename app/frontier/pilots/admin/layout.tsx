@@ -23,8 +23,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   if (!cfg) return null;
 
   const userProfile = await getProfile();
+  if (!userProfile) {
+    redirect(`/${TENANT}/${PORTAL}/login?error=profile_missing`);
+  }
   const admin = await isAdmin(TENANT, PORTAL);
-  if (!admin || !userProfile) {
+  if (!admin) {
     redirect(`/${TENANT}/${PORTAL}/portal`);
   }
 
@@ -88,8 +91,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
               <div className="flex shrink-0 items-center">
                 <PortalUserMenu
-                  email={userProfile?.email ?? null}
-                  role={userProfile?.role ?? "tenant_admin"}
+                  email={userProfile.email ?? null}
+                  role={userProfile.role}
                   signOut={signOut}
                 />
               </div>

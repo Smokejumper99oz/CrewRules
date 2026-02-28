@@ -4,20 +4,45 @@ import Link from "next/link";
 import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import { submitLogin } from "./actions";
+import { signOut } from "../portal/actions";
+import { SignOutButton } from "@/components/sign-out-button";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
 
+const GATE_ERROR_MESSAGES: Record<string, string> = {
+  not_signed_in: "Your session expired. Please sign in again.",
+  profile_missing: "Your account exists but your CrewRules profile is missing. Contact an admin.",
+  tenant_mismatch: "This account is not authorized for this airline portal.",
+  portal_mismatch: "This account is not authorized for this portal.",
+  role_not_allowed: "Your role does not allow access. Contact an admin.",
+};
+
 function LoginForm() {
   const searchParams = useSearchParams();
   const redirectError = searchParams?.get("error");
+  const gateMessage = redirectError ? GATE_ERROR_MESSAGES[redirectError] : null;
   const [state, formAction, isPending] = useActionState(submitLogin, null);
 
-  const errorMessage = state?.error ?? (redirectError === "invalid_link" ? "Reset link is invalid or expired. Please request a new one." : redirectError);
+  const formErrorMessage =
+    state?.error ??
+    (redirectError === "invalid_link"
+      ? "Reset link is invalid or expired. Please request a new one."
+      : !gateMessage && redirectError
+        ? redirectError
+        : null);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="mx-auto max-w-lg px-6 py-16">
+        {gateMessage && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/40 bg-rose-950/30 px-4 py-3">
+            <p className="text-sm text-rose-200">{gateMessage}</p>
+            <SignOutButton signOut={signOut} buttonClassName="shrink-0 rounded-lg border border-rose-400/50 bg-rose-900/50 px-3 py-2 text-sm text-rose-100 hover:bg-rose-900/70">
+              Sign out
+            </SignOutButton>
+          </div>
+        )}
         <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-8 shadow-lg shadow-black/30">
           <div className="text-xs uppercase tracking-widest text-slate-400">
             Frontier Airline Pilots
@@ -57,8 +82,8 @@ function LoginForm() {
               />
             </div>
 
-            {errorMessage && (
-              <p className="text-sm text-red-400">{errorMessage}</p>
+            {formErrorMessage && (
+              <p className="text-sm text-red-400">{formErrorMessage}</p>
             )}
 
             <button

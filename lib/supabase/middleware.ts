@@ -62,6 +62,7 @@ export async function updateSession(request: NextRequest) {
   if ((isPortalRoute || isAdminRoute) && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/frontier/pilots/login";
+    url.searchParams.set("error", "not_signed_in");
     return NextResponse.redirect(url);
   }
 

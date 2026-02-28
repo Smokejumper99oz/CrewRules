@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { getTenantPortalConfig } from "@/lib/tenant-config";
-import { getProfile, isAdmin, getDisplayName } from "@/lib/profile";
+import { gateUserForPortal } from "@/lib/portal-gate";
+import { isAdmin, getDisplayName } from "@/lib/profile";
 import { signOut } from "./actions";
 import { PortalMobileNav } from "@/components/portal-mobile-nav";
 import { PortalUserMenu } from "@/components/portal-user-menu";
 import { SignOutButton } from "@/components/sign-out-button";
 import { PageTitle } from "@/components/page-title";
+import { PortalDebugLine } from "@/components/portal-debug-line";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -43,8 +45,8 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   const cfg = getTenantPortalConfig(TENANT, PORTAL);
   if (!cfg) return null;
 
-  const profile = await getProfile();
-  const admin = await isAdmin();
+  const { user, profile } = await gateUserForPortal(TENANT, PORTAL);
+  const admin = await isAdmin(TENANT, PORTAL);
   const base = `/${TENANT}/${PORTAL}/portal`;
   const displayName = getDisplayName(profile ?? null);
   const roleLabel =
@@ -118,6 +120,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
 
         <section className="flex-1">
           <header className="sticky top-0 z-40 border-b border-white/5 bg-slate-950/70 backdrop-blur">
+            <PortalDebugLine email={user.email} role={profile.role} tenant={profile.tenant} portal={profile.portal} />
             <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-4 py-3 sm:px-6">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <PortalMobileNav
@@ -134,8 +137,8 @@ export default async function PortalLayout({ children }: { children: ReactNode }
 
               <div className="flex shrink-0 items-center">
                 <PortalUserMenu
-                  email={profile?.email ?? null}
-                  role={profile?.role ?? "pilot"}
+                  email={profile.email ?? user.email ?? null}
+                  role={profile.role}
                   signOut={signOut}
                 />
               </div>

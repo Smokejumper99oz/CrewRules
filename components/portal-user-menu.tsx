@@ -33,7 +33,7 @@ export function PortalUserMenu({
   const ref = useRef<HTMLDivElement>(null);
 
   const displayName = emailToDisplayName(email);
-  const roleLabel = ROLE_LABELS[role] ?? "Member";
+  const roleLabel = ROLE_LABELS[role] ?? role;
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
