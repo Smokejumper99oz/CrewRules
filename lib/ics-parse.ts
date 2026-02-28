@@ -14,6 +14,7 @@ export type ParsedEvent = {
   uid: string | null;
   reportTime?: string; // "11:15"
   creditHours?: number; // 4.5
+  firstLegRoute?: string; // "SJU-BOS" from legs section
 };
 
 export type ParseIcsOptions = {
@@ -54,6 +55,28 @@ function getPropertyWithParams(block: string, name: string): { value: string; tz
   const tzidMatch = params.match(/TZID=([^:;]+)/i);
   if (tzidMatch) tzid = tzidMatch[1].trim();
   return { value, tzid };
+}
+
+/** Multi-line property: captures full value when it spans lines. Handles \\n in values and continuation lines. */
+function getPropertyMultiline(block: string, name: string): string | null {
+  const lines = block.split(/\r?\n/);
+  let value: string | null = null;
+  let collecting = false;
+  const propStart = new RegExp(`^${name}((?:;[^:]*)*):(.*)`, "i");
+  const knownProp = /^(BEGIN|END|DTSTART|DTEND|SUMMARY|DESCRIPTION|UID|LOCATION|RRULE|CREATED|LAST-MODIFIED|EXDATE|RDATE|TRANSP|SEQUENCE|STATUS)(?:;[^:]*)*:/i;
+  for (const line of lines) {
+    const startMatch = line.match(propStart);
+    if (startMatch) {
+      value = decodeIcsText(startMatch[2]);
+      collecting = true;
+      continue;
+    }
+    if (collecting) {
+      if (knownProp.test(line.trim())) break;
+      value += "\n" + decodeIcsText(line);
+    }
+  }
+  return value?.trim() ?? null;
 }
 
 function getProperty(block: string, name: string): string | null {
@@ -98,10 +121,15 @@ function hasRrule(block: string): boolean {
   return /^RRULE(?:;[^:]*)?:/im.test(block);
 }
 
-/** Parse DESCRIPTION for Report time and Credit hours. FLICA/airline ICS may include these. */
-function parseDescription(desc: string): { reportTime?: string; creditHours?: number } {
-  const result: { reportTime?: string; creditHours?: number } = {};
-  const normalized = desc.replace(/\\n/g, "\n").replace(/\\,/g, ",").toLowerCase();
+/** Parse DESCRIPTION for Report time, Credit hours, and first leg route. FLICA/airline ICS may include these. */
+function parseDescription(desc: string): {
+  reportTime?: string;
+  creditHours?: number;
+  firstLegRoute?: string;
+} {
+  const result: { reportTime?: string; creditHours?: number; firstLegRoute?: string } = {};
+  const raw = desc.replace(/\\n/g, "\n").replace(/\\,/g, ",");
+  const normalized = raw.toLowerCase();
 
   // Report: 11:15, Report 11:15, Report 1115
   const reportMatch = normalized.match(/report\s*:?\s*(\d{1,2}):?(\d{2})/i);
@@ -139,7 +167,53 @@ function parseDescription(desc: string): { reportTime?: string; creditHours?: nu
     result.creditHours = !isNaN(val) && val > 0 ? val : undefined;
   }
 
+  // First leg route: scan Dy Flt flight leg lines only (day + flight number, e.g. "Th 3546 Sju-Jfk").
+  // Do NOT match header text like "Dy Flt". Pattern: ([A-Za-z]{3})\s*[-→]\s*([A-Za-z]{3})
+  const flightLegLine = /^(?:Mo|Tu|We|Th|Fr|Sa|Su)\s+\d{3,5}\b/i;
+  const airportPair = /([A-Za-z]{3})\s*[-→–—\/\u2010\u2011]\s*([A-Za-z]{3})/;
+  const tryExtractRoute = (text: string): boolean => {
+    const m = text.match(airportPair);
+    if (m && m[1] && m[2]) {
+      const origin = m[1].toUpperCase();
+      const dest = m[2].toUpperCase();
+      if (origin !== dest && /^[A-Za-z]{3}$/.test(origin) && /^[A-Za-z]{3}$/.test(dest)) {
+        result.firstLegRoute = `${origin} → ${dest}`;
+        return true;
+      }
+    }
+    return false;
+  };
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!flightLegLine.test(trimmed)) continue;
+    if (tryExtractRoute(line)) break;
+  }
+  // Fallback: if DESCRIPTION is one unfolded line (e.g. "Dy Flt Th 3546 Sju-Jfk …"), match day+num+pair
+  if (!result.firstLegRoute) {
+    const m = raw.match(/(?:Mo|Tu|We|Th|Fr|Sa|Su)\s+\d{3,5}\s+([A-Za-z]{3})\s*[-→–—\/\u2010\u2011]\s*([A-Za-z]{3})/i);
+    if (m && m[1] && m[2]) {
+      const origin = m[1].toUpperCase();
+      const dest = m[2].toUpperCase();
+      if (origin !== dest && /^[A-Za-z]{3}$/.test(origin) && /^[A-Za-z]{3}$/.test(dest)) {
+        result.firstLegRoute = `${origin} → ${dest}`;
+      }
+    }
+  }
+
   return result;
+}
+
+/** Extract first-leg route (e.g. "SJU → JFK") from text. Used as fallback when DESCRIPTION has none. */
+function parseRouteFromText(text: string): string | null {
+  const m = text.match(/\b([A-Za-z]{3})\s*[-→–—\/\u2010\u2011]\s*([A-Za-z]{3})\b/i);
+  if (m && m[1] && m[2]) {
+    const origin = m[1].toUpperCase();
+    const dest = m[2].toUpperCase();
+    if (origin !== dest && /^[A-Za-z]{3}$/.test(origin) && /^[A-Za-z]{3}$/.test(dest)) {
+      return `${origin} → ${dest}`;
+    }
+  }
+  return null;
 }
 
 export function parseIcs(icsText: string, options: ParseIcsOptions = {}): ParsedEvent[] {
@@ -163,12 +237,16 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
         const dtstartRaw = getPropertyWithParams(block, "DTSTART");
         const dtendRaw = getPropertyWithParams(block, "DTEND");
         const summary = getProperty(block, "SUMMARY");
-        const description = getProperty(block, "DESCRIPTION");
+        const description = getPropertyMultiline(block, "DESCRIPTION");
+        const location = getProperty(block, "LOCATION");
         const uid = getProperty(block, "UID");
 
         if (!dtstartRaw?.value) continue;
 
-        const { reportTime, creditHours } = parseDescription(description ?? "");
+        const { reportTime, creditHours, firstLegRoute } = parseDescription(description ?? "");
+        const routeFromSummary = !firstLegRoute ? parseRouteFromText(summary ?? "") : null;
+        const routeFromLocation =
+          !firstLegRoute && !routeFromSummary ? parseRouteFromText(location ?? "") : null;
         const start = parseIcsDateToUtc(dtstartRaw.value, {
           tzid: dtstartRaw.tzid,
           sourceTimezone,
@@ -189,6 +267,7 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
           uid: uid?.trim() || null,
           reportTime: reportTime || undefined,
           creditHours: creditHours ?? undefined,
+          firstLegRoute: firstLegRoute || routeFromSummary || routeFromLocation || undefined,
         });
       }
     }

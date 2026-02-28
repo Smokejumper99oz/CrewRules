@@ -41,6 +41,7 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
   const titlePart = event.event_type === "reserve" ? rawTitle.replace(/^Trip\s+/i, "") : rawTitle;
   const typePrefix = event.event_type === "reserve" ? "" : `${typeLabel(event.event_type)} `;
   const headerLine = pos ? `${typePrefix}${titlePart} • ${pos}` : `${typePrefix}${titlePart}`;
+  const showRoute = event.event_type === "trip" && event.route?.trim();
 
   const showReportCredit = event.event_type === "trip" || event.event_type === "reserve";
   const reportPart = event.report_time ?? "—";
@@ -61,6 +62,7 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
       <div className={`flex flex-col gap-0.5 rounded-xl border px-3 py-2 ${borderStyle} bg-slate-950/40`}>
         <span className="text-xs font-medium text-slate-500">{formatDayLabel(event.start_time, displaySettings.baseTimezone)}</span>
         <span className="font-medium text-white">{headerLine}</span>
+        {showRoute && <span className="text-xs text-slate-500">{event.route}</span>}
         {showReportCredit && (
           <>
             <span className="text-xs text-slate-400">{timeLine}</span>
@@ -76,6 +78,7 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
     <div className={`flex flex-col gap-0.5 rounded-xl border px-4 py-3 ${borderStyle} bg-slate-950/40`}>
       <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{formatDayLabel(event.start_time, displaySettings.baseTimezone)}</span>
       <span className="text-lg font-medium text-white">{headerLine}</span>
+      {showRoute && <span className="text-sm text-slate-500">{event.route}</span>}
       {showReportCredit && (
         <>
           <span className="text-sm text-slate-400">{timeLine}</span>

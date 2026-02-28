@@ -55,7 +55,7 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
     profile.base_timezone ??
     (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : getTenantSourceTimezone(profile.tenant));
 
-  let parsed: { start: Date; end: Date; title: string; uid: string | null; reportTime?: string; creditHours?: number }[];
+  let parsed: { start: Date; end: Date; title: string; uid: string | null; reportTime?: string; creditHours?: number; firstLegRoute?: string }[];
   try {
     const { parseIcs } = await import("@/lib/ics-parse");
     parsed = parseIcs(icsText, { sourceTimezone });
@@ -74,6 +74,7 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
       externalUid: ev.uid,
       reportTime: ev.reportTime ?? null,
       creditHours: ev.creditHours ?? null,
+      route: ev.firstLegRoute ?? null,
     }));
 
   if (events.length === 0) {
@@ -96,6 +97,7 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
     event_type: inferEventType(e.title),
     report_time: e.reportTime,
     credit_hours: e.creditHours ?? null,
+    route: e.route ?? null,
     source: FLICA_SOURCE,
     external_uid: e.externalUid,
     import_batch_id: importBatchId,
@@ -187,6 +189,7 @@ export type ScheduleEvent = {
   event_type: string;
   report_time?: string | null;
   credit_hours?: number | null;
+  route?: string | null;
 };
 
 export type NextDutyLabel = "on_duty" | "later_today" | "next_duty";
@@ -215,7 +218,7 @@ export async function getNextDuty(): Promise<{
     // 1. On duty: start <= now < end
     const { data: onDutyData, error: onDutyError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, route")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", nowIso)
@@ -232,7 +235,7 @@ export async function getNextDuty(): Promise<{
     // 2. Upcoming events: start >= now
     const { data: upcomingData, error: upcomingError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, route")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .gte("start_time", nowIso)
@@ -277,7 +280,7 @@ export async function getScheduleEvents(fromIso: string, toIso: string): Promise
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, route")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", toIso)
@@ -343,7 +346,7 @@ export async function getUpcomingEvents(limit = 8): Promise<{ events: ScheduleEv
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, route")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .gte("start_time", nowIso)
