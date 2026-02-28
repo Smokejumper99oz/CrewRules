@@ -12,10 +12,13 @@ const PORTAL = "pilots";
 
 const GATE_ERROR_MESSAGES: Record<string, string> = {
   not_signed_in: "Your session expired. Please sign in again.",
+  company_email_required: "CrewRules Frontier portal requires a @flyfrontier.com email.",
   profile_missing: "Your account exists but your CrewRules profile is missing. Contact an admin.",
+  profile_missing_contact_admin: "Your account exists but your CrewRules profile is missing. Contact an admin.",
   tenant_mismatch: "This account is not authorized for this airline portal.",
   portal_mismatch: "This account is not authorized for this portal.",
   role_not_allowed: "Your role does not allow access. Contact an admin.",
+  account_disabled: "Your account has been disabled. Contact an admin.",
 };
 
 function LoginForm() {
