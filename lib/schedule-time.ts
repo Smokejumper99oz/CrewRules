@@ -101,6 +101,30 @@ export function formatCreditHours(hours: number): string {
   return m > 0 ? `${h}:${String(m).padStart(2, "0")}` : `${h}:00`;
 }
 
+/** Format minutes as "2:20" (140 -> "2:20"). */
+export function formatMinutesToHhMm(minutes: number): string {
+  const m = Math.round(minutes);
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return mm > 0 ? `${h}:${String(mm).padStart(2, "0")}` : `${h}:00`;
+}
+
+/** Compute trip credit: min 5 hrs/day, credit = max(block, min_credit), extra = credit - block. */
+export function computeTripCredit(
+  pairingDays: number | null | undefined,
+  blockMinutes: number | null | undefined
+): {
+  blockMinutes: number;
+  creditMinutes: number;
+  extraCreditMinutes: number;
+} {
+  const block = blockMinutes ?? 0;
+  const minCredit = (pairingDays ?? 1) * 300;
+  const credit = Math.max(block, minCredit);
+  const extra = Math.max(0, credit - block);
+  return { blockMinutes: block, creditMinutes: credit, extraCreditMinutes: extra };
+}
+
 /** Day label for schedule: e.g. "Tue • Feb 27", "Wed • Feb 28". Always includes weekday and date to avoid confusion. */
 export function formatDayLabel(isoUtc: string, timezone: string): string {
   try {
@@ -124,14 +148,14 @@ export type DaySegment = {
 };
 
 /** Add one day to YYYY-MM-DD (timezone-safe). */
-function addDay(dateStr: string): string {
+export function addDay(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   const next = new Date(Date.UTC(y, m - 1, d + 1));
   return next.toISOString().slice(0, 10);
 }
 
 /** Extract pairing/trip key from title for merging. Handles "S3059", "Trip S3059", "S3059 BOS-SJU", etc. */
-function extractPairingKey(title: string | null): string {
+export function extractPairingKey(title: string | null): string {
   const s = (title ?? "").trim();
   const match = s.match(/([A-Z]?\d{4,}[A-Z]?)/i);
   if (match) return match[1].toUpperCase();

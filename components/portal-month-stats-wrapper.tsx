@@ -1,4 +1,5 @@
 import { getAvailableMonths, getMonthStats } from "@/app/frontier/pilots/portal/schedule/actions";
+import type { MonthStats } from "@/app/frontier/pilots/portal/schedule/actions";
 import { PortalMonthStatsClient } from "./portal-month-stats";
 
 function monthKey(year: number, month: number): string {
@@ -9,7 +10,7 @@ export async function PortalMonthStats({ tenant, portal }: { tenant: string; por
   const availableMonths = await getAvailableMonths();
   if (availableMonths.length === 0) return null;
 
-  const statsByMonth: Record<string, { trip: number; reserve: number; vacationOff: number; totalCredit: number }> = {};
+  const statsByMonth: Record<string, MonthStats> = {};
   for (const m of availableMonths) {
     const stats = await getMonthStats(m.year, m.month);
     statsByMonth[monthKey(m.year, m.month)] = stats;

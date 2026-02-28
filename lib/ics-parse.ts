@@ -12,9 +12,12 @@ export type ParsedEvent = {
   end: Date;
   title: string;
   uid: string | null;
-  reportTime?: string; // "11:15"
-  creditHours?: number; // 4.5
-  firstLegRoute?: string; // "SJU-BOS" from legs section
+  reportTime?: string;
+  /** Credit/pay in minutes (HHMM→minutes, e.g. 0812→492). Stored, not decimal. */
+  creditMinutes?: number;
+  firstLegRoute?: string;
+  pairingDays?: number;
+  blockMinutes?: number;
 };
 
 export type ParseIcsOptions = {
@@ -121,56 +124,102 @@ function hasRrule(block: string): boolean {
   return /^RRULE(?:;[^:]*)?:/im.test(block);
 }
 
-/** Parse DESCRIPTION for Report time, Credit hours, and first leg route. FLICA/airline ICS may include these. */
+/** Parse DESCRIPTION for Report time, Credit, route, pairing_days, block. FLICA/airline ICS. */
 function parseDescription(desc: string): {
   reportTime?: string;
-  creditHours?: number;
+  creditMinutes?: number;
   firstLegRoute?: string;
+  pairingDays?: number;
+  blockMinutes?: number;
 } {
-  const result: { reportTime?: string; creditHours?: number; firstLegRoute?: string } = {};
+  const result: {
+    reportTime?: string;
+    creditMinutes?: number;
+    firstLegRoute?: string;
+    pairingDays?: number;
+    blockMinutes?: number;
+  } = {};
   const raw = desc.replace(/\\n/g, "\n").replace(/\\,/g, ",");
   const normalized = raw.toLowerCase();
 
-  // Report: 11:15, Report 11:15, Report 1115
-  const reportMatch = normalized.match(/report\s*:?\s*(\d{1,2}):?(\d{2})/i);
+  // Report: 11:15, Report 11:15, Report 1115, Check In: 07:50
+  const reportMatch = normalized.match(/(?:report|check\s+in)\s*:?\s*(\d{1,2}):?(\d{2})/i);
   if (reportMatch) {
     result.reportTime = `${reportMatch[1].padStart(2, "0")}:${reportMatch[2]}`;
   }
 
-  // Pay/Credit patterns: FLICA uses PAY. Also Credit, Total Credit.
-  const payHhMm = normalized.match(/\bpay\s*:?\s*(\d{1,2}):?(\d{2})/i);
-  const payDecimal = normalized.match(/\bpay\s*:?\s*(\d+(?:[.,]\d+)?)/i);
-  const creditHhMm =
-    normalized.match(/(?:total\s+)?(?:trip\s+)?credit\s*:?\s*(\d{1,2}):?(\d{2})/i) ??
-    normalized.match(/credit\s*:?\s*(\d{1,2}):?(\d{2})/i) ??
-    normalized.match(/(\d{1,2}):(\d{2})\s*(?:hrs?|hours?)?\s*credit/i);
+  // HHMM → minutes (0812 → 8*60+12, 2114 → 21*60+14). Store minutes, not decimal hours.
+  const hhmmToMinutes = (n: number) => Math.floor(n / 100) * 60 + (n % 100);
+
+  // FLICA totals line: "Blk: 2114 TAFB: 8102 Pay: 2309"
+  // Blk = block time (21:14), Pay = credit (23:09). Ignore TAFB (Total Away From Base).
+  const blkMatch = raw.match(/\bblk\s*:?\s*(\d{3,4})\b/i);
+  const payMatch = raw.match(/\bpay\s*:?\s*(\d{3,4})\b/i);
+  if (payMatch) {
+    const v = parseInt(payMatch[1], 10);
+    const min = hhmmToMinutes(v);
+    if (min > 0 && min < 60000) result.creditMinutes = min;
+  }
+  if (blkMatch) {
+    const v = parseInt(blkMatch[1], 10);
+    const min = hhmmToMinutes(v);
+    if (min >= 0 && min < 60000) result.blockMinutes = min;
+  }
+
+  // FLICA TBLK/TCRD (multi-day): 2114 → 21*60+14, 2309 → 23*60+9
+  const tcrdMatch = !result.creditMinutes && raw.match(/\btcrd\s*:?\s*(\d{3,5})\b/i);
+  const tblkMatch = !result.blockMinutes && raw.match(/\btblk\s*:?\s*(\d{3,5})\b/i);
+  const totalBlockMatch = !result.blockMinutes && raw.match(/(?:total\s+)?block\s*:?\s*(\d{3,5})\b/i);
+  if (tcrdMatch) {
+    const v = parseInt(tcrdMatch[1], 10);
+    const min = hhmmToMinutes(v);
+    if (min > 0 && min < 60000) result.creditMinutes = min;
+  }
+  if (tblkMatch || totalBlockMatch) {
+    const m = tblkMatch ?? totalBlockMatch;
+    if (m) {
+      const v = parseInt(m[1], 10);
+      const min = hhmmToMinutes(v);
+      if (min >= 0 && min < 60000) result.blockMinutes = min;
+    }
+  }
+
+  // Pay/Credit fallbacks (when no Blk/Pay/TCRD HHMM): H:MM or decimal → creditMinutes
+  const payHhMm = !result.creditMinutes && normalized.match(/\bpay\s*:?\s*(\d{1,2}):?(\d{2})/i);
+  const payDecimal = !result.creditMinutes && normalized.match(/\bpay\s*:?\s*(\d+(?:[.,]\d+)?)/i);
+  const creditHhMm = !result.creditMinutes
+    ? (normalized.match(/(?:total\s+)?(?:trip\s+)?credit\s*:?\s*(\d{1,2}):?(\d{2})/i) ??
+        normalized.match(/credit\s*:?\s*(\d{1,2}):?(\d{2})/i) ??
+        normalized.match(/(\d{1,2}):(\d{2})\s*(?:hrs?|hours?)?\s*credit/i))
+    : null;
   const creditDecimal =
-    normalized.match(/(?:total\s+)?(?:trip\s+)?credit\s*:?\s*(\d+(?:[.,]\d+)?)/i) ??
-    normalized.match(/credit\s*:?\s*(\d+(?:[.,]\d+)?)/i) ??
-    normalized.match(/(\d+(?:[.,]\d+)?)\s*(?:hrs?|hours?)?\s*credit/i) ??
-    normalized.match(/(\d+(?:[.,]\d+)?)\s*credit/i);
+    !result.creditMinutes &&
+    (normalized.match(/(?:total\s+)?(?:trip\s+)?credit\s*:?\s*(\d+(?:[.,]\d+)?)/i) ??
+      normalized.match(/credit\s*:?\s*(\d+(?:[.,]\d+)?)/i) ??
+      normalized.match(/(\d+(?:[.,]\d+)?)\s*(?:hrs?|hours?)?\s*credit/i) ??
+      normalized.match(/(\d+(?:[.,]\d+)?)\s*credit/i));
   if (payHhMm) {
     const h = parseInt(payHhMm[1], 10);
     const m = parseInt(payHhMm[2], 10);
-    result.creditHours = h + m / 60;
+    result.creditMinutes = h * 60 + m;
   } else if (payDecimal) {
     const numStr = payDecimal[1].replace(",", ".");
     const val = parseFloat(numStr);
-    result.creditHours = !isNaN(val) && val > 0 ? val : undefined;
+    if (!isNaN(val) && val > 0 && val < 999) result.creditMinutes = Math.round(val * 60);
   } else if (creditHhMm) {
     const h = parseInt(creditHhMm[1], 10);
     const m = parseInt(creditHhMm[2], 10);
-    result.creditHours = h + m / 60;
+    result.creditMinutes = h * 60 + m;
   } else if (creditDecimal) {
     const numStr = creditDecimal[1].replace(",", ".");
     const val = parseFloat(numStr);
-    result.creditHours = !isNaN(val) && val > 0 ? val : undefined;
+    if (!isNaN(val) && val > 0 && val < 999) result.creditMinutes = Math.round(val * 60);
   }
 
-  // First leg route: scan Dy Flt flight leg lines only (day + flight number, e.g. "Th 3546 Sju-Jfk").
-  // Do NOT match header text like "Dy Flt". Pattern: ([A-Za-z]{3})\s*[-→]\s*([A-Za-z]{3})
+  // First leg route and pairing_days: scan Dy Flt flight leg lines only (day + flight number).
   const flightLegLine = /^(?:Mo|Tu|We|Th|Fr|Sa|Su)\s+\d{3,5}\b/i;
   const airportPair = /([A-Za-z]{3})\s*[-→–—\/\u2010\u2011]\s*([A-Za-z]{3})/;
+  const legLines: string[] = [];
   const tryExtractRoute = (text: string): boolean => {
     const m = text.match(airportPair);
     if (m && m[1] && m[2]) {
@@ -183,12 +232,18 @@ function parseDescription(desc: string): {
     }
     return false;
   };
+  const dutyDays = new Set<string>();
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!flightLegLine.test(trimmed)) continue;
-    if (tryExtractRoute(line)) break;
+    legLines.push(line);
+    if (!result.firstLegRoute) tryExtractRoute(line);
+    const dayMatch = trimmed.match(/^(Mo|Tu|We|Th|Fr|Sa|Su)/i);
+    if (dayMatch) dutyDays.add(dayMatch[1].toLowerCase());
   }
-  // Fallback: if DESCRIPTION is one unfolded line (e.g. "Dy Flt Th 3546 Sju-Jfk …"), match day+num+pair
+  result.pairingDays = dutyDays.size > 0 ? Math.min(dutyDays.size, 31) : (legLines.length > 0 ? Math.min(legLines.length, 31) : undefined);
+
+  // Fallback route: if DESCRIPTION is one unfolded line
   if (!result.firstLegRoute) {
     const m = raw.match(/(?:Mo|Tu|We|Th|Fr|Sa|Su)\s+\d{3,5}\s+([A-Za-z]{3})\s*[-→–—\/\u2010\u2011]\s*([A-Za-z]{3})/i);
     if (m && m[1] && m[2]) {
@@ -200,7 +255,75 @@ function parseDescription(desc: string): {
     }
   }
 
+  // Block minutes fallback (TBLK already parsed above): "Block: 2:20", leg sum
+  const MAX_BLOCK_MINUTES = 24 * 60 * 14; // 14 days max
+  if (!result.blockMinutes) {
+    const blockHhMm = normalized.match(/\bblock\s*:?\s*(\d{1,2}):?(\d{2})/i);
+    const blockDecimal = normalized.match(/\bblock\s*:?\s*(\d+(?:[.,]\d+)?)/i);
+    if (blockHhMm) {
+      const m = parseInt(blockHhMm[1], 10) * 60 + parseInt(blockHhMm[2], 10);
+      result.blockMinutes = Math.min(Math.max(0, m), MAX_BLOCK_MINUTES);
+    } else if (blockDecimal) {
+      const h = parseFloat(blockDecimal[1].replace(",", "."));
+      if (!isNaN(h) && h >= 0 && h <= 336) result.blockMinutes = Math.min(Math.round(h * 60), MAX_BLOCK_MINUTES);
+    } else {
+      let totalBlock = 0;
+      for (const leg of legLines) {
+        // Leg format: "Th 3546 Sju-Jfk 0850 1204 0414" (dep, arr, block in HHMM)
+        const depArrBlock = leg.match(/(\d{3,4})\s+(\d{3,4})\s+(\d{3,4})\s*$/);
+        if (depArrBlock) {
+          const blockHhmm = parseInt(depArrBlock[3], 10);
+          totalBlock += hhmmToMinutes(blockHhmm);
+        } else {
+          const depArr = leg.match(/(\d{3,4})\s+(\d{3,4})\s*$/);
+          if (depArr) {
+            const dep = parseInt(depArr[1], 10);
+            const arr = parseInt(depArr[2], 10);
+            const depMin = hhmmToMinutes(dep);
+            const arrMin = hhmmToMinutes(arr);
+            let block = arrMin - depMin;
+            if (block < 0) block += 24 * 60;
+            totalBlock += block;
+          }
+        }
+      }
+      if (totalBlock > 0) result.blockMinutes = Math.min(totalBlock, MAX_BLOCK_MINUTES);
+    }
+  }
+
   return result;
+}
+
+/** Extract credit/pay hours from text. Used for SUMMARY, COMMENT, or fallback. */
+function parseCreditFromText(text: string): number | null {
+  if (!text?.trim()) return null;
+  const t = text.trim();
+  const payOrCredit =
+    t.match(/\b(?:pay|credit)\s*:?\s*(\d{1,2}):?(\d{2})\b/i) ??
+    t.match(/\b(?:pay|credit)\s*:?\s*(\d+(?:[.,]\d+)?)\b/i) ??
+    t.match(/\b(\d{1,2}):(\d{2})\s*(?:hrs?)?\s*(?:pay|credit)\b/i) ??
+    t.match(/\b(\d+(?:[.,]\d+)?)\s*(?:hrs?)?\s*(?:pay|credit)\b/i);
+  if (payOrCredit) {
+    if (payOrCredit[2] && /^\d{2}$/.test(payOrCredit[2])) {
+      const h = parseInt(payOrCredit[1], 10);
+      const m = parseInt(payOrCredit[2], 10);
+      return h + m / 60;
+    }
+    const num = parseFloat((payOrCredit[1] ?? "").replace(",", "."));
+    return !isNaN(num) && num > 0 && num < 999 ? num : null;
+  }
+  const standalone = t.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (standalone) {
+    const h = parseInt(standalone[1], 10);
+    const m = parseInt(standalone[2], 10);
+    if (h >= 0 && h < 24 && m >= 0 && m < 60) return h + m / 60;
+  }
+  const decimal = t.match(/\b(\d{1,2}\.\d{2})\b/);
+  if (decimal) {
+    const v = parseFloat(decimal[1]);
+    if (v > 0 && v < 999) return v;
+  }
+  return null;
 }
 
 /** Extract first-leg route (e.g. "SJU → JFK") from text. Used as fallback when DESCRIPTION has none. */
@@ -238,12 +361,20 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
         const dtendRaw = getPropertyWithParams(block, "DTEND");
         const summary = getProperty(block, "SUMMARY");
         const description = getPropertyMultiline(block, "DESCRIPTION");
+        const comment = getPropertyMultiline(block, "COMMENT");
         const location = getProperty(block, "LOCATION");
         const uid = getProperty(block, "UID");
 
         if (!dtstartRaw?.value) continue;
 
-        const { reportTime, creditHours, firstLegRoute } = parseDescription(description ?? "");
+        const { reportTime, creditMinutes, firstLegRoute, pairingDays, blockMinutes } =
+          parseDescription(description ?? "");
+        const creditFromSummary = !creditMinutes ? parseCreditFromText(summary ?? "") : null;
+        const creditFromComment = !creditMinutes && !creditFromSummary ? parseCreditFromText(comment ?? "") : null;
+        const resolvedCreditMinutes =
+          creditMinutes ??
+          (creditFromSummary != null ? Math.round(creditFromSummary * 60) : undefined) ??
+          (creditFromComment != null ? Math.round(creditFromComment * 60) : undefined);
         const routeFromSummary = !firstLegRoute ? parseRouteFromText(summary ?? "") : null;
         const routeFromLocation =
           !firstLegRoute && !routeFromSummary ? parseRouteFromText(location ?? "") : null;
@@ -266,8 +397,10 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
           title: (summary ?? "").trim() || "Untitled",
           uid: uid?.trim() || null,
           reportTime: reportTime || undefined,
-          creditHours: creditHours ?? undefined,
+          creditMinutes: resolvedCreditMinutes,
           firstLegRoute: firstLegRoute || routeFromSummary || routeFromLocation || undefined,
+          pairingDays: pairingDays ?? undefined,
+          blockMinutes: blockMinutes ?? undefined,
         });
       }
     }

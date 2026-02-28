@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { formatMinutesToHhMm } from "@/lib/schedule-time";
 import type { MonthOption, MonthStats } from "@/app/frontier/pilots/portal/schedule/actions";
 
 type Props = {
@@ -71,8 +72,22 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
             <p className="text-xs text-slate-400">Days off</p>
           </div>
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-center">
-            <p className="text-2xl font-bold text-amber-300">{stats.totalCredit?.toFixed(1) ?? "0"}</p>
-            <p className="text-xs text-slate-400">Credit hrs</p>
+            <p className="text-2xl font-bold text-amber-300">
+              {stats.totalCredit != null && stats.totalCredit > 0
+                ? formatMinutesToHhMm(Math.round(stats.totalCredit * 60))
+                : "0:00"}
+            </p>
+            <p className="text-xs text-slate-400">
+              Credit
+              {((stats.totalBlock ?? 0) > 0 || (stats.totalExtraCredit ?? 0) > 0) && (
+                <span className="mt-0.5 block text-slate-500">
+                  Block {formatMinutesToHhMm(Math.round((stats.totalBlock ?? 0) * 60))}
+                  {(stats.totalExtraCredit ?? 0) > 0 && (
+                    <> • +{formatMinutesToHhMm(Math.round((stats.totalExtraCredit ?? 0) * 60))}</>
+                  )}
+                </span>
+              )}
+            </p>
           </div>
         </div>
       </div>

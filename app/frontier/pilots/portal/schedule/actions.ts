@@ -5,23 +5,51 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, isAdmin } from "@/lib/profile";
 import { getTenantSourceTimezone, getReserveCreditPerDay } from "@/lib/tenant-config";
+import { computeTripCredit, extractPairingKey, expandEventToDaySegments, addDay } from "@/lib/schedule-time";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 
 const FLICA_SOURCE = "flica_import";
 
+/** Reserve codes: RSA, RSB, RSC, RSD, RSE, RSL. */
+const RESERVE_CODE = /\b(RSA|RSB|RSC|RSD|RSE|RSL)\b/i;
+
+/** True if title indicates a trip assigned from reserve (e.g. "RSA Trip S3019"). */
+function isReserveAssignmentByTitle(title: string): boolean {
+  return RESERVE_CODE.test(title ?? "") && (/\bTrip\b/i.test(title ?? "") || /\bS\d{4}\b/i.test(title ?? ""));
+}
+
 /**
  * Infer event_type from ICS summary/title (FLICA-style labels).
- * Reserve: RSA, RSB, RSC, RSD, RDE, RSE, RSL, RES, Reserve.
+ * Reserve assignment (RSA/RSB/etc + Trip): treat as trip, 4 hrs/day credit.
+ * Reserve: RSA, RSB, RSC, RSD, RDE, RSE, RSL, RES (standalone).
  * Vacation: VAC, Vacation, V15, V20 (V + digits).
  * Off: OFF, Off, OFF DUTY, Off Duty, DAY OFF.
  * Else → trip.
  */
 function inferEventType(summary: string): "trip" | "reserve" | "vacation" | "off" {
   const s = summary ?? "";
-  if (/\b(RES|RSA|RSB|RSC|RSD|RDE|RSE|RSL)\b|Reserve/i.test(s)) return "reserve";
   if (/\bVAC\b|Vacation|\bV\d+\b/i.test(s)) return "vacation"; // V15, V20, etc.
   if (/\bOFF\b|\bOff\b|Off Duty|DAY OFF/i.test(s)) return "off";
+  if (isReserveAssignmentByTitle(s)) return "trip";
+  if (/\b(RES|RSA|RSB|RSC|RSD|RDE|RSE|RSL)\b|Reserve/i.test(s)) return "reserve";
   return "trip";
+}
+
+/** True if trip immediately follows a reserve event (short call → pairing). */
+function tripFollowsReserve(
+  tripStart: Date,
+  allEvents: Array<{ start: Date; end: Date; title: string }>
+): boolean {
+  const tripStartMs = tripStart.getTime();
+  const preceding = allEvents
+    .filter((e) => e.end.getTime() < tripStartMs)
+    .sort((a, b) => b.end.getTime() - a.end.getTime());
+  const lastBefore = preceding[0];
+  if (!lastBefore) return false;
+  const type = inferEventType(lastBefore.title);
+  if (type !== "reserve") return false;
+  const gapMs = tripStartMs - lastBefore.end.getTime();
+  return gapMs <= 48 * 60 * 60 * 1000;
 }
 
 export type ImportIcsResult =
@@ -55,7 +83,7 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
     profile.base_timezone ??
     (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : getTenantSourceTimezone(profile.tenant));
 
-  let parsed: { start: Date; end: Date; title: string; uid: string | null; reportTime?: string; creditHours?: number; firstLegRoute?: string }[];
+  let parsed: { start: Date; end: Date; title: string; uid: string | null; reportTime?: string; creditMinutes?: number; firstLegRoute?: string; pairingDays?: number; blockMinutes?: number }[];
   try {
     const { parseIcs } = await import("@/lib/ics-parse");
     parsed = parseIcs(icsText, { sourceTimezone });
@@ -73,8 +101,10 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
       title: ev.title,
       externalUid: ev.uid,
       reportTime: ev.reportTime ?? null,
-      creditHours: ev.creditHours ?? null,
+      creditMinutes: ev.creditMinutes ?? null,
       route: ev.firstLegRoute ?? null,
+      pairingDays: ev.pairingDays ?? null,
+      blockMinutes: ev.blockMinutes ?? null,
     }));
 
   if (events.length === 0) {
@@ -87,34 +117,66 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
   const tenant = profile.tenant ?? "frontier";
   const portal = profile.portal ?? "pilots";
 
-  const toRow = (e: (typeof events)[0] & { externalUid: string; creditHours?: number | null }) => ({
-    tenant,
-    portal,
-    user_id: profile.id,
-    start_time: e.start.toISOString(),
-    end_time: e.end.toISOString(),
-    title: e.title,
-    event_type: inferEventType(e.title),
-    report_time: e.reportTime,
-    credit_hours: e.creditHours ?? null,
-    route: e.route ?? null,
-    source: FLICA_SOURCE,
-    external_uid: e.externalUid,
-    import_batch_id: importBatchId,
-    imported_at: importedAt,
-  });
-
   const reserveCreditPerDay = getReserveCreditPerDay(profile.tenant ?? "frontier");
+  const RESERVE_CREDIT_PER_DAY_MINUTES = Math.round(reserveCreditPerDay * 60);
+
+  const sortedByStart = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  const toRow = (e: (typeof events)[0] & { externalUid: string }) => {
+    const eventType = inferEventType(e.title);
+    let creditMinutes: number | null = null;
+    let blockMinutes: number | null = e.blockMinutes ?? null;
+    let pairingDays: number | null = e.pairingDays ?? null;
+    let isReserveAssignment = false;
+
+    if (eventType === "trip") {
+      const followsReserve = tripFollowsReserve(e.start, sortedByStart);
+      const titleIndicatesReserveAssign = isReserveAssignmentByTitle(e.title);
+      isReserveAssignment = titleIndicatesReserveAssign || followsReserve;
+
+      if (isReserveAssignment) {
+        const days = e.pairingDays ?? 1;
+        creditMinutes = RESERVE_CREDIT_PER_DAY_MINUTES * days;
+        blockMinutes = null;
+      } else if (e.creditMinutes != null && e.creditMinutes > 0) {
+        creditMinutes = e.creditMinutes;
+        blockMinutes = e.blockMinutes ?? blockMinutes ?? creditMinutes;
+      } else if (e.pairingDays != null || e.blockMinutes != null) {
+        const { creditMinutes: computed } = computeTripCredit(e.pairingDays, e.blockMinutes);
+        creditMinutes = computed;
+      }
+    } else if (eventType === "reserve") {
+      creditMinutes = RESERVE_CREDIT_PER_DAY_MINUTES;
+    }
+
+    return {
+      tenant,
+      portal,
+      user_id: profile.id,
+      start_time: e.start.toISOString(),
+      end_time: e.end.toISOString(),
+      title: e.title,
+      event_type: eventType,
+      report_time: e.reportTime,
+      credit_hours: creditMinutes != null ? creditMinutes / 60 : null,
+      credit_minutes: creditMinutes,
+      route: e.route ?? null,
+      pairing_days: pairingDays,
+      block_minutes: blockMinutes,
+      is_reserve_assignment: isReserveAssignment,
+      source: FLICA_SOURCE,
+      external_uid: e.externalUid,
+      import_batch_id: importBatchId,
+      imported_at: importedAt,
+    };
+  };
 
   const rows = events.map((e) => {
     const baseUid =
       e.externalUid?.trim() ||
       `anon-${createHash("sha256").update(`${e.start.toISOString()}|${e.end.toISOString()}|${e.title}`).digest("hex").slice(0, 24)}`;
     const externalUid = `${baseUid}-${e.start.toISOString()}`;
-    const eventType = inferEventType(e.title);
-    const creditHours =
-      e.creditHours ?? (eventType === "reserve" ? reserveCreditPerDay : null);
-    return toRow({ ...e, externalUid, creditHours });
+    return toRow({ ...e, externalUid });
   });
 
   const { error: upsertError } = await supabase
@@ -189,7 +251,12 @@ export type ScheduleEvent = {
   event_type: string;
   report_time?: string | null;
   credit_hours?: number | null;
+  credit_minutes?: number | null;
   route?: string | null;
+  pairing_days?: number | null;
+  block_minutes?: number | null;
+  /** Trip from short-call reserve (RSA/RSB/etc): credit = 4 hrs/day, no block. */
+  is_reserve_assignment?: boolean | null;
 };
 
 export type NextDutyLabel = "on_duty" | "later_today" | "next_duty";
@@ -218,7 +285,7 @@ export async function getNextDuty(): Promise<{
     // 1. On duty: start <= now < end
     const { data: onDutyData, error: onDutyError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, route")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", nowIso)
@@ -235,7 +302,7 @@ export async function getNextDuty(): Promise<{
     // 2. Upcoming events: start >= now
     const { data: upcomingData, error: upcomingError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, route")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .gte("start_time", nowIso)
@@ -280,7 +347,7 @@ export async function getScheduleEvents(fromIso: string, toIso: string): Promise
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, route")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", toIso)
@@ -346,7 +413,7 @@ export async function getUpcomingEvents(limit = 8): Promise<{ events: ScheduleEv
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, route")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .gte("start_time", nowIso)
@@ -393,14 +460,15 @@ export async function getScheduleDisplaySettings(): Promise<ScheduleDisplaySetti
 }
 
 export type MonthStats = {
-  /** Trip occurrences (each schedule_events row = 1, back-to-back same pairing = 2). */
   trip: number;
-  /** Unique reserve days (YYYY-MM-DD). */
   reserve: number;
-  /** Unique vacation/off days, including days with no trip or reserve. */
   vacationOff: number;
-  /** Sum of credit_hours for trip occurrences whose start_time is within the month. */
+  /** Trip credit hours (pay). */
   totalCredit: number;
+  /** Trip block hours (wheels up–down). */
+  totalBlock: number;
+  /** Extra credit over block (min 5 hrs/day). */
+  totalExtraCredit: number;
   error?: string;
 };
 
@@ -422,18 +490,19 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("start_time, end_time, event_type, title, credit_hours")
+      .select("start_time, end_time, event_type, title, credit_hours, credit_minutes, pairing_days, block_minutes")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", endStr)
       .gte("end_time", startStr);
 
-    if (error) return { trip: 0, reserve: 0, vacationOff: 0, totalCredit: 0, error: error.message };
+    if (error)
+      return { trip: 0, reserve: 0, vacationOff: 0, totalCredit: 0, totalBlock: 0, totalExtraCredit: 0, error: error.message };
 
     const baseTimezone =
       profile.base_timezone ??
       (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : getTenantSourceTimezone(profile.tenant));
-    const { expandEventToDaySegments } = await import("@/lib/schedule-time");
+    const reserveCreditPerDay = getReserveCreditPerDay(profile.tenant ?? "frontier");
 
     const rows = (data ?? []) as {
       start_time: string;
@@ -441,12 +510,30 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
       event_type: string;
       title: string | null;
       credit_hours: number | null;
+      credit_minutes: number | null;
+      pairing_days: number | null;
+      block_minutes: number | null;
     }[];
 
     const reserveDays = new Set<string>();
     const tripDays = new Set<string>();
     let tripOccurrences = 0;
     let totalCredit = 0;
+    let totalBlock = 0;
+    let totalExtraCredit = 0;
+
+    // Group by pairing, then find runs (consecutive dates). Same pairing on non-consecutive days = different trips.
+    // e.g. S3019 Feb 19-20 and S3019 Feb 21-22 are two separate trips, not duplicates.
+    const byPairing = new Map<
+      string,
+      Array<{
+        creditHrs: number;
+        blockHrs: number;
+        extraHrs: number;
+        pairingDays: number;
+        dateStrs: string[];
+      }>
+    >();
 
     for (const ev of rows) {
       const segments = expandEventToDaySegments(ev.start_time, ev.end_time, y, m, baseTimezone);
@@ -459,14 +546,75 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
       }
       if (ev.event_type === "trip") {
         tripOccurrences += 1;
-        if (ev.credit_hours != null && ev.credit_hours > 0) {
-          const evStart = new Date(ev.start_time);
-          if (evStart >= monthStart && evStart <= monthEnd) {
-            totalCredit += ev.credit_hours;
-          }
+        const evCreditHrs = ev.credit_minutes != null ? ev.credit_minutes / 60 : ev.credit_hours ?? null;
+        let blockHrs = 0;
+        let creditHrs = 0;
+        let extraHrs = 0;
+        if (ev.block_minutes != null && evCreditHrs != null && evCreditHrs > 0) {
+          blockHrs = ev.block_minutes / 60;
+          creditHrs = evCreditHrs;
+          extraHrs = Math.max(0, evCreditHrs - ev.block_minutes / 60);
+        } else if (ev.pairing_days != null || ev.block_minutes != null) {
+          const { blockMinutes, creditMinutes, extraCreditMinutes } = computeTripCredit(
+            ev.pairing_days,
+            ev.block_minutes
+          );
+          blockHrs = blockMinutes / 60;
+          creditHrs = creditMinutes / 60;
+          extraHrs = extraCreditMinutes / 60;
+        } else if (evCreditHrs != null && evCreditHrs > 0) {
+          creditHrs = evCreditHrs;
+        }
+        if (creditHrs > 0 && segments.length > 0) {
+          const key = extractPairingKey(ev.title);
+          const dateStrs = segments.map((s) => s.dateStr);
+          const entry = {
+            creditHrs,
+            blockHrs,
+            extraHrs,
+            pairingDays: ev.pairing_days ?? 1,
+            dateStrs,
+          };
+          if (!byPairing.has(key)) byPairing.set(key, []);
+          byPairing.get(key)!.push(entry);
         }
       }
     }
+
+    // Find runs: consecutive dates that share an event. Same pairing on non-consecutive/ungapped
+    // spans = different trips (e.g. S3019 Feb 19-20 vs Feb 21-22).
+    for (const [, entries] of byPairing) {
+      const allDateStrs = [...new Set(entries.flatMap((e) => e.dateStrs))].sort();
+      const runs: string[][] = [];
+      let run: string[] = [allDateStrs[0]];
+      for (let i = 1; i < allDateStrs.length; i++) {
+        const prev = allDateStrs[i - 1];
+        const curr = allDateStrs[i];
+        const isConsecutive = addDay(prev) === curr;
+        const hasEventSpanningBoth = isConsecutive && entries.some(
+          (e) => e.dateStrs.includes(prev) && e.dateStrs.includes(curr)
+        );
+        if (hasEventSpanningBoth) {
+          run.push(curr);
+        } else {
+          runs.push(run);
+          run = [curr];
+        }
+      }
+      runs.push(run);
+      for (const runDateStrs of runs) {
+        const ev = entries.find((e) => e.dateStrs.some((d) => runDateStrs.includes(d)))!;
+        const daysInMonth = runDateStrs.length;
+        const ratio = ev.pairingDays > 0 ? Math.min(1, daysInMonth / ev.pairingDays) : 1;
+        totalCredit += ev.creditHrs * ratio;
+        totalBlock += ev.blockHrs * ratio;
+        totalExtraCredit += ev.extraHrs * ratio;
+      }
+    }
+
+    // Add reserve credit (exclude days that are also trip days—short call that converted to pairing)
+    const reserveOnlyDays = [...reserveDays].filter((d) => !tripDays.has(d));
+    totalCredit += reserveOnlyDays.length * reserveCreditPerDay;
 
     const lastDate = monthEnd.getDate();
     const allMonthDays = new Set<string>();
@@ -474,16 +622,18 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
       allMonthDays.add(`${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
     }
 
-    const reserve = reserveDays.size;
+    const reserve = reserveOnlyDays.length;
     const vacationOff = [...allMonthDays].filter((d) => !reserveDays.has(d) && !tripDays.has(d)).length;
 
-    return { trip: tripOccurrences, reserve, vacationOff, totalCredit };
+    return { trip: tripOccurrences, reserve, vacationOff, totalCredit, totalBlock, totalExtraCredit };
   } catch (e) {
     return {
       trip: 0,
       reserve: 0,
       vacationOff: 0,
       totalCredit: 0,
+      totalBlock: 0,
+      totalExtraCredit: 0,
       error: e instanceof Error ? e.message : "Unknown error",
     };
   }

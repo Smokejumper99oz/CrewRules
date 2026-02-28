@@ -1,4 +1,4 @@
-import { formatScheduleTime, formatDayLabel } from "@/lib/schedule-time";
+import { formatScheduleTime, formatDayLabel, computeTripCredit, formatMinutesToHhMm } from "@/lib/schedule-time";
 import type { ScheduleEvent } from "@/app/frontier/pilots/portal/schedule/actions";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
 
@@ -45,9 +45,17 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
 
   const showReportCredit = event.event_type === "trip" || event.event_type === "reserve";
   const reportPart = event.report_time ?? "—";
+  const tripCredit =
+    event.event_type === "trip" && (event.pairing_days != null || event.block_minutes != null)
+      ? computeTripCredit(event.pairing_days, event.block_minutes)
+      : null;
+  const creditMinutes =
+    event.event_type === "trip"
+      ? event.credit_minutes ?? (tripCredit ? tripCredit.creditMinutes : null)
+      : event.credit_minutes ?? (event.credit_hours != null ? Math.round(event.credit_hours * 60) : null);
   const creditDisplay =
-    event.credit_hours != null && event.credit_hours > 0
-      ? `${event.credit_hours.toFixed(2)} hrs`
+    creditMinutes != null && creditMinutes > 0
+      ? formatMinutesToHhMm(creditMinutes)
       : "—";
   const dutyRange = `${formatScheduleTime(event.start_time, timeOpts)}–${formatScheduleTime(event.end_time, timeOpts)}`;
   const timeLine =
