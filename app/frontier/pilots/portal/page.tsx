@@ -37,18 +37,6 @@ export default async function PortalDashboard() {
       <DashboardAskBox askHref={ASK_HREF} />
 
       <PortalRecentQA tenant={TENANT} portal={PORTAL} />
-
-      {/* Saved (3 items) */}
-      <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20">
-        <h2 className="text-xl font-semibold tracking-tight border-b border-white/5">Saved</h2>
-        <ul className="mt-3 space-y-2 text-sm text-slate-300">
-          {["Bookmark…", "Note…", "Item…"].map((item, i) => (
-            <li key={i} className="rounded-lg px-3 py-2 hover:bg-white/5">
-              {item}
-            </li>
-          ))}
-        </ul>
-      </div>
     </div>
   );
 }
