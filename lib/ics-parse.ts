@@ -109,15 +109,34 @@ function parseDescription(desc: string): { reportTime?: string; creditHours?: nu
     result.reportTime = `${reportMatch[1].padStart(2, "0")}:${reportMatch[2]}`;
   }
 
-  // Credit: 4:30, Credit 4:30, Credit 4.5, 4.30 credit
-  const creditHhMm = normalized.match(/credit\s*:?\s*(\d{1,2}):?(\d{2})/i);
-  const creditDecimal = normalized.match(/credit\s*:?\s*(\d+\.?\d*)/i) ?? normalized.match(/(\d+\.?\d*)\s*credit/i);
-  if (creditHhMm) {
+  // Pay/Credit patterns: FLICA uses PAY. Also Credit, Total Credit.
+  const payHhMm = normalized.match(/\bpay\s*:?\s*(\d{1,2}):?(\d{2})/i);
+  const payDecimal = normalized.match(/\bpay\s*:?\s*(\d+(?:[.,]\d+)?)/i);
+  const creditHhMm =
+    normalized.match(/(?:total\s+)?(?:trip\s+)?credit\s*:?\s*(\d{1,2}):?(\d{2})/i) ??
+    normalized.match(/credit\s*:?\s*(\d{1,2}):?(\d{2})/i) ??
+    normalized.match(/(\d{1,2}):(\d{2})\s*(?:hrs?|hours?)?\s*credit/i);
+  const creditDecimal =
+    normalized.match(/(?:total\s+)?(?:trip\s+)?credit\s*:?\s*(\d+(?:[.,]\d+)?)/i) ??
+    normalized.match(/credit\s*:?\s*(\d+(?:[.,]\d+)?)/i) ??
+    normalized.match(/(\d+(?:[.,]\d+)?)\s*(?:hrs?|hours?)?\s*credit/i) ??
+    normalized.match(/(\d+(?:[.,]\d+)?)\s*credit/i);
+  if (payHhMm) {
+    const h = parseInt(payHhMm[1], 10);
+    const m = parseInt(payHhMm[2], 10);
+    result.creditHours = h + m / 60;
+  } else if (payDecimal) {
+    const numStr = payDecimal[1].replace(",", ".");
+    const val = parseFloat(numStr);
+    result.creditHours = !isNaN(val) && val > 0 ? val : undefined;
+  } else if (creditHhMm) {
     const h = parseInt(creditHhMm[1], 10);
     const m = parseInt(creditHhMm[2], 10);
     result.creditHours = h + m / 60;
   } else if (creditDecimal) {
-    result.creditHours = parseFloat(creditDecimal[1]) || undefined;
+    const numStr = creditDecimal[1].replace(",", ".");
+    const val = parseFloat(numStr);
+    result.creditHours = !isNaN(val) && val > 0 ? val : undefined;
   }
 
   return result;

@@ -1,4 +1,4 @@
-import { getProfile, getDisplayName } from "@/lib/profile";
+import { getProfile, getDashboardGreeting } from "@/lib/profile";
 import { PortalRecentQA } from "@/components/portal-recent-qa";
 import { PortalNextDuty } from "@/components/portal-next-duty";
 import { PortalScheduleUpcoming } from "@/components/portal-schedule-upcoming";
@@ -11,13 +11,14 @@ const ASK_HREF = `/${TENANT}/${PORTAL}/portal/ask`;
 
 export default async function PortalDashboard() {
   const profile = await getProfile();
-  const displayName = getDisplayName(profile ?? null);
+  const { greetingPart, namePart } = getDashboardGreeting(profile ?? null);
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-slate-400">
-        Welcome back, <span className="font-medium text-slate-200">{displayName}</span>
-      </p>
+      <div>
+        <p className="text-[0.9375rem] text-slate-500">{greetingPart}</p>
+        <p className="text-lg font-semibold text-slate-100">{namePart}</p>
+      </div>
 
       {/* Next Duty */}
       <PortalNextDuty tenant={TENANT} portal={PORTAL} />

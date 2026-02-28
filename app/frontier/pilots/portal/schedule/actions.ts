@@ -11,13 +11,16 @@ const FLICA_SOURCE = "flica_import";
 
 /**
  * Infer event_type from ICS summary/title (FLICA-style labels).
- * Reserve codes: RSA, RSB, RSC, RSD, RDE, RSE, RSL, RES, Reserve → reserve.
- * VAC/Vacation → vacation. Else → trip.
+ * Reserve: RSA, RSB, RSC, RSD, RDE, RSE, RSL, RES, Reserve.
+ * Vacation: VAC, Vacation, V15, V20 (V + digits).
+ * Off: OFF, Off, OFF DUTY, Off Duty, DAY OFF.
+ * Else → trip.
  */
-function inferEventType(summary: string): "trip" | "reserve" | "vacation" {
+function inferEventType(summary: string): "trip" | "reserve" | "vacation" | "off" {
   const s = summary ?? "";
   if (/\b(RES|RSA|RSB|RSC|RSD|RDE|RSE|RSL)\b|Reserve/i.test(s)) return "reserve";
-  if (/\bVAC\b|Vacation/i.test(s)) return "vacation";
+  if (/\bVAC\b|Vacation|\bV\d+\b/i.test(s)) return "vacation"; // V15, V20, etc.
+  if (/\bOFF\b|\bOff\b|Off Duty|DAY OFF/i.test(s)) return "off";
   return "trip";
 }
 
@@ -102,10 +105,10 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
   const reserveCreditPerDay = getReserveCreditPerDay(profile.tenant ?? "frontier");
 
   const rows = events.map((e) => {
-    const uid = e.externalUid?.trim();
-    const externalUid =
-      uid ||
+    const baseUid =
+      e.externalUid?.trim() ||
       `anon-${createHash("sha256").update(`${e.start.toISOString()}|${e.end.toISOString()}|${e.title}`).digest("hex").slice(0, 24)}`;
+    const externalUid = `${baseUid}-${e.start.toISOString()}`;
     const eventType = inferEventType(e.title);
     const creditHours =
       e.creditHours ?? (eventType === "reserve" ? reserveCreditPerDay : null);
@@ -186,29 +189,20 @@ export type ScheduleEvent = {
   credit_hours?: number | null;
 };
 
+export type NextDutyLabel = "on_duty" | "later_today" | "next_duty";
+
 export async function getNextDuty(): Promise<{
   event: ScheduleEvent | null;
+  label: NextDutyLabel | null;
   hasSchedule: boolean;
   error?: string;
 }> {
   const profile = await getProfile();
-  if (!profile) return { event: null, hasSchedule: false };
+  if (!profile) return { event: null, label: null, hasSchedule: false };
 
   try {
     const supabase = await createClient();
     const nowIso = new Date().toISOString();
-
-    const { data: nextData, error: nextError } = await supabase
-      .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours")
-      .eq("user_id", profile.id)
-      .eq("source", FLICA_SOURCE)
-      .gte("start_time", nowIso)
-      .order("start_time", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (nextError) return { event: null, hasSchedule: false, error: nextError.message };
 
     const { count } = await supabase
       .from("schedule_events")
@@ -216,12 +210,59 @@ export async function getNextDuty(): Promise<{
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE);
 
-    return {
-      event: nextData as ScheduleEvent | null,
-      hasSchedule: (count ?? 0) > 0,
-    };
+    const hasSchedule = (count ?? 0) > 0;
+
+    // 1. On duty: start <= now < end
+    const { data: onDutyData, error: onDutyError } = await supabase
+      .from("schedule_events")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours")
+      .eq("user_id", profile.id)
+      .eq("source", FLICA_SOURCE)
+      .lte("start_time", nowIso)
+      .gt("end_time", nowIso)
+      .order("start_time", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (onDutyError) return { event: null, label: null, hasSchedule, error: onDutyError.message };
+    if (onDutyData) {
+      return { event: onDutyData as ScheduleEvent, label: "on_duty", hasSchedule };
+    }
+
+    // 2. Upcoming events: start >= now
+    const { data: upcomingData, error: upcomingError } = await supabase
+      .from("schedule_events")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours")
+      .eq("user_id", profile.id)
+      .eq("source", FLICA_SOURCE)
+      .gte("start_time", nowIso)
+      .order("start_time", { ascending: true })
+      .limit(50);
+
+    if (upcomingError) return { event: null, label: null, hasSchedule, error: upcomingError.message };
+
+    const upcoming = (upcomingData ?? []) as ScheduleEvent[];
+    if (upcoming.length === 0) {
+      return { event: null, label: null, hasSchedule };
+    }
+
+    // Need base timezone to determine "today"
+    const baseAirport = profile.base_airport ?? null;
+    const baseTimezone =
+      profile.base_timezone ?? (baseAirport ? getTimezoneFromAirport(baseAirport) : getTenantSourceTimezone(profile.tenant));
+
+    const { isEventStartToday } = await import("@/lib/schedule-time");
+
+    // 2a. Later today: first event that starts today
+    const laterToday = upcoming.find((e) => isEventStartToday(e.start_time, baseTimezone));
+    if (laterToday) {
+      return { event: laterToday, label: "later_today", hasSchedule };
+    }
+
+    // 2b. Next duty: first future event
+    return { event: upcoming[0], label: "next_duty", hasSchedule };
   } catch (e) {
-    return { event: null, hasSchedule: false, error: e instanceof Error ? e.message : "Unknown error" };
+    return { event: null, label: null, hasSchedule: false, error: e instanceof Error ? e.message : "Unknown error" };
   }
 }
 
@@ -239,8 +280,8 @@ export async function getScheduleEvents(fromIso: string, toIso: string): Promise
       .select("id, start_time, end_time, title, event_type, report_time, credit_hours")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
-      .gte("start_time", fromIso)
       .lte("start_time", toIso)
+      .gte("end_time", fromIso)
       .order("start_time", { ascending: true });
 
     if (error) return { events: [], error: error.message };
@@ -349,9 +390,14 @@ export async function getScheduleDisplaySettings(): Promise<ScheduleDisplaySetti
 }
 
 export type MonthStats = {
+  /** Trip occurrences (each schedule_events row = 1, back-to-back same pairing = 2). */
   trip: number;
+  /** Unique reserve days (YYYY-MM-DD). */
   reserve: number;
+  /** Unique vacation/off days, including days with no trip or reserve. */
   vacationOff: number;
+  /** Sum of credit_hours for trip occurrences whose start_time is within the month. */
+  totalCredit: number;
   error?: string;
 };
 
@@ -362,7 +408,7 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
   const y = year ?? now.getFullYear();
   const m = month ?? now.getMonth();
   const profile = await getProfile();
-  if (!profile) return { trip: 0, reserve: 0, vacationOff: 0 };
+  if (!profile) return { trip: 0, reserve: 0, vacationOff: 0, totalCredit: 0 };
 
   try {
     const monthStart = new Date(y, m, 1);
@@ -373,24 +419,70 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("event_type")
+      .select("start_time, end_time, event_type, title, credit_hours")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
-      .gte("start_time", startStr)
-      .lte("start_time", endStr);
+      .lte("start_time", endStr)
+      .gte("end_time", startStr);
 
-    if (error) return { trip: 0, reserve: 0, vacationOff: 0, error: error.message };
+    if (error) return { trip: 0, reserve: 0, vacationOff: 0, totalCredit: 0, error: error.message };
 
-    let trip = 0, reserve = 0, vacationOff = 0;
-    for (const row of data ?? []) {
-      const t = (row as { event_type: string }).event_type;
-      if (t === "trip") trip++;
-      else if (t === "reserve") reserve++;
-      else vacationOff++; // vacation, off, other
+    const baseTimezone =
+      profile.base_timezone ??
+      (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : getTenantSourceTimezone(profile.tenant));
+    const { expandEventToDaySegments } = await import("@/lib/schedule-time");
+
+    const rows = (data ?? []) as {
+      start_time: string;
+      end_time: string;
+      event_type: string;
+      title: string | null;
+      credit_hours: number | null;
+    }[];
+
+    const reserveDays = new Set<string>();
+    const tripDays = new Set<string>();
+    let tripOccurrences = 0;
+    let totalCredit = 0;
+
+    for (const ev of rows) {
+      const segments = expandEventToDaySegments(ev.start_time, ev.end_time, y, m, baseTimezone);
+      for (const seg of segments) {
+        if (ev.event_type === "trip") {
+          tripDays.add(seg.dateStr);
+        } else if (ev.event_type === "reserve") {
+          reserveDays.add(seg.dateStr);
+        }
+      }
+      if (ev.event_type === "trip") {
+        tripOccurrences += 1;
+        if (ev.credit_hours != null && ev.credit_hours > 0) {
+          const evStart = new Date(ev.start_time);
+          if (evStart >= monthStart && evStart <= monthEnd) {
+            totalCredit += ev.credit_hours;
+          }
+        }
+      }
     }
-    return { trip, reserve, vacationOff };
+
+    const lastDate = monthEnd.getDate();
+    const allMonthDays = new Set<string>();
+    for (let d = 1; d <= lastDate; d++) {
+      allMonthDays.add(`${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+    }
+
+    const reserve = reserveDays.size;
+    const vacationOff = [...allMonthDays].filter((d) => !reserveDays.has(d) && !tripDays.has(d)).length;
+
+    return { trip: tripOccurrences, reserve, vacationOff, totalCredit };
   } catch (e) {
-    return { trip: 0, reserve: 0, vacationOff: 0, error: e instanceof Error ? e.message : "Unknown error" };
+    return {
+      trip: 0,
+      reserve: 0,
+      vacationOff: 0,
+      totalCredit: 0,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
   }
 }
 

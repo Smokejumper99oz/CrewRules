@@ -1,4 +1,4 @@
-import { formatScheduleTime, formatDayLabel, formatCreditHours } from "@/lib/schedule-time";
+import { formatScheduleTime, formatDayLabel } from "@/lib/schedule-time";
 import type { ScheduleEvent } from "@/app/frontier/pilots/portal/schedule/actions";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
 
@@ -44,9 +44,15 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
 
   const showReportCredit = event.event_type === "trip" || event.event_type === "reserve";
   const reportPart = event.report_time ?? "—";
-  const creditPart = event.credit_hours != null && event.credit_hours > 0 ? formatCreditHours(event.credit_hours) : "—";
-  const reportCreditLine = `Report ${reportPart} • ${creditPart} Credit`;
+  const creditDisplay =
+    event.credit_hours != null && event.credit_hours > 0
+      ? `${event.credit_hours.toFixed(2)} hrs`
+      : "—";
   const dutyRange = `${formatScheduleTime(event.start_time, timeOpts)}–${formatScheduleTime(event.end_time, timeOpts)}`;
+  const timeLine =
+    event.event_type === "reserve"
+      ? `On Call • ${dutyRange}`
+      : `Report ${reportPart} • ${dutyRange}`;
 
   const borderStyle = EVENT_STYLES[event.event_type] ?? EVENT_STYLES.other;
 
@@ -56,9 +62,12 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
         <span className="text-xs font-medium text-slate-500">{formatDayLabel(event.start_time, displaySettings.baseTimezone)}</span>
         <span className="font-medium text-white">{headerLine}</span>
         {showReportCredit && (
-          <span className="text-xs text-slate-400">{reportCreditLine}</span>
+          <>
+            <span className="text-xs text-slate-400">{timeLine}</span>
+            <span className="text-xs text-slate-400">Credit {creditDisplay}</span>
+          </>
         )}
-        <span className="text-xs text-slate-400">{dutyRange}</span>
+        {!showReportCredit && <span className="text-xs text-slate-400">{dutyRange}</span>}
       </div>
     );
   }
@@ -68,9 +77,12 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
       <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{formatDayLabel(event.start_time, displaySettings.baseTimezone)}</span>
       <span className="text-lg font-medium text-white">{headerLine}</span>
       {showReportCredit && (
-        <span className="text-sm text-slate-400">{reportCreditLine}</span>
+        <>
+          <span className="text-sm text-slate-400">{timeLine}</span>
+          <span className="text-sm text-slate-400">Credit {creditDisplay}</span>
+        </>
       )}
-      <span className="text-sm text-slate-400">{dutyRange}</span>
+      {!showReportCredit && <span className="text-sm text-slate-400">{dutyRange}</span>}
     </div>
   );
 }

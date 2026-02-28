@@ -3,7 +3,7 @@
  * Uses date-fns-tz for IANA timezone support.
  */
 
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
 export type TimeFormat = "24h" | "12h";
 export type DisplayTimezoneMode = "base" | "device" | "toggle";
@@ -69,6 +69,18 @@ export function resolveDisplayTimezone(
   return baseTimezone;
 }
 
+/** Check if event start is on today's date in the given timezone. */
+export function isEventStartToday(isoUtc: string, timezone: string): boolean {
+  try {
+    const now = new Date();
+    const startDateStr = formatInTimeZone(new Date(isoUtc), timezone, "yyyy-MM-dd");
+    const todayStr = formatInTimeZone(now, timezone, "yyyy-MM-dd");
+    return startDateStr === todayStr;
+  } catch {
+    return false;
+  }
+}
+
 /** Check if event start falls on the given calendar day in the given timezone. */
 export function isEventOnDay(isoUtc: string, day: Date, timezone: string): boolean {
   try {
@@ -97,5 +109,198 @@ export function formatDayLabel(isoUtc: string, timezone: string): string {
     return formatInTimeZone(date, timezone, "EEE • MMM d");
   } catch {
     return isoUtc;
+  }
+}
+
+/**
+ * Expand a schedule event (start_time/end_time) into the list of local calendar dates it overlaps,
+ * clipped to the selected month boundaries. Each segment includes isStart/isMiddle/isEnd for through-bar styling.
+ */
+export type DaySegment = {
+  dateStr: string; // YYYY-MM-DD in timezone
+  isStart: boolean;
+  isMiddle: boolean;
+  isEnd: boolean;
+};
+
+/** Add one day to YYYY-MM-DD (timezone-safe). */
+function addDay(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  return next.toISOString().slice(0, 10);
+}
+
+/** Extract pairing/trip key from title for merging. Handles "S3059", "Trip S3059", "S3059 BOS-SJU", etc. */
+function extractPairingKey(title: string | null): string {
+  const s = (title ?? "").trim();
+  const match = s.match(/([A-Z]?\d{4,}[A-Z]?)/i);
+  if (match) return match[1].toUpperCase();
+  return s || "unknown";
+}
+
+/**
+ * One continuous bar per weekly segment. No daily instances.
+ * Merges same-pairing events (FLICA exports one per day).
+ */
+export type WeeklyBarSpan<T = unknown> = {
+  event: T;
+  rowIndex: number;
+  startCol: number;
+  endCol: number;
+  showLabel: boolean;
+  leftChevron: boolean;
+  rightChevron: boolean;
+};
+
+export function computeWeeklyBarSpans<T extends { id: string; start_time: string; end_time: string; title: string | null }>(
+  events: T[],
+  calendarDays: (Date | null)[],
+  year: number,
+  month: number,
+  timezone: string
+): WeeklyBarSpan[] {
+  const dateToCell = new Map<string, { row: number; col: number }>();
+  for (let i = 0; i < calendarDays.length; i++) {
+    const day = calendarDays[i];
+    if (!day) continue;
+    const row = Math.floor(i / 7);
+    const col = i % 7;
+    const dateStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+    dateToCell.set(dateStr, { row, col });
+  }
+
+  const byPairingKey = new Map<string, { event: T; dateStrs: string[] }[]>();
+  for (const event of events) {
+    const segments = expandEventToDaySegments(event.start_time, event.end_time, year, month, timezone);
+    if (segments.length === 0) continue;
+    const dateStrs = [...new Set(segments.map((s) => s.dateStr))].sort();
+    const key = extractPairingKey(event.title);
+    if (!byPairingKey.has(key)) byPairingKey.set(key, []);
+    byPairingKey.get(key)!.push({ event, dateStrs });
+  }
+
+  const mergedRuns: { event: T; dateStrs: string[] }[] = [];
+  for (const [, pairs] of byPairingKey) {
+    const allDateStrs = [...new Set(pairs.flatMap((p) => p.dateStrs))].sort();
+    const runs: string[][] = [];
+    let run: string[] = [allDateStrs[0]];
+    for (let i = 1; i < allDateStrs.length; i++) {
+      if (addDay(allDateStrs[i - 1]) === allDateStrs[i]) {
+        run.push(allDateStrs[i]);
+      } else {
+        runs.push(run);
+        run = [allDateStrs[i]];
+      }
+    }
+    runs.push(run);
+    for (const runDateStrs of runs) {
+      const ev = pairs.find((p) => p.dateStrs.includes(runDateStrs[0]))!.event;
+      mergedRuns.push({ event: ev, dateStrs: runDateStrs });
+    }
+  }
+
+  const result: WeeklyBarSpan[] = [];
+  for (const { event, dateStrs } of mergedRuns) {
+    const byRow = new Map<number, number[]>();
+    for (const ds of dateStrs) {
+      const cell = dateToCell.get(ds);
+      if (cell) {
+        if (!byRow.has(cell.row)) byRow.set(cell.row, []);
+        byRow.get(cell.row)!.push(cell.col);
+      }
+    }
+    const sortedRows = [...byRow.keys()].sort((a, b) => a - b);
+
+    for (let i = 0; i < sortedRows.length; i++) {
+      const rowIndex = sortedRows[i];
+      const cols = byRow.get(rowIndex)!.sort((a, b) => a - b);
+      const minCol = cols[0];
+      const maxCol = cols[cols.length - 1];
+      const isFirstSegment = i === 0;
+      const isLastSegment = i === sortedRows.length - 1;
+
+      result.push({
+        event,
+        rowIndex,
+        startCol: minCol,
+        endCol: maxCol + 1,
+        showLabel: isFirstSegment,
+        leftChevron: !isFirstSegment,
+        rightChevron: !isLastSegment,
+      });
+    }
+  }
+
+  return result;
+}
+
+/** DTEND is exclusive in iCal; use overlap check to get days. */
+export function expandEventToDaySegments(
+  startTime: string,
+  endTime: string,
+  year: number,
+  month: number,
+  timezone: string
+): DaySegment[] {
+  const segments: DaySegment[] = [];
+  try {
+    const eventStart = new Date(startTime);
+    const eventEnd = new Date(endTime);
+    if (isNaN(eventStart.getTime()) || isNaN(eventEnd.getTime())) return [];
+
+    const lastDay = new Date(year, month + 1, 0).getDate();
+
+    const overlapping: string[] = [];
+    for (let d = 1; d <= lastDay; d++) {
+      const day = new Date(year, month, d);
+      if (eventOverlapsDay(startTime, endTime, day, timezone)) {
+        overlapping.push(`${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+      }
+    }
+
+    for (let i = 0; i < overlapping.length; i++) {
+      const dateStr = overlapping[i];
+      segments.push({
+        dateStr,
+        isStart: i === 0,
+        isMiddle: i > 0 && i < overlapping.length - 1,
+        isEnd: i === overlapping.length - 1,
+      });
+    }
+
+    return segments;
+  } catch {
+    return [];
+  }
+}
+
+/** Get start and end of calendar day in timezone as UTC Dates. */
+function getDayBounds(day: Date, timezone: string): { start: Date; end: Date } {
+  const y = day.getFullYear();
+  const m = String(day.getMonth() + 1).padStart(2, "0");
+  const d = String(day.getDate()).padStart(2, "0");
+  const start = fromZonedTime(`${y}-${m}-${d}T00:00:00.000`, timezone);
+  const end = fromZonedTime(`${y}-${m}-${d}T23:59:59.999`, timezone);
+  return { start, end };
+}
+
+/**
+ * Check if event overlaps the given calendar day.
+ * Overlap: event.start_time < end_of_day AND event.end_time > start_of_day
+ */
+export function eventOverlapsDay(
+  startTime: string,
+  endTime: string,
+  day: Date,
+  timezone: string
+): boolean {
+  try {
+    const eventStart = new Date(startTime);
+    const eventEnd = new Date(endTime);
+    if (isNaN(eventStart.getTime()) || isNaN(eventEnd.getTime())) return false;
+    const { start: dayStart, end: dayEnd } = getDayBounds(day, timezone);
+    return eventStart.getTime() < dayEnd.getTime() && eventEnd.getTime() > dayStart.getTime();
+  } catch {
+    return false;
   }
 }

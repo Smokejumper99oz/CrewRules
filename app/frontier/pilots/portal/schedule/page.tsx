@@ -12,7 +12,7 @@ import {
   type ScheduleDisplaySettings,
 } from "./actions";
 import { ScheduleStatusChip } from "@/components/schedule-status-chip";
-import { formatScheduleTime, formatDayLabel, isEventOnDay } from "@/lib/schedule-time";
+import { formatScheduleTime, formatDayLabel, eventOverlapsDay } from "@/lib/schedule-time";
 
 const EVENT_STYLES: Record<string, string> = {
   trip: "bg-emerald-500/20 border-emerald-500/40 text-emerald-200",
@@ -54,7 +54,7 @@ function getCalendarDays(year: number, month: number): (Date | null)[] {
 }
 
 function eventsForDay(events: ScheduleEvent[], day: Date, baseTimezone: string): ScheduleEvent[] {
-  return events.filter((e) => isEventOnDay(e.start_time, day, baseTimezone));
+  return events.filter((e) => eventOverlapsDay(e.start_time, e.end_time, day, baseTimezone));
 }
 
 export default function SchedulePage() {
@@ -238,16 +238,11 @@ export default function SchedulePage() {
       {status != null && status.count === 0 && (
         <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-12 text-center">
           <p className="text-slate-400">No schedule imported yet.</p>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing}
-            className="mt-4 rounded-xl bg-[#75C043] px-5 py-2.5 text-sm font-semibold text-slate-950 hover:opacity-95 disabled:opacity-50"
-          >
-            Upload FLICA Schedule (.ICS)
-          </button>
-          <p className="mt-3 text-xs text-slate-500">
-            This uploads a file from your computer (it does not connect to FLICA)
+          <p className="mt-2 text-sm text-slate-500">
+            Use the upload button above to import your schedule.
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            This uploads a file from your computer — it does not connect CrewRules™ to FLICA.
           </p>
         </div>
       )}

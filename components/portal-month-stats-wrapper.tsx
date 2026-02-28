@@ -9,7 +9,7 @@ export async function PortalMonthStats({ tenant, portal }: { tenant: string; por
   const availableMonths = await getAvailableMonths();
   if (availableMonths.length === 0) return null;
 
-  const statsByMonth: Record<string, { trip: number; reserve: number; vacationOff: number }> = {};
+  const statsByMonth: Record<string, { trip: number; reserve: number; vacationOff: number; totalCredit: number }> = {};
   for (const m of availableMonths) {
     const stats = await getMonthStats(m.year, m.month);
     statsByMonth[monthKey(m.year, m.month)] = stats;

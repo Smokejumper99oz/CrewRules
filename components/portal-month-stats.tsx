@@ -57,18 +57,22 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
       </div>
       <div className="mt-4">
         <p className="mb-3 text-sm text-slate-400">{selectedMonth?.label}</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-center">
             <p className="text-2xl font-bold text-emerald-300">{stats.trip}</p>
-            <p className="text-xs text-slate-400">Trip</p>
+            <p className="text-xs text-slate-400">Trips</p>
           </div>
           <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-center">
             <p className="text-2xl font-bold text-blue-300">{stats.reserve}</p>
-            <p className="text-xs text-slate-400">Reserve</p>
+            <p className="text-xs text-slate-400">Reserve days</p>
           </div>
           <div className="rounded-xl border border-slate-500/20 bg-slate-500/5 px-4 py-3 text-center">
             <p className="text-2xl font-bold text-slate-300">{stats.vacationOff}</p>
-            <p className="text-xs text-slate-400">Vacation/Off</p>
+            <p className="text-xs text-slate-400">Days off</p>
+          </div>
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-center">
+            <p className="text-2xl font-bold text-amber-300">{stats.totalCredit?.toFixed(1) ?? "0"}</p>
+            <p className="text-xs text-slate-400">Credit hrs</p>
           </div>
         </div>
       </div>
