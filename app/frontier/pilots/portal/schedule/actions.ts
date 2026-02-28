@@ -479,7 +479,7 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
   const y = year ?? now.getFullYear();
   const m = month ?? now.getMonth();
   const profile = await getProfile();
-  if (!profile) return { trip: 0, reserve: 0, vacationOff: 0, totalCredit: 0 };
+  if (!profile) return { trip: 0, reserve: 0, vacationOff: 0, totalCredit: 0, totalBlock: 0, totalExtraCredit: 0 };
 
   try {
     const monthStart = new Date(y, m, 1);

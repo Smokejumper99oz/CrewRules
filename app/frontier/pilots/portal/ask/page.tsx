@@ -43,7 +43,7 @@ const RECENT_MAX = 5;
 
 export default function AskPage() {
   const searchParams = useSearchParams();
-  const qFromUrl = searchParams.get("q");
+  const qFromUrl = searchParams?.get("q") ?? null;
   const processedUrlRef = useRef(false);
 
   const [question, setQuestion] = useState("");
