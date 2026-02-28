@@ -24,7 +24,7 @@ export default function LoginPage() {
           </h1>
 
           <p className="mt-3 text-slate-300">
-            Secure access for verified crew members. This portal is tenant-specific.
+            Secure access for verified crew members of this airline.
           </p>
 
           <form action={formAction} className="mt-8 space-y-4">

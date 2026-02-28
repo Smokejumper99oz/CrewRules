@@ -44,33 +44,31 @@ export default function LoginPage() {
             <div className="text-xs uppercase tracking-widest text-slate-400 mb-4">
               Step 1: Choose your role
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setRole("pilot")}
-                className={`flex flex-col items-center justify-center rounded-2xl border-2 px-8 py-10 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] ${
+                className={`flex flex-col items-center justify-center rounded-lg border px-4 py-3 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] ${
                   role === "pilot"
                     ? "border-[#75C043] bg-[#75C043]/10 shadow-[0_0_25px_rgba(117,192,67,0.15)]"
-                    : "border-white/10 bg-white/5 hover:border-emerald-400/20"
+                    : "border-slate-600 bg-white/5 hover:border-emerald-400/20"
                 }`}
               >
-                <span className="text-4xl mb-2" aria-hidden>✈️</span>
-                <span className="text-xl font-semibold text-white">Pilot</span>
-                <span className="mt-1 text-sm text-slate-400">Pilot Portal access</span>
+                <span className="font-semibold text-white">Pilot</span>
+                <span className="text-xs text-slate-400">Flight Deck Access</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setRole("flight-attendant")}
-                className={`flex flex-col items-center justify-center rounded-2xl border-2 px-8 py-10 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] ${
+                className={`flex flex-col items-center justify-center rounded-lg border px-4 py-3 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] ${
                   role === "flight-attendant"
                     ? "border-[#75C043] bg-[#75C043]/10 shadow-[0_0_25px_rgba(117,192,67,0.15)]"
-                    : "border-white/10 bg-white/5 hover:border-emerald-400/20"
+                    : "border-slate-600 bg-white/5 hover:border-emerald-400/20"
                 }`}
               >
-                <span className="text-4xl mb-2" aria-hidden>🛫</span>
-                <span className="text-xl font-semibold text-white">Flight Attendant</span>
-                <span className="mt-1 text-sm text-slate-400">Flight Attendant Portal</span>
+                <span className="font-semibold text-white">Flight Attendant</span>
+                <span className="text-xs text-slate-400">Cabin Crew Access</span>
               </button>
             </div>
           </div>
