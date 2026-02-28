@@ -47,10 +47,12 @@ export async function updateSession(request: NextRequest) {
     if (user && isAdminRoute) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, tenant, portal")
         .eq("id", user.id)
         .single();
-      isAdmin = profile?.role === "admin";
+      isAdmin =
+        profile?.role === "super_admin" ||
+        (profile?.role === "tenant_admin" && profile?.tenant === "frontier" && profile?.portal === "pilots");
     }
   } catch {
     // Supabase unreachable (fetch failed, paused project, etc.)

@@ -1,5 +1,6 @@
 import { formatInTimeZone } from "date-fns-tz";
 import { createClient } from "@/lib/supabase/server";
+import type { Role } from "@/lib/rbac";
 
 export type ProfilePosition = "captain" | "first_officer" | "flight_attendant";
 
@@ -8,8 +9,7 @@ export type Profile = {
   email: string | null;
   tenant: string;
   portal: string;
-  role: "admin" | "member";
-  crew_role: "pilot" | "flight_attendant";
+  role: Role;
   plan?: "free" | "pro" | "enterprise";
   full_name?: string | null;
   employee_number?: string | null;
@@ -30,9 +30,17 @@ export type Profile = {
  * Time: 04:00–11:59 morning, 12:00–17:59 afternoon, 18:00–03:59 evening.
  * Role: Captain or First Officer prefixed before name. No exclamation mark.
  */
+const FALLBACK_TZ = "America/Denver";
+
 export function getDashboardGreeting(profile: Profile | null): { greetingPart: string; namePart: string } {
-  const timezone = profile?.base_timezone ?? "America/Denver";
-  const hour = parseInt(formatInTimeZone(new Date(), timezone, "HH"), 10);
+  const tz = profile?.base_timezone?.trim() || FALLBACK_TZ;
+  let hour = 12;
+  try {
+    hour = parseInt(formatInTimeZone(new Date(), tz, "HH"), 10);
+    if (Number.isNaN(hour)) hour = 12;
+  } catch {
+    hour = parseInt(formatInTimeZone(new Date(), FALLBACK_TZ, "HH"), 10);
+  }
 
   let greetingPart: string;
   if (hour >= 4 && hour < 12) greetingPart = "Good morning";
@@ -59,21 +67,29 @@ export function getDisplayName(profile: Profile | null): string {
 }
 
 export async function getProfile(): Promise<Profile | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
 
-  const { data } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
 
-  return data as Profile | null;
+    if (error) return null;
+    return data as Profile | null;
+  } catch {
+    return null;
+  }
 }
 
 export async function isAdmin(tenant = "frontier", portal = "pilots"): Promise<boolean> {
   const profile = await getProfile();
   if (!profile) return false;
-  return profile.role === "admin" && profile.tenant === tenant && profile.portal === portal;
+  if (profile.role !== "super_admin" && profile.role !== "tenant_admin") return false;
+  if (profile.role === "tenant_admin" && (profile.tenant !== tenant || profile.portal !== portal))
+    return false;
+  return true;
 }

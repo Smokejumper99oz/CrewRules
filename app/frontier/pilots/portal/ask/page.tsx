@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { askQuestion, getCitationDownloadUrl } from "./actions";
 import { saveQARow } from "./qa-actions";
@@ -41,7 +41,7 @@ function formatCitationForDisplay(citation: string | null, answer?: string | nul
 const RECENT_KEY = "crewrules-ask-recent";
 const RECENT_MAX = 5;
 
-export default function AskPage() {
+function AskPageContent() {
   const searchParams = useSearchParams();
   const qFromUrl = searchParams?.get("q") ?? null;
   const processedUrlRef = useRef(false);
@@ -235,5 +235,13 @@ export default function AskPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AskPage() {
+  return (
+    <Suspense fallback={<div className="animate-pulse rounded-2xl bg-slate-900/60 h-48" />}>
+      <AskPageContent />
+    </Suspense>
   );
 }

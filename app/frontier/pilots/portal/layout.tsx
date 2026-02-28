@@ -5,6 +5,7 @@ import { getProfile, isAdmin, getDisplayName } from "@/lib/profile";
 import { signOut } from "./actions";
 import { PortalMobileNav } from "@/components/portal-mobile-nav";
 import { PortalUserMenu } from "@/components/portal-user-menu";
+import { SignOutButton } from "@/components/sign-out-button";
 import { PageTitle } from "@/components/page-title";
 
 const TENANT = "frontier";
@@ -46,7 +47,14 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   const admin = await isAdmin();
   const base = `/${TENANT}/${PORTAL}/portal`;
   const displayName = getDisplayName(profile ?? null);
-  const roleLabel = admin ? "System Administrator" : "Member";
+  const roleLabel =
+    profile?.role === "super_admin"
+      ? "Super Administrator"
+      : profile?.role === "tenant_admin"
+        ? "Administrator"
+        : profile?.role === "flight_attendant"
+          ? "Flight Attendant"
+          : "Pilot";
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -98,17 +106,12 @@ export default async function PortalLayout({ children }: { children: ReactNode }
                 <div className="font-medium text-white">{displayName}</div>
                 <div className="text-xs text-slate-400">{roleLabel}</div>
               </div>
-              <form action={signOut} className="mt-2">
-                <button
-                  type="submit"
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-white hover:bg-white/5 hover:text-white transition"
-                >
-                  Sign Out
-                  <svg className="ml-auto h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                  </svg>
-                </button>
-              </form>
+              <SignOutButton signOut={signOut} className="mt-2">
+                <span className="flex-1">Sign Out</span>
+                <svg className="ml-auto h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </SignOutButton>
             </div>
           </nav>
         </aside>
@@ -132,7 +135,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
               <div className="flex shrink-0 items-center">
                 <PortalUserMenu
                   email={profile?.email ?? null}
-                  role={admin ? "admin" : "member"}
+                  role={profile?.role ?? "pilot"}
                   signOut={signOut}
                 />
               </div>

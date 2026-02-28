@@ -15,7 +15,7 @@ const ADMIN_NAV = [
   { label: "Dashboard", href: "" },
   { label: "Uploads", href: "documents" },
   { label: "Library", href: "library" },
-  { label: "People & Permissions", href: "people" },
+  { label: "Users", href: "people" },
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
@@ -89,7 +89,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               <div className="flex shrink-0 items-center">
                 <PortalUserMenu
                   email={userProfile?.email ?? null}
-                  role="admin"
+                  role={userProfile?.role ?? "tenant_admin"}
                   signOut={signOut}
                 />
               </div>

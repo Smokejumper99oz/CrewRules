@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState, useRef, useEffect } from "react";
+import { SignOutButton } from "@/components/sign-out-button";
 
 function emailToDisplayName(email: string | null): string {
   if (!email) return "User";
@@ -12,20 +13,27 @@ function emailToDisplayName(email: string | null): string {
     .join(" ") || email;
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: "Super Administrator",
+  tenant_admin: "Administrator",
+  pilot: "Pilot",
+  flight_attendant: "Flight Attendant",
+};
+
 export function PortalUserMenu({
   email,
   role,
   signOut,
 }: {
   email: string | null;
-  role: "admin" | "member";
+  role: string;
   signOut: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const displayName = emailToDisplayName(email);
-  const roleLabel = role === "admin" ? "System Administrator" : "Member";
+  const roleLabel = ROLE_LABELS[role] ?? "Member";
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -80,18 +88,12 @@ export function PortalUserMenu({
             <div className="mt-0.5 text-sm text-slate-400">{roleLabel}</div>
           </div>
           <div className="border-t border-white/10 p-2">
-            <form action={signOut}>
-              <button
-                type="submit"
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-white hover:bg-white/5 transition touch-manipulation"
-                role="menuitem"
-              >
-                <span className="flex-1">Sign Out</span>
-                <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </button>
-            </form>
+            <SignOutButton signOut={signOut} buttonClassName="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-white hover:bg-white/5 transition touch-manipulation disabled:opacity-50" role="menuitem">
+              <span className="flex-1">Sign Out</span>
+              <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </SignOutButton>
           </div>
         </div>
       )}
