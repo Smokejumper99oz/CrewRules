@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Suspense, useEffect, useActionState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { submitLogin } from "./actions";
 import { signOut } from "../portal/actions";
 import { SignOutButton } from "@/components/sign-out-button";
@@ -22,7 +22,6 @@ const GATE_ERROR_MESSAGES: Record<string, string> = {
 };
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectError = searchParams?.get("error");
   const gateMessage = redirectError ? GATE_ERROR_MESSAGES[redirectError] : null;
@@ -30,10 +29,9 @@ function LoginForm() {
 
   useEffect(() => {
     if (state?.ok) {
-      router.push("/frontier/pilots/portal");
-      router.refresh();
+      window.location.href = "/frontier/pilots/portal";
     }
-  }, [state?.ok, router]);
+  }, [state?.ok]);
 
   const formErrorMessage =
     state?.error ??
