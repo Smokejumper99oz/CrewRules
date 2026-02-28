@@ -8,6 +8,12 @@ export type PortalConfig = {
 
 export type TenantConfig = {
   displayName: string;
+  /** Default IANA timezone for ICS import when times have no TZID (e.g. FLICA exports). */
+  sourceTimezone?: string;
+  /** Default credit hours for reserve lines when not in ICS (monthly total, per CBA). */
+  reserveCreditHours?: number;
+  /** Credit hours per reserve day (RSA, RSB, RSC, RSD, RSE) when not in ICS. Typically 4 to reach ~75/month. */
+  reserveCreditPerDay?: number;
   portals: Record<PortalKey, PortalConfig>;
 };
 
@@ -15,6 +21,9 @@ export type TenantConfig = {
 export const TENANT_CONFIG: Record<string, TenantConfig> = {
   frontier: {
     displayName: "Frontier Airlines",
+    sourceTimezone: "America/Denver",
+    reserveCreditHours: 75,
+    reserveCreditPerDay: 4,
     portals: {
       pilots: {
         displayName: "Pilot Portal",
@@ -43,4 +52,19 @@ export function getTenantPortalConfig(tenant: string, portal: string) {
   if (!p) return null;
 
   return { tenant: t, portal: p };
+}
+
+/** Default IANA timezone for ICS import (floating times). Falls back to America/Denver. */
+export function getTenantSourceTimezone(tenant: string): string {
+  return TENANT_CONFIG[tenant]?.sourceTimezone ?? "America/Denver";
+}
+
+/** Default credit hours for reserve lines when not in ICS (monthly total, per CBA). */
+export function getReserveCreditHours(tenant: string): number {
+  return TENANT_CONFIG[tenant]?.reserveCreditHours ?? 75;
+}
+
+/** Credit hours per reserve day (RSA, RSB, RSC, RSD, RSE) when not in ICS. */
+export function getReserveCreditPerDay(tenant: string): number {
+  return TENANT_CONFIG[tenant]?.reserveCreditPerDay ?? 4;
 }

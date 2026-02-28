@@ -1,11 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useEffect } from "react";
+import { getCitationDownloadUrl } from "@/app/frontier/pilots/portal/ask/actions";
+import { listRecentQA } from "@/app/frontier/pilots/portal/ask/qa-actions";
 
 const RECENT_KEY = "crewrules-ask-recent";
 
-type RecentItem = { q: string; a?: string | null; c?: string | null; p?: string | null };
+type RecentItem = { id?: string; q: string; a?: string | null; c?: string | null; p?: string | null };
 
 export function PortalRecentQA({
   tenant,
@@ -15,31 +16,43 @@ export function PortalRecentQA({
   portal: string;
 }) {
   const [items, setItems] = useState<RecentItem[]>([]);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    try {
-      const stored = sessionStorage.getItem(RECENT_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as RecentItem[];
-        setItems(Array.isArray(parsed) ? parsed : []);
+    let cancelled = false;
+    (async () => {
+      const { items: dbItems } = await listRecentQA();
+      if (cancelled) return;
+      if (dbItems.length > 0) {
+        setItems(
+          dbItems.map((r) => ({
+            id: r.id,
+            q: r.question,
+            a: r.answer,
+            c: r.citation,
+            p: r.citation_path,
+          }))
+        );
+        return;
       }
-    } catch {
-      setItems([]);
-    }
+      try {
+        const stored = localStorage.getItem(RECENT_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored) as RecentItem[];
+          setItems(Array.isArray(parsed) ? parsed : []);
+        }
+      } catch {
+        setItems([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  function handleClick(item: RecentItem) {
-    try {
-      sessionStorage.setItem(
-        "crewrules-ask-last",
-        JSON.stringify({
-          q: item.q,
-          a: item.a ?? null,
-          c: item.c ?? null,
-          p: item.p ?? null,
-        })
-      );
-    } catch (_) {}
+  async function handleDownloadCitation(path: string) {
+    const { url, error } = await getCitationDownloadUrl(path);
+    if (!error && url) window.open(url, "_blank");
   }
 
   if (items.length === 0) {
@@ -56,14 +69,36 @@ export function PortalRecentQA({
       <h2 className="text-lg font-semibold">Recent Q&A</h2>
       <ul className="mt-3 space-y-2 text-sm text-slate-300">
         {items.map((item, i) => (
-          <li key={i}>
-            <Link
-              href={`/${tenant}/${portal}/portal/ask`}
-              onClick={() => handleClick(item)}
-              className="block rounded-lg px-3 py-2 hover:bg-white/5"
+          <li
+            key={i}
+            className="rounded-xl border border-white/5 bg-slate-950/40 overflow-hidden"
+          >
+            <button
+              type="button"
+              onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
+              className="w-full text-left px-4 py-3 hover:bg-white/5 transition"
             >
-              &quot;{item.q.length > 60 ? item.q.slice(0, 60) + "…" : item.q}&quot;
-            </Link>
+              &quot;{item.q.length > 80 ? item.q.slice(0, 80) + "…" : item.q}&quot;
+            </button>
+            {expandedIndex === i && item.a && (
+              <div className="border-t border-white/5 px-4 py-3 space-y-2">
+                <p className="text-slate-200 leading-relaxed whitespace-pre-wrap">{item.a}</p>
+                {item.c && (
+                  <div className="rounded-lg bg-emerald-500/10 ring-1 ring-emerald-500/20 p-3">
+                    <div className="text-xs text-emerald-200 whitespace-pre-wrap">{item.c}</div>
+                    {item.p && (
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadCitation(item.p!)}
+                        className="mt-2 text-xs font-medium text-[#75C043] hover:underline"
+                      >
+                        Download source document →
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </li>
         ))}
       </ul>

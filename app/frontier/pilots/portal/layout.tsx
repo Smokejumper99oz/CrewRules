@@ -1,34 +1,42 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { getTenantPortalConfig } from "@/lib/tenant-config";
-import { getProfile, isAdmin } from "@/lib/profile";
+import { getProfile, isAdmin, getDisplayName } from "@/lib/profile";
 import { signOut } from "./actions";
 import { PortalMobileNav } from "@/components/portal-mobile-nav";
 import { PortalUserMenu } from "@/components/portal-user-menu";
 import { PageTitle } from "@/components/page-title";
 
-function emailToDisplayName(email: string | null): string {
-  if (!email) return "User";
-  const local = email.split("@")[0] || "";
-  return local
-    .split(/[._-]/)
-    .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
-    .join(" ") || email;
-}
-
 const TENANT = "frontier";
 const PORTAL = "pilots";
 
-const NAV = [
-  { label: "Dashboard", href: "" },
-  { label: "Ask", href: "ask" },
-  { label: "Library", href: "library" },
-  { label: "Forum", href: "forum" },
-  { label: "Notes", href: "notes" },
-  { label: "Mentoring", href: "mentoring" },
-  { label: "Updates", href: "updates" },
-  { label: "Settings", href: "settings" },
-];
+const NAV_GROUPS = [
+  {
+    title: "Core",
+    items: [
+      { label: "Dashboard", href: "" },
+      { label: "My Schedule", href: "schedule" },
+      { label: "Ask", href: "ask" },
+      { label: "Library", href: "library" },
+    ],
+  },
+  {
+    title: "Community",
+    items: [
+      { label: "Forum", href: "forum" },
+      { label: "Notes", href: "notes" },
+      { label: "Mentoring", href: "mentoring" },
+    ],
+  },
+  {
+    title: "System",
+    items: [
+      { label: "Updates", href: "updates" },
+      { label: "Archive", href: "archive" },
+      { label: "Profile", href: "profile" },
+    ],
+  },
+] as const;
 
 export default async function PortalLayout({ children }: { children: ReactNode }) {
   const cfg = getTenantPortalConfig(TENANT, PORTAL);
@@ -37,7 +45,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   const profile = await getProfile();
   const admin = await isAdmin();
   const base = `/${TENANT}/${PORTAL}/portal`;
-  const displayName = emailToDisplayName(profile?.email ?? null);
+  const displayName = getDisplayName(profile ?? null);
   const roleLabel = admin ? "System Administrator" : "Member";
 
   return (
@@ -55,15 +63,25 @@ export default async function PortalLayout({ children }: { children: ReactNode }
           </div>
 
           <nav className="px-4 pb-6 pt-2">
-            <div className="space-y-1">
-              {NAV.map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href ? `${base}/${item.href}` : base}
-                  className="block rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition"
-                >
-                  {item.label}
-                </Link>
+            <div className="space-y-6">
+              {NAV_GROUPS.map((group) => (
+                <div key={group.title}>
+                  <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    {group.title}
+                  </h3>
+                  <ul className="space-y-0.5 list-disc pl-5 marker:text-slate-500">
+                    {group.items.map((item) => (
+                      <li key={item.label}>
+                        <Link
+                          href={item.href ? `${base}/${item.href}` : base}
+                          className="block rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition"
+                        >
+                          {item.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
             </div>
 
@@ -101,7 +119,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <PortalMobileNav
                   base={base}
-                  nav={NAV}
+                  navGroups={NAV_GROUPS}
                   admin={admin ?? false}
                   signOut={signOut}
                   portalName={cfg.portal.displayName}

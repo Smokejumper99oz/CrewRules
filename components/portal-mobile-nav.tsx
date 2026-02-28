@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useState } from "react";
 
 type NavItem = { label: string; href: string };
+type NavGroup = { title: string; items: readonly NavItem[] };
 
 export function PortalMobileNav({
   base,
-  nav,
+  navGroups,
   admin,
   signOut,
   portalName,
@@ -15,7 +16,7 @@ export function PortalMobileNav({
   roleLabel,
 }: {
   base: string;
-  nav: NavItem[];
+  navGroups: readonly NavGroup[];
   admin: boolean;
   signOut: () => Promise<void>;
   portalName: string;
@@ -67,16 +68,26 @@ export function PortalMobileNav({
                 </button>
               </div>
               <nav className="flex-1 overflow-y-auto px-4 py-4">
-                <div className="space-y-1">
-                  {nav.map((item) => (
-                    <Link
-                      key={item.label}
-                      href={item.href ? `${base}/${item.href}` : base}
-                      onClick={() => setOpen(false)}
-                      className="block rounded-xl px-3 py-3 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition touch-manipulation min-h-[44px] flex items-center"
-                    >
-                      {item.label}
-                    </Link>
+                <div className="space-y-6">
+                  {navGroups.map((group) => (
+                    <div key={group.title}>
+                      <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        {group.title}
+                      </h3>
+                      <ul className="space-y-0.5 list-disc pl-5 marker:text-slate-500">
+                        {group.items.map((item) => (
+                          <li key={item.label}>
+                            <Link
+                              href={item.href ? `${base}/${item.href}` : base}
+                              onClick={() => setOpen(false)}
+                              className="block rounded-xl px-3 py-3 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition touch-manipulation min-h-[44px] flex items-center"
+                            >
+                              {item.label}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ))}
                 </div>
                 <div className="mt-6 border-t border-white/10 pt-4">

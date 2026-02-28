@@ -9,6 +9,41 @@
   }
 }
 
+/* Dark theme for native select dropdowns - uses OS/browser dark mode for dropdown panels */
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+}
+
+@layer components {
+  select option {
+    background-color: #0f172a;
+    color: #e2e8f0;
+  }
+}
+
+/* Profile date picker - dark theme to match portal (slate-900 / #75C043) */
+.rdp-profile-dark.rdp-root {
+  --rdp-accent-color: #75c043;
+  --rdp-accent-background-color: rgba(117, 192, 67, 0.2);
+  --rdp-today-color: #75c043;
+  color: #e2e8f0;
+}
+.rdp-profile-dark .rdp-day_button {
+  color: inherit;
+}
+.rdp-profile-dark .rdp-day_button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.rdp-profile-dark .rdp-selected .rdp-day_button {
+  background: #75c043 !important;
+  color: #020617 !important;
+}
+.rdp-profile-dark .rdp-chevron {
+  fill: #75c043;
+}
+
 /* === CrewRules™ Sky Glow Animation === */
 @keyframes skyGlow {
   0% {

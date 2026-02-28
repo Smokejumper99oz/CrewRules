@@ -8,6 +8,14 @@ export async function updateSession(request: NextRequest) {
   const isAdminRoute = request.nextUrl.pathname.startsWith("/frontier/pilots/admin");
   const isAuthRoute =
     request.nextUrl.pathname === "/frontier/pilots/login" ||
+    request.nextUrl.pathname === "/frontier/pilots/sign-up" ||
+    request.nextUrl.pathname === "/frontier/pilots/forgot-password" ||
+    request.nextUrl.pathname === "/frontier/pilots/reset-password" ||
+    request.nextUrl.pathname.startsWith("/auth/");
+
+  // Redirect logged-in users away from login/sign-up (but not reset-password - they need to set new password)
+  const redirectLoggedInToPortal =
+    request.nextUrl.pathname === "/frontier/pilots/login" ||
     request.nextUrl.pathname === "/frontier/pilots/sign-up";
 
   let user: { id: string } | null = null;
@@ -61,7 +69,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isAuthRoute && user) {
+  if (redirectLoggedInToPortal && user) {
     const url = request.nextUrl.clone();
     url.pathname = "/frontier/pilots/portal";
     return NextResponse.redirect(url);

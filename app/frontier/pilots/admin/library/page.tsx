@@ -53,22 +53,54 @@ export default function AdminLibraryPage() {
   const [busy, setBusy] = useState(false);
   const [aiStatusByPath, setAiStatusByPath] = useState<Record<string, "active" | "not_enabled">>({});
   const [aiEnabledByPath, setAiEnabledByPath] = useState<Record<string, boolean>>({});
+  const [slowLoad, setSlowLoad] = useState(false);
+
+  const LOAD_TIMEOUT_MS = 45_000;
+  const SLOW_LOAD_MS = 15_000;
 
   async function load() {
     setLoading(true);
     setError(null);
-    const { docs: list, error: err } = await listDocuments();
-    setDocs(list);
-    if (err) setError(err);
-    if (list.length > 0) {
-      const { statusByPath, aiEnabledByPath } = await getDocumentAIStatus(list.map((d) => d.path));
-      setAiStatusByPath(statusByPath);
-      setAiEnabledByPath(aiEnabledByPath);
-    } else {
+    setSlowLoad(false);
+
+    const slowTimer = setTimeout(() => setSlowLoad(true), SLOW_LOAD_MS);
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Loading took too long. Check your connection or Supabase status (dashboard.supabase.com).")), LOAD_TIMEOUT_MS)
+    );
+
+    try {
+      const { docs: list, error: err } = await Promise.race([
+        listDocuments(),
+        timeoutPromise,
+      ]);
+      if (err) {
+        setError(err);
+        setDocs([]);
+      } else {
+        setDocs(list);
+        if (list.length > 0) {
+          const { statusByPath, aiEnabledByPath } = await Promise.race([
+            getDocumentAIStatus(list.map((d) => d.path)),
+            timeoutPromise,
+          ]);
+          setAiStatusByPath(statusByPath);
+          setAiEnabledByPath(aiEnabledByPath);
+        } else {
+          setAiStatusByPath({});
+          setAiEnabledByPath({});
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load documents");
+      setDocs([]);
       setAiStatusByPath({});
       setAiEnabledByPath({});
+    } finally {
+      clearTimeout(slowTimer);
+      setLoading(false);
+      setSlowLoad(false);
     }
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -181,14 +213,36 @@ export default function AdminLibraryPage() {
       </p>
 
       {loading && (
-        <div className="mt-6 flex items-center gap-3 text-slate-400">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#75C043]/40 border-t-[#75C043]" />
-          <span>Loading documents…</span>
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center gap-3 text-slate-400">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#75C043]/40 border-t-[#75C043]" />
+            <span>Loading documents…</span>
+          </div>
+          {slowLoad && (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-2 text-sm text-amber-200/90">
+              <span>Taking longer than usual.</span>
+              <button
+                onClick={() => load()}
+                className="rounded border border-amber-500/40 px-2 py-1 text-amber-400 hover:bg-amber-500/10"
+              >
+                Retry now
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {error && (
-        <p className="mt-4 text-sm text-red-400">{error}</p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <p className="text-sm text-red-400">{error}</p>
+          <button
+            onClick={() => load()}
+            disabled={loading}
+            className="rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+          >
+            Retry
+          </button>
+        </div>
       )}
 
       {docs.length > 0 && (
@@ -223,6 +277,11 @@ export default function AdminLibraryPage() {
                   )}
                 </span>
               </div>
+              {indexSecondsRemaining != null && indexSecondsRemaining <= 0 && indexPercent !== 100 && (
+                <p className="text-xs text-amber-400/90">
+                  Embedding documents — may take 1–2 min to finish
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -260,6 +319,11 @@ export default function AdminLibraryPage() {
                   />
                   AI
                 </label>
+                {aiEnabledByPath[doc.path] && aiStatusByPath[doc.path] === "not_enabled" && !indexing && (
+                  <span className="text-xs text-amber-400/90">
+                    Click &quot;Enable AI Questions&quot; above to make searchable
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {action.type === "rename" && action.doc?.path === doc.path ? (

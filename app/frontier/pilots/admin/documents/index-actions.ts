@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/profile";
 import { getEmbeddings } from "@/lib/ai/embed";
-import { extractTextFromBuffer, chunkText } from "@/lib/ai/docs";
+import { extractTextFromBufferWithPages, chunkTextWithPageNumbers } from "@/lib/ai/docs";
 
 // One index run feeds all portal AIs (Pilot, Flight Attendant, etc.)
 const PORTALS_TO_INDEX: string[] = ["pilots", "flight-attendants"];
@@ -73,21 +73,22 @@ export async function indexDocuments(): Promise<{ error?: string; success?: stri
       if (!mimeType) continue;
 
       try {
-        const { text } = await extractTextFromBuffer(buffer, mimeType);
-        if (!text.trim()) continue;
+        const { pages } = await extractTextFromBufferWithPages(buffer, mimeType);
+        const chunksWithPages = chunkTextWithPageNumbers(pages);
+        if (chunksWithPages.length === 0) continue;
 
-        const chunks = chunkText(text);
-        if (chunks.length === 0) continue;
-
-        const embeddings = await getEmbeddings(chunks);
+        const chunkContents = chunksWithPages.map((c) => c.content);
+        const embeddings = await getEmbeddings(chunkContents);
         const category = file.path.split("/")[0];
 
         for (const portal of PORTALS_TO_INDEX) {
-          const rows = chunks.map((content, i) => ({
-            content,
+          const rows = chunksWithPages.map((chunk, i) => ({
+            content: chunk.content,
             embedding: embeddings[i],
             source_path: file.path,
             source_category: category || "general",
+            page_number: chunk.pageNumber,
+            metadata: chunk.metadata,
             tenant: "frontier",
             portal,
           }));
@@ -97,7 +98,7 @@ export async function indexDocuments(): Promise<{ error?: string; success?: stri
             continue;
           }
         }
-        totalChunks += chunks.length;
+        totalChunks += chunksWithPages.length;
       } catch (e) {
         console.error("[Index] Error processing", file.path, e);
       }

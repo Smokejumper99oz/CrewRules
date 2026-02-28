@@ -6,11 +6,12 @@ const PORTAL_TITLES: Record<string, string> = {
   "": "Dashboard",
   ask: "Ask AI",
   library: "Library",
+  schedule: "My Schedule",
   forum: "Forum",
   notes: "Notes",
   mentoring: "Mentoring",
   updates: "Updates",
-  settings: "Settings",
+  profile: "Profile",
   reserve: "Reserve",
 };
 

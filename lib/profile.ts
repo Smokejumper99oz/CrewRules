@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 
+export type ProfilePosition = "captain" | "first_officer" | "flight_attendant";
+
 export type Profile = {
   id: string;
   email: string | null;
@@ -7,9 +9,31 @@ export type Profile = {
   portal: string;
   role: "admin" | "member";
   crew_role: "pilot" | "flight_attendant";
+  plan?: "free" | "pro" | "enterprise";
+  full_name?: string | null;
+  employee_number?: string | null;
+  date_of_hire?: string | null;
+  position?: ProfilePosition | null;
+  base_airport?: string | null;
+  equipment?: string | null;
+  base_timezone?: string;
+  display_timezone_mode?: "base" | "device" | "toggle" | "both";
+  time_format?: "24h" | "12h";
+  show_timezone_label?: boolean;
   created_at: string;
   updated_at: string;
 };
+
+/** Display name: full_name if set, else derived from email. */
+export function getDisplayName(profile: Profile | null): string {
+  if (!profile) return "User";
+  if (profile.full_name?.trim()) return profile.full_name.trim();
+  const local = (profile.email ?? "").split("@")[0] || "";
+  return local
+    .split(/[._-]/)
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
+    .join(" ") || profile.email || "User";
+}
 
 export async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient();

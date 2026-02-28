@@ -1,14 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
+import { useSearchParams } from "next/navigation";
 import { submitLogin } from "./actions";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
 
-export default function LoginPage() {
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const redirectError = searchParams?.get("error");
   const [state, formAction, isPending] = useActionState(submitLogin, null);
+
+  const errorMessage = state?.error ?? (redirectError === "invalid_link" ? "Reset link is invalid or expired. Please request a new one." : redirectError);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -52,8 +57,8 @@ export default function LoginPage() {
               />
             </div>
 
-            {state?.error && (
-              <p className="text-sm text-red-400">{state.error}</p>
+            {errorMessage && (
+              <p className="text-sm text-red-400">{errorMessage}</p>
             )}
 
             <button
@@ -63,6 +68,15 @@ export default function LoginPage() {
             >
               {isPending ? "Logging in…" : "Login"}
             </button>
+
+            <div className="text-center">
+              <Link
+                href={`/${TENANT}/${PORTAL}/forgot-password`}
+                className="text-sm text-slate-300 hover:text-white"
+              >
+                Forgot User ID or Password?
+              </Link>
+            </div>
 
             <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
               <Link href="/" className="text-slate-300 hover:text-white">
@@ -97,5 +111,17 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#75C043]/40 border-t-[#75C043]" />
+      </main>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }

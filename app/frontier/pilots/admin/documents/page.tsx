@@ -247,15 +247,7 @@ export default function DocumentsPage() {
       </form>
 
       <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-6">
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-          <p className="text-sm font-medium text-emerald-200">Try Ask AI with CBA</p>
-          <ol className="mt-2 list-decimal list-inside space-y-1 text-sm text-slate-300">
-            <li>Upload your CBA (PDF or Word) — use category <strong>CBA</strong></li>
-            <li>Click <strong>Enable AI Questions</strong> below</li>
-            <li>Go to Portal → Ask to search your contract</li>
-          </ol>
-        </div>
-        <div className="mt-4 space-y-3">
+        <div className="space-y-3">
           {indexing && (
             <div className="space-y-2">
               <LoaderBar percent={indexPercent} />

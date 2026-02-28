@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { askQuestion, getCitationDownloadUrl } from "./actions";
+import { saveQARow } from "./qa-actions";
 
 const SAMPLE_QUESTION = "I'm on short call reserve on my last day — can scheduling extend me past midnight?";
 const SAMPLE_REFERENCE = "Reference example: Section 25.X • Page ### (sample)";
@@ -27,29 +29,23 @@ function formatCitationForDisplay(citation: string | null, answer?: string | nul
     sourceLabel = `Source: ${friendly}`;
   }
   const searchText = [answer, citation].filter(Boolean).join(" ");
-  const sectionMatch = searchText?.match(/\b[Ss]ection\s+([0-9]+(?:\.[A-Z0-9]+)?)/i);
+  const sectionMatch = searchText?.match(/\b[Ss]ection\s+([0-9]+(?:\.[A-Za-z0-9]+)*)/i);
   const pageMatch = searchText?.match(/\b[Pp](?:age|\.)\s*(\d+)/i) ?? searchText?.match(/\b[Pp]age\s+(\d+)/i);
   const section = sectionMatch?.[1] ?? null;
   const page = pageMatch?.[1] ?? null;
   const lines: string[] = [sourceLabel];
   if (section) lines.push(`Section ${section}`);
-  if (page) lines.push(`Page ${page}`);
-  if (!section && !page) {
-    lines.push("Section —");
-    lines.push("Page —");
-  }
+  lines.push(page ? `Page ${page}` : "Page —");
   return lines.join("\n");
 }
 const RECENT_KEY = "crewrules-ask-recent";
 const RECENT_MAX = 5;
 
-const CARDS = [
-  { t: "Reserve", s: "Rules + buckets" },
-  { t: "Pay", s: "Credits explained" },
-  { t: "Mentor", s: "Notes & tracking" },
-];
-
 export default function AskPage() {
+  const searchParams = useSearchParams();
+  const qFromUrl = searchParams.get("q");
+  const processedUrlRef = useRef(false);
+
   const [question, setQuestion] = useState("");
   const [submittedQuestion, setSubmittedQuestion] = useState<string | null>(null);
   const [answer, setAnswer] = useState<string | null>(null);
@@ -59,20 +55,48 @@ export default function AskPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (qFromUrl && !processedUrlRef.current) {
+      processedUrlRef.current = true;
+      const q = qFromUrl.trim();
+      if (!q) return;
+      (async () => {
+        setSubmittedQuestion(q);
+        setAnswer(null);
+        setCitation(null);
+        setCitationPath(null);
+        setError(null);
+        setLoading(true);
+        const result = await askQuestion(q);
+        setLoading(false);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        setAnswer(result.answer ?? null);
+        setCitation(result.citation ?? null);
+        setCitationPath(result.citationPath ?? null);
+        await saveQARow(q, result.answer ?? null, result.citation ?? null, result.citationPath ?? null);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ q, a: result.answer ?? null, c: result.citation ?? null, p: result.citationPath ?? null }));
+          const recent: { q: string; a?: string | null; c?: string | null; p?: string | null }[] = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+          const updated = [{ q, a: result.answer ?? null, c: result.citation ?? null, p: result.citationPath ?? null }, ...recent.filter((r) => r.q !== q)].slice(0, RECENT_MAX);
+          localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+        } catch (_) {}
+        window.history.replaceState({}, "", window.location.pathname);
+      })();
+      return;
+    }
     try {
-      const stored = sessionStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const { q, a, c, p } = JSON.parse(stored);
-        if (q) {
-          setQuestion(q);
-          setSubmittedQuestion(q);
-        }
+        if (q) setSubmittedQuestion(q);
         if (a) setAnswer(a);
         if (c) setCitation(c);
         if (p) setCitationPath(p);
       }
     } catch (_) {}
-  }, []);
+  }, [qFromUrl]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -82,6 +106,7 @@ export default function AskPage() {
     if (!q || loading) return;
 
     setSubmittedQuestion(q);
+    setQuestion("");
     setAnswer(null);
     setCitation(null);
     setCitationPath(null);
@@ -98,8 +123,9 @@ export default function AskPage() {
     setAnswer(result.answer ?? null);
     setCitation(result.citation ?? null);
     setCitationPath(result.citationPath ?? null);
+    await saveQARow(q, result.answer ?? null, result.citation ?? null, result.citationPath ?? null);
     try {
-      sessionStorage.setItem(
+      localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
           q,
@@ -109,13 +135,13 @@ export default function AskPage() {
         })
       );
       const recent: { q: string; a?: string | null; c?: string | null; p?: string | null }[] = JSON.parse(
-        sessionStorage.getItem(RECENT_KEY) ?? "[]"
+        localStorage.getItem(RECENT_KEY) ?? "[]"
       );
       const updated = [
         { q, a: result.answer ?? null, c: result.citation ?? null, p: result.citationPath ?? null },
         ...recent.filter((r) => r.q !== q),
       ].slice(0, RECENT_MAX);
-      sessionStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+      localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
     } catch (_) {}
   }
 
@@ -205,15 +231,6 @@ export default function AskPage() {
                 </button>
               )}
             </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {CARDS.map((x) => (
-              <div key={x.t} className="rounded-2xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-3">
-                <div className="text-xs font-semibold text-white">{x.t}</div>
-                <div className="mt-1 text-[11px] text-slate-400">{x.s}</div>
-              </div>
-            ))}
           </div>
         </div>
       </div>
