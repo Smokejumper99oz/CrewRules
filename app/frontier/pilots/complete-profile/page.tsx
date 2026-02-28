@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createActionClient } from "@/lib/supabase/server-action";
+import { signOut } from "../portal/actions";
 import { CompleteProfileForm } from "./complete-profile-form";
+import { SignOutButton } from "@/components/sign-out-button";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -50,12 +52,12 @@ export default async function CompleteProfilePage() {
           >
             Request Access
           </Link>
-          <Link
-            href={LOGIN_PATH}
-            className="inline-block rounded-xl border border-white/20 px-6 py-3 font-medium text-slate-200 hover:bg-white/5 transition"
+          <SignOutButton
+            signOut={signOut}
+            buttonClassName="inline-block rounded-xl border border-rose-400/50 bg-rose-900/30 px-6 py-3 font-medium text-rose-200 hover:bg-rose-900/50 transition"
           >
-            Back to Login
-          </Link>
+            Sign out and use a different account
+          </SignOutButton>
         </div>
       </div>
     </main>
