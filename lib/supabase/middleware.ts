@@ -8,6 +8,7 @@ export async function updateSession(request: NextRequest) {
   const isAdminRoute = request.nextUrl.pathname.startsWith("/frontier/pilots/admin");
   const isAuthRoute =
     request.nextUrl.pathname === "/frontier/pilots/login" ||
+    request.nextUrl.pathname === "/frontier/pilots/complete-profile" ||
     request.nextUrl.pathname === "/frontier/pilots/sign-up" ||
     request.nextUrl.pathname === "/frontier/pilots/forgot-password" ||
     request.nextUrl.pathname === "/frontier/pilots/reset-password" ||
@@ -76,12 +77,6 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/frontier/pilots/portal";
     return NextResponse.redirect(url);
-  }
-
-  // Log out when navigating away from portal/admin to public pages
-  // Prevents bookmarking portal and returning without re-login
-  if (user && supabase && !isPortalRoute && !isAdminRoute && !isAuthRoute) {
-    await supabase.auth.signOut();
   }
 
   return supabaseResponse;
