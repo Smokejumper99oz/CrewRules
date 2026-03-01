@@ -42,12 +42,12 @@ export function PortalMobileNav({
       {open && (
         <>
           <div
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm md:hidden"
             aria-hidden
             onClick={() => setOpen(false)}
           />
           <aside
-            className="fixed left-0 top-0 z-50 h-full w-72 border-r border-white/10 bg-slate-950 shadow-xl md:hidden"
+            className="fixed left-0 top-0 z-50 h-full w-72 bg-slate-900/85 backdrop-blur-xl border-r border-white/10 shadow-2xl ring-1 ring-white/10 md:hidden"
             role="dialog"
             aria-label="Navigation menu"
           >
@@ -68,14 +68,15 @@ export function PortalMobileNav({
                   </svg>
                 </button>
               </div>
+              <div className="mx-4 h-px bg-white/10" />
               <nav className="flex-1 overflow-y-auto px-4 py-4">
                 <div className="space-y-6">
                   {navGroups.map((group) => (
                     <div key={group.title}>
-                      <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-slate-300/90">
                         {group.title}
                       </h3>
-                      <ul className="space-y-0.5 list-disc pl-5 marker:text-slate-500">
+                      <ul className="space-y-0.5 list-disc pl-5 marker:text-slate-400">
                         {group.items.map((item) => (
                           <li key={item.label}>
                             <Link
