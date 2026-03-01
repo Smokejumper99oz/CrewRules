@@ -11,11 +11,11 @@ function escapeHtml(input: unknown) {
 }
 
 function formatTimestamp(date = new Date()) {
-  // readable, stable-ish format without pulling in libs
   return date.toLocaleString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
     year: "numeric",
-    month: "short",
-    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -48,137 +48,130 @@ export async function POST(req: Request) {
       subject: subject ? `CrewRules Contact: ${String(subject)}` : "CrewRules Contact Message",
       html: `<!DOCTYPE html>
 <html lang="en">
-  <body style="margin:0;padding:0;background-color:#0b1220;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background-color:#0b1220;padding:28px 0;">
+  <body style="margin:0;padding:0;background:#0f172a;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#ffffff;padding:26px 0;">
       <tr>
-        <td align="center" style="padding:0 16px;">
-          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;border-collapse:separate;border-spacing:0;">
+        <td align="center" style="padding:0 14px;">
 
-            <!-- Header with logo -->
+          <!-- Outer card -->
+          <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="width:100%;max-width:640px;border-collapse:separate;border-spacing:0;background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;overflow:hidden;box-shadow:0 10px 24px rgba(15,23,42,0.08);">
+
+            <!-- Header -->
             <tr>
-              <td style="background:#0b1220;border-radius:16px 16px 0 0;padding:24px 18px;text-align:center;">
+              <td style="padding:18px 20px 14px 20px;background:#0f172a;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                  <tr>
+                    <td align="center" style="padding:0;">
+                      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:36px;font-weight:400;line-height:1.2;">
+                        <span style="color:#ffffff;">Crew</span><span style="color:#75C043;">Rules</span><span style="font-size:20px;vertical-align:super;font-weight:400;color:#ffffff;">™</span>
+                      </div>
+                    </td>
+                  </tr>
 
-                <img
-                  src="https://crewrules.com/logo/crewrules-logo.png"
-                  alt="CrewRules"
-                  width="260"
-                  style="max-width:260px;height:auto;display:block;margin:0 auto 12px auto;border:0;"
-                />
+                  <tr>
+                    <td align="center" style="padding:12px 0 0 0;">
+                      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#cbd5e1;">
+                        ${ts}
+                      </div>
+                    </td>
+                  </tr>
+                </table>
 
-                <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#9ca3af;">
-                  ${ts}
-                </div>
-
-                <div style="height:1px;background:rgba(255,255,255,0.08);margin-top:18px;"></div>
-
+                <!-- Keep ONLY this accent line -->
+                <div style="height:3px;background:#75C043;border-radius:999px;margin:14px 0 0 0;"></div>
               </td>
             </tr>
 
-            <!-- Card -->
+            <!-- Body -->
             <tr>
-              <td style="background:#0f172a;border:1px solid rgba(148,163,184,0.18);border-radius:18px;padding:18px;">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+              <td style="padding:18px 20px 20px 20px;background:#0f172a;">
+
+                <!-- Inner white content card -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                  style="border-collapse:separate;border-spacing:0;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
                   <tr>
-                    <td style="padding:0;">
-                      <div style="height:4px;background:#75C043;border-radius:18px 18px 0 0;"></div>
-                    </td>
-                  </tr>
-                  <!-- Rows -->
-                  <tr>
-                    <td style="padding:10px 0;">
+                    <td style="padding:26px 28px;">
+
+                      <!-- Details -->
                       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+
                         <tr>
-                          <td width="120" style="vertical-align:top;padding-right:12px;">
-                            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#94a3b8;">
-                              Name
-                            </div>
+                          <td width="120" style="padding:10px 0;vertical-align:top;">
+                            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#6b7280;">Name</div>
                           </td>
-                          <td style="vertical-align:top;">
-                            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#e5e7eb;font-weight:700;">
+                          <td style="padding:10px 0;vertical-align:top;">
+                            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#111827;font-weight:700;">
                               ${safeName}
                             </div>
                           </td>
                         </tr>
-                      </table>
-                    </td>
-                  </tr>
 
-                  <tr>
-                    <td style="padding:10px 0;">
-                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                         <tr>
-                          <td width="120" style="vertical-align:top;padding-right:12px;">
-                            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#94a3b8;">
-                              Email
-                            </div>
+                          <td width="120" style="padding:10px 0;vertical-align:top;border-top:1px solid #f3f4f6;">
+                            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#6b7280;">Email</div>
                           </td>
-                          <td style="vertical-align:top;">
-                            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#e5e7eb;font-weight:700;">
-                              <a href="mailto:${safeEmail}" style="color:#75C043;text-decoration:underline;font-weight:700;">${safeEmail}</a>
+                          <td style="padding:10px 0;vertical-align:top;border-top:1px solid #f3f4f6;">
+                            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;font-weight:700;">
+                              <a href="mailto:${safeEmail}" style="color:#0f766e;text-decoration:underline;">${safeEmail}</a>
                             </div>
                           </td>
                         </tr>
-                      </table>
-                    </td>
-                  </tr>
 
-                  <tr>
-                    <td style="padding:10px 0;">
-                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                         <tr>
-                          <td width="120" style="vertical-align:top;padding-right:12px;">
-                            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#94a3b8;">
-                              Subject
-                            </div>
+                          <td width="120" style="padding:10px 0;vertical-align:top;border-top:1px solid #f3f4f6;">
+                            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#6b7280;">Subject</div>
                           </td>
-                          <td style="vertical-align:top;">
-                            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#e5e7eb;font-weight:700;">
+                          <td style="padding:10px 0;vertical-align:top;border-top:1px solid #f3f4f6;">
+                            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#111827;font-weight:700;">
                               ${safeSubject}
                             </div>
                           </td>
                         </tr>
-                      </table>
-                    </td>
-                  </tr>
 
-                  <!-- Message block -->
-                  <tr>
-                    <td style="padding:14px 0 8px 0;">
-                      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#94a3b8;margin-bottom:8px;">
-                        Message
-                      </div>
-                      <div style="background:#020617;border:1px solid rgba(148,163,184,0.16);border-radius:14px;padding:16px 18px;">
-                        <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.7;color:#e5e7eb;white-space:pre-wrap;">
-                          ${safeMessage}
+                      </table>
+
+                      <!-- Message -->
+                      <div style="margin-top:14px;">
+                        <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#6b7280;margin-bottom:8px;">
+                          Message
+                        </div>
+                        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:16px 18px;">
+                          <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.7;color:#111827;white-space:pre-wrap;">
+                            ${safeMessage}
+                          </div>
                         </div>
                       </div>
+
+                      <!-- Reply -->
+                      <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px;">
+                        <tr>
+                          <td>
+                            <a href="${mailtoReply}"
+                              style="display:inline-block;background:#75C043;color:#0f172a;text-decoration:none;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-weight:900;font-size:14px;padding:10px 16px;border-radius:12px;">
+                              Reply to sender
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+
                     </td>
                   </tr>
-
-                  <!-- CTA -->
-                  <tr>
-                    <td style="padding:14px 0 2px 0;">
-                      <a href="${mailtoReply}"
-                         style="display:inline-block;background:#75C043;color:#0b1220;text-decoration:none;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-weight:900;font-size:14px;padding:10px 14px;border-radius:10px;">
-                        Reply to sender
-                      </a>
-                    </td>
-                  </tr>
-
                 </table>
+
               </td>
             </tr>
 
             <!-- Footer -->
             <tr>
-              <td style="padding:14px 4px 0 4px;">
-                <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#94a3b8;line-height:1.6;">
-                  Sent by <span style="color:#e5e7eb;font-weight:700;">CrewRules</span> via <span style="color:#e5e7eb;font-weight:700;">contact.crewrules.com</span>
+              <td style="padding:14px 20px;background:#0f172a;">
+                <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#cbd5e1;">
+                  Sent by <span style="font-weight:400;color:#ffffff;">Crew</span><span style="font-weight:400;color:#75C043;">Rules</span><span style="font-size:10px;vertical-align:super;font-weight:400;color:#ffffff;">™</span> — The Smart Knowledge Platform for Airline Crew
                 </div>
               </td>
             </tr>
 
           </table>
+
         </td>
       </tr>
     </table>
