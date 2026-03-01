@@ -639,15 +639,19 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
   }
 }
 
-/** Returns months that have at least one schedule event, derived from event start dates. */
+/** Returns at most 2 months: current first, then next (if has events) else previous (if has events). */
 export async function getAvailableMonths(): Promise<MonthOption[]> {
   const profile = await getProfile();
   if (!profile) return [];
 
   try {
     const now = new Date();
-    const rangeStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const rangeEnd = new Date(now.getFullYear(), now.getMonth() + 13, 0);
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-based
+    const currentKey = `${currentYear}-${currentMonth}`;
+
+    const rangeStart = new Date(currentYear, currentMonth - 1, 1);
+    const rangeEnd = new Date(currentYear, currentMonth + 13, 0);
     const startStr = rangeStart.toISOString().slice(0, 10) + "T00:00:00.000Z";
     const endStr = rangeEnd.toISOString().slice(0, 10) + "T23:59:59.999Z";
 
@@ -669,19 +673,33 @@ export async function getAvailableMonths(): Promise<MonthOption[]> {
       monthSet.add(key);
     }
 
-    const available: MonthOption[] = [];
-    const sorted = [...monthSet].sort();
-    for (const key of sorted) {
-      const [y, m] = key.split("-").map(Number);
+    const toOption = (y: number, m: number): MonthOption => {
       const d = new Date(y, m, 1);
-      available.push({
+      return {
         year: y,
         month: m,
         label: d.toLocaleString(undefined, { month: "long", year: "numeric" }),
         shortLabel: d.toLocaleString(undefined, { month: "short" }),
-      });
+      };
+    };
+
+    const currentOption = toOption(currentYear, currentMonth);
+
+    const nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
+    const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
+    const nextKey = `${nextYear}-${nextMonth}`;
+
+    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const prevKey = `${prevYear}-${prevMonth}`;
+
+    if (monthSet.has(nextKey)) {
+      return [currentOption, toOption(nextYear, nextMonth)];
     }
-    return available;
+    if (monthSet.has(prevKey)) {
+      return [toOption(prevYear, prevMonth), currentOption];
+    }
+    return [currentOption];
   } catch {
     return [];
   }
