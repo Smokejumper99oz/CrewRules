@@ -59,7 +59,7 @@ export async function POST(req: Request) {
               <td style="background:#0b1220;border-radius:16px 16px 0 0;padding:24px 18px;text-align:center;">
 
                 <img
-                  src="https://crewrules.com/crewrules-logo.png"
+                  src="https://crewrules.com/logo/crewrules-logo.png"
                   alt="CrewRules"
                   width="260"
                   style="max-width:260px;height:auto;display:block;margin:0 auto 12px auto;border:0;"
