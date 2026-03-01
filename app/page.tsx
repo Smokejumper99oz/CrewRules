@@ -521,6 +521,7 @@ export default function HomePage() {
           </div>
 
           <div className="mt-8 text-xs text-slate-500 leading-relaxed">
+            Message ID: {crypto.randomUUID()} <br />
             © {new Date().getFullYear()} Crew<span className="text-[#75C043]">Rules</span>™. All rights reserved. <br />
             Crew<span className="text-[#75C043]">Rules</span>™ is an independent pilot resource and is not affiliated with any airline, union, or regulatory authority.
             Information provided is for reference only.<br />
