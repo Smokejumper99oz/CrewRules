@@ -57,7 +57,12 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
     creditMinutes != null && creditMinutes > 0
       ? formatMinutesToHhMm(creditMinutes)
       : "—";
-  const dutyRange = `${formatScheduleTime(event.start_time, timeOpts)}–${formatScheduleTime(event.end_time, timeOpts)}`;
+  const rangeStart =
+    event.event_type === "trip" && event.first_leg_departure_time
+      ? event.first_leg_departure_time
+      : formatScheduleTime(event.start_time, timeOpts);
+
+  const dutyRange = `${rangeStart}–${formatScheduleTime(event.end_time, timeOpts)}`;
   const timeLine =
     event.event_type === "reserve"
       ? `On Call • ${dutyRange}`

@@ -16,6 +16,7 @@ export type ParsedEvent = {
   /** Credit/pay in minutes (HHMM→minutes, e.g. 0812→492). Stored, not decimal. */
   creditMinutes?: number;
   firstLegRoute?: string;
+  firstLegDepartureTime?: string;
   pairingDays?: number;
   blockMinutes?: number;
 };
@@ -129,6 +130,7 @@ function parseDescription(desc: string): {
   reportTime?: string;
   creditMinutes?: number;
   firstLegRoute?: string;
+  firstLegDepartureTime?: string;
   pairingDays?: number;
   blockMinutes?: number;
 } {
@@ -136,6 +138,7 @@ function parseDescription(desc: string): {
     reportTime?: string;
     creditMinutes?: number;
     firstLegRoute?: string;
+    firstLegDepartureTime?: string;
     pairingDays?: number;
     blockMinutes?: number;
   } = {};
@@ -242,6 +245,17 @@ function parseDescription(desc: string): {
     if (dayMatch) dutyDays.add(dayMatch[1].toLowerCase());
   }
   result.pairingDays = dutyDays.size > 0 ? Math.min(dutyDays.size, 31) : (legLines.length > 0 ? Math.min(legLines.length, 31) : undefined);
+
+  // First leg departure time: "Th 3546 Sju-Jfk 0850 1204 0414" → dep=0850 → "08:50"
+  for (const leg of legLines) {
+    if (result.firstLegDepartureTime) break;
+    const depArrBlock = leg.match(/(\d{3,4})\s+(\d{3,4})\s+(\d{3,4})\s*$/);
+    if (depArrBlock) {
+      let dep = depArrBlock[1];
+      if (dep.length === 3) dep = dep.padStart(4, "0");
+      result.firstLegDepartureTime = `${dep.slice(0, 2)}:${dep.slice(2)}`;
+    }
+  }
 
   // Fallback route: if DESCRIPTION is one unfolded line
   if (!result.firstLegRoute) {
@@ -367,7 +381,7 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
 
         if (!dtstartRaw?.value) continue;
 
-        const { reportTime, creditMinutes, firstLegRoute, pairingDays, blockMinutes } =
+        const { reportTime, creditMinutes, firstLegRoute, firstLegDepartureTime, pairingDays, blockMinutes } =
           parseDescription(description ?? "");
         const creditFromSummary = !creditMinutes ? parseCreditFromText(summary ?? "") : null;
         const creditFromComment = !creditMinutes && !creditFromSummary ? parseCreditFromText(comment ?? "") : null;
@@ -399,6 +413,7 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
           reportTime: reportTime || undefined,
           creditMinutes: resolvedCreditMinutes,
           firstLegRoute: firstLegRoute || routeFromSummary || routeFromLocation || undefined,
+          firstLegDepartureTime: firstLegDepartureTime ?? undefined,
           pairingDays: pairingDays ?? undefined,
           blockMinutes: blockMinutes ?? undefined,
         });

@@ -51,7 +51,7 @@ export default function HomePage() {
       </header>
 
       {/* Hero */}
-      <section className="relative w-full overflow-hidden min-h-[85vh]">
+      <section className="relative w-full overflow-hidden min-h-[60vh] lg:min-h-[65vh] xl:min-h-[60vh] 2xl:min-h-[55vh]">
         {/* HERO BACKGROUND IMAGE - clearly visible like the example */}
         <div className="absolute inset-0 z-0">
           <Image
@@ -69,7 +69,7 @@ export default function HomePage() {
           <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent" />
         </div>
 
-        <div className="relative z-10 mx-auto max-w-6xl px-6 pb-10 pt-8 md:pb-16 md:pt-10">
+        <div className="relative z-10 mx-auto max-w-6xl px-6 pt-16 pb-12 lg:pt-20 lg:pb-14 xl:pt-16 xl:pb-10 2xl:pt-14 2xl:pb-8">
           <div className="grid gap-10 md:grid-cols-2 md:items-end">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-slate-300">
