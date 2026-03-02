@@ -1,5 +1,6 @@
 "use server";
 
+import { addDays } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/profile";
 import { revalidatePath } from "next/cache";
@@ -26,6 +27,12 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   const displayTimezoneMode = (formData.get("display_timezone_mode") as string) || "base";
   const timeFormat = (formData.get("time_format") as string) || "24h";
   const showTimezoneLabel = formData.get("show_timezone_label") === "1";
+  const homeAirport = (formData.get("home_airport") as string)?.trim().toUpperCase() || null;
+  const commuteArrivalRaw = (formData.get("commute_arrival_buffer_minutes") as string)?.trim();
+  const commuteArrival = commuteArrivalRaw ? parseInt(commuteArrivalRaw, 10) : 180;
+  const commuteReleaseRaw = (formData.get("commute_release_buffer_minutes") as string)?.trim();
+  const commuteRelease = commuteReleaseRaw ? parseInt(commuteReleaseRaw, 10) : 90;
+  const commuteNonstopOnly = formData.get("commute_nonstop_only") === "1";
 
   if (fullName && fullName.length > 128) {
     return { error: "Full name is too long" };
@@ -54,6 +61,15 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   if (!["24h", "12h"].includes(timeFormat)) {
     return { error: "Invalid time format" };
   }
+  if (homeAirport && !VALID_AIRPORT.test(homeAirport)) {
+    return { error: "Home airport must be a 3-letter IATA code" };
+  }
+  if (![120, 180, 240].includes(commuteArrival)) {
+    return { error: "Invalid commute arrival buffer" };
+  }
+  if (![60, 90, 120].includes(commuteRelease)) {
+    return { error: "Invalid commute release buffer" };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -69,6 +85,10 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
       display_timezone_mode: displayTimezoneMode,
       time_format: timeFormat,
       show_timezone_label: showTimezoneLabel,
+      home_airport: homeAirport,
+      commute_arrival_buffer_minutes: commuteArrival,
+      commute_release_buffer_minutes: commuteRelease,
+      commute_nonstop_only: commuteNonstopOnly,
       updated_at: new Date().toISOString(),
     })
     .eq("id", profile.id);
@@ -78,4 +98,50 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   revalidatePath("/frontier/pilots/portal/profile");
   revalidatePath("/frontier/pilots/portal/schedule");
   return { success: true };
+}
+
+export type StartProTrialResult =
+  | { ok: false; reason: "profile_missing" }
+  | { ok: false; reason: "already_paid" }
+  | { ok: false; reason: "trial_active"; pro_trial_expires_at: string }
+  | { ok: false; reason: "update_failed"; error: string }
+  | { ok: true; pro_trial_expires_at: string };
+
+export async function startProTrial(): Promise<StartProTrialResult> {
+  const profile = await getProfile();
+  if (!profile) return { ok: false, reason: "profile_missing" };
+
+  const tier = profile.subscription_tier;
+  if (tier === "pro" || tier === "enterprise") {
+    return { ok: false, reason: "already_paid" };
+  }
+
+  const expiresAt = profile.pro_trial_expires_at;
+  if (expiresAt && typeof expiresAt === "string") {
+    const expiresMs = new Date(expiresAt).getTime();
+    if (!Number.isNaN(expiresMs) && expiresMs > Date.now()) {
+      return { ok: false, reason: "trial_active", pro_trial_expires_at: expiresAt };
+    }
+  }
+
+  const now = new Date();
+  const newStartedAt = now.toISOString();
+  const newExpiresAt = addDays(now, 14).toISOString();
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      pro_trial_started_at: newStartedAt,
+      pro_trial_expires_at: newExpiresAt,
+      updated_at: newStartedAt,
+    })
+    .eq("id", profile.id);
+
+  if (error) return { ok: false, reason: "update_failed", error: error.message };
+
+  revalidatePath("/frontier/pilots/portal");
+  revalidatePath("/frontier/pilots/portal/profile");
+
+  return { ok: true, pro_trial_expires_at: newExpiresAt };
 }

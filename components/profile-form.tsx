@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { updateProfilePreferences } from "@/app/frontier/pilots/portal/profile/actions";
+import { useRouter } from "next/navigation";
+import { updateProfilePreferences, startProTrial } from "@/app/frontier/pilots/portal/profile/actions";
 import { DatePickerInput } from "@/components/date-picker-input";
+import { ProBadge } from "@/components/pro-badge";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -32,7 +34,16 @@ type Props = {
     display_timezone_mode?: "base" | "device" | "toggle" | "both";
     time_format?: "24h" | "12h";
     show_timezone_label?: boolean;
+    home_airport?: string | null;
+    commute_arrival_buffer_minutes?: number;
+    commute_release_buffer_minutes?: number;
+    commute_nonstop_only?: boolean;
+    subscription_tier?: "free" | "pro" | "enterprise";
+    pro_trial_expires_at?: string | null;
   };
+  proActive: boolean;
+  proBadgeLabel: string | null;
+  proBadgeVariant: "emerald" | "amber" | "red";
 };
 
 const COMMON_AIRPORTS = ["SJU", "DEN", "MCO", "LAS", "PHX", "MIA", "ORD", "DFW", "ATL", "FLL", "BOS", "IAH", "LAX", "SFO"];
@@ -73,9 +84,15 @@ function getTimezoneAbbreviation(iana: string): string {
   }
 }
 
-export function ProfileForm({ profile }: Props) {
+const COMMUTE_ARRIVAL_OPTIONS = [120, 180, 240] as const;
+const COMMUTE_RELEASE_OPTIONS = [60, 90, 120] as const;
+
+export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant }: Props) {
+  const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [trialStarting, setTrialStarting] = useState(false);
+  const [trialMessage, setTrialMessage] = useState<string | null>(null);
   const [baseAirport, setBaseAirport] = useState(profile.base_airport ?? "");
   const storedTimezone = profile.base_timezone ?? DEFAULT_TIMEZONE;
   const derivedFromBase = getTimezoneFromAirport(profile.base_airport ?? "DEN");
@@ -85,6 +102,10 @@ export function ProfileForm({ profile }: Props) {
   const displayTimezoneMode = profile.display_timezone_mode ?? "base";
   const timeFormat = profile.time_format ?? "24h";
   const showTimezoneLabel = profile.show_timezone_label ?? false;
+  const homeAirport = profile.home_airport ?? "";
+  const commuteArrival = profile.commute_arrival_buffer_minutes ?? 180;
+  const commuteRelease = profile.commute_release_buffer_minutes ?? 90;
+  const commuteNonstopOnly = profile.commute_nonstop_only ?? true;
 
   const derivedTimezone = getTimezoneFromAirport(baseAirport || "DEN");
   const effectiveTimezone = showAdvanced ? manualTimezone : derivedTimezone;
@@ -118,7 +139,15 @@ export function ProfileForm({ profile }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <>
+      <div className="flex items-center justify-between gap-4 border-b border-white/5 pb-4">
+        <h1 className="text-xl font-semibold tracking-tight">Profile</h1>
+        <ProBadge label={proBadgeLabel} variant={proBadgeVariant} />
+      </div>
+      <p className="mt-2 text-sm text-slate-400">
+        Identity, base, subscription, and display preferences.
+      </p>
+      <form onSubmit={handleSubmit} className="mt-6 space-y-8">
       {/* 1. Personal Information */}
       <section>
         <h2 className="text-base font-semibold text-white mb-4">1. Personal Information</h2>
@@ -271,6 +300,134 @@ export function ProfileForm({ profile }: Props) {
         </div>
       </section>
 
+      {/* Commute Settings */}
+      <section>
+        <h2 className="text-base font-semibold text-white mb-4">Commute Settings</h2>
+        <div
+          className={`space-y-4 rounded-xl border px-4 py-4 ${
+            proActive
+              ? "border-white/10 bg-slate-950/40"
+              : "border-amber-500/30 bg-amber-950/10 opacity-90"
+          }`}
+        >
+          {!proActive && (
+            <>
+              <p className="text-sm text-amber-200/90">Commute Assist is a Pro feature.</p>
+              <input type="hidden" name="home_airport" value={homeAirport} />
+              <input type="hidden" name="commute_arrival_buffer_minutes" value={commuteArrival} />
+              <input type="hidden" name="commute_release_buffer_minutes" value={commuteRelease} />
+              <input type="hidden" name="commute_nonstop_only" value={commuteNonstopOnly ? "1" : "0"} />
+            </>
+          )}
+          <div className={!proActive ? "pointer-events-none select-none" : ""}>
+            <div>
+              <label htmlFor="home_airport" className="block text-sm font-medium text-slate-300">
+                Home airport <span className="text-slate-500 font-normal">(commute from)</span>
+              </label>
+              <input
+                id="home_airport"
+                name="home_airport"
+                type="text"
+                defaultValue={homeAirport}
+                maxLength={3}
+                placeholder="e.g. MCO"
+                disabled={!proActive}
+                className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 disabled:opacity-60 disabled:cursor-not-allowed uppercase"
+                style={{ textTransform: "uppercase" }}
+                onInput={(e) => {
+                  e.currentTarget.value = e.currentTarget.value.toUpperCase();
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">3-letter IATA code, blank if not commuting</p>
+            </div>
+            <div className="mt-4">
+              <label
+                htmlFor="commute_arrival_buffer_minutes"
+                className="block text-sm font-medium text-slate-300"
+              >
+                Arrival buffer (minutes before duty)
+              </label>
+              <select
+                id="commute_arrival_buffer_minutes"
+                name="commute_arrival_buffer_minutes"
+                defaultValue={commuteArrival}
+                disabled={!proActive}
+                className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {COMMUTE_ARRIVAL_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="mt-4">
+              <label
+                htmlFor="commute_release_buffer_minutes"
+                className="block text-sm font-medium text-slate-300"
+              >
+                Release buffer (minutes after duty)
+              </label>
+              <select
+                id="commute_release_buffer_minutes"
+                name="commute_release_buffer_minutes"
+                defaultValue={commuteRelease}
+                disabled={!proActive}
+                className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {COMMUTE_RELEASE_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="mt-4 flex items-center gap-3">
+              <input
+                id="commute_nonstop_only"
+                name="commute_nonstop_only"
+                type="checkbox"
+                defaultChecked={commuteNonstopOnly}
+                value="1"
+                disabled={!proActive}
+                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+              <input type="hidden" name="commute_nonstop_only" value="0" />
+              <label htmlFor="commute_nonstop_only" className="text-sm text-slate-300">
+                Prefer nonstop commute flights
+              </label>
+            </div>
+          </div>
+          {!proActive && (
+            <div className="mt-4 space-y-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  setTrialMessage(null);
+                  setTrialStarting(true);
+                  const result = await startProTrial();
+                  setTrialStarting(false);
+                  if (result.ok) {
+                    router.refresh();
+                  } else if (result.reason === "trial_active") {
+                    setTrialMessage("Trial already active");
+                  } else if (result.reason === "already_paid") {
+                    setTrialMessage("You already have Pro access");
+                  }
+                }}
+                disabled={trialStarting}
+                className="rounded-xl bg-amber-500/90 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-amber-500 transition disabled:opacity-50"
+              >
+                {trialStarting ? "Starting…" : "Start 14-Day Pro Trial"}
+              </button>
+              {trialMessage && (
+                <p className="text-sm text-amber-200/90">{trialMessage}</p>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* Schedule display */}
       <section>
         <h2 className="text-base font-semibold text-white mb-4">Schedule display</h2>
@@ -335,5 +492,8 @@ export function ProfileForm({ profile }: Props) {
         {saving ? "Saving…" : "Save"}
       </button>
     </form>
+    </>
   );
 }
+
+/* DEV: Manual test — Commute Settings: (1) Section locked when not Pro; (2) Click "Start 14-Day Pro Trial" → refresh → section unlocks; (3) Edit fields, Save → persists. */

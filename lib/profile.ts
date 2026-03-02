@@ -21,6 +21,13 @@ export type Profile = {
   display_timezone_mode?: "base" | "device" | "toggle" | "both";
   time_format?: "24h" | "12h";
   show_timezone_label?: boolean;
+  home_airport?: string | null;
+  commute_arrival_buffer_minutes?: number;
+  commute_release_buffer_minutes?: number;
+  commute_nonstop_only?: boolean;
+  subscription_tier?: "free" | "pro" | "enterprise";
+  pro_trial_started_at?: string | null;
+  pro_trial_expires_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -64,6 +71,59 @@ export function getDisplayName(profile: Profile | null): string {
     .split(/[._-]/)
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
     .join(" ") || profile.email || "User";
+}
+
+/** Pro access: subscription_tier pro/enterprise, or valid trial not yet expired. */
+export function isProActive(profile?: Profile | null): boolean {
+  if (!profile) {
+    return false;
+  }
+
+  const tier = profile.subscription_tier;
+  if (tier === "pro" || tier === "enterprise") {
+    return true;
+  }
+
+  const expiresAt = profile.pro_trial_expires_at;
+  if (!expiresAt || typeof expiresAt !== "string") {
+    return false;
+  }
+
+  const expiresMs = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiresMs)) {
+    return false;
+  }
+
+  return expiresMs > Date.now();
+}
+
+/** Pro badge label: "Pro Active" or "Pro Trial — X days remaining", or null. */
+export function getProBadgeLabel(profile: Profile | null): string | null {
+  if (!profile) return null;
+  const tier = profile.subscription_tier;
+  if (tier === "pro" || tier === "enterprise") return "Pro Active";
+  if (profile.pro_trial_expires_at) {
+    const ms = new Date(profile.pro_trial_expires_at).getTime();
+    if (!Number.isNaN(ms) && ms > Date.now()) {
+      const daysLeft = Math.ceil((ms - Date.now()) / (24 * 60 * 60 * 1000));
+      return `Pro Trial — ${daysLeft} days remaining`;
+    }
+  }
+  return null;
+}
+
+/** Pro badge color variant: emerald (paid or >7 days), amber (2–7 days), red (≤1 day). */
+export function getProBadgeVariant(profile: Profile | null): "emerald" | "amber" | "red" {
+  if (!profile) return "emerald";
+  const tier = profile.subscription_tier;
+  if (tier === "pro" || tier === "enterprise") return "emerald";
+  if (!profile.pro_trial_expires_at) return "emerald";
+  const ms = new Date(profile.pro_trial_expires_at).getTime();
+  if (Number.isNaN(ms) || ms <= Date.now()) return "emerald";
+  const daysRemaining = Math.ceil((ms - Date.now()) / (24 * 60 * 60 * 1000));
+  if (daysRemaining > 7) return "emerald";
+  if (daysRemaining > 1) return "amber";
+  return "red";
 }
 
 export async function getProfile(): Promise<Profile | null> {

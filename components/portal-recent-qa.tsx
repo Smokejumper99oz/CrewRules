@@ -3,22 +3,27 @@
 import { useState, useEffect } from "react";
 import { getCitationDownloadUrl } from "@/app/frontier/pilots/portal/ask/actions";
 import { listRecentQA } from "@/app/frontier/pilots/portal/ask/qa-actions";
-
-const RECENT_KEY = "crewrules-ask-recent";
+import { getRecentQAStorageKey, RECENT_QA_LEGACY_KEY } from "@/lib/recent-qa-storage";
 
 type RecentItem = { id?: string; q: string; a?: string | null; c?: string | null; p?: string | null };
 
 export function PortalRecentQA({
   tenant,
   portal,
+  userId,
 }: {
   tenant: string;
   portal: string;
+  userId?: string | null;
 }) {
   const [items, setItems] = useState<RecentItem[]>([]);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const storageKey = getRecentQAStorageKey(tenant, portal, userId ?? null);
 
   useEffect(() => {
+    if (typeof localStorage !== "undefined" && localStorage.getItem(RECENT_QA_LEGACY_KEY)) {
+      localStorage.removeItem(RECENT_QA_LEGACY_KEY);
+    }
     let cancelled = false;
     (async () => {
       const { items: dbItems } = await listRecentQA();
@@ -36,7 +41,7 @@ export function PortalRecentQA({
         return;
       }
       try {
-        const stored = localStorage.getItem(RECENT_KEY);
+        const stored = localStorage.getItem(storageKey);
         if (stored) {
           const parsed = JSON.parse(stored) as RecentItem[];
           setItems(Array.isArray(parsed) ? parsed : []);
@@ -48,7 +53,7 @@ export function PortalRecentQA({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [storageKey]);
 
   async function handleDownloadCitation(path: string) {
     const { url, error } = await getCitationDownloadUrl(path);

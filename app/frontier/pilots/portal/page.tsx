@@ -36,7 +36,7 @@ export default async function PortalDashboard() {
       {/* Ask - matches Ask page design */}
       <DashboardAskBox askHref={ASK_HREF} />
 
-      <PortalRecentQA tenant={TENANT} portal={PORTAL} />
+      <PortalRecentQA tenant={TENANT} portal={PORTAL} userId={profile?.id ?? null} />
     </div>
   );
 }
