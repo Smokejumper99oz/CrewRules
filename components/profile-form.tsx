@@ -40,6 +40,7 @@ type Props = {
     commute_nonstop_only?: boolean;
     subscription_tier?: "free" | "pro" | "enterprise";
     pro_trial_expires_at?: string | null;
+    show_pay_projection?: boolean;
   };
   proActive: boolean;
   proBadgeLabel: string | null;
@@ -475,6 +476,22 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               Show timezone label next to times <span className="text-slate-500">(e.g., 2230 SJU)</span>
             </label>
           </div>
+          {proActive && (
+            <div className="flex items-center gap-3">
+              <input
+                id="show_pay_projection"
+                name="show_pay_projection"
+                type="checkbox"
+                defaultChecked={profile.show_pay_projection ?? false}
+                value="1"
+                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
+              />
+              <input type="hidden" name="show_pay_projection" value="0" />
+              <label htmlFor="show_pay_projection" className="text-sm text-slate-300">
+                Show pay
+              </label>
+            </div>
+          )}
         </div>
       </section>
 

@@ -2,6 +2,7 @@
 
 import { addDays } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
+import { createActionClient } from "@/lib/supabase/server-action";
 import { getProfile } from "@/lib/profile";
 import { revalidatePath } from "next/cache";
 
@@ -33,6 +34,7 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   const commuteReleaseRaw = (formData.get("commute_release_buffer_minutes") as string)?.trim();
   const commuteRelease = commuteReleaseRaw ? parseInt(commuteReleaseRaw, 10) : 90;
   const commuteNonstopOnly = formData.get("commute_nonstop_only") === "1";
+  const showPayProjection = formData.get("show_pay_projection") === "1";
 
   if (fullName && fullName.length > 128) {
     return { error: "Full name is too long" };
@@ -89,6 +91,7 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
       commute_arrival_buffer_minutes: commuteArrival,
       commute_release_buffer_minutes: commuteRelease,
       commute_nonstop_only: commuteNonstopOnly,
+      show_pay_projection: showPayProjection,
       updated_at: new Date().toISOString(),
     })
     .eq("id", profile.id);
@@ -98,6 +101,22 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   revalidatePath("/frontier/pilots/portal/profile");
   revalidatePath("/frontier/pilots/portal/schedule");
   return { success: true };
+}
+
+export async function setShowPayProjection(show: boolean) {
+  const supabase = await createActionClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Profile not found");
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ show_pay_projection: show, updated_at: new Date().toISOString() })
+    .eq("id", profile.id);
+
+  if (error) throw error;
+
+  revalidatePath("/frontier/pilots/portal");
+  return { ok: true, show_pay_projection: show };
 }
 
 export type StartProTrialResult =

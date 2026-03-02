@@ -28,6 +28,7 @@ export type Profile = {
   subscription_tier?: "free" | "pro" | "enterprise";
   pro_trial_started_at?: string | null;
   pro_trial_expires_at?: string | null;
+  show_pay_projection?: boolean;
   created_at: string;
   updated_at: string;
 };

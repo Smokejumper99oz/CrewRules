@@ -3,10 +3,12 @@
 import { createHash } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getProfile, isAdmin } from "@/lib/profile";
+import { getProfile, isAdmin, isProActive } from "@/lib/profile";
 import { getTenantSourceTimezone, getReserveCreditPerDay } from "@/lib/tenant-config";
 import { computeTripCredit, extractPairingKey, expandEventToDaySegments, addDay } from "@/lib/schedule-time";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
+import { getPayScale } from "@/lib/tenant-settings";
+import { payYearFromDOH } from "@/lib/pay-utils";
 
 const FLICA_SOURCE = "flica_import";
 
@@ -466,12 +468,32 @@ export type MonthStats = {
   trip: number;
   reserve: number;
   vacationOff: number;
-  /** Trip credit hours (pay). */
-  totalCredit: number;
   /** Trip block hours (wheels up–down). */
   totalBlock: number;
   /** Extra credit over block (min 5 hrs/day). */
   totalExtraCredit: number;
+  /** Credit totals in minutes */
+  tripCreditMinutes: number;
+  reserveCreditMinutes: number;
+  vacationCreditMinutes: number;
+  rawCreditMinutes: number;
+  guaranteeMinutes: number;
+  creditAfterGuaranteeMinutes: number;
+  paidMinutes: number;
+  /** RSL days count (for guarantee logic) */
+  rslDaysCount?: number;
+  /** Pro with setting off: show "Pay hidden" for privacy */
+  payHidden?: boolean;
+  /** Pro-only: estimated gross pay projection */
+  payProjection?: {
+    pay20thHours: number;
+    pay5thHours: number;
+    pay20thGross: number;
+    pay5thGross: number;
+    totalGross: number;
+    rate: number;
+    year: number;
+  };
   error?: string;
 };
 
@@ -482,7 +504,21 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
   const y = year ?? now.getFullYear();
   const m = month ?? now.getMonth();
   const profile = await getProfile();
-  if (!profile) return { trip: 0, reserve: 0, vacationOff: 0, totalCredit: 0, totalBlock: 0, totalExtraCredit: 0 };
+  const emptyStats: MonthStats = {
+    trip: 0,
+    reserve: 0,
+    vacationOff: 0,
+    totalBlock: 0,
+    totalExtraCredit: 0,
+    tripCreditMinutes: 0,
+    reserveCreditMinutes: 0,
+    vacationCreditMinutes: 0,
+    rawCreditMinutes: 0,
+    guaranteeMinutes: 0,
+    creditAfterGuaranteeMinutes: 0,
+    paidMinutes: 0,
+  };
+  if (!profile) return emptyStats;
 
   try {
     const monthStart = new Date(y, m, 1);
@@ -499,8 +535,7 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
       .lte("start_time", endStr)
       .gte("end_time", startStr);
 
-    if (error)
-      return { trip: 0, reserve: 0, vacationOff: 0, totalCredit: 0, totalBlock: 0, totalExtraCredit: 0, error: error.message };
+    if (error) return { ...emptyStats, error: error.message };
 
     const baseTimezone =
       profile.base_timezone ??
@@ -519,11 +554,16 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
     }[];
 
     const reserveDays = new Set<string>();
+    const rslDays = new Set<string>();
     const tripDays = new Set<string>();
     let tripOccurrences = 0;
-    let totalCredit = 0;
     let totalBlock = 0;
     let totalExtraCredit = 0;
+    let tripCreditMinutes = 0;
+    let vacationCreditMinutes = 0;
+    let tripEvents = 0;
+    let reserveEvents = 0;
+    let vacationEvents = 0;
 
     // Group by pairing, then find runs (consecutive dates). Same pairing on non-consecutive days = different trips.
     // e.g. S3019 Feb 19-20 and S3019 Feb 21-22 are two separate trips, not duplicates.
@@ -545,9 +585,21 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
           tripDays.add(seg.dateStr);
         } else if (ev.event_type === "reserve") {
           reserveDays.add(seg.dateStr);
+          if (/\bRSL\b/i.test(ev.title ?? "")) rslDays.add(seg.dateStr);
         }
       }
-      if (ev.event_type === "trip") {
+      if (ev.event_type === "vacation") {
+        vacationEvents += 1;
+        const vacMatch = (ev.title ?? "").match(/\bV(\d+)\b/i);
+        if (vacMatch) {
+          const tenths = parseInt(vacMatch[1], 10); // V35 → 35
+          const minutesPerDay = Math.round((tenths / 10) * 60); // 3.5 * 60 = 210
+          vacationCreditMinutes += segments.length * minutesPerDay;
+        }
+      } else if (ev.event_type === "reserve") {
+        reserveEvents += 1;
+      } else if (ev.event_type === "trip") {
+        tripEvents += 1;
         tripOccurrences += 1;
         const evCreditHrs = ev.credit_minutes != null ? ev.credit_minutes / 60 : ev.credit_hours ?? null;
         let blockHrs = 0;
@@ -609,7 +661,7 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
         const ev = entries.find((e) => e.dateStrs.some((d) => runDateStrs.includes(d)))!;
         const daysInMonth = runDateStrs.length;
         const ratio = ev.pairingDays > 0 ? Math.min(1, daysInMonth / ev.pairingDays) : 1;
-        totalCredit += ev.creditHrs * ratio;
+        tripCreditMinutes += Math.round(ev.creditHrs * ratio * 60);
         totalBlock += ev.blockHrs * ratio;
         totalExtraCredit += ev.extraHrs * ratio;
       }
@@ -617,7 +669,17 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
 
     // Add reserve credit (exclude days that are also trip days—short call that converted to pairing)
     const reserveOnlyDays = [...reserveDays].filter((d) => !tripDays.has(d));
-    totalCredit += reserveOnlyDays.length * reserveCreditPerDay;
+    const reserveCreditMinutes = Math.round(reserveOnlyDays.length * reserveCreditPerDay * 60);
+
+    const rawCreditMinutes = tripCreditMinutes + vacationCreditMinutes + reserveCreditMinutes;
+
+    const PREMIUM_THRESHOLD_MIN = 4920; // 82h
+    const guaranteeMinutes = reserveOnlyDays.length > 0 || rslDays.size >= 7 ? 4500 : 0;
+    const creditAfterGuaranteeMinutes = Math.max(rawCreditMinutes, guaranteeMinutes);
+    const paidMinutes =
+      creditAfterGuaranteeMinutes <= PREMIUM_THRESHOLD_MIN
+        ? creditAfterGuaranteeMinutes
+        : PREMIUM_THRESHOLD_MIN + Math.round((creditAfterGuaranteeMinutes - PREMIUM_THRESHOLD_MIN) * 1.25);
 
     const lastDate = monthEnd.getDate();
     const allMonthDays = new Set<string>();
@@ -628,15 +690,79 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
     const reserve = reserveOnlyDays.length;
     const vacationOff = [...allMonthDays].filter((d) => !reserveDays.has(d) && !tripDays.has(d)).length;
 
-    return { trip: tripOccurrences, reserve, vacationOff, totalCredit, totalBlock, totalExtraCredit };
+    const stats: MonthStats = {
+      trip: tripOccurrences,
+      reserve,
+      vacationOff,
+      totalBlock,
+      totalExtraCredit,
+      tripCreditMinutes,
+      reserveCreditMinutes,
+      vacationCreditMinutes,
+      rawCreditMinutes,
+      guaranteeMinutes,
+      creditAfterGuaranteeMinutes,
+      paidMinutes,
+      rslDaysCount: rslDays.size,
+    };
+
+    const isPro = isProActive(profile);
+
+    if (isPro) {
+      // Always compute pay for Pro users
+      const scale = await getPayScale(profile.tenant, profile.portal);
+
+      const seat =
+        profile.position === "captain"
+          ? "CA"
+          : profile.position === "first_officer"
+            ? "FO"
+            : null;
+
+      const doh = profile.date_of_hire;
+
+      // DEBUG: log scale, seat, doh before payProjection
+      console.log("[getMonthStats] pay inputs:", {
+        scale: scale ?? null,
+        seat: seat ?? null,
+        doh: doh ?? null,
+      });
+
+      if (scale && seat && doh) {
+        const year = payYearFromDOH(doh, new Date(y, m + 1, 0));
+        const cappedYear = Math.min(12, year);
+        const rate = scale.seats[seat]?.[String(cappedYear)] ?? 0;
+
+        console.log("[getMonthStats] pay calc:", {
+          year,
+          rate,
+          paidMinutes,
+          paidHours: paidMinutes / 60,
+        });
+
+        const paidHours = paidMinutes / 60;
+        const pay20thHours = Math.min(35, paidHours);
+        const pay5thHours = Math.max(0, paidHours - 35);
+
+        stats.payProjection = {
+          pay20thHours,
+          pay5thHours,
+          pay20thGross: pay20thHours * rate,
+          pay5thGross: pay5thHours * rate,
+          totalGross: pay20thHours * rate + pay5thHours * rate,
+          rate,
+          year,
+        };
+      }
+
+      // Visibility controlled only by toggle
+      stats.payHidden = !profile.show_pay_projection;
+    }
+
+    return stats;
   } catch (e) {
     return {
-      trip: 0,
-      reserve: 0,
-      vacationOff: 0,
-      totalCredit: 0,
-      totalBlock: 0,
-      totalExtraCredit: 0,
+      ...emptyStats,
       error: e instanceof Error ? e.message : "Unknown error",
     };
   }
