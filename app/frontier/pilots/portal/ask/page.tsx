@@ -49,6 +49,7 @@ function AskPageContent() {
   const [question, setQuestion] = useState("");
   const [submittedQuestion, setSubmittedQuestion] = useState<string | null>(null);
   const [answer, setAnswer] = useState<string | null>(null);
+  const [retrievedSources, setRetrievedSources] = useState<string | null>(null);
   const [citation, setCitation] = useState<string | null>(null);
   const [citationPath, setCitationPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +63,7 @@ function AskPageContent() {
       (async () => {
         setSubmittedQuestion(q);
         setAnswer(null);
+        setRetrievedSources(null);
         setCitation(null);
         setCitationPath(null);
         setError(null);
@@ -73,13 +75,14 @@ function AskPageContent() {
           return;
         }
         setAnswer(result.answer ?? null);
+        setRetrievedSources(result.retrievedSources ?? null);
         setCitation(result.citation ?? null);
         setCitationPath(result.citationPath ?? null);
         await saveQARow(q, result.answer ?? null, result.citation ?? null, result.citationPath ?? null);
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify({ q, a: result.answer ?? null, c: result.citation ?? null, p: result.citationPath ?? null }));
-          const recent: { q: string; a?: string | null; c?: string | null; p?: string | null }[] = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
-          const updated = [{ q, a: result.answer ?? null, c: result.citation ?? null, p: result.citationPath ?? null }, ...recent.filter((r) => r.q !== q)].slice(0, RECENT_MAX);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ q, a: result.answer ?? null, r: result.retrievedSources ?? null, c: result.citation ?? null, p: result.citationPath ?? null }));
+          const recent: { q: string; a?: string | null; r?: string | null; c?: string | null; p?: string | null }[] = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+          const updated = [{ q, a: result.answer ?? null, r: result.retrievedSources ?? null, c: result.citation ?? null, p: result.citationPath ?? null }, ...recent.filter((r) => r.q !== q)].slice(0, RECENT_MAX);
           localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
         } catch (_) {}
         window.history.replaceState({}, "", window.location.pathname);
@@ -89,9 +92,10 @@ function AskPageContent() {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const { q, a, c, p } = JSON.parse(stored);
+        const { q, a, r, c, p } = JSON.parse(stored);
         if (q) setSubmittedQuestion(q);
         if (a) setAnswer(a);
+        if (r) setRetrievedSources(r);
         if (c) setCitation(c);
         if (p) setCitationPath(p);
       }
@@ -108,6 +112,7 @@ function AskPageContent() {
     setSubmittedQuestion(q);
     setQuestion("");
     setAnswer(null);
+    setRetrievedSources(null);
     setCitation(null);
     setCitationPath(null);
     setError(null);
@@ -121,6 +126,7 @@ function AskPageContent() {
       return;
     }
     setAnswer(result.answer ?? null);
+    setRetrievedSources(result.retrievedSources ?? null);
     setCitation(result.citation ?? null);
     setCitationPath(result.citationPath ?? null);
     await saveQARow(q, result.answer ?? null, result.citation ?? null, result.citationPath ?? null);
@@ -130,15 +136,16 @@ function AskPageContent() {
         JSON.stringify({
           q,
           a: result.answer ?? null,
+          r: result.retrievedSources ?? null,
           c: result.citation ?? null,
           p: result.citationPath ?? null,
         })
       );
-      const recent: { q: string; a?: string | null; c?: string | null; p?: string | null }[] = JSON.parse(
+      const recent: { q: string; a?: string | null; r?: string | null; c?: string | null; p?: string | null }[] = JSON.parse(
         localStorage.getItem(RECENT_KEY) ?? "[]"
       );
       const updated = [
-        { q, a: result.answer ?? null, c: result.citation ?? null, p: result.citationPath ?? null },
+        { q, a: result.answer ?? null, r: result.retrievedSources ?? null, c: result.citation ?? null, p: result.citationPath ?? null },
         ...recent.filter((r) => r.q !== q),
       ].slice(0, RECENT_MAX);
       localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
@@ -162,6 +169,10 @@ function AskPageContent() {
     rawCitation && rawCitation !== "Citation will appear here once documents are indexed." && rawCitation !== SAMPLE_REFERENCE
       ? formatCitationForDisplay(rawCitation, answer)
       : rawCitation;
+  const displayRetrieved =
+    retrievedSources && retrievedSources !== "Citation will appear here once documents are indexed."
+      ? formatCitationForDisplay(retrievedSources, answer)
+      : retrievedSources;
 
   return (
     <div className="space-y-6">
@@ -219,16 +230,37 @@ function AskPageContent() {
             <p className="mt-3 text-xs font-medium text-emerald-300/90">
               Answer generated from official contract documents.
             </p>
-            <div className="mt-2 rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/20 p-3">
-              <div className="text-xs text-emerald-200 whitespace-pre-wrap">{displayCitation}</div>
-              {citationPath && (
-                <button
-                  type="button"
-                  onClick={handleDownloadCitation}
-                  className="mt-2 text-xs font-medium text-[#75C043] hover:underline"
-                >
-                  Download source document →
-                </button>
+            <div className="mt-2 space-y-3">
+              {loading && submittedQuestion && (
+                <div className="rounded-xl bg-slate-800/40 ring-1 ring-slate-600/30 p-3">
+                  <div className="text-xs text-slate-400">Searching library…</div>
+                </div>
+              )}
+              {!loading && displayRetrieved && (
+                <div className="rounded-xl bg-slate-800/40 ring-1 ring-slate-600/30 p-3">
+                  <div className="text-xs font-medium text-slate-400 mb-1.5">Retrieved sources</div>
+                  <div className="text-xs text-slate-300 whitespace-pre-wrap">{displayRetrieved}</div>
+                </div>
+              )}
+              {!loading && displayCitation && displayCitation !== SAMPLE_REFERENCE && displayCitation !== "Citation will appear here once documents are indexed." && (
+                <div className="rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/20 p-3">
+                  <div className="text-xs font-medium text-emerald-400/90 mb-1.5">Cited sources</div>
+                  <div className="text-xs text-emerald-200 whitespace-pre-wrap">{displayCitation}</div>
+                  {citationPath && (
+                    <button
+                      type="button"
+                      onClick={handleDownloadCitation}
+                      className="mt-2 text-xs font-medium text-[#75C043] hover:underline"
+                    >
+                      Download source document →
+                    </button>
+                  )}
+                </div>
+              )}
+              {!loading && !displayRetrieved && !displayCitation && submittedQuestion && (
+                <div className="rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/20 p-3">
+                  <div className="text-xs text-emerald-200">Citation will appear here once documents are indexed.</div>
+                </div>
               )}
             </div>
           </div>

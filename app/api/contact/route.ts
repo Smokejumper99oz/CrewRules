@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       subject: subject ? `CrewRules Contact: ${String(subject)}` : "CrewRules Contact Message",
       html: `<!DOCTYPE html>
 <html lang="en">
-  <body style="margin:0;padding:0;background:#0f172a;">
+  <body style="margin:0;padding:0;background:#ffffff;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#ffffff;padding:26px 0;">
       <tr>
         <td align="center" style="padding:0 14px;">
@@ -58,13 +58,16 @@ export async function POST(req: Request) {
 
             <!-- Header -->
             <tr>
-              <td style="padding:18px 20px 14px 20px;background:#0f172a;">
+              <td style="padding:18px 20px 14px 20px;background:#0c111e;">
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                   <tr>
                     <td align="center" style="padding:0;">
-                      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:36px;font-weight:400;line-height:1.2;">
-                        <span style="color:#ffffff;">Crew</span><span style="color:#75C043;">Rules</span><span style="font-size:20px;vertical-align:super;font-weight:400;color:#ffffff;">™</span>
-                      </div>
+                      <img
+                        src="https://crewrules.com/logo/crewrules-logo.png"
+                        alt="CrewRules"
+                        width="300"
+                        style="max-width:300px;height:auto;display:block;border:0;outline:none;text-decoration:none;margin:0 auto;"
+                      />
                     </td>
                   </tr>
 
@@ -84,7 +87,7 @@ export async function POST(req: Request) {
 
             <!-- Body -->
             <tr>
-              <td style="padding:18px 20px 20px 20px;background:#0f172a;">
+              <td style="padding:18px 20px 20px 20px;background:#0c111e;">
 
                 <!-- Inner white content card -->
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
@@ -163,7 +166,7 @@ export async function POST(req: Request) {
 
             <!-- Footer -->
             <tr>
-              <td style="padding:14px 20px;background:#0f172a;">
+              <td style="padding:14px 20px;background:#0c111e;">
                 <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#cbd5e1;">
                   Sent by <span style="font-weight:400;color:#ffffff;">Crew</span><span style="font-weight:400;color:#75C043;">Rules</span><span style="font-size:10px;vertical-align:super;font-weight:400;color:#ffffff;">™</span> — The Smart Knowledge Platform for Airline Crew
                 </div>
