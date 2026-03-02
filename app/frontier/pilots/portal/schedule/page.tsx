@@ -57,7 +57,13 @@ function eventsForDay(events: ScheduleEvent[], day: Date, baseTimezone: string):
   return events.filter((e) => eventOverlapsDay(e.start_time, e.end_time, day, baseTimezone));
 }
 
+const isSameDay = (d1: Date, d2: Date) =>
+  d1.getFullYear() === d2.getFullYear() &&
+  d1.getMonth() === d2.getMonth() &&
+  d1.getDate() === d2.getDate();
+
 export default function SchedulePage() {
+  const today = new Date();
   const [importing, setImporting] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -292,7 +298,11 @@ export default function SchedulePage() {
                 <div
                   key={i}
                   className={`min-h-[72px] rounded-lg border p-1 ${
-                    day ? "border-white/10 bg-slate-950/40" : "border-transparent"
+                    !day
+                      ? "border-transparent"
+                      : isSameDay(day, today)
+                        ? "border-amber-500/60 bg-amber-500/15 ring-2 ring-amber-500/30"
+                        : "border-white/10 bg-slate-950/40"
                   }`}
                 >
                   {day && (

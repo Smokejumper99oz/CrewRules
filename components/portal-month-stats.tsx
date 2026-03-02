@@ -90,7 +90,7 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [totalTarget, optimisticShow, stats?.payProjection]);
+  }, [totalTarget, optimisticShow]);
 
   if (!stats || availableMonths.length === 0) return null;
 
@@ -155,7 +155,11 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
           </div>
         </div>
         {(stats.payHidden || stats.payProjection) && (
-          <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-slate-900/40 to-slate-950/40 px-5 py-4 shadow-[0_0_0_1px_rgba(16,185,129,0.12),0_20px_60px_rgba(0,0,0,0.35)] transition-all duration-200 hover:shadow-[0_0_0_1px_rgba(16,185,129,0.2),0_0_30px_rgba(16,185,129,0.1),0_20px_60px_rgba(0,0,0,0.35)]">
+          <div
+            className={`mt-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-slate-900/40 to-slate-950/40 px-5 py-4 shadow-[0_0_0_1px_rgba(16,185,129,0.12),0_20px_60px_rgba(0,0,0,0.35)] transition-all duration-200 hover:shadow-[0_0_0_1px_rgba(16,185,129,0.2),0_0_30px_rgba(16,185,129,0.1),0_20px_60px_rgba(0,0,0,0.35)] ${
+              !optimisticShow ? "opacity-60 saturate-75" : ""
+            }`}
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-wide text-emerald-200/80">
@@ -227,7 +231,7 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
             </div>
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300">
-              {stats.payProjection ? (
+              {optimisticShow && stats.payProjection ? (
                 <span>
                   Rate{" "}
                   <span className="font-semibold text-emerald-300">
