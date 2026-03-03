@@ -3,10 +3,11 @@ import { fetchFlightsFromAviationStack } from "@/lib/aviationstack";
 export default async function CommuteTestPage({
   searchParams,
 }: {
-  searchParams: { origin?: string; destination?: string };
+  searchParams: Promise<{ origin?: string; destination?: string }>;
 }) {
-  const origin = (searchParams.origin ?? "TPA").toUpperCase();
-  const destination = (searchParams.destination ?? "SJU").toUpperCase();
+  const params = await searchParams;
+  const origin = (params.origin ?? "TPA").toUpperCase();
+  const destination = (params.destination ?? "SJU").toUpperCase();
 
   const flights = await fetchFlightsFromAviationStack(origin, destination, "2026-03-03", { noCache: true });
 

@@ -5,6 +5,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { subMinutes } from "date-fns";
 import type { CommuteFlightOption } from "@/lib/commute/providers/types";
 import { getCommuteFlights } from "@/app/frontier/pilots/portal/commute/actions";
+import type { CommuteFlight } from "@/lib/aviationstack";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
 import type { Profile } from "@/lib/profile";
 
@@ -50,29 +51,40 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
     dutyOk: boolean;
     searchingText: string;
   } | null>(null);
+  const [source, setSource] = useState<"cache" | "api" | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const baseTz = displaySettings.baseTimezone;
-        const arrivalBuffer = profile?.commute_arrival_buffer_minutes ?? 60;
-        const baseAirport = profile?.base_airport || displaySettings.baseAirport || "Base";
-        const dutyStart = new Date(event.start_time);
-        const dutyOk = !Number.isNaN(dutyStart.getTime());
-        const arriveBy = dutyOk ? subMinutes(dutyStart, arrivalBuffer) : null;
-        const arriveByFormatted = arriveBy ? formatInTimeZone(arriveBy, baseTz, "HH:mm") : "";
-        const showInfo = dutyOk;
+  const baseTz = displaySettings.baseTimezone;
+  const baseAirport = profile?.base_airport || displaySettings.baseAirport || "Base";
+  const arrivalBuffer = profile?.commute_arrival_buffer_minutes ?? 60;
+  const dutyStart = new Date(event.start_time);
+  const dutyOk = !Number.isNaN(dutyStart.getTime());
+  const arriveBy = dutyOk ? subMinutes(dutyStart, arrivalBuffer) : null;
 
-        const flights = await getCommuteFlights({
-          origin: profile.home_airport ?? "TPA",
-          destination: baseAirport === "Base" ? "SJU" : baseAirport,
-          date: dutyOk ? dutyStart.toISOString().slice(0, 10) : "2026-03-03",
-        });
+  async function loadFlights(opts?: { forceRefresh?: boolean }) {
+    try {
+      setCommuteError(null);
+      setNotice(null);
+      if (opts?.forceRefresh) setRefreshing(true);
 
+      const res = await getCommuteFlights({
+        origin: profile.home_airport ?? "TPA",
+        destination: baseAirport === "Base" ? "SJU" : baseAirport,
+        date: dutyOk ? dutyStart.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+        forceRefresh: opts?.forceRefresh ?? false,
+      });
+
+      const arriveByFormatted = arriveBy ? formatInTimeZone(arriveBy, baseTz, "HH:mm") : "";
+      const showInfo = dutyOk;
+
+      if (res.ok) {
+        setSource(res.source);
+        const flights = res.flights;
         const dutyDateStr = dutyOk ? dutyStart.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
         const reportAtIso = dutyOk ? dutyStart.toISOString() : `${dutyDateStr}T12:00:00Z`;
 
-        const options: CommuteFlightOption[] = flights.map((f, i) => {
+        const options: CommuteFlightOption[] = (flights as CommuteFlight[]).map((f, i) => {
           const bufferMin = minutesBetween(f.arrivalTime, reportAtIso);
           let risk: "recommended" | "risky" | "not_recommended" = "recommended";
           let reason = "";
@@ -107,20 +119,29 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
         };
         const searchingText = options.length ? "Day of" : "";
 
-        setCommuteError(null);
         setCommuteGroups(grouped);
         setCommuteMeta({ showInfo, arriveByFormatted, dutyOk, searchingText });
-      } catch (err) {
-        console.error("Commute Assist failed", err);
-        setCommuteError("Commute Assist temporarily unavailable.");
-        setCommuteGroups({ day_prior: [], same_day: [] });
-        setCommuteMeta(null);
+        setNotice(null);
+        return res.flights;
+      } else {
+        setNotice(res.message);
+        setSource(null);
+        setCommuteMeta({ showInfo, arriveByFormatted, dutyOk, searchingText: "" });
+        return null;
       }
-    })();
-  }, [event.start_time, profile, displaySettings, tenant, portal]);
+    } catch (err) {
+      console.error("Commute Assist failed", err);
+      setCommuteError("Commute Assist temporarily unavailable.");
+      setSource(null);
+      return null;
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
-  const baseTz = displaySettings.baseTimezone;
-  const baseAirport = profile?.base_airport || displaySettings.baseAirport || "Base";
+  useEffect(() => {
+    void loadFlights();
+  }, [event.start_time, profile, displaySettings, tenant, portal]);
 
   if (commuteError) {
     return (
@@ -144,13 +165,35 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
     );
   }
 
-  const { showInfo, arriveByFormatted, dutyOk, searchingText } = commuteMeta;
+  const { showInfo, arriveByFormatted, searchingText } = commuteMeta;
 
   return (
     <div className="mt-3 space-y-2">
-      <p className="text-sm text-slate-300">
-        {profile.home_airport} → {baseAirport}
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-slate-300">
+          {profile.home_airport} → {baseAirport}
+        </p>
+        <div className="flex items-center gap-2">
+          {source && (
+            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-200">
+              {source === "cache" ? "Cached" : "Live"}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => void loadFlights({ forceRefresh: true })}
+            disabled={refreshing}
+            className="rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1 text-[11px] text-slate-200 hover:bg-slate-900/70 disabled:opacity-50"
+          >
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+      </div>
+      {notice && (
+        <div className="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+          {notice}
+        </div>
+      )}
       {showInfo ? (
         <>
           <p className="text-xs text-slate-400">
