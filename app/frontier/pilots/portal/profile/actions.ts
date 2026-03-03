@@ -66,10 +66,10 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   if (homeAirport && !VALID_AIRPORT.test(homeAirport)) {
     return { error: "Home airport must be a 3-letter IATA code" };
   }
-  if (![120, 180, 240].includes(commuteArrival)) {
+  if (![30, 60, 90, 120, 180].includes(commuteArrival)) {
     return { error: "Invalid commute arrival buffer" };
   }
-  if (![60, 90, 120].includes(commuteRelease)) {
+  if (![0, 30, 60].includes(commuteRelease)) {
     return { error: "Invalid commute release buffer" };
   }
 

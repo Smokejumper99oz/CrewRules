@@ -3,11 +3,20 @@
 import { useState, useEffect } from "react";
 import { formatInTimeZone } from "date-fns-tz";
 import { subMinutes } from "date-fns";
-import { getCommuteSearchWindowsToBase } from "@/lib/commute/commute-windows";
-import { getCommuteFlightProvider } from "@/lib/commute/providers/provider";
 import type { CommuteFlightOption } from "@/lib/commute/providers/types";
+import { getCommuteFlights } from "@/app/frontier/pilots/portal/commute/actions";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
 import type { Profile } from "@/lib/profile";
+
+function fmtHM(totalMinutes: number) {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function minutesBetween(a: string, b: string) {
+  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000);
+}
 
 type Props = {
   event: { start_time: string };
@@ -46,55 +55,57 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
     void (async () => {
       try {
         const baseTz = displaySettings.baseTimezone;
-        const homeTz = profile?.base_timezone ?? displaySettings.baseTimezone;
-        const arrivalBuffer = profile?.commute_arrival_buffer_minutes ?? 180;
+        const arrivalBuffer = profile?.commute_arrival_buffer_minutes ?? 60;
         const baseAirport = profile?.base_airport || displaySettings.baseAirport || "Base";
-        let showInfo = false;
-        let arriveByFormatted = "";
-        let dutyOk = false;
-        const grouped: Record<string, CommuteFlightOption[]> = {};
-
         const dutyStart = new Date(event.start_time);
-        dutyOk = !Number.isNaN(dutyStart.getTime());
-        if (dutyOk) {
-          const arriveBy = subMinutes(dutyStart, arrivalBuffer);
-          arriveByFormatted = formatInTimeZone(arriveBy, baseTz, "HH:mm");
-          const windows = getCommuteSearchWindowsToBase(dutyStart.toISOString(), baseTz, homeTz);
-          showInfo = true;
-          const provider = getCommuteFlightProvider(tenant, portal);
-          for (const w of windows) {
-            const results = await provider.searchToBase({
-              tenant,
-              portal,
-              fromAirport: profile.home_airport!,
-              toAirport: baseAirport,
-              startUtc: w.startUtc,
-              endUtc: w.endUtc,
-              nonstopOnly: profile?.commute_nonstop_only ?? false,
-              arrivalBufferMinutes: arrivalBuffer,
-              arriveByUtc: arriveBy.toISOString(),
-              baseTimezone: baseTz,
-            });
-            if (!grouped[w.kind]) grouped[w.kind] = [];
-            grouped[w.kind].push(...results);
-          }
-          for (const key of Object.keys(grouped)) {
-            grouped[key].sort(
-              (a, b) => new Date(a.depUtc).getTime() - new Date(b.depUtc).getTime()
-            );
-          }
-        }
+        const dutyOk = !Number.isNaN(dutyStart.getTime());
+        const arriveBy = dutyOk ? subMinutes(dutyStart, arrivalBuffer) : null;
+        const arriveByFormatted = arriveBy ? formatInTimeZone(arriveBy, baseTz, "HH:mm") : "";
+        const showInfo = dutyOk;
 
-        const hasDayPrior = !!grouped.day_prior?.length;
-        const hasSameDay = !!grouped.same_day?.length;
-        let searchingText = "";
-        if (hasDayPrior && hasSameDay) {
-          searchingText = "Day prior + Day of";
-        } else if (hasDayPrior) {
-          searchingText = "Day prior (00:00–23:59)";
-        } else if (hasSameDay) {
-          searchingText = "Day of";
-        }
+        const flights = await getCommuteFlights({
+          origin: profile.home_airport ?? "TPA",
+          destination: baseAirport === "Base" ? "SJU" : baseAirport,
+          date: dutyOk ? dutyStart.toISOString().slice(0, 10) : "2026-03-03",
+        });
+
+        const dutyDateStr = dutyOk ? dutyStart.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+        const reportAtIso = dutyOk ? dutyStart.toISOString() : `${dutyDateStr}T12:00:00Z`;
+
+        const options: CommuteFlightOption[] = flights.map((f, i) => {
+          const bufferMin = minutesBetween(f.arrivalTime, reportAtIso);
+          let risk: "recommended" | "risky" | "not_recommended" = "recommended";
+          let reason = "";
+
+          if (bufferMin < arrivalBuffer) {
+            risk = "not_recommended";
+            reason = `Arrives after cutoff (${bufferMin}m < ${arrivalBuffer}m)`;
+          } else if (bufferMin < arrivalBuffer + 60) {
+            risk = "risky";
+            reason = `Meets cutoff but tight (${bufferMin}m)`;
+          } else {
+            risk = "recommended";
+            reason = `Good buffer (${bufferMin}m)`;
+          }
+          reason = `${reason} • ${fmtHM(f.durationMinutes)}`;
+
+          return {
+            id: `${f.flightNumber}-${f.departureTime}-${i}`,
+            carrier: f.carrier,
+            flight: f.flightNumber.replace(f.carrier, "").trim() || f.flightNumber,
+            depUtc: f.departureTime,
+            arrUtc: f.arrivalTime,
+            nonstop: true,
+            risk,
+            reason,
+          };
+        });
+
+        const grouped: Record<string, CommuteFlightOption[]> = {
+          day_prior: [],
+          same_day: options,
+        };
+        const searchingText = options.length ? "Day of" : "";
 
         setCommuteError(null);
         setCommuteGroups(grouped);

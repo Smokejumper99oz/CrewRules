@@ -7,6 +7,7 @@ import { CrewSplashScreen, SPLASH_START_KEY } from "@/components/crew-splash-scr
 const MIN_SPLASH_MS = 700;
 const SPLASH_FADE_OUT_MS = 250;
 const PORTAL_FADE_IN_MS = 400;
+const SPLASH_SEEN_KEY = "crewrules-portal-splash-seen";
 
 type Stage = "splash" | "crossfade" | "portal";
 
@@ -14,7 +15,16 @@ export function PortalFadeIn({ children }: { children: ReactNode }) {
   const [stage, setStage] = useState<Stage>("splash");
 
   useEffect(() => {
-    const t0 = performance.now();
+    if (typeof window !== "undefined") {
+      const alreadySeen = sessionStorage.getItem(SPLASH_SEEN_KEY);
+      if (alreadySeen === "1") {
+        setStage("portal");
+        return;
+      }
+      // Set immediately so any remount (nav, Strict Mode) will skip splash
+      sessionStorage.setItem(SPLASH_SEEN_KEY, "1");
+    }
+
     let storedEpoch = 0;
     if (typeof window !== "undefined") {
       const stored = sessionStorage.getItem(SPLASH_START_KEY);

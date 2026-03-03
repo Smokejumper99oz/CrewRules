@@ -85,8 +85,8 @@ function getTimezoneAbbreviation(iana: string): string {
   }
 }
 
-const COMMUTE_ARRIVAL_OPTIONS = [120, 180, 240] as const;
-const COMMUTE_RELEASE_OPTIONS = [60, 90, 120] as const;
+const COMMUTE_BUFFER_OPTIONS = [30, 60, 90, 120, 180] as const;
+const COMMUTE_RELEASE_OPTIONS = [0, 30, 60] as const;
 
 export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant }: Props) {
   const router = useRouter();
@@ -104,8 +104,8 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
   const timeFormat = profile.time_format ?? "24h";
   const showTimezoneLabel = profile.show_timezone_label ?? false;
   const homeAirport = profile.home_airport ?? "";
-  const commuteArrival = profile.commute_arrival_buffer_minutes ?? 180;
-  const commuteRelease = profile.commute_release_buffer_minutes ?? 90;
+  const commuteArrival = profile.commute_arrival_buffer_minutes ?? 60;
+  const commuteRelease = profile.commute_release_buffer_minutes ?? 30;
   const commuteNonstopOnly = profile.commute_nonstop_only ?? true;
 
   const derivedTimezone = getTimezoneFromAirport(baseAirport || "DEN");
@@ -301,9 +301,11 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
         </div>
       </section>
 
-      {/* Commute Settings */}
+      {/* CrewRules™ Commute Assist™ Settings */}
       <section>
-        <h2 className="text-base font-semibold text-white mb-4">Commute Settings</h2>
+        <h2 className="text-base font-semibold text-white mb-4">
+          Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Commute Assist<span className="align-super text-[10px]">™</span> Settings
+        </h2>
         <div
           className={`space-y-4 rounded-xl border px-4 py-4 ${
             proActive
@@ -355,9 +357,9 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 disabled={!proActive}
                 className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {COMMUTE_ARRIVAL_OPTIONS.map((m) => (
+                {COMMUTE_BUFFER_OPTIONS.map((m) => (
                   <option key={m} value={m}>
-                    {m}
+                    {m}min
                   </option>
                 ))}
               </select>
@@ -378,7 +380,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               >
                 {COMMUTE_RELEASE_OPTIONS.map((m) => (
                   <option key={m} value={m}>
-                    {m}
+                    {m}min
                   </option>
                 ))}
               </select>
