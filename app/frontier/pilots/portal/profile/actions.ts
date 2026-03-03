@@ -105,8 +105,18 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
 
 export async function setShowPayProjection(show: boolean) {
   const supabase = await createActionClient();
-  const profile = await getProfile();
-  if (!profile) throw new Error("Profile not found");
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in");
+
+  const { data: profile, error: pErr } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (pErr) throw pErr;
+  if (!profile?.id) throw new Error("Profile not found");
 
   const { error } = await supabase
     .from("profiles")

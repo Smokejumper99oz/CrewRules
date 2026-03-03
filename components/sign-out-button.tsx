@@ -1,5 +1,6 @@
 "use client";
 
+import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -25,6 +26,12 @@ export function SignOutButton({
     e.preventDefault();
     setPending(true);
     await signOut();
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch {
+      // Best-effort: clear browser storage; ignore errors
+    }
     router.push(LOGIN_PATH);
     setPending(false);
   }

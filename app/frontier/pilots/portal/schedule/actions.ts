@@ -484,6 +484,10 @@ export type MonthStats = {
   rslDaysCount?: number;
   /** Pro with setting off: show "Pay hidden" for privacy */
   payHidden?: boolean;
+  /** Pro user is eligible for pay projection */
+  payEligible?: boolean;
+  /** Missing inputs needed to compute pay (e.g. pay scale, position, date of hire) */
+  payMissingInputs?: string[];
   /** Pro-only: estimated gross pay projection */
   payProjection?: {
     pay20thHours: number;
@@ -495,6 +499,13 @@ export type MonthStats = {
     year: number;
   };
   error?: string;
+  /** DEV-only: debug pay/pro state */
+  _debug?: {
+    isPro?: boolean;
+    subscription_tier?: string | null;
+    pro_trial_expires_at?: string | null;
+    show_pay_projection?: boolean | null;
+  };
 };
 
 export type MonthOption = { year: number; month: number; label: string; shortLabel: string };
@@ -708,7 +719,18 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
 
     const isPro = isProActive(profile);
 
+    if (process.env.NODE_ENV !== "production") {
+      stats._debug = {
+        isPro,
+        subscription_tier: profile.subscription_tier ?? null,
+        pro_trial_expires_at: profile.pro_trial_expires_at ?? null,
+        show_pay_projection: profile.show_pay_projection ?? null,
+      };
+    }
+
     if (isPro) {
+      stats.payEligible = true;
+
       // Always compute pay for Pro users
       const scale = await getPayScale(profile.tenant, profile.portal);
 
@@ -720,6 +742,12 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
             : null;
 
       const doh = profile.date_of_hire;
+
+      const payMissingInputs: string[] = [];
+      if (!scale) payMissingInputs.push("pay scale");
+      if (!seat) payMissingInputs.push("position (Captain/First Officer)");
+      if (!doh) payMissingInputs.push("Date of Hire (DOH)");
+      stats.payMissingInputs = payMissingInputs;
 
       // DEBUG: log scale, seat, doh before payProjection
       console.log("[getMonthStats] pay inputs:", {

@@ -8,7 +8,9 @@ import { PortalMobileNav } from "@/components/portal-mobile-nav";
 import { PortalUserMenu } from "@/components/portal-user-menu";
 import { SignOutButton } from "@/components/sign-out-button";
 import { PageTitle } from "@/components/page-title";
+import { DesktopIdleLogout } from "@/components/desktop-idle-logout";
 import { PortalDebugLine } from "@/components/portal-debug-line";
+import { PortalFadeIn } from "@/components/portal-fade-in";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -59,6 +61,8 @@ export default async function PortalLayout({ children }: { children: ReactNode }
           : "Pilot";
 
   return (
+    <PortalFadeIn>
+    <DesktopIdleLogout />
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="flex">
         <aside className="hidden md:flex md:w-72 md:flex-col md:gap-4 border-r border-white/5 bg-slate-950/70 backdrop-blur">
@@ -149,5 +153,6 @@ export default async function PortalLayout({ children }: { children: ReactNode }
         </section>
       </div>
     </main>
+    </PortalFadeIn>
   );
 }

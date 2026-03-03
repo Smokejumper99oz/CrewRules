@@ -47,9 +47,9 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
 
   const onTogglePay = () => {
     const next = !optimisticShow;
-    setOptimisticShow(next);
 
     startTransition(async () => {
+      setOptimisticShow(next);
       try {
         await setShowPayProjection(next);
         router.refresh();
@@ -154,7 +154,7 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
             </div>
           </div>
         </div>
-        {(stats.payHidden || stats.payProjection) && (
+        {(stats.payEligible || stats.payHidden || stats.payProjection) && (
           <div
             className={`mt-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-slate-900/40 to-slate-950/40 px-5 py-4 shadow-[0_0_0_1px_rgba(16,185,129,0.12),0_20px_60px_rgba(0,0,0,0.35)] transition-all duration-200 hover:shadow-[0_0_0_1px_rgba(16,185,129,0.2),0_0_30px_rgba(16,185,129,0.1),0_20px_60px_rgba(0,0,0,0.35)] ${
               !optimisticShow ? "opacity-60 saturate-75" : ""
@@ -192,6 +192,26 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
               </button>
             </div>
 
+            {!stats.payProjection ? (
+              <div className="mt-4 space-y-2">
+                <p className="text-sm font-medium text-emerald-200/90">
+                  Complete your Profile to enable pay projection
+                </p>
+                <p className="text-xs text-slate-500">
+                  Missing: {stats.payMissingInputs?.length ? stats.payMissingInputs.join(", ") : "required info"}
+                </p>
+                <p className="text-xs text-slate-500">
+                  Add it in your Profile to calculate your pay scale year.
+                </p>
+                <Link
+                  href={`/${tenant}/${portal}/portal/profile`}
+                  className="inline-block text-sm font-medium text-[#75C043] hover:underline"
+                >
+                  Go to Profile →
+                </Link>
+              </div>
+            ) : (
+            <>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border border-white/5 bg-black/20 p-3">
                 <p className="text-xs text-slate-300">Estimated Payment</p>
@@ -253,6 +273,8 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
                 For pay questions or discrepancies, please contact the Frontier Airlines Payroll Department.
               </p>
             </div>
+            </>
+            )}
           </div>
         )}
       </div>

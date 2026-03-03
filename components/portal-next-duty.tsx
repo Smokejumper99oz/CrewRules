@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { getNextDuty, getScheduleImportStatus, getScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
-import { getProfile } from "@/lib/profile";
+import { getProfile, isProActive } from "@/lib/profile";
 import { ScheduleStatusChip } from "@/components/schedule-status-chip";
+import { CommuteAssistProContent } from "@/components/commute-assist-pro-content";
 import { ScheduleEventCard } from "@/components/schedule-event-card";
 import { OnDutyTimer } from "@/components/on-duty-timer";
 
@@ -21,6 +22,7 @@ export async function PortalNextDuty({ tenant, portal }: { tenant: string; porta
   const scheduleHref = `/${tenant}/${portal}/portal/schedule`;
   const heading = label ? DUTY_LABELS[label] : "Next Duty";
   const isOnDuty = label === "on_duty";
+  const proActive = isProActive(profile);
 
   return (
     <div
@@ -68,6 +70,50 @@ export async function PortalNextDuty({ tenant, portal }: { tenant: string; porta
           {isOnDuty && (
             <OnDutyTimer startTime={event.start_time} endTime={event.end_time} timezone={displaySettings.baseTimezone} />
           )}
+
+          {/* Commute Assist — layout scaffold with mock data */}
+          <div className="mt-3 rounded-2xl border border-white/5 bg-slate-950/30 p-4">
+            <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
+              <h3 className="text-sm font-semibold text-slate-200">Commute Assist</h3>
+              <span className="text-xs text-slate-500">
+                {!profile?.home_airport?.trim() ? "Preview" : proActive ? "Pro" : "Locked"}
+              </span>
+            </div>
+            {!profile?.home_airport?.trim() ? (
+              <p className="mt-3 text-sm text-slate-400">
+                Set your Home airport in{" "}
+                <Link
+                  href={`/${tenant}/${portal}/portal/profile`}
+                  className="font-medium text-[#75C043] hover:underline"
+                >
+                  Profile
+                </Link>{" "}
+                to see commute options.
+              </p>
+            ) : !proActive ? (
+              <div className="mt-3 space-y-2">
+                <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
+                  Commute Assist is a Pro feature
+                </span>
+                <p className="text-xs text-slate-500">Start a 14-day Pro trial in Profile.</p>
+                <Link
+                  href={`/${tenant}/${portal}/portal/profile`}
+                  className="inline-block text-sm font-medium text-[#75C043] hover:underline"
+                >
+                  Go to Profile →
+                </Link>
+              </div>
+            ) : (
+              <CommuteAssistProContent
+                event={event}
+                profile={profile!}
+                displaySettings={displaySettings}
+                tenant={tenant}
+                portal={portal}
+              />
+            )}
+          </div>
+
           <div className="flex justify-end">
             <Link
               href={scheduleHref}

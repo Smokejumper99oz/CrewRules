@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --cr-green: #75C043; /* CrewRules green */
+}
+
 /* Touch-friendly: remove tap highlight on iOS/Android */
 @layer base {
   * {
@@ -75,4 +79,90 @@
     transparent 52%
   );
   animation: skyGlow 24s ease-in-out infinite;
+}
+
+/* CrewRules Splash Screen */
+@keyframes crew-splash-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes crew-splash-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.crew-splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #0c111e;
+  animation: crew-splash-fade-in 0.6s ease-out forwards;
+}
+.crew-splash-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  animation: crew-splash-scale-in 0.6s ease-out forwards;
+}
+.crew-splash-screen--static {
+  animation: none;
+  opacity: 1;
+}
+.crew-splash-content--static {
+  animation: none;
+  opacity: 1;
+  transform: scale(1);
+}
+.crew-splash-fade-out {
+  opacity: 0;
+  transition: opacity 250ms ease-out;
+  pointer-events: none;
+}
+.crew-splash-bar {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: rgba(117, 192, 67, 0.85);
+  transform-origin: left center;
+  animation: crew-splash-fill 1.4s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px rgba(117, 192, 67, 0.25));
+}
+
+.crew-splash-bar--static {
+  animation: none;
+  transform: scaleX(1);
+  opacity: 0.6;
+}
+
+@keyframes crew-splash-fill {
+  0%   { transform: scaleX(0.05); opacity: 0.3; }
+  60%  { transform: scaleX(1);    opacity: 0.7; }
+  100% { transform: scaleX(1);    opacity: 0; }
+}
+@keyframes crew-splash-loading-text-pulse {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.crew-splash-loading-text {
+  animation: crew-splash-loading-text-pulse 1.5s ease-in-out infinite;
 }
