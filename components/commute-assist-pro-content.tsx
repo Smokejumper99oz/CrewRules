@@ -60,54 +60,94 @@ const riskBorderStyles = {
   not_recommended: "border-l-4 border-l-red-500",
 };
 
-type DelayBanner =
-  | { type: "cancelled" }
-  | { type: "delayed"; wasTxt: string; nowTxt: string; delayMin: number; variant: "arrival" | "departure" }
-  | null;
+/** Inline delay/cancel display: original crossed out, new time below (amber for delay, red for cancel). */
+type DelayInfo = {
+  cancelled: boolean;
+  dep?: { scheduled: string; actual: string };
+  arr?: { scheduled: string; actual: string };
+};
 
-/** Arrival-first delay banner; falls back to departure when arrival data is weird. */
-function computeDelayBanner(
+function computeDelayInfo(
   opt: CommuteFlightOption,
   originTz: string,
   destTz: string
-): DelayBanner {
-  if (opt.status === "cancelled") return { type: "cancelled" };
+): DelayInfo {
   const depTz = opt.originTz ?? originTz;
   const arrTz = opt.destTz ?? destTz;
 
-  // 1) Try arrival delay
-  const arrWasRaw = opt.arr_scheduled_raw;
-  const arrNowRaw = opt.arr_actual_raw ?? opt.arr_estimated_raw;
-  if (arrWasRaw && arrNowRaw) {
-    const wasMs = parseAviationstackTs(arrWasRaw, arrTz).getTime();
-    const nowMs = parseAviationstackTs(arrNowRaw, arrTz).getTime();
-    if (!Number.isNaN(wasMs) && !Number.isNaN(nowMs)) {
-      const delayMin = Math.round((nowMs - wasMs) / 60000);
-      if (delayMin >= 1) {
-        const wasTxt = formatInTimeZone(parseAviationstackTs(arrWasRaw, arrTz), arrTz, "HH:mm");
-        const nowTxt = formatInTimeZone(parseAviationstackTs(arrNowRaw, arrTz), arrTz, "HH:mm");
-        return { type: "delayed", wasTxt, nowTxt, delayMin, variant: "arrival" };
-      }
-    }
+  if (opt.status === "cancelled") {
+    const depSched = opt.dep_scheduled_raw
+      ? formatInTimeZone(parseAviationstackTs(opt.dep_scheduled_raw, depTz), depTz, "HH:mm")
+      : formatInTimeZone(new Date(opt.depUtc), depTz, "HH:mm");
+    const arrSched = opt.arr_scheduled_raw
+      ? formatInTimeZone(parseAviationstackTs(opt.arr_scheduled_raw, arrTz), arrTz, "HH:mm")
+      : formatInTimeZone(new Date(opt.arrUtc), arrTz, "HH:mm");
+    return { cancelled: true, dep: { scheduled: depSched, actual: depSched }, arr: { scheduled: arrSched, actual: arrSched } };
   }
 
-  // 2) Fallback: departure delay
+  const result: DelayInfo = { cancelled: false };
+
   const depWasRaw = opt.dep_scheduled_raw;
   const depNowRaw = opt.dep_actual_raw ?? opt.dep_estimated_raw;
   if (depWasRaw && depNowRaw) {
     const wasMs = parseAviationstackTs(depWasRaw, depTz).getTime();
     const nowMs = parseAviationstackTs(depNowRaw, depTz).getTime();
-    if (!Number.isNaN(wasMs) && !Number.isNaN(nowMs)) {
-      const delayMin = Math.round((nowMs - wasMs) / 60000);
-      if (delayMin >= 1) {
-        const wasTxt = formatInTimeZone(parseAviationstackTs(depWasRaw, depTz), depTz, "HH:mm");
-        const nowTxt = formatInTimeZone(parseAviationstackTs(depNowRaw, depTz), depTz, "HH:mm");
-        return { type: "delayed", wasTxt, nowTxt, delayMin, variant: "departure" };
-      }
+    if (!Number.isNaN(wasMs) && !Number.isNaN(nowMs) && nowMs - wasMs >= 60000) {
+      result.dep = {
+        scheduled: formatInTimeZone(parseAviationstackTs(depWasRaw, depTz), depTz, "HH:mm"),
+        actual: formatInTimeZone(parseAviationstackTs(depNowRaw, depTz), depTz, "HH:mm"),
+      };
     }
   }
 
-  return null;
+  const arrWasRaw = opt.arr_scheduled_raw;
+  const arrNowRaw = opt.arr_actual_raw ?? opt.arr_estimated_raw;
+  if (arrWasRaw && arrNowRaw) {
+    const wasMs = parseAviationstackTs(arrWasRaw, arrTz).getTime();
+    const nowMs = parseAviationstackTs(arrNowRaw, arrTz).getTime();
+    if (!Number.isNaN(wasMs) && !Number.isNaN(nowMs) && nowMs - wasMs >= 60000) {
+      result.arr = {
+        scheduled: formatInTimeZone(parseAviationstackTs(arrWasRaw, arrTz), arrTz, "HH:mm"),
+        actual: formatInTimeZone(parseAviationstackTs(arrNowRaw, arrTz), arrTz, "HH:mm"),
+      };
+    }
+  }
+
+  return result;
+}
+
+function TimeBlock({
+  scheduled,
+  actual,
+  isDelayed,
+  isCancelled,
+  className = "",
+}: {
+  scheduled: string;
+  actual?: string;
+  isDelayed: boolean;
+  isCancelled: boolean;
+  className?: string;
+}) {
+  const showDelay = isDelayed && actual && actual !== scheduled;
+  const showCancel = isCancelled;
+
+  if (showCancel) {
+    return (
+      <span className={`tabular-nums ${className}`}>
+        <span className="line-through text-red-400/90">{scheduled}</span>
+      </span>
+    );
+  }
+  if (showDelay) {
+    return (
+      <span className={`flex flex-col items-baseline gap-0 ${className}`}>
+        <span className="line-through text-amber-400/90 tabular-nums text-[0.9em]">{scheduled}</span>
+        <span className="text-amber-400 font-bold tabular-nums">{actual}</span>
+      </span>
+    );
+  }
+  return <span className={`font-bold tabular-nums text-slate-200 ${className}`}>{scheduled}</span>;
 }
 
 function CommuteFlightCard({
@@ -130,37 +170,44 @@ function CommuteFlightCard({
   const dep = new Date(opt.depUtc);
   const arr = new Date(opt.arrUtc);
   const dateStr = formatInTimeZone(dep, depTz, "EEE • MMM d");
-  const depTime = formatInTimeZone(dep, depTz, "HH:mm");
-  const arrTime = formatInTimeZone(arr, arrTz, "HH:mm");
+  const depSched = formatInTimeZone(dep, depTz, "HH:mm");
+  const arrSched = formatInTimeZone(arr, arrTz, "HH:mm");
+  const durMin = minutesBetween(opt.depUtc, opt.arrUtc);
+  const durStr = fmtHM(durMin);
   const flightLabel = `${opt.carrier} ${opt.flight ?? ""}`.trim();
-  const delayBanner = computeDelayBanner(opt, originTz, destTz);
+  const delayInfo = computeDelayInfo(opt, originTz, destTz);
+
+  const depDisplay = delayInfo.dep ?? { scheduled: depSched, actual: undefined };
+  const arrDisplay = delayInfo.arr ?? { scheduled: arrSched, actual: undefined };
 
   return (
     <div
       className={`rounded-lg border border-slate-700/60 bg-slate-900/40 pl-3 pr-3 py-2.5 ${riskBorderStyles[opt.risk]}`}
     >
-      {delayBanner && (
-        <div
-          className={`mb-2 rounded px-2 py-1 text-[11px] ${
-            delayBanner.type === "cancelled"
-              ? "border border-red-500/40 bg-red-500/10 text-red-200/90"
-              : "border border-amber-500/40 bg-amber-500/10 text-amber-200/90"
-          }`}
-        >
-          {delayBanner.type === "cancelled"
-            ? "Cancelled"
-            : delayBanner.variant === "departure"
-              ? `Departure delayed ${delayBanner.delayMin}m / Was: ${delayBanner.wasTxt} – Now: ${delayBanner.nowTxt}`
-              : `1st Leg Arrival Delayed ${delayBanner.delayMin}m / Was: ${delayBanner.wasTxt} – Now: ${delayBanner.nowTxt}`}
-        </div>
-      )}
       <div className="text-sm font-semibold text-slate-400">{dateStr}</div>
       <div className="flex items-baseline gap-2 mt-1">
-        <span className="text-2xl font-bold tabular-nums text-slate-200">{depTime}</span>
+        <TimeBlock
+          scheduled={depDisplay.scheduled}
+          actual={depDisplay.actual}
+          isDelayed={!!delayInfo.dep}
+          isCancelled={delayInfo.cancelled}
+          className="text-2xl"
+        />
         <span className="text-[11px] text-slate-500">{origin} → {destination}</span>
-        <span className="text-2xl font-bold tabular-nums text-slate-200">{arrTime}</span>
+        <TimeBlock
+          scheduled={arrDisplay.scheduled}
+          actual={arrDisplay.actual}
+          isDelayed={!!delayInfo.arr}
+          isCancelled={delayInfo.cancelled}
+          className="text-2xl"
+        />
       </div>
-      <div className="text-xs text-slate-500 mt-1">{flightLabel}</div>
+      <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+        <span>{flightLabel}</span>
+        {delayInfo.cancelled && <span className="text-red-400 font-semibold">Cancelled</span>}
+        <span className="text-slate-600">•</span>
+        <span>Flight time {durStr}</span>
+      </div>
     </div>
   );
 }
@@ -185,50 +232,69 @@ function CommuteFlightRow({
   const dep = new Date(opt.depUtc);
   const arr = new Date(opt.arrUtc);
   const dateStr = formatInTimeZone(dep, depTz, "EEE • MMM d");
-  const depTime = formatInTimeZone(dep, depTz, "HH:mm");
-  const arrTime = formatInTimeZone(arr, arrTz, "HH:mm");
+  const depSched = formatInTimeZone(dep, depTz, "HH:mm");
+  const arrSched = formatInTimeZone(arr, arrTz, "HH:mm");
   const durMin = minutesBetween(opt.depUtc, opt.arrUtc);
   const durStr = fmtHM(durMin);
   const flightLabel = `${opt.carrier} ${opt.flight ?? ""}`.trim();
-  const delayBanner = computeDelayBanner(opt, originTz, destTz);
+  const delayInfo = computeDelayInfo(opt, originTz, destTz);
+
+  const depDisplay = delayInfo.dep ?? { scheduled: depSched, actual: undefined };
+  const arrDisplay = delayInfo.arr ?? { scheduled: arrSched, actual: undefined };
+
+  const flightLine = (
+    <>
+      {flightLabel}
+      {delayInfo.cancelled && <><span className="text-slate-500"> </span><span className="text-red-400 font-semibold">Cancelled</span></>}
+    </>
+  );
 
   return (
     <div
       className={`rounded border border-slate-700/60 bg-slate-900/40 pl-3 pr-3 py-2 ${riskBorderStyles[opt.risk]}`}
     >
-      {delayBanner && (
-        <div
-          className={`mb-1.5 rounded px-2 py-0.5 text-[11px] ${
-            delayBanner.type === "cancelled"
-              ? "border border-red-500/40 bg-red-500/10 text-red-200/90"
-              : "border border-amber-500/40 bg-amber-500/10 text-amber-200/90"
-          }`}
-        >
-          {delayBanner.type === "cancelled"
-            ? "Cancelled"
-            : delayBanner.variant === "departure"
-              ? `Departure delayed ${delayBanner.delayMin}m / Was: ${delayBanner.wasTxt} – Now: ${delayBanner.nowTxt}`
-              : `1st Leg Arrival Delayed ${delayBanner.delayMin}m / Was: ${delayBanner.wasTxt} – Now: ${delayBanner.nowTxt}`}
-        </div>
-      )}
-      {/* Mobile: Row 1 — DEP left, ARR right (big); Row 2 — date • dur • carrier flt */}
+      {/* Mobile: Row 1 — DEP left, ARR right; Row 2 — date • dur • carrier flt */}
       <div className="md:hidden">
         <div className="flex justify-between items-baseline">
-          <span className="text-xl font-bold tabular-nums text-slate-200">{depTime}</span>
-          <span className="text-xl font-bold tabular-nums text-slate-200">{arrTime}</span>
+          <TimeBlock
+            scheduled={depDisplay.scheduled}
+            actual={depDisplay.actual}
+            isDelayed={!!delayInfo.dep}
+            isCancelled={delayInfo.cancelled}
+            className="text-xl"
+          />
+          <TimeBlock
+            scheduled={arrDisplay.scheduled}
+            actual={arrDisplay.actual}
+            isDelayed={!!delayInfo.arr}
+            isCancelled={delayInfo.cancelled}
+            className="text-xl"
+          />
         </div>
         <div className="text-sm font-semibold text-slate-400 mt-0.5">
           <span>{dateStr}</span>
-          <span className="font-normal text-slate-500"> • {durStr} • {flightLabel}</span>
+          <span className="font-normal text-slate-500"> • Flight time {durStr} • {flightLine}</span>
         </div>
       </div>
       {/* Desktop: grid DATE | DEP | ARR | DUR | FLT */}
       <div className="hidden md:grid md:grid-cols-[auto_1fr_1fr_auto_auto] md:items-center md:gap-4">
         <span className="text-slate-400 text-sm font-semibold">{dateStr}</span>
-        <span className="text-slate-200 font-semibold tabular-nums">{depTime}</span>
-        <span className="text-slate-200 font-semibold tabular-nums">{arrTime}</span>
-        <span className="text-slate-500 text-xs">{durStr}</span>
-        <span className="text-slate-500 text-xs">{flightLabel}</span>
+        <TimeBlock
+          scheduled={depDisplay.scheduled}
+          actual={depDisplay.actual}
+          isDelayed={!!delayInfo.dep}
+          isCancelled={delayInfo.cancelled}
+          className="font-semibold"
+        />
+        <TimeBlock
+          scheduled={arrDisplay.scheduled}
+          actual={arrDisplay.actual}
+          isDelayed={!!delayInfo.arr}
+          isCancelled={delayInfo.cancelled}
+          className="font-semibold"
+        />
+        <span className="text-slate-500 text-xs">Flight time {durStr}</span>
+        <span className="text-slate-500 text-xs flex items-center gap-1.5">{flightLine}</span>
       </div>
     </div>
   );
@@ -360,13 +426,22 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
 
         const stripOffset = (s: string) => s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
         const isReturn = direction === "to_home";
-        const options: CommuteFlightOption[] = (flights as CommuteFlight[]).map((f, i) => {
+        const options: CommuteFlightOption[] = [];
+        for (let i = 0; i < (flights as CommuteFlight[]).length; i++) {
+          const f = (flights as CommuteFlight[])[i];
           const depTz = f.origin_tz ?? res.originTz;
           const arrTz = f.dest_tz ?? res.destTz;
-          const depClean = stripOffset(f.departureTime);
-          const arrClean = stripOffset(f.arrivalTime);
-          const depUtc = fromZonedTime(depClean, depTz).toISOString();
-          const arrUtc = fromZonedTime(arrClean, arrTz).toISOString();
+          const depClean = stripOffset(f.departureTime ?? "");
+          const arrClean = stripOffset(f.arrivalTime ?? "");
+          if (!depClean || !arrClean) continue;
+          let depUtc: string;
+          let arrUtc: string;
+          try {
+            depUtc = fromZonedTime(depClean, depTz).toISOString();
+            arrUtc = fromZonedTime(arrClean, arrTz).toISOString();
+          } catch {
+            continue;
+          }
           let risk: "recommended" | "risky" | "not_recommended" = "recommended";
           let reason = "";
 
@@ -386,7 +461,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
             reason = `${reason} • ${fmtHM(f.durationMinutes)}`;
           }
 
-          return {
+          options.push({
             id: `${f.flightNumber}-${f.departureTime}-${i}`,
             carrier: f.carrier,
             flight: f.flightNumber.replace(f.carrier, "").trim() || f.flightNumber,
@@ -406,8 +481,8 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
             arr_actual_raw: f.arr_actual_raw,
             arr_delay_min: f.arr_delay_min,
             status: f.status,
-          };
-        });
+          });
+        }
 
         const grouped: Record<string, CommuteFlightOption[]> = {
           day_prior: options,
@@ -446,7 +521,12 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
   }
 
   useEffect(() => {
-    if (canUseCommute && !noCommuteNeeded) void loadFlights();
+    if (canUseCommute && !noCommuteNeeded) {
+      loadFlights().catch((err) => {
+        console.error("Commute Assist loadFlights failed", err);
+        setCommuteError("Commute Assist temporarily unavailable.");
+      });
+    }
   }, [event.start_time, event.end_time, event.report_time, event.route, profile, displaySettings, tenant, portal, direction]);
 
   useEffect(() => {
@@ -586,7 +666,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
           )}
           <button
             type="button"
-            onClick={() => void loadFlights({ forceRefresh: true })}
+            onClick={() => loadFlights({ forceRefresh: true }).catch((err) => { console.error("Commute Assist refresh failed", err); setCommuteError("Refresh failed."); })}
             disabled={refreshing}
             className="rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1 text-[11px] text-slate-200 hover:bg-slate-900/70 disabled:opacity-50"
           >

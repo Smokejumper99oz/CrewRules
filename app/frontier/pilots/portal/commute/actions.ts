@@ -4,10 +4,51 @@ import { createActionClient } from "@/lib/supabase/server-action";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/profile";
 import { fetchFlightsFromAviationStack } from "@/lib/aviationstack";
+import { fetchFlightsFromAerodataBox } from "@/lib/aerodatabox";
 import { getRouteTzs } from "@/lib/airports";
+import type { CommuteFlight } from "@/lib/aviationstack";
 
 /** Cache version for commute_flight_cache. Bump to purge old entries (e.g. 3-flight cache). */
 const CACHE_VERSION = "v2";
+
+type ProviderResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: unknown };
+
+async function safe<T>(fn: () => Promise<T>): Promise<ProviderResult<T>> {
+  try {
+    return { ok: true, data: await fn() };
+  } catch (e) {
+    return { ok: false, error: e };
+  }
+}
+
+/** Dedupe key: carrier + flightNumber + dep time (same flight = same key). */
+function flightKey(f: CommuteFlight): string {
+  const dep = (f.departureTime ?? "").slice(0, 16);
+  return `${f.carrier}${f.flightNumber}-${dep}`;
+}
+
+/** Merge and deduplicate flights from multiple providers. Prefer AviationStack when duplicate (has live timing). */
+function dedupeFlights(
+  all: CommuteFlight[],
+  notice?: string
+): { flights: CommuteFlight[]; mergedCount: number; dedupedCount: number; notice?: string } {
+  const mergedCount = all.length;
+  const seen = new Set<string>();
+  const unique: CommuteFlight[] = [];
+  for (const f of all) {
+    const k = flightKey(f);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    unique.push(f);
+  }
+  unique.sort(
+    (a, b) =>
+      new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime()
+  );
+  return { flights: unique, mergedCount, dedupedCount: unique.length, notice };
+}
 
 function monthStartISO(d: Date) {
   const ms = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
@@ -17,6 +58,26 @@ function monthStartISO(d: Date) {
 function daysBetween(now: Date, then: Date) {
   return Math.floor((now.getTime() - then.getTime()) / (1000 * 60 * 60 * 24));
 }
+
+type GetCommuteFlightsSuccess = {
+  ok: true;
+  source: "api" | "cache";
+  flights: CommuteFlight[];
+  notice?: string;
+  originTz: string;
+  destTz: string;
+  debug?: {
+    aviationstackCount?: number;
+    aerodataboxCount?: number;
+    mergedCount?: number;
+    dedupedCount?: number;
+    aviationstackFailed?: boolean;
+    aerodataboxFailed?: boolean;
+    aerodataboxSkipped?: boolean;
+    cacheHit?: boolean;
+    fetchedAt?: string | null;
+  };
+};
 
 export async function getCommuteFlights(input: {
   origin: string;
@@ -89,7 +150,29 @@ export async function getCommuteFlights(input: {
     }
 
     try {
-      const { flights, notice } = await fetchFlightsFromAviationStack(origin, destination, input.date, { noCache: true }); // bypass dev cache
+      const aerodataboxSkipped = !process.env.RAPIDAPI_KEY;
+      const asPromise = safe(() =>
+        fetchFlightsFromAviationStack(origin, destination, input.date, { noCache: true })
+      );
+      const adbPromise = aerodataboxSkipped
+        ? Promise.resolve({ ok: true as const, data: { flights: [] as CommuteFlight[] } })
+        : safe(() => fetchFlightsFromAerodataBox(origin, destination, input.date));
+
+      const [asRes, adbRes] = await Promise.all([asPromise, adbPromise]);
+
+      const aviationstackFlights = asRes.ok ? asRes.data.flights : [];
+      const aerodataboxFlights = adbRes.ok ? adbRes.data.flights : [];
+      const aviationstackFailed = !asRes.ok;
+      const aerodataboxFailed = !adbRes.ok && !aerodataboxSkipped;
+
+      if (aviationstackFailed) console.error("AviationStack failed", (asRes as { ok: false; error: unknown }).error);
+      if (aerodataboxFailed) console.error("AerodataBox failed", (adbRes as { ok: false; error: unknown }).error);
+
+      const merged = dedupeFlights(
+        [...aviationstackFlights, ...aerodataboxFlights],
+        asRes.ok ? asRes.data.notice : undefined
+      );
+      const { flights, notice } = merged;
 
       const row = {
         tenant,
@@ -118,7 +201,21 @@ export async function getCommuteFlights(input: {
         if (rpcErr) console.error("increment_commute_refresh_usage failed", rpcErr);
       }
 
-      return { ok: true as const, source: "api" as const, flights, notice, originTz, destTz };
+      const debug =
+        process.env.NODE_ENV !== "production"
+          ? {
+              aviationstackCount: aviationstackFlights.length,
+              aerodataboxCount: aerodataboxFlights.length,
+              mergedCount: merged.mergedCount,
+              dedupedCount: merged.dedupedCount,
+              aviationstackFailed,
+              aerodataboxFailed,
+              aerodataboxSkipped,
+              cacheHit: false,
+            }
+          : undefined;
+
+      return { ok: true as const, source: "api" as const, flights, notice, originTz, destTz, debug };
     } catch (err) {
       console.error("Commute Assist failed", err);
       return { ok: false as const, reason: "unavailable" as const, message: "Commute Assist temporarily unavailable." };
@@ -128,7 +225,7 @@ export async function getCommuteFlights(input: {
   // 1) Cache-first (return if exists) — only v2 entries
   const { data: cached, error: cacheErr } = await admin
     .from("commute_flight_cache")
-    .select("data")
+    .select("data, fetched_at")
     .eq("tenant", tenant)
     .eq("user_id", userId)
     .eq("commute_date", input.date)
@@ -141,9 +238,23 @@ export async function getCommuteFlights(input: {
     console.error("Commute cache lookup failed", cacheErr);
   }
 
-  if (cached?.data) {
+  if (cached?.data && !input.forceRefresh) {
     const { originTz, destTz } = await getRouteTzs(origin, destination);
-    return { ok: true as const, source: "cache" as const, flights: cached.data, notice: undefined, originTz, destTz };
+    return {
+      ok: true as const,
+      source: "cache" as const,
+      flights: cached.data,
+      notice: undefined,
+      originTz,
+      destTz,
+      debug:
+        process.env.NODE_ENV !== "production"
+          ? {
+              cacheHit: true,
+              fetchedAt: cached.fetched_at ?? null,
+            }
+          : undefined,
+    };
   }
 
   // 2) Plan gating (cache miss)
@@ -182,10 +293,32 @@ export async function getCommuteFlights(input: {
     }
   }
 
-  // 3) Hit AviationStack (cache miss)
+  // 3) Hit both providers (cache miss)
   try {
     const { originTz, destTz } = await getRouteTzs(origin, destination);
-    const { flights, notice } = await fetchFlightsFromAviationStack(origin, destination, input.date);
+    const aerodataboxSkipped = !process.env.RAPIDAPI_KEY;
+    const asPromise = safe(() =>
+      fetchFlightsFromAviationStack(origin, destination, input.date)
+    );
+    const adbPromise = aerodataboxSkipped
+      ? Promise.resolve({ ok: true as const, data: { flights: [] as CommuteFlight[] } })
+      : safe(() => fetchFlightsFromAerodataBox(origin, destination, input.date));
+
+    const [asRes, adbRes] = await Promise.all([asPromise, adbPromise]);
+
+    const aviationstackFlights = asRes.ok ? asRes.data.flights : [];
+    const aerodataboxFlights = adbRes.ok ? adbRes.data.flights : [];
+    const aviationstackFailed = !asRes.ok;
+    const aerodataboxFailed = !adbRes.ok && !aerodataboxSkipped;
+
+    if (aviationstackFailed) console.error("AviationStack failed", (asRes as { ok: false; error: unknown }).error);
+    if (aerodataboxFailed) console.error("AerodataBox failed", (adbRes as { ok: false; error: unknown }).error);
+
+    const merged = dedupeFlights(
+      [...aviationstackFlights, ...aerodataboxFlights],
+      asRes.ok ? asRes.data.notice : undefined
+    );
+    const { flights, notice } = merged;
 
     // 4) Write cache (upsert on unique key)
     const row = {
@@ -216,7 +349,21 @@ export async function getCommuteFlights(input: {
       if (rpcErr) console.error("increment_commute_refresh_usage failed", rpcErr);
     }
 
-    return { ok: true as const, source: "api" as const, flights, notice, originTz, destTz };
+    const debug =
+      process.env.NODE_ENV !== "production"
+        ? {
+            aviationstackCount: aviationstackFlights.length,
+            aerodataboxCount: aerodataboxFlights.length,
+            mergedCount: merged.mergedCount,
+            dedupedCount: merged.dedupedCount,
+            aviationstackFailed,
+            aerodataboxFailed,
+            aerodataboxSkipped,
+            cacheHit: false,
+          }
+        : undefined;
+
+    return { ok: true as const, source: "api" as const, flights, notice, originTz, destTz, debug };
   } catch (err) {
     console.error("Commute Assist failed", err);
     return { ok: false as const, reason: "unavailable" as const, message: "Commute Assist temporarily unavailable." };
