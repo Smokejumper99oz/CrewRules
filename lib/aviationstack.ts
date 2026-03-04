@@ -15,6 +15,10 @@ export type CommuteFlight = {
   origin: string;
   destination: string;
   durationMinutes: number;
+  /** IANA timezone for departure airport (from API or lookup). */
+  origin_tz?: string;
+  /** IANA timezone for arrival airport (from API or lookup). */
+  dest_tz?: string;
 };
 
 export type FetchFlightsResult = {
@@ -22,10 +26,20 @@ export type FetchFlightsResult = {
   notice?: string;
 };
 
-function calculateDurationMinutes(dep: string, arr: string) {
-  const departure = new Date(dep).getTime();
-  const arrival = new Date(arr).getTime();
-  return Math.max(0, Math.round((arrival - departure) / 60000));
+/** Strip timezone offset from AviationStack timestamp (scheduled times are airport-local). */
+function stripOffset(s: string): string {
+  return s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
+}
+
+function calculateDurationMinutes(
+  dep: string,
+  arr: string,
+  originTz: string,
+  destTz: string
+): number {
+  const depUtc = fromZonedTime(stripOffset(dep), originTz).getTime();
+  const arrUtc = fromZonedTime(stripOffset(arr), destTz).getTime();
+  return Math.max(0, Math.round((arrUtc - depUtc) / 60000));
 }
 
 const devCache = new Map<string, { expiresAt: number; data: FetchFlightsResult }>();
@@ -70,13 +84,15 @@ export async function fetchFlightsFromAviationStack(
 
   let result: FetchFlightsResult;
 
-  if (daysAhead === 0) {
+  // /flights with dep_iata+arr_iata works for same-day and near-term (0–7 days).
+  // /flightsFuture requires date > 7 days ahead and is origin-only (fewer results).
+  if (daysAhead >= 0 && daysAhead <= 7) {
     result = await fetchFlightsSameDay(apiKey, origin, destination, date, originTz, destTz);
-  } else if (daysAhead > 0) {
+  } else if (daysAhead > 7) {
     result = await fetchFlightsFuture(apiKey, origin, destination, date, originTz, destTz);
   } else {
     // daysAhead < 0 (past date) — use /flights for historical (last 3 months)
-    result = await fetchFlightsHistorical(apiKey, origin, destination, date, originTz);
+    result = await fetchFlightsHistorical(apiKey, origin, destination, date, originTz, destTz);
   }
 
   if (process.env.NODE_ENV !== "production" && !opts?.noCache) {
@@ -123,12 +139,8 @@ async function fetchTimetable(
       const number = f?.flight?.number ?? "";
       const flightNumber = carrier && number ? `${carrier}${number}` : "";
 
-      // Timetable returns full ISO; if no offset, treat as local-naive
-      let depUtc = depTime;
-      let arrUtc = arrTime;
-      const hasOffset = (s: string) => /[+-]\d{2}:\d{2}$|Z$/i.test(s);
-      if (!hasOffset(depTime) && depTime) depUtc = fromZonedTime(depTime, originTz).toISOString();
-      if (!hasOffset(arrTime) && arrTime) arrUtc = fromZonedTime(arrTime, destTz).toISOString();
+      const depUtc = depTime ? fromZonedTime(stripOffset(depTime), originTz).toISOString() : "";
+      const arrUtc = arrTime ? fromZonedTime(stripOffset(arrTime), destTz).toISOString() : "";
 
       return {
         carrier,
@@ -137,17 +149,25 @@ async function fetchTimetable(
         arrivalTime: arrUtc,
         origin: (f?.departure?.iataCode ?? origin).toUpperCase(),
         destination: (f?.arrival?.iataCode ?? destination).toUpperCase(),
-        durationMinutes: depUtc && arrUtc ? calculateDurationMinutes(depUtc, arrUtc) : 0,
+        durationMinutes:
+          depTime && arrTime ? calculateDurationMinutes(depTime, arrTime, originTz, destTz) : 0,
       };
     })
-    .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());
+    .sort(
+      (a, b) =>
+        fromZonedTime(stripOffset(a.arrivalTime), destTz).getTime() -
+        fromZonedTime(stripOffset(b.arrivalTime), destTz).getTime()
+    );
 
   return { flights };
 }
 
+const MAX_PAGES = 5;
+
 /**
  * Same-day flights using /v1/flights with city-pair filtering (dep_iata + arr_iata).
  * Returns all flights for the given origin→destination on the given date.
+ * Paginates when total > count (limit=100).
  */
 async function fetchFlightsSameDay(
   apiKey: string,
@@ -157,28 +177,40 @@ async function fetchFlightsSameDay(
   originTz: string,
   destTz: string
 ): Promise<FetchFlightsResult> {
-  const url = new URL("https://api.aviationstack.com/v1/flights");
-  url.searchParams.set("access_key", apiKey);
-  url.searchParams.set("dep_iata", origin);
-  url.searchParams.set("arr_iata", destination);
-  url.searchParams.set("flight_date", date);
-  url.searchParams.set("limit", "100");
+  const limit = 100;
+  const allData: any[] = [];
 
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    cache: "no-store",
-    headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist)" },
-  });
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const offset = page * limit;
+    const url = new URL("https://api.aviationstack.com/v1/flights");
+    url.searchParams.set("access_key", apiKey);
+    url.searchParams.set("dep_iata", origin);
+    url.searchParams.set("arr_iata", destination);
+    url.searchParams.set("flight_date", date);
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("offset", String(offset));
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`AviationStack flights (same-day) failed: ${res.status} - ${body.slice(0, 200)}`);
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      cache: "no-store",
+      headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist)" },
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`AviationStack flights (same-day) failed: ${res.status} - ${body.slice(0, 200)}`);
+    }
+
+    const json = await res.json();
+    const pageData = (json.data ?? []) as any[];
+    allData.push(...pageData);
+
+    const total = json.pagination?.total ?? 0;
+    const count = json.pagination?.count ?? pageData.length;
+    if (total <= 0 || offset + count >= total || pageData.length < limit) break;
   }
 
-  const json = await res.json();
-  if (!json.data) return { flights: [] };
-
-  const flights: CommuteFlight[] = (json.data as any[])
+  const flights: CommuteFlight[] = (allData as any[])
     .filter((f) => {
       const depTime = f?.departure?.scheduled ?? "";
       const arrTime = f?.arrival?.scheduled ?? "";
@@ -200,10 +232,19 @@ async function fetchFlightsSameDay(
         arrivalTime: arrTime,
         origin: (f?.departure?.iataCode ?? f?.departure?.iata ?? origin).toUpperCase(),
         destination: (f?.arrival?.iataCode ?? f?.arrival?.iata ?? destination).toUpperCase(),
-        durationMinutes: depTime && arrTime ? calculateDurationMinutes(depTime, arrTime) : 0,
+        durationMinutes:
+          depTime && arrTime
+            ? calculateDurationMinutes(depTime, arrTime, originTz, destTz)
+            : 0,
+        origin_tz: f?.departure?.timezone ?? originTz,
+        dest_tz: f?.arrival?.timezone ?? destTz,
       };
     })
-    .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());
+    .sort(
+      (a, b) =>
+        fromZonedTime(stripOffset(a.arrivalTime), a.dest_tz ?? destTz).getTime() -
+        fromZonedTime(stripOffset(b.arrivalTime), b.dest_tz ?? destTz).getTime()
+    );
 
   return { flights };
 }
@@ -294,7 +335,9 @@ async function fetchFlightsFuture(
         arrivalTime: arrUtc,
         origin: (f?.departure?.iataCode ?? origin).toUpperCase(),
         destination: (f?.arrival?.iataCode ?? destination).toUpperCase(),
-        durationMinutes: calculateDurationMinutes(depUtc, arrUtc),
+        durationMinutes: calculateDurationMinutes(depUtc, arrUtc, "UTC", "UTC"),
+        origin_tz: f?.departure?.timezone ?? originTz,
+        dest_tz: f?.arrival?.timezone ?? destTz,
       };
     })
     .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());
@@ -315,7 +358,8 @@ async function fetchFlightsHistorical(
   origin: string,
   destination: string,
   date: string,
-  originTz: string
+  originTz: string,
+  destTz: string
 ): Promise<FetchFlightsResult> {
   const url = new URL("https://api.aviationstack.com/v1/flights");
   url.searchParams.set("access_key", apiKey);
@@ -351,16 +395,18 @@ async function fetchFlightsHistorical(
       arrivalTime: arrTime,
       origin: (f?.departure?.iataCode ?? origin).toUpperCase(),
       destination: (f?.arrival?.iataCode ?? destination).toUpperCase(),
-      durationMinutes: depTime && arrTime ? calculateDurationMinutes(depTime, arrTime) : 0,
+      durationMinutes:
+        depTime && arrTime ? calculateDurationMinutes(depTime, arrTime, originTz, destTz) : 0,
+      origin_tz: f?.departure?.timezone ?? originTz,
+      dest_tz: f?.arrival?.timezone ?? destTz,
     };
   });
 
   const filtered = mapped
     .filter((f) => {
       if (!f.departureTime) return false;
-      const depDate = new Date(f.departureTime);
-      const depLocalDate = formatInTimeZone(depDate, originTz, "yyyy-MM-dd");
-      return depLocalDate === date;
+      const depClean = stripOffset(f.departureTime);
+      return depClean.slice(0, 10) === date;
     })
     .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());
 

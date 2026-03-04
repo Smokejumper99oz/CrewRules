@@ -52,6 +52,8 @@ type Props = {
 };
 
 const PAGE_SIZE = 5;
+/** Set to false after confirming flight time display is correct. */
+const DEBUG_FLIGHT_TIMES = true;
 
 const riskBorderStyles = {
   recommended: "border-l-4 border-l-emerald-500",
@@ -66,6 +68,7 @@ function CommuteFlightCard({
   destination,
   originTz,
   destTz,
+  showDebug,
 }: {
   opt: CommuteFlightOption;
   baseTz: string;
@@ -73,18 +76,27 @@ function CommuteFlightCard({
   destination: string;
   originTz: string;
   destTz: string;
+  showDebug?: boolean;
 }) {
+  const depTz = opt.originTz ?? originTz;
+  const arrTz = opt.destTz ?? destTz;
   const dep = new Date(opt.depUtc);
   const arr = new Date(opt.arrUtc);
-  const dateStr = formatInTimeZone(dep, originTz, "EEE • MMM d");
-  const depTime = formatInTimeZone(dep, originTz, "HH:mm");
-  const arrTime = formatInTimeZone(arr, destTz, "HH:mm");
+  const dateStr = formatInTimeZone(dep, depTz, "EEE • MMM d");
+  const depTime = formatInTimeZone(dep, depTz, "HH:mm");
+  const arrTime = formatInTimeZone(arr, arrTz, "HH:mm");
   const flightLabel = `${opt.carrier} ${opt.flight ?? ""}`.trim();
 
   return (
     <div
       className={`rounded-lg border border-slate-700/60 bg-slate-900/40 pl-3 pr-3 py-2.5 ${riskBorderStyles[opt.risk]}`}
     >
+      {showDebug && (
+        <div className="mb-2 rounded bg-slate-800/80 px-2 py-1.5 font-mono text-[10px] text-amber-200/90 space-y-0.5">
+          <div>dep raw: {opt.depUtc} | originTz: {depTz} | depLocal: {depTime}</div>
+          <div>arr raw: {opt.arrUtc} | destTz: {arrTz} | arrLocal: {arrTime}</div>
+        </div>
+      )}
       <div className="text-sm font-semibold text-slate-400">{dateStr}</div>
       <div className="flex items-baseline gap-2 mt-1">
         <span className="text-2xl font-bold tabular-nums text-slate-200">{depTime}</span>
@@ -111,11 +123,13 @@ function CommuteFlightRow({
   originTz: string;
   destTz: string;
 }) {
+  const depTz = opt.originTz ?? originTz;
+  const arrTz = opt.destTz ?? destTz;
   const dep = new Date(opt.depUtc);
   const arr = new Date(opt.arrUtc);
-  const dateStr = formatInTimeZone(dep, originTz, "EEE • MMM d");
-  const depTime = formatInTimeZone(dep, originTz, "HH:mm");
-  const arrTime = formatInTimeZone(arr, destTz, "HH:mm");
+  const dateStr = formatInTimeZone(dep, depTz, "EEE • MMM d");
+  const depTime = formatInTimeZone(dep, depTz, "HH:mm");
+  const arrTime = formatInTimeZone(arr, arrTz, "HH:mm");
   const durMin = minutesBetween(opt.depUtc, opt.arrUtc);
   const durStr = fmtHM(durMin);
   const flightLabel = `${opt.carrier} ${opt.flight ?? ""}`.trim();
@@ -165,8 +179,6 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
   const [sameDayPage, setSameDayPage] = useState(1);
   const [viewMode, setViewMode] = useState<"cards" | "board">("cards");
   const [sortBy, setSortBy] = useState<"arrAsc" | "arrDesc" | "durAsc" | "durDesc">("arrAsc");
-  const [showAllDayPrior, setShowAllDayPrior] = useState(false);
-  const [showAllSameDay, setShowAllSameDay] = useState(false);
   const [originTz, setOriginTz] = useState<string>("UTC");
   const [destTz, setDestTz] = useState<string>("UTC");
 
@@ -274,15 +286,15 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
         const flights = res.flights;
         const reportAtIso = dutyOk ? dutyDateTime.toISOString() : `${dutyDateBase}T12:00:00Z`;
 
-        const hasOffset = (s: string) => /[+-]\d{2}:\d{2}$|Z$/i.test(s);
+        const stripOffset = (s: string) => s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
         const isReturn = direction === "to_home";
         const options: CommuteFlightOption[] = (flights as CommuteFlight[]).map((f, i) => {
-          const depUtc = hasOffset(f.departureTime)
-            ? f.departureTime
-            : fromZonedTime(f.departureTime, res.originTz).toISOString();
-          const arrUtc = hasOffset(f.arrivalTime)
-            ? f.arrivalTime
-            : fromZonedTime(f.arrivalTime, res.destTz).toISOString();
+          const depTz = f.origin_tz ?? res.originTz;
+          const arrTz = f.dest_tz ?? res.destTz;
+          const depClean = stripOffset(f.departureTime);
+          const arrClean = stripOffset(f.arrivalTime);
+          const depUtc = fromZonedTime(depClean, depTz).toISOString();
+          const arrUtc = fromZonedTime(arrClean, arrTz).toISOString();
           let risk: "recommended" | "risky" | "not_recommended" = "recommended";
           let reason = "";
 
@@ -311,6 +323,8 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
             nonstop: true,
             risk,
             reason,
+            originTz: depTz,
+            destTz: arrTz,
           };
         });
 
@@ -322,6 +336,8 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
         setCommuteGroups(grouped);
         setCommuteMeta({ showInfo, arriveByFormatted, dutyOk });
         setNotice(res.notice ?? null);
+        setDayPriorPage(1);
+        setSameDayPage(1);
         return res.flights;
       } else {
         setNotice(res.message);
@@ -350,8 +366,8 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
 
   const dayPriorList = sortFlights(commuteGroups.day_prior ?? [], sortBy);
   const sameDayList = sortFlights(commuteGroups.same_day ?? [], sortBy);
-  const dayPriorDisplayList = showAllDayPrior ? dayPriorList : dayPriorList.slice(0, 3);
-  const sameDayDisplayList = showAllSameDay ? sameDayList : sameDayList.slice(0, 3);
+  const dayPriorDisplayList = dayPriorList;
+  const sameDayDisplayList = sameDayList;
   const dayPriorTotalPages = Math.max(1, Math.ceil(dayPriorDisplayList.length / PAGE_SIZE));
   const sameDayTotalPages = Math.max(1, Math.ceil(sameDayDisplayList.length / PAGE_SIZE));
   const dayPriorPageItems = dayPriorDisplayList.slice((dayPriorPage - 1) * PAGE_SIZE, dayPriorPage * PAGE_SIZE);
@@ -525,7 +541,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
                 <div className="space-y-2">
                   <p className="text-[11px] uppercase tracking-wide text-slate-500">Day prior</p>
                   <div className="space-y-2">
-                    {dayPriorPageItems.map((opt) =>
+                    {dayPriorPageItems.map((opt, idx) =>
                       viewMode === "cards" ? (
                         <CommuteFlightCard
                           key={opt.id}
@@ -535,6 +551,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
                           destination={destination}
                           originTz={originTz}
                           destTz={destTz}
+                          showDebug={DEBUG_FLIGHT_TIMES && idx === 0}
                         />
                       ) : (
                         <CommuteFlightRow
@@ -549,19 +566,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
                       )
                     )}
                   </div>
-                  {dayPriorList.length > 3 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDayPriorPage(1);
-                        setShowAllDayPrior(!showAllDayPrior);
-                      }}
-                      className="text-[11px] text-slate-400 hover:text-slate-300"
-                    >
-                      {showAllDayPrior ? "Show less" : `Show all (${dayPriorList.length})`}
-                    </button>
-                  )}
-                  {showAllDayPrior && dayPriorTotalPages > 1 && (
+                  {dayPriorTotalPages > 1 && (
                     <div className="flex items-center justify-center gap-2 pt-1">
                       <button
                         type="button"
@@ -597,7 +602,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
                 <div className="space-y-2">
                   <p className="text-[11px] uppercase tracking-wide text-slate-500">Day of (before duty)</p>
                   <div className="space-y-2">
-                    {sameDayPageItems.map((opt) =>
+                    {sameDayPageItems.map((opt, idx) =>
                       viewMode === "cards" ? (
                         <CommuteFlightCard
                           key={opt.id}
@@ -607,6 +612,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
                           destination={destination}
                           originTz={originTz}
                           destTz={destTz}
+                          showDebug={DEBUG_FLIGHT_TIMES && idx === 0}
                         />
                       ) : (
                         <CommuteFlightRow
@@ -621,19 +627,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
                       )
                     )}
                   </div>
-                  {sameDayList.length > 3 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSameDayPage(1);
-                        setShowAllSameDay(!showAllSameDay);
-                      }}
-                      className="text-[11px] text-slate-400 hover:text-slate-300"
-                    >
-                      {showAllSameDay ? "Show less" : `Show all (${sameDayList.length})`}
-                    </button>
-                  )}
-                  {showAllSameDay && sameDayTotalPages > 1 && (
+                  {sameDayTotalPages > 1 && (
                     <div className="flex items-center justify-center gap-2 pt-1">
                       <button
                         type="button"

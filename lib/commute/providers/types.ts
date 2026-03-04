@@ -22,4 +22,8 @@ export type CommuteFlightOption = {
   nonstop: boolean;
   risk: CommuteRisk;
   reason: string;
+  /** IANA timezone for departure airport (for correct time display). */
+  originTz?: string;
+  /** IANA timezone for arrival airport (for correct time display). */
+  destTz?: string;
 };
