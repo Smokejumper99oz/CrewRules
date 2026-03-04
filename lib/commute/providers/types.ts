@@ -26,4 +26,14 @@ export type CommuteFlightOption = {
   originTz?: string;
   /** IANA timezone for arrival airport (for correct time display). */
   destTz?: string;
+  /** Live timing from /v1/flights (for delay Was/Now display). */
+  dep_scheduled_raw?: string;
+  dep_estimated_raw?: string;
+  dep_actual_raw?: string;
+  dep_delay_min?: number | null;
+  arr_scheduled_raw?: string;
+  arr_estimated_raw?: string;
+  arr_actual_raw?: string;
+  arr_delay_min?: number | null;
+  status?: string;
 };

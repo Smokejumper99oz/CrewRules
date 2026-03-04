@@ -3,21 +3,21 @@
  * Used for deriving crew base timezone from base airport.
  */
 
+/** Frontier Airlines crew bases → IANA timezone. */
 export const AIRPORT_TO_TIMEZONE: Record<string, string> = {
-  SJU: "America/Puerto_Rico",
-  DEN: "America/Denver",
-  MCO: "America/New_York",
-  LAS: "America/Los_Angeles",
-  PHX: "America/Phoenix",
-  MIA: "America/New_York",
-  ORD: "America/Chicago",
-  DFW: "America/Chicago",
   ATL: "America/New_York",
-  FLL: "America/New_York",
-  BOS: "America/New_York",
-  IAH: "America/Chicago",
-  LAX: "America/Los_Angeles",
-  SFO: "America/Los_Angeles",
+  MDW: "America/Chicago",
+  ORD: "America/Chicago",
+  CVG: "America/New_York",
+  CLE: "America/New_York",
+  DFW: "America/Chicago",
+  DEN: "America/Denver",
+  LAS: "America/Los_Angeles",
+  MIA: "America/New_York",
+  MCO: "America/New_York",
+  PHL: "America/New_York",
+  PHX: "America/Phoenix",
+  SJU: "America/Puerto_Rico",
 };
 
 const DEFAULT_TIMEZONE = "America/Denver";

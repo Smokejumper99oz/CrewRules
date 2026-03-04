@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { subMinutes, subDays, addDays } from "date-fns";
 import type { CommuteFlightOption } from "@/lib/commute/providers/types";
+import { parseAviationstackTs } from "@/lib/aviationstack";
 import { getCommuteFlights } from "@/app/frontier/pilots/portal/commute/actions";
 import type { CommuteFlight } from "@/lib/aviationstack";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
@@ -52,14 +53,62 @@ type Props = {
 };
 
 const PAGE_SIZE = 5;
-/** Set to false after confirming flight time display is correct. */
-const DEBUG_FLIGHT_TIMES = true;
 
 const riskBorderStyles = {
   recommended: "border-l-4 border-l-emerald-500",
   risky: "border-l-4 border-l-amber-500",
   not_recommended: "border-l-4 border-l-red-500",
 };
+
+type DelayBanner =
+  | { type: "cancelled" }
+  | { type: "delayed"; wasTxt: string; nowTxt: string; delayMin: number; variant: "arrival" | "departure" }
+  | null;
+
+/** Arrival-first delay banner; falls back to departure when arrival data is weird. */
+function computeDelayBanner(
+  opt: CommuteFlightOption,
+  originTz: string,
+  destTz: string
+): DelayBanner {
+  if (opt.status === "cancelled") return { type: "cancelled" };
+  const depTz = opt.originTz ?? originTz;
+  const arrTz = opt.destTz ?? destTz;
+
+  // 1) Try arrival delay
+  const arrWasRaw = opt.arr_scheduled_raw;
+  const arrNowRaw = opt.arr_actual_raw ?? opt.arr_estimated_raw;
+  if (arrWasRaw && arrNowRaw) {
+    const wasMs = parseAviationstackTs(arrWasRaw, arrTz).getTime();
+    const nowMs = parseAviationstackTs(arrNowRaw, arrTz).getTime();
+    if (!Number.isNaN(wasMs) && !Number.isNaN(nowMs)) {
+      const delayMin = Math.round((nowMs - wasMs) / 60000);
+      if (delayMin >= 1) {
+        const wasTxt = formatInTimeZone(parseAviationstackTs(arrWasRaw, arrTz), arrTz, "HH:mm");
+        const nowTxt = formatInTimeZone(parseAviationstackTs(arrNowRaw, arrTz), arrTz, "HH:mm");
+        return { type: "delayed", wasTxt, nowTxt, delayMin, variant: "arrival" };
+      }
+    }
+  }
+
+  // 2) Fallback: departure delay
+  const depWasRaw = opt.dep_scheduled_raw;
+  const depNowRaw = opt.dep_actual_raw ?? opt.dep_estimated_raw;
+  if (depWasRaw && depNowRaw) {
+    const wasMs = parseAviationstackTs(depWasRaw, depTz).getTime();
+    const nowMs = parseAviationstackTs(depNowRaw, depTz).getTime();
+    if (!Number.isNaN(wasMs) && !Number.isNaN(nowMs)) {
+      const delayMin = Math.round((nowMs - wasMs) / 60000);
+      if (delayMin >= 1) {
+        const wasTxt = formatInTimeZone(parseAviationstackTs(depWasRaw, depTz), depTz, "HH:mm");
+        const nowTxt = formatInTimeZone(parseAviationstackTs(depNowRaw, depTz), depTz, "HH:mm");
+        return { type: "delayed", wasTxt, nowTxt, delayMin, variant: "departure" };
+      }
+    }
+  }
+
+  return null;
+}
 
 function CommuteFlightCard({
   opt,
@@ -68,7 +117,6 @@ function CommuteFlightCard({
   destination,
   originTz,
   destTz,
-  showDebug,
 }: {
   opt: CommuteFlightOption;
   baseTz: string;
@@ -76,7 +124,6 @@ function CommuteFlightCard({
   destination: string;
   originTz: string;
   destTz: string;
-  showDebug?: boolean;
 }) {
   const depTz = opt.originTz ?? originTz;
   const arrTz = opt.destTz ?? destTz;
@@ -86,15 +133,25 @@ function CommuteFlightCard({
   const depTime = formatInTimeZone(dep, depTz, "HH:mm");
   const arrTime = formatInTimeZone(arr, arrTz, "HH:mm");
   const flightLabel = `${opt.carrier} ${opt.flight ?? ""}`.trim();
+  const delayBanner = computeDelayBanner(opt, originTz, destTz);
 
   return (
     <div
       className={`rounded-lg border border-slate-700/60 bg-slate-900/40 pl-3 pr-3 py-2.5 ${riskBorderStyles[opt.risk]}`}
     >
-      {showDebug && (
-        <div className="mb-2 rounded bg-slate-800/80 px-2 py-1.5 font-mono text-[10px] text-amber-200/90 space-y-0.5">
-          <div>dep raw: {opt.depUtc} | originTz: {depTz} | depLocal: {depTime}</div>
-          <div>arr raw: {opt.arrUtc} | destTz: {arrTz} | arrLocal: {arrTime}</div>
+      {delayBanner && (
+        <div
+          className={`mb-2 rounded px-2 py-1 text-[11px] ${
+            delayBanner.type === "cancelled"
+              ? "border border-red-500/40 bg-red-500/10 text-red-200/90"
+              : "border border-amber-500/40 bg-amber-500/10 text-amber-200/90"
+          }`}
+        >
+          {delayBanner.type === "cancelled"
+            ? "Cancelled"
+            : delayBanner.variant === "departure"
+              ? `Departure delayed ${delayBanner.delayMin}m / Was: ${delayBanner.wasTxt} – Now: ${delayBanner.nowTxt}`
+              : `1st Leg Arrival Delayed ${delayBanner.delayMin}m / Was: ${delayBanner.wasTxt} – Now: ${delayBanner.nowTxt}`}
         </div>
       )}
       <div className="text-sm font-semibold text-slate-400">{dateStr}</div>
@@ -133,11 +190,27 @@ function CommuteFlightRow({
   const durMin = minutesBetween(opt.depUtc, opt.arrUtc);
   const durStr = fmtHM(durMin);
   const flightLabel = `${opt.carrier} ${opt.flight ?? ""}`.trim();
+  const delayBanner = computeDelayBanner(opt, originTz, destTz);
 
   return (
     <div
       className={`rounded border border-slate-700/60 bg-slate-900/40 pl-3 pr-3 py-2 ${riskBorderStyles[opt.risk]}`}
     >
+      {delayBanner && (
+        <div
+          className={`mb-1.5 rounded px-2 py-0.5 text-[11px] ${
+            delayBanner.type === "cancelled"
+              ? "border border-red-500/40 bg-red-500/10 text-red-200/90"
+              : "border border-amber-500/40 bg-amber-500/10 text-amber-200/90"
+          }`}
+        >
+          {delayBanner.type === "cancelled"
+            ? "Cancelled"
+            : delayBanner.variant === "departure"
+              ? `Departure delayed ${delayBanner.delayMin}m / Was: ${delayBanner.wasTxt} – Now: ${delayBanner.nowTxt}`
+              : `1st Leg Arrival Delayed ${delayBanner.delayMin}m / Was: ${delayBanner.wasTxt} – Now: ${delayBanner.nowTxt}`}
+        </div>
+      )}
       {/* Mobile: Row 1 — DEP left, ARR right (big); Row 2 — date • dur • carrier flt */}
       <div className="md:hidden">
         <div className="flex justify-between items-baseline">
@@ -172,7 +245,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
     arriveByFormatted: string;
     dutyOk: boolean;
   } | null>(null);
-  const [source, setSource] = useState<"cache" | "api" | null>(null);
+  const [source, setSource] = useState<"live" | "scheduled" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [dayPriorPage, setDayPriorPage] = useState(1);
@@ -325,6 +398,15 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
             reason,
             originTz: depTz,
             destTz: arrTz,
+            dep_scheduled_raw: f.dep_scheduled_raw,
+            dep_estimated_raw: f.dep_estimated_raw,
+            dep_actual_raw: f.dep_actual_raw,
+            dep_delay_min: f.dep_delay_min,
+            arr_scheduled_raw: f.arr_scheduled_raw,
+            arr_estimated_raw: f.arr_estimated_raw,
+            arr_actual_raw: f.arr_actual_raw,
+            arr_delay_min: f.arr_delay_min,
+            status: f.status,
           };
         });
 
@@ -332,6 +414,15 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
           day_prior: options,
           same_day: [],
         };
+
+        const hasLiveTiming = options.some(
+          (o) =>
+            o.arr_estimated_raw ||
+            o.arr_actual_raw ||
+            o.dep_estimated_raw ||
+            o.dep_actual_raw
+        );
+        setSource(hasLiveTiming ? "live" : "scheduled");
 
         setCommuteGroups(grouped);
         setCommuteMeta({ showInfo, arriveByFormatted, dutyOk });
@@ -491,7 +582,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
           </select>
           {source && (
             <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-200">
-              {source === "cache" ? "Cached" : "Live"}
+              {source === "live" ? "Live" : "Scheduled"}
             </span>
           )}
           <button
@@ -551,7 +642,6 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
                           destination={destination}
                           originTz={originTz}
                           destTz={destTz}
-                          showDebug={DEBUG_FLIGHT_TIMES && idx === 0}
                         />
                       ) : (
                         <CommuteFlightRow
@@ -612,7 +702,6 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
                           destination={destination}
                           originTz={originTz}
                           destTz={destTz}
-                          showDebug={DEBUG_FLIGHT_TIMES && idx === 0}
                         />
                       ) : (
                         <CommuteFlightRow

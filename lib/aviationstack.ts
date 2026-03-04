@@ -19,6 +19,16 @@ export type CommuteFlight = {
   origin_tz?: string;
   /** IANA timezone for arrival airport (from API or lookup). */
   dest_tz?: string;
+  /** Live timing from /v1/flights (for delay Was/Now display). */
+  dep_scheduled_raw?: string;
+  dep_estimated_raw?: string;
+  dep_actual_raw?: string;
+  dep_delay_min?: number | null;
+  arr_scheduled_raw?: string;
+  arr_estimated_raw?: string;
+  arr_actual_raw?: string;
+  arr_delay_min?: number | null;
+  status?: string;
 };
 
 export type FetchFlightsResult = {
@@ -29,6 +39,11 @@ export type FetchFlightsResult = {
 /** Strip timezone offset from AviationStack timestamp (scheduled times are airport-local). */
 function stripOffset(s: string): string {
   return s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
+}
+
+/** Parse AviationStack timestamp (airport-local) to Date. Fixes +00:00 misinterpretation. */
+export function parseAviationstackTs(ts: string, tz: string): Date {
+  return fromZonedTime(stripOffset(ts), tz);
 }
 
 function calculateDurationMinutes(
@@ -110,27 +125,40 @@ async function fetchTimetable(
   originTz: string,
   destTz: string
 ): Promise<FetchFlightsResult> {
-  const url = new URL("https://api.aviationstack.com/v1/timetable");
-  url.searchParams.set("access_key", apiKey);
-  url.searchParams.set("iataCode", origin);
-  url.searchParams.set("type", "departure");
+  const limit = 100;
+  const allData: any[] = [];
 
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    cache: "no-store",
-    headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist)" },
-  });
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const offset = page * limit;
+    const url = new URL("https://api.aviationstack.com/v1/timetable");
+    url.searchParams.set("access_key", apiKey);
+    url.searchParams.set("iataCode", origin);
+    url.searchParams.set("type", "departure");
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("offset", String(offset));
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`AviationStack timetable failed: ${res.status} - ${body.slice(0, 200)}`);
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      cache: "no-store",
+      headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist)" },
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`AviationStack timetable failed: ${res.status} - ${body.slice(0, 200)}`);
+    }
+
+    const json = await res.json();
+    const pageData = (json.data ?? []) as any[];
+    allData.push(...pageData);
+
+    const total = json.pagination?.total ?? 0;
+    const count = json.pagination?.count ?? pageData.length;
+    if (total <= 0 || offset + count >= total || pageData.length < limit) break;
   }
 
-  const json = await res.json();
-  if (!json.data) return { flights: [] };
-
   const destUpper = destination.toUpperCase();
-  const flights: CommuteFlight[] = (json.data as any[])
+  const flights: CommuteFlight[] = (allData as any[])
     .filter((f) => (f?.arrival?.iataCode ?? "").toUpperCase() === destUpper)
     .map((f) => {
       const depTime = f?.departure?.scheduledTime ?? "";
@@ -166,8 +194,7 @@ const MAX_PAGES = 5;
 
 /**
  * Same-day flights using /v1/flights with city-pair filtering (dep_iata + arr_iata).
- * Returns all flights for the given origin→destination on the given date.
- * Paginates when total > count (limit=100).
+ * Returns whatever /v1/flights returns (no timetable fallback).
  */
 async function fetchFlightsSameDay(
   apiKey: string,
@@ -202,7 +229,8 @@ async function fetchFlightsSameDay(
     }
 
     const json = await res.json();
-    const pageData = (json.data ?? []) as any[];
+    const raw = json?.data;
+    const pageData = Array.isArray(raw) ? raw : raw ? [raw] : [];
     allData.push(...pageData);
 
     const total = json.pagination?.total ?? 0;
@@ -210,11 +238,38 @@ async function fetchFlightsSameDay(
     if (total <= 0 || offset + count >= total || pageData.length < limit) break;
   }
 
-  const flights: CommuteFlight[] = (allData as any[])
+  let droppedMissingDepTs = 0;
+  let droppedMissingArrTs = 0;
+  let droppedBadDate = 0;
+  let droppedParseFail = 0;
+
+  const flightsA: CommuteFlight[] = (allData as any[])
     .filter((f) => {
       const depTime = f?.departure?.scheduled ?? "";
       const arrTime = f?.arrival?.scheduled ?? "";
-      return !!depTime && !!arrTime;
+      if (!depTime) {
+        droppedMissingDepTs++;
+        return false;
+      }
+      if (!arrTime) {
+        droppedMissingArrTs++;
+        return false;
+      }
+      const depClean = stripOffset(depTime);
+      const arrClean = stripOffset(arrTime);
+      const depDateStr = depClean.slice(0, 10);
+      if (depDateStr !== date) {
+        droppedBadDate++;
+        return false;
+      }
+      try {
+        fromZonedTime(depClean, f?.departure?.timezone ?? originTz);
+        fromZonedTime(arrClean, f?.arrival?.timezone ?? destTz);
+      } catch {
+        droppedParseFail++;
+        return false;
+      }
+      return true;
     })
     .map((f) => {
       const depTime = f?.departure?.scheduled ?? "";
@@ -238,6 +293,15 @@ async function fetchFlightsSameDay(
             : 0,
         origin_tz: f?.departure?.timezone ?? originTz,
         dest_tz: f?.arrival?.timezone ?? destTz,
+        dep_scheduled_raw: f?.departure?.scheduled ?? undefined,
+        dep_estimated_raw: f?.departure?.estimated ?? undefined,
+        dep_actual_raw: f?.departure?.actual ?? undefined,
+        dep_delay_min: f?.departure?.delay != null ? Number(f.departure.delay) : null,
+        arr_scheduled_raw: f?.arrival?.scheduled ?? undefined,
+        arr_estimated_raw: f?.arrival?.estimated ?? undefined,
+        arr_actual_raw: f?.arrival?.actual ?? undefined,
+        arr_delay_min: f?.arrival?.delay != null ? Number(f.arrival.delay) : null,
+        status: f?.flight_status ?? undefined,
       };
     })
     .sort(
@@ -246,7 +310,7 @@ async function fetchFlightsSameDay(
         fromZonedTime(stripOffset(b.arrivalTime), b.dest_tz ?? destTz).getTime()
     );
 
-  return { flights };
+  return { flights: flightsA };
 }
 
 async function fetchFlightsFuture(

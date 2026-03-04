@@ -91,19 +91,21 @@ export async function getCommuteFlights(input: {
     try {
       const { flights, notice } = await fetchFlightsFromAviationStack(origin, destination, input.date, { noCache: true }); // bypass dev cache
 
-      const { error: upsertErr } = await admin.from("commute_flight_cache").upsert(
-        {
-          tenant,
-          user_id: userId,
-          origin,
-          destination,
-          commute_date: input.date,
-          cache_version: CACHE_VERSION,
-          data: flights,
-          fetched_at: now.toISOString(),
-        },
-        { onConflict: "tenant,user_id,commute_date,origin,destination,cache_version" }
-      );
+      const row = {
+        tenant,
+        user_id: userId,
+        origin,
+        destination,
+        commute_date: input.date,
+        cache_version: CACHE_VERSION,
+        data: flights,
+        fetched_at: now.toISOString(),
+      };
+      const { error: upsertErr } = await admin
+        .from("commute_flight_cache")
+        .upsert(row, {
+          onConflict: "tenant,user_id,commute_date,origin,destination,cache_version",
+        });
       if (upsertErr) console.error("Commute cache upsert failed", upsertErr);
 
       if (!isPaid && accountAgeDays < 30) {
@@ -185,23 +187,23 @@ export async function getCommuteFlights(input: {
     const { originTz, destTz } = await getRouteTzs(origin, destination);
     const { flights, notice } = await fetchFlightsFromAviationStack(origin, destination, input.date);
 
-    // 4) Write cache (latest snapshot per commute date/route)
-    const { error: upsertErr } = await admin.from("commute_flight_cache").upsert(
-      {
-        tenant,
-        user_id: userId,
-        origin,
-        destination,
-        commute_date: input.date,
-        data: flights,
-        fetched_at: now.toISOString(),
-      },
-      { onConflict: "tenant,user_id,commute_date,origin,destination" }
-    );
-
-    if (upsertErr) {
-      console.error("Commute cache upsert failed", upsertErr);
-    }
+    // 4) Write cache (upsert on unique key)
+    const row = {
+      tenant,
+      user_id: userId,
+      origin,
+      destination,
+      commute_date: input.date,
+      cache_version: CACHE_VERSION,
+      data: flights,
+      fetched_at: now.toISOString(),
+    };
+    const { error: upsertErr } = await admin
+      .from("commute_flight_cache")
+      .upsert(row, {
+        onConflict: "tenant,user_id,commute_date,origin,destination,cache_version",
+      });
+    if (upsertErr) console.error("Commute cache upsert failed", upsertErr);
 
     // 5) Increment usage ONLY when an API refresh occurs and only for Free (first 30 days)
     if (!isPaid && accountAgeDays < 30) {

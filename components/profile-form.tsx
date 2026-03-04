@@ -47,23 +47,37 @@ type Props = {
   proBadgeVariant: "emerald" | "amber" | "red";
 };
 
-const COMMON_AIRPORTS = ["SJU", "DEN", "MCO", "LAS", "PHX", "MIA", "ORD", "DFW", "ATL", "FLL", "BOS", "IAH", "LAX", "SFO"];
+/** Frontier Airlines crew bases (IATA codes). */
+const FRONTIER_CREW_BASES = [
+  "ATL", // Atlanta
+  "MDW", // Chicago-Midway
+  "ORD", // Chicago-O'Hare
+  "CVG", // Cincinnati
+  "CLE", // Cleveland
+  "DFW", // Dallas/Fort Worth
+  "DEN", // Denver (Main hub)
+  "LAS", // Las Vegas
+  "MIA", // Miami
+  "MCO", // Orlando
+  "PHL", // Philadelphia
+  "PHX", // Phoenix
+  "SJU", // San Juan, Puerto Rico
+];
 
 const AIRPORT_TO_TIMEZONE: Record<string, string> = {
-  SJU: "America/Puerto_Rico",
-  DEN: "America/Denver",
-  MCO: "America/New_York",
-  LAS: "America/Los_Angeles",
-  PHX: "America/Phoenix",
-  MIA: "America/New_York",
-  ORD: "America/Chicago",
-  DFW: "America/Chicago",
   ATL: "America/New_York",
-  FLL: "America/New_York",
-  BOS: "America/New_York",
-  IAH: "America/Chicago",
-  LAX: "America/Los_Angeles",
-  SFO: "America/Los_Angeles",
+  MDW: "America/Chicago",
+  ORD: "America/Chicago",
+  CVG: "America/New_York",
+  CLE: "America/New_York",
+  DFW: "America/Chicago",
+  DEN: "America/Denver",
+  LAS: "America/Los_Angeles",
+  MIA: "America/New_York",
+  MCO: "America/New_York",
+  PHL: "America/New_York",
+  PHX: "America/Phoenix",
+  SJU: "America/Puerto_Rico",
 };
 
 const DEFAULT_TIMEZONE = "America/Denver";
@@ -225,7 +239,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               className="profile-select mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
             >
               <option value="">Select crew base</option>
-              {[...new Set([...(baseAirport && !COMMON_AIRPORTS.includes(baseAirport) ? [baseAirport] : []), ...COMMON_AIRPORTS])]
+              {[...new Set([...(baseAirport && !FRONTIER_CREW_BASES.includes(baseAirport) ? [baseAirport] : []), ...FRONTIER_CREW_BASES])]
                 .sort()
                 .map((code) => (
                   <option key={code} value={code}>
