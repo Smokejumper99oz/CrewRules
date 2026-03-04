@@ -233,7 +233,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   </option>
                 ))}
             </select>
-            <p className="mt-1 text-xs text-slate-500">3-letter IATA code</p>
+            <p className="mt-1 text-xs text-slate-500">3-letter IATA code. Commute Assist arrives here.</p>
             <p className="mt-2 text-sm text-slate-400">
               Timezone: <span className="font-medium text-slate-200">{tzLabel}</span>
             </p>
@@ -341,7 +341,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   e.currentTarget.value = e.currentTarget.value.toUpperCase();
                 }}
               />
-              <p className="mt-1 text-xs text-slate-500">3-letter IATA code, blank if not commuting</p>
+              <p className="mt-1 text-xs text-slate-500">3-letter IATA code. Commute Assist departs from here.</p>
             </div>
             <div className="mt-4">
               <label

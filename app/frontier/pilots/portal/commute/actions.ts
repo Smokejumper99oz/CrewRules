@@ -4,6 +4,7 @@ import { createActionClient } from "@/lib/supabase/server-action";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/profile";
 import { fetchFlightsFromAviationStack } from "@/lib/aviationstack";
+import { getRouteTzs } from "@/lib/airports";
 
 function monthStartISO(d: Date) {
   const ms = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
@@ -32,12 +33,21 @@ export async function getCommuteFlights(input: {
   const userId = profile.id; // profiles.id is the auth uid in your schema
   const subscription = (profile.subscription_tier ?? "free") as "free" | "pro" | "enterprise";
 
+  const origin = (input.origin ?? "").trim().toUpperCase();
+  const destination = (input.destination ?? "").trim().toUpperCase();
+
+  if (!origin || origin.length !== 3) {
+    return { ok: false as const, reason: "missing_origin" as const, message: "Origin airport is required (3-letter IATA)." };
+  }
+  if (!destination || destination.length !== 3) {
+    return { ok: false as const, reason: "missing_destination" as const, message: "Destination airport is required (3-letter IATA)." };
+  }
+
   const now = new Date();
   const createdAt = profile.created_at ? new Date(profile.created_at) : null;
   const accountAgeDays = createdAt ? daysBetween(now, createdAt) : 9999;
 
-  const origin = input.origin.toUpperCase();
-  const destination = input.destination.toUpperCase();
+  console.log("Commute Assist getRouteTzs:", { origin, destination });
 
   // 1) Cache-first (return if exists)
   const { data: cached, error: cacheErr } = await admin
@@ -56,7 +66,8 @@ export async function getCommuteFlights(input: {
 
   // 1) Cache-first (once per commute date unless forceRefresh)
   if (cached?.data && !input.forceRefresh) {
-    return { ok: true as const, source: "cache" as const, flights: cached.data };
+    const { originTz, destTz } = await getRouteTzs(origin, destination);
+    return { ok: true as const, source: "cache" as const, flights: cached.data, notice: undefined, originTz, destTz };
   }
 
   // 2) Plan gating only on cache miss or forceRefresh
@@ -103,7 +114,8 @@ export async function getCommuteFlights(input: {
 
   // 3) Allowed => hit AviationStack
   try {
-    const flights = await fetchFlightsFromAviationStack(origin, destination, input.date);
+    const { originTz, destTz } = await getRouteTzs(origin, destination);
+    const { flights, notice } = await fetchFlightsFromAviationStack(origin, destination, input.date);
 
     // 4) Write cache (latest snapshot per commute date/route)
     const { error: upsertErr } = await admin.from("commute_flight_cache").upsert(
@@ -134,7 +146,7 @@ export async function getCommuteFlights(input: {
       if (rpcErr) console.error("increment_commute_refresh_usage failed", rpcErr);
     }
 
-    return { ok: true as const, source: "api" as const, flights };
+    return { ok: true as const, source: "api" as const, flights, notice, originTz, destTz };
   } catch (err) {
     console.error("Commute Assist failed", err);
     return { ok: false as const, reason: "unavailable" as const, message: "Commute Assist temporarily unavailable." };

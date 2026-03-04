@@ -409,6 +409,9 @@ export default function SchedulePage() {
               {formatTimeForDisplay(selectedEvent.start_time, displaySettings)} –{" "}
               {formatTimeForDisplay(selectedEvent.end_time, displaySettings)}
             </p>
+            {selectedEvent.event_type === "trip" && selectedEvent.route?.trim() && (
+              <p className="mt-2 text-sm text-slate-400">{selectedEvent.route}</p>
+            )}
             <span className={`mt-2 inline-block rounded px-2 py-0.5 text-xs ${eventStyle(selectedEvent.event_type)}`}>
               {selectedEvent.event_type}
             </span>

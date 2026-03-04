@@ -4,7 +4,6 @@ import { PortalNextDuty } from "@/components/portal-next-duty";
 import { PortalScheduleUpcoming } from "@/components/portal-schedule-upcoming";
 import { PortalMonthStats } from "@/components/portal-month-stats-wrapper";
 import { DashboardAskBox } from "@/components/dashboard-ask-box";
-import { testCommuteFetch } from "./commute/test-actions";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -16,11 +15,6 @@ export default async function PortalDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* TEMP: Test Commute Fetch */}
-      <form action={testCommuteFetch}>
-        <button type="submit">Test Commute Fetch</button>
-      </form>
-
       <div>
         <p className="text-[0.9375rem] text-slate-500">{greetingPart}</p>
         <p className="text-lg font-semibold text-slate-100">{namePart}</p>

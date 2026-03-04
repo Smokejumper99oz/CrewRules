@@ -78,26 +78,15 @@ export async function PortalNextDuty({ tenant, portal }: { tenant: string; porta
                 Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Commute Assist<span className="align-super text-[10px]">™</span>
               </h3>
               <span className="text-xs text-slate-500">
-                {!profile?.home_airport?.trim() ? "Preview" : proActive ? "Pro" : "Locked"}
+                {proActive ? "Pro" : "Locked"}
               </span>
             </div>
-            {!profile?.home_airport?.trim() ? (
-              <p className="mt-3 text-sm text-slate-400">
-                Set your Home airport in{" "}
-                <Link
-                  href={`/${tenant}/${portal}/portal/profile`}
-                  className="font-medium text-[#75C043] hover:underline"
-                >
-                  Profile
-                </Link>{" "}
-                to see commute options.
-              </p>
-            ) : !proActive ? (
+            {!proActive ? (
               <div className="mt-3 space-y-2">
                 <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
-                  Commute Assist is a Pro feature
+                  Commute Assist<span className="align-super text-[10px]">™</span>{"\u00A0"}·{"\u00A0"}Pro
                 </span>
-                <p className="text-xs text-slate-500">Start a 14-day Pro trial in Profile.</p>
+                <p className="text-xs text-slate-500">Start a 14-day Pro trial to unlock this feature.</p>
                 <Link
                   href={`/${tenant}/${portal}/portal/profile`}
                   className="inline-block text-sm font-medium text-[#75C043] hover:underline"

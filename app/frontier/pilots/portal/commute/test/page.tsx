@@ -9,13 +9,14 @@ export default async function CommuteTestPage({
   const origin = (params.origin ?? "TPA").toUpperCase();
   const destination = (params.destination ?? "SJU").toUpperCase();
 
-  const flights = await fetchFlightsFromAviationStack(origin, destination, "2026-03-03", { noCache: true });
+  const { flights, notice } = await fetchFlightsFromAviationStack(origin, destination, "2026-03-03", { noCache: true });
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
       <h1 className="text-xl font-semibold">Commute Test</h1>
       <p className="mt-1 text-sm text-slate-500">
         {origin} → {destination} • Found {flights.length} flights
+        {notice ? ` • ${notice}` : ""}
       </p>
 
       <div className="mt-6 space-y-3">

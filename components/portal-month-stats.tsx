@@ -141,7 +141,7 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
             <div className="space-y-2">
               <div>
                 <p className="text-2xl font-normal text-amber-300/80">
-                  {formatMinutesToHhMm(stats.rawCreditMinutes ?? 0)}
+                  {formatMinutesToHhMm(stats.creditAfterGuaranteeMinutes ?? 0)}
                 </p>
                 <p className="text-xs text-slate-300">Credit</p>
               </div>
@@ -154,16 +154,31 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
             </div>
           </div>
         </div>
-        {(stats.payEligible || stats.payHidden || stats.payProjection) && (
-          <div
-            className={`mt-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-slate-900/40 to-slate-950/40 px-5 py-4 shadow-[0_0_0_1px_rgba(16,185,129,0.12),0_20px_60px_rgba(0,0,0,0.35)] transition-all duration-200 hover:shadow-[0_0_0_1px_rgba(16,185,129,0.2),0_0_30px_rgba(16,185,129,0.1),0_20px_60px_rgba(0,0,0,0.35)] ${
-              !optimisticShow ? "opacity-60 saturate-75" : ""
-            }`}
-          >
+        <div
+          className={`mt-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-slate-900/40 to-slate-950/40 px-5 py-4 shadow-[0_0_0_1px_rgba(16,185,129,0.12),0_20px_60px_rgba(0,0,0,0.35)] transition-all duration-200 hover:shadow-[0_0_0_1px_rgba(16,185,129,0.2),0_0_30px_rgba(16,185,129,0.1),0_20px_60px_rgba(0,0,0,0.35)] ${
+            stats.payEligible && !optimisticShow ? "opacity-60 saturate-75" : ""
+          }`}
+        >
+          {!stats.payEligible ? (
+            <div className="mt-3 space-y-2">
+              <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
+                Pay Estimate{"\u00A0"}·{"\u00A0"}Pro
+              </span>
+              <p className="text-xs text-slate-500">See your projected monthly pay based on credit and guarantee.</p>
+              <p className="text-xs text-slate-500">Start a 14-day Pro trial to unlock this feature.</p>
+              <Link
+                href={`/${tenant}/${portal}/portal/profile`}
+                className="inline-block text-sm font-medium text-[#75C043] hover:underline"
+              >
+                Go to Profile →
+              </Link>
+            </div>
+          ) : (
+            <>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-wide text-emerald-200/80">
-                  Pay projection
+                  Pay Estimate
                 </p>
                 <p className="mt-1 text-[11px] text-slate-500">
                   Based on your credited hours this month
@@ -195,7 +210,7 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
             {!stats.payProjection ? (
               <div className="mt-4 space-y-2">
                 <p className="text-sm font-medium text-emerald-200/90">
-                  Complete your Profile to enable pay projection
+                  Complete your Profile to enable pay estimate
                 </p>
                 <p className="text-xs text-slate-500">
                   Missing: {stats.payMissingInputs?.length ? stats.payMissingInputs.join(", ") : "required info"}
@@ -275,8 +290,9 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
             </div>
             </>
             )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

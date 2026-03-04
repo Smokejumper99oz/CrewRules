@@ -1,5 +1,4 @@
-const SHOW_DEBUG =
-  process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEBUG_PORTAL_GATE === "1";
+const SHOW_DEBUG = false; // Set to true or use NEXT_PUBLIC_DEBUG_PORTAL_GATE=1 to re-enable
 
 export function PortalDebugLine({
   email,
