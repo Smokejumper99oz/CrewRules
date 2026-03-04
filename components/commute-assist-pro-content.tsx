@@ -353,7 +353,6 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
       const showInfo = dutyOk;
 
       if (res.ok) {
-        setSource(res.source);
         setOriginTz(res.originTz);
         setDestTz(res.destTz);
         const flights = res.flights;
