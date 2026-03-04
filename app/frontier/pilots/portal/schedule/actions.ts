@@ -327,10 +327,23 @@ export async function getNextDuty(): Promise<{
       profile.base_timezone ?? (baseAirport ? getTimezoneFromAirport(baseAirport) : getTenantSourceTimezone(profile.tenant));
 
     const { isEventStartToday } = await import("@/lib/schedule-time");
+    const { addDays } = await import("date-fns");
+    const { formatInTimeZone } = await import("date-fns-tz");
 
     // 2a. Later today: first event that starts today
     const laterToday = upcoming.find((e) => isEventStartToday(e.start_time, baseTimezone));
     if (laterToday) {
+      // For commute: if "later today" starts in the morning and there's an event that starts
+      // tomorrow, use the tomorrow event instead (first leg departs today, main duty reports tomorrow)
+      const laterStartHour = parseInt(formatInTimeZone(new Date(laterToday.start_time), baseTimezone, "HH"), 10);
+      const tomorrowStr = formatInTimeZone(addDays(new Date(), 1), baseTimezone, "yyyy-MM-dd");
+      const firstTomorrow = upcoming.find((e) => {
+        const startStr = formatInTimeZone(new Date(e.start_time), baseTimezone, "yyyy-MM-dd");
+        return startStr === tomorrowStr;
+      });
+      if (laterStartHour < 12 && firstTomorrow) {
+        return { event: firstTomorrow, label: "next_duty", hasSchedule };
+      }
       return { event: laterToday, label: "later_today", hasSchedule };
     }
 

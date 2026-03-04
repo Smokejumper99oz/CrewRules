@@ -5,6 +5,8 @@ import { PortalScheduleUpcoming } from "@/components/portal-schedule-upcoming";
 import { PortalMonthStats } from "@/components/portal-month-stats-wrapper";
 import { DashboardAskBox } from "@/components/dashboard-ask-box";
 
+export const dynamic = "force-dynamic";
+
 const TENANT = "frontier";
 const PORTAL = "pilots";
 const ASK_HREF = `/${TENANT}/${PORTAL}/portal/ask`;

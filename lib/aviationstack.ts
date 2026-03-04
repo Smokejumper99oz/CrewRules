@@ -71,7 +71,7 @@ export async function fetchFlightsFromAviationStack(
   let result: FetchFlightsResult;
 
   if (daysAhead === 0) {
-    result = await fetchTimetable(apiKey, origin, destination, date, originTz, destTz);
+    result = await fetchFlightsSameDay(apiKey, origin, destination, date, originTz, destTz);
   } else if (daysAhead > 0) {
     result = await fetchFlightsFuture(apiKey, origin, destination, date, originTz, destTz);
   } else {
@@ -138,6 +138,69 @@ async function fetchTimetable(
         origin: (f?.departure?.iataCode ?? origin).toUpperCase(),
         destination: (f?.arrival?.iataCode ?? destination).toUpperCase(),
         durationMinutes: depUtc && arrUtc ? calculateDurationMinutes(depUtc, arrUtc) : 0,
+      };
+    })
+    .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());
+
+  return { flights };
+}
+
+/**
+ * Same-day flights using /v1/flights with city-pair filtering (dep_iata + arr_iata).
+ * Returns all flights for the given origin→destination on the given date.
+ */
+async function fetchFlightsSameDay(
+  apiKey: string,
+  origin: string,
+  destination: string,
+  date: string,
+  originTz: string,
+  destTz: string
+): Promise<FetchFlightsResult> {
+  const url = new URL("https://api.aviationstack.com/v1/flights");
+  url.searchParams.set("access_key", apiKey);
+  url.searchParams.set("dep_iata", origin);
+  url.searchParams.set("arr_iata", destination);
+  url.searchParams.set("flight_date", date);
+  url.searchParams.set("limit", "100");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    cache: "no-store",
+    headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist)" },
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`AviationStack flights (same-day) failed: ${res.status} - ${body.slice(0, 200)}`);
+  }
+
+  const json = await res.json();
+  if (!json.data) return { flights: [] };
+
+  const flights: CommuteFlight[] = (json.data as any[])
+    .filter((f) => {
+      const depTime = f?.departure?.scheduled ?? "";
+      const arrTime = f?.arrival?.scheduled ?? "";
+      return !!depTime && !!arrTime;
+    })
+    .map((f) => {
+      const depTime = f?.departure?.scheduled ?? "";
+      const arrTime = f?.arrival?.scheduled ?? "";
+      const carrier = (f?.airline?.iataCode ?? "").toUpperCase();
+      const number = f?.flight?.number ?? "";
+      const flightIata = f?.flight?.iata ?? "";
+      const flightNumber =
+        carrier && number ? `${carrier}${number}` : flightIata ? flightIata.toUpperCase() : "";
+
+      return {
+        carrier,
+        flightNumber,
+        departureTime: depTime,
+        arrivalTime: arrTime,
+        origin: (f?.departure?.iataCode ?? f?.departure?.iata ?? origin).toUpperCase(),
+        destination: (f?.arrival?.iataCode ?? f?.arrival?.iata ?? destination).toUpperCase(),
+        durationMinutes: depTime && arrTime ? calculateDurationMinutes(depTime, arrTime) : 0,
       };
     })
     .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());

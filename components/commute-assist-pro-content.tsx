@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
-import { subMinutes, subDays } from "date-fns";
+import { subMinutes, subDays, addDays } from "date-fns";
 import type { CommuteFlightOption } from "@/lib/commute/providers/types";
 import { getCommuteFlights } from "@/app/frontier/pilots/portal/commute/actions";
 import type { CommuteFlight } from "@/lib/aviationstack";
@@ -76,7 +76,7 @@ function CommuteFlightCard({
 }) {
   const dep = new Date(opt.depUtc);
   const arr = new Date(opt.arrUtc);
-  const dateStr = formatInTimeZone(dep, originTz, "MM/dd/yyyy");
+  const dateStr = formatInTimeZone(dep, originTz, "EEE • MMM d");
   const depTime = formatInTimeZone(dep, originTz, "HH:mm");
   const arrTime = formatInTimeZone(arr, destTz, "HH:mm");
   const flightLabel = `${opt.carrier} ${opt.flight ?? ""}`.trim();
@@ -85,7 +85,7 @@ function CommuteFlightCard({
     <div
       className={`rounded-lg border border-slate-700/60 bg-slate-900/40 pl-3 pr-3 py-2.5 ${riskBorderStyles[opt.risk]}`}
     >
-      <div className="text-[10px] text-slate-500">{dateStr}</div>
+      <div className="text-sm font-semibold text-slate-400">{dateStr}</div>
       <div className="flex items-baseline gap-2 mt-1">
         <span className="text-2xl font-bold tabular-nums text-slate-200">{depTime}</span>
         <span className="text-[11px] text-slate-500">{origin} → {destination}</span>
@@ -113,7 +113,7 @@ function CommuteFlightRow({
 }) {
   const dep = new Date(opt.depUtc);
   const arr = new Date(opt.arrUtc);
-  const dateStr = formatInTimeZone(dep, originTz, "MM/dd/yyyy");
+  const dateStr = formatInTimeZone(dep, originTz, "EEE • MMM d");
   const depTime = formatInTimeZone(dep, originTz, "HH:mm");
   const arrTime = formatInTimeZone(arr, destTz, "HH:mm");
   const durMin = minutesBetween(opt.depUtc, opt.arrUtc);
@@ -130,13 +130,14 @@ function CommuteFlightRow({
           <span className="text-xl font-bold tabular-nums text-slate-200">{depTime}</span>
           <span className="text-xl font-bold tabular-nums text-slate-200">{arrTime}</span>
         </div>
-        <div className="text-[11px] text-slate-500 mt-0.5">
-          {dateStr} • {durStr} • {flightLabel}
+        <div className="text-sm font-semibold text-slate-400 mt-0.5">
+          <span>{dateStr}</span>
+          <span className="font-normal text-slate-500"> • {durStr} • {flightLabel}</span>
         </div>
       </div>
       {/* Desktop: grid DATE | DEP | ARR | DUR | FLT */}
       <div className="hidden md:grid md:grid-cols-[auto_1fr_1fr_auto_auto] md:items-center md:gap-4">
-        <span className="text-slate-500 text-xs">{dateStr}</span>
+        <span className="text-slate-400 text-sm font-semibold">{dateStr}</span>
         <span className="text-slate-200 font-semibold tabular-nums">{depTime}</span>
         <span className="text-slate-200 font-semibold tabular-nums">{arrTime}</span>
         <span className="text-slate-500 text-xs">{durStr}</span>
@@ -182,13 +183,22 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
   const dutyStart = new Date(event.start_time);
   const dutyOk = !Number.isNaN(dutyStart.getTime());
 
-  // Compute duty date/time in base timezone; use report_time if available
+  // Compute duty date/time in base timezone; use report_time if available.
+  // When duty spans midnight (event starts late night, report is early morning), use the next
+  // calendar day as the report date so commute = day prior to report, not day prior to event start.
   const dutyDateTime = (() => {
     if (!dutyOk) return new Date();
     if (event.report_time?.trim()) {
-      const dutyDateStr = formatInTimeZone(dutyStart, baseTz, "yyyy-MM-dd");
+      const startDateStr = formatInTimeZone(dutyStart, baseTz, "yyyy-MM-dd");
+      const startHour = parseInt(formatInTimeZone(dutyStart, baseTz, "HH"), 10);
       const reportTime = event.report_time.length === 5 ? `${event.report_time}:00` : event.report_time;
-      return fromZonedTime(`${dutyDateStr}T${reportTime}`, baseTz);
+      const reportHour = parseInt(reportTime.slice(0, 2), 10) || 0;
+      // Report is next day if event starts late (>=18) and report is early morning (<12)
+      const reportDateStr =
+        startHour >= 18 && reportHour < 12
+          ? formatInTimeZone(addDays(dutyStart, 1), baseTz, "yyyy-MM-dd")
+          : startDateStr;
+      return fromZonedTime(`${reportDateStr}T${reportTime}`, baseTz);
     }
     return dutyStart;
   })();
@@ -404,7 +414,8 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
   }
 
   const { showInfo, arriveByFormatted } = commuteMeta;
-  const commuteDateObj = new Date(commuteDate);
+  // Parse commuteDate as local date in baseTz (noon avoids UTC-midnight → wrong-day display)
+  const commuteDateObj = fromZonedTime(`${commuteDate}T12:00:00`, baseTz);
   const commuteDateFormatted = formatInTimeZone(commuteDateObj, baseTz, "EEE MMM d, yyyy");
   const tzMissing = originTz === "UTC" || destTz === "UTC";
   const commuteWindowLabel = direction === "to_base"
