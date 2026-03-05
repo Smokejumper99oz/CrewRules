@@ -274,11 +274,25 @@ async function fetchFlightsSameDay(
     .map((f) => {
       const depTime = f?.departure?.scheduled ?? "";
       const arrTime = f?.arrival?.scheduled ?? "";
-      const carrier = (f?.airline?.iataCode ?? "").toUpperCase();
-      const number = f?.flight?.number ?? "";
-      const flightIata = f?.flight?.iata ?? "";
-      const flightNumber =
-        carrier && number ? `${carrier}${number}` : flightIata ? flightIata.toUpperCase() : "";
+      let carrier = (f?.airline?.iataCode ?? "").toUpperCase();
+      let number = String(f?.flight?.number ?? "").trim();
+      const flightIata = (f?.flight?.iata ?? "").toUpperCase();
+      let flightNumber =
+        carrier && number ? `${carrier}${number}` : flightIata ? flightIata : "";
+
+      // When carrier is empty but flightIata is "B62751", parse carrier and number
+      if (!carrier && flightNumber) {
+        const m = flightNumber.match(/^([A-Z]{2})(\d+)$/);
+        if (m) {
+          carrier = m[1];
+          flightNumber = carrier + m[2];
+        }
+      }
+      // When number already starts with carrier (e.g. number="B62751", carrier="B6"), strip it
+      if (carrier && number && number.toUpperCase().startsWith(carrier)) {
+        number = number.slice(carrier.length).trim() || number;
+        flightNumber = carrier + number;
+      }
 
       return {
         carrier,

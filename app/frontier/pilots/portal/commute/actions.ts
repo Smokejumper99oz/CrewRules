@@ -9,7 +9,7 @@ import { getRouteTzs } from "@/lib/airports";
 import type { CommuteFlight } from "@/lib/aviationstack";
 
 /** Cache version for commute_flight_cache. Bump to purge old entries (e.g. 3-flight cache). */
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 
 type ProviderResult<T> =
   | { ok: true; data: T }
@@ -21,6 +21,18 @@ async function safe<T>(fn: () => Promise<T>): Promise<ProviderResult<T>> {
   } catch (e) {
     return { ok: false, error: e };
   }
+}
+
+/** Timeout in ms for each provider fetch. Prevents "Failed to fetch" when APIs hang. */
+const PROVIDER_TIMEOUT_MS = 20_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Provider timeout after ${ms}ms`)), ms)
+    ),
+  ]);
 }
 
 /** Dedupe key: carrier + flightNumber + dep time (same flight = same key). */
@@ -152,11 +164,19 @@ export async function getCommuteFlights(input: {
     try {
       const aerodataboxSkipped = !process.env.RAPIDAPI_KEY;
       const asPromise = safe(() =>
-        fetchFlightsFromAviationStack(origin, destination, input.date, { noCache: true })
+        withTimeout(
+          fetchFlightsFromAviationStack(origin, destination, input.date, { noCache: true }),
+          PROVIDER_TIMEOUT_MS
+        )
       );
       const adbPromise = aerodataboxSkipped
         ? Promise.resolve({ ok: true as const, data: { flights: [] as CommuteFlight[] } })
-        : safe(() => fetchFlightsFromAerodataBox(origin, destination, input.date));
+        : safe(() =>
+            withTimeout(
+              fetchFlightsFromAerodataBox(origin, destination, input.date),
+              PROVIDER_TIMEOUT_MS
+            )
+          );
 
       const [asRes, adbRes] = await Promise.all([asPromise, adbPromise]);
 
@@ -298,11 +318,19 @@ export async function getCommuteFlights(input: {
     const { originTz, destTz } = await getRouteTzs(origin, destination);
     const aerodataboxSkipped = !process.env.RAPIDAPI_KEY;
     const asPromise = safe(() =>
-      fetchFlightsFromAviationStack(origin, destination, input.date)
+      withTimeout(
+        fetchFlightsFromAviationStack(origin, destination, input.date),
+        PROVIDER_TIMEOUT_MS
+      )
     );
     const adbPromise = aerodataboxSkipped
       ? Promise.resolve({ ok: true as const, data: { flights: [] as CommuteFlight[] } })
-      : safe(() => fetchFlightsFromAerodataBox(origin, destination, input.date));
+      : safe(() =>
+          withTimeout(
+            fetchFlightsFromAerodataBox(origin, destination, input.date),
+            PROVIDER_TIMEOUT_MS
+          )
+        );
 
     const [asRes, adbRes] = await Promise.all([asPromise, adbPromise]);
 

@@ -16,6 +16,34 @@ function fmtHM(totalMinutes: number) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+function escapeRegExp(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Format carrier + flight as "XX NNNN" with a space (e.g. B6 2751, F9 1234). */
+function formatFlightLabel(carrier: string, flight: string | undefined): string {
+  let c = (carrier ?? "").trim().toUpperCase();
+  let raw = (flight ?? "").trim();
+  // When carrier is empty but flight is combined (e.g. "B62751"), parse it
+  if (!c && raw) {
+    const m = raw.match(/^([A-Z]{2})(\d+)$/i);
+    if (m) {
+      c = m[1].toUpperCase();
+      raw = m[2];
+    }
+  }
+  const numPart = c
+    ? raw.replace(new RegExp(`^${escapeRegExp(c)}`, "i"), "").trim() || raw
+    : raw;
+  return c && numPart ? `${c} ${numPart}` : c || numPart;
+}
+
+/** Strip carrier code from flight number (e.g. B62751 → 2751). */
+function stripCarrierFromFlight(flightNumber: string, carrier: string): string {
+  if (!carrier) return flightNumber;
+  return flightNumber.replace(new RegExp(`^${escapeRegExp(carrier)}`, "i"), "").trim() || flightNumber;
+}
+
 function minutesBetween(a: string, b: string) {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000);
 }
@@ -142,8 +170,8 @@ function TimeBlock({
   if (showDelay) {
     return (
       <span className={`flex flex-col items-baseline gap-0 ${className}`}>
-        <span className="line-through text-amber-400/90 tabular-nums text-[0.9em]">{scheduled}</span>
-        <span className="text-amber-400 font-bold tabular-nums">{actual}</span>
+        <span className="line-through text-amber-400/60 opacity-70 tabular-nums text-[0.85em]">{scheduled}</span>
+        <span className="text-amber-300 font-bold tracking-wide tabular-nums">{actual}</span>
       </span>
     );
   }
@@ -174,7 +202,7 @@ function CommuteFlightCard({
   const arrSched = formatInTimeZone(arr, arrTz, "HH:mm");
   const durMin = minutesBetween(opt.depUtc, opt.arrUtc);
   const durStr = fmtHM(durMin);
-  const flightLabel = `${opt.carrier} ${opt.flight ?? ""}`.trim();
+  const flightLabel = formatFlightLabel(opt.carrier, opt.flight);
   const delayInfo = computeDelayInfo(opt, originTz, destTz);
 
   const depDisplay = delayInfo.dep ?? { scheduled: depSched, actual: undefined };
@@ -184,7 +212,21 @@ function CommuteFlightCard({
     <div
       className={`rounded-lg border border-slate-700/60 bg-slate-900/40 pl-3 pr-3 py-2.5 ${riskBorderStyles[opt.risk]}`}
     >
-      <div className="text-sm font-semibold text-slate-400">{dateStr}</div>
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold text-slate-400">{dateStr}</span>
+        <span
+          className={[
+            "px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide uppercase",
+            delayInfo.cancelled
+              ? "bg-red-500/20 text-red-400 border border-red-500/40"
+              : (delayInfo.dep || delayInfo.arr)
+                ? "bg-amber-500/20 text-amber-400 border border-amber-500/40"
+                : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40",
+          ].join(" ")}
+        >
+          {delayInfo.cancelled ? "Cancelled" : (delayInfo.dep || delayInfo.arr) ? "Delayed" : "On time"}
+        </span>
+      </div>
       <div className="flex items-baseline gap-2 mt-1">
         <TimeBlock
           scheduled={depDisplay.scheduled}
@@ -193,7 +235,9 @@ function CommuteFlightCard({
           isCancelled={delayInfo.cancelled}
           className="text-2xl"
         />
-        <span className="text-[11px] text-slate-500">{origin} → {destination}</span>
+        <span className="text-[11px] tabular-nums font-medium text-slate-300 bg-slate-800/50 border border-slate-700/40 px-1.5 py-0.5 rounded">
+          {origin} → {destination}
+        </span>
         <TimeBlock
           scheduled={arrDisplay.scheduled}
           actual={arrDisplay.actual}
@@ -202,9 +246,13 @@ function CommuteFlightCard({
           className="text-2xl"
         />
       </div>
-      <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
-        <span>{flightLabel}</span>
-        {delayInfo.cancelled && <span className="text-red-400 font-semibold">Cancelled</span>}
+      <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+        <span className="font-mono tabular-nums font-medium text-slate-300">{flightLabel}</span>
+        {delayInfo.cancelled && (
+          <span className="ml-1 px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-semibold text-[10px] tracking-wide uppercase">
+            Cancelled
+          </span>
+        )}
         <span className="text-slate-600">•</span>
         <span>Flight time {durStr}</span>
       </div>
@@ -236,7 +284,7 @@ function CommuteFlightRow({
   const arrSched = formatInTimeZone(arr, arrTz, "HH:mm");
   const durMin = minutesBetween(opt.depUtc, opt.arrUtc);
   const durStr = fmtHM(durMin);
-  const flightLabel = `${opt.carrier} ${opt.flight ?? ""}`.trim();
+  const flightLabel = formatFlightLabel(opt.carrier, opt.flight);
   const delayInfo = computeDelayInfo(opt, originTz, destTz);
 
   const depDisplay = delayInfo.dep ?? { scheduled: depSched, actual: undefined };
@@ -244,18 +292,39 @@ function CommuteFlightRow({
 
   const flightLine = (
     <>
-      {flightLabel}
+      <span className="font-mono tabular-nums font-medium text-slate-300">{flightLabel}</span>
       {delayInfo.cancelled && <><span className="text-slate-500"> </span><span className="text-red-400 font-semibold">Cancelled</span></>}
     </>
+  );
+
+  const statusBadge = (
+    <span
+      className={[
+        "px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide uppercase",
+        delayInfo.cancelled
+          ? "bg-red-500/20 text-red-400 border border-red-500/40"
+          : (delayInfo.dep || delayInfo.arr)
+            ? "bg-amber-500/20 text-amber-400 border border-amber-500/40"
+            : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40",
+      ].join(" ")}
+    >
+      {delayInfo.cancelled ? "Cancelled" : (delayInfo.dep || delayInfo.arr) ? "Delayed" : "On time"}
+    </span>
+  );
+
+  const routePill = (
+    <span className="text-[11px] tabular-nums font-medium text-slate-300 bg-slate-800/50 border border-slate-700/40 px-1.5 py-0.5 rounded">
+      {origin} → {destination}
+    </span>
   );
 
   return (
     <div
       className={`rounded border border-slate-700/60 bg-slate-900/40 pl-3 pr-3 py-2 ${riskBorderStyles[opt.risk]}`}
     >
-      {/* Mobile: Row 1 — DEP left, ARR right; Row 2 — date • dur • carrier flt */}
+      {/* Mobile: Row 1 — DEP, route, ARR; Row 2 — date, status, dur, flight */}
       <div className="md:hidden">
-        <div className="flex justify-between items-baseline">
+        <div className="flex flex-wrap items-baseline gap-2">
           <TimeBlock
             scheduled={depDisplay.scheduled}
             actual={depDisplay.actual}
@@ -263,6 +332,7 @@ function CommuteFlightRow({
             isCancelled={delayInfo.cancelled}
             className="text-xl"
           />
+          {routePill}
           <TimeBlock
             scheduled={arrDisplay.scheduled}
             actual={arrDisplay.actual}
@@ -271,30 +341,39 @@ function CommuteFlightRow({
             className="text-xl"
           />
         </div>
-        <div className="text-sm font-semibold text-slate-400 mt-0.5">
+        <div className="text-sm font-semibold text-slate-400 mt-1 flex flex-wrap items-center gap-1.5">
           <span>{dateStr}</span>
-          <span className="font-normal text-slate-500"> • Flight time {durStr} • {flightLine}</span>
+          {statusBadge}
+          <span className="font-normal text-slate-500">• Flight time {durStr} • {flightLine}</span>
         </div>
       </div>
-      {/* Desktop: grid DATE | DEP | ARR | DUR | FLT */}
-      <div className="hidden md:grid md:grid-cols-[auto_1fr_1fr_auto_auto] md:items-center md:gap-4">
-        <span className="text-slate-400 text-sm font-semibold">{dateStr}</span>
-        <TimeBlock
-          scheduled={depDisplay.scheduled}
-          actual={depDisplay.actual}
-          isDelayed={!!delayInfo.dep}
-          isCancelled={delayInfo.cancelled}
-          className="font-semibold"
-        />
-        <TimeBlock
-          scheduled={arrDisplay.scheduled}
-          actual={arrDisplay.actual}
-          isDelayed={!!delayInfo.arr}
-          isCancelled={delayInfo.cancelled}
-          className="font-semibold"
-        />
-        <span className="text-slate-500 text-xs">Flight time {durStr}</span>
-        <span className="text-slate-500 text-xs flex items-center gap-1.5">{flightLine}</span>
+      {/* Desktop: date+status left | DEP route ARR centered (like Cards) | duration+flight right */}
+      <div className="hidden md:flex md:items-center md:justify-between">
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-slate-400 text-sm font-semibold">{dateStr}</span>
+          {statusBadge}
+        </div>
+        <div className="flex items-center gap-4 flex-1 justify-center min-w-0">
+          <TimeBlock
+            scheduled={depDisplay.scheduled}
+            actual={depDisplay.actual}
+            isDelayed={!!delayInfo.dep}
+            isCancelled={delayInfo.cancelled}
+            className="font-semibold"
+          />
+          {routePill}
+          <TimeBlock
+            scheduled={arrDisplay.scheduled}
+            actual={arrDisplay.actual}
+            isDelayed={!!delayInfo.arr}
+            isCancelled={delayInfo.cancelled}
+            className="font-semibold"
+          />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-slate-500 text-xs">Flight time {durStr}</span>
+          <span className="text-slate-500 text-xs flex items-center gap-1.5">{flightLine}</span>
+        </div>
       </div>
     </div>
   );
@@ -464,7 +543,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
           options.push({
             id: `${f.flightNumber}-${f.departureTime}-${i}`,
             carrier: f.carrier,
-            flight: f.flightNumber.replace(f.carrier, "").trim() || f.flightNumber,
+            flight: stripCarrierFromFlight(f.flightNumber, f.carrier),
             depUtc,
             arrUtc,
             nonstop: true,
