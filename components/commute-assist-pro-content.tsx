@@ -83,6 +83,7 @@ function sortFlights(
 
 type Props = {
   event: { start_time: string; end_time?: string; report_time?: string | null; route?: string | null };
+  label?: "on_duty" | "later_today" | "next_duty";
   profile: NonNullable<Profile>;
   displaySettings: ScheduleDisplaySettings;
   tenant: string;
@@ -297,7 +298,7 @@ function CommuteFlightCard({
           <>
             <span className="text-slate-600">•</span>
             <span className="tabular-nums">
-              {[opt.dep_gate && `Dep ${opt.dep_gate}`, opt.arr_gate && `Arr ${opt.arr_gate}`, opt.aircraft_type].filter(Boolean).join(" • ")}
+              {[opt.dep_gate && `DEP ${opt.dep_gate}`, opt.arr_gate && `ARR ${opt.arr_gate}`, opt.aircraft_type].filter(Boolean).join(" • ")}
             </span>
           </>
         )}
@@ -374,22 +375,28 @@ function CommuteFlightRow({
     >
       {/* Mobile: Row 1 — DEP, route, ARR; Row 2 — date, status, dur, flight */}
       <div className="md:hidden">
-        <div className="flex flex-wrap items-baseline gap-2">
-          <TimeBlock
-            scheduled={depDisplay.scheduled}
-            actual={depDisplay.actual}
-            isDelayed={!!delayInfo.dep}
-            isCancelled={delayInfo.cancelled}
-            className="text-xl"
-          />
-          {routePill}
-          <TimeBlock
-            scheduled={arrDisplay.scheduled}
-            actual={arrDisplay.actual}
-            isDelayed={!!delayInfo.arr}
-            isCancelled={delayInfo.cancelled}
-            className="text-xl"
-          />
+        <div className="grid grid-cols-[4rem_auto_4rem] gap-2 items-center">
+          <div className="flex flex-col items-start">
+            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">DEP</span>
+            <TimeBlock
+              scheduled={depDisplay.scheduled}
+              actual={depDisplay.actual}
+              isDelayed={!!delayInfo.dep}
+              isCancelled={delayInfo.cancelled}
+              className="text-xl"
+            />
+          </div>
+          <div className="flex justify-center">{routePill}</div>
+          <div className="flex flex-col items-end">
+            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">ARR</span>
+            <TimeBlock
+              scheduled={arrDisplay.scheduled}
+              actual={arrDisplay.actual}
+              isDelayed={!!delayInfo.arr}
+              isCancelled={delayInfo.cancelled}
+              className="text-xl"
+            />
+          </div>
         </div>
         <div className="text-sm font-semibold text-slate-400 mt-1 flex flex-wrap items-center gap-1.5">
           <span>{dateStr}</span>
@@ -397,50 +404,56 @@ function CommuteFlightRow({
           <span className="font-normal text-slate-500">
             • Flight time {durStr}
             {(opt.dep_gate || opt.arr_gate || opt.aircraft_type) && (
-              <> • {[opt.dep_gate && `Dep ${opt.dep_gate}`, opt.arr_gate && `Arr ${opt.arr_gate}`, opt.aircraft_type].filter(Boolean).join(" • ")}</>
+              <> • {[opt.dep_gate && `DEP ${opt.dep_gate}`, opt.arr_gate && `ARR ${opt.arr_gate}`, opt.aircraft_type].filter(Boolean).join(" • ")}</>
             )}
             {" • "}{flightLine}
           </span>
         </div>
       </div>
-      {/* Desktop: date+status left | DEP route ARR centered (like Cards) | duration+flight right */}
-      <div className="hidden md:flex md:items-center md:justify-between">
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-slate-400 text-sm font-semibold">{dateStr}</span>
+      {/* Desktop: date+status left | DEP route ARR grid (aligned) | duration+flight right */}
+      <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-slate-400 text-sm font-semibold shrink-0">{dateStr}</span>
           {statusBadge}
         </div>
-        <div className="flex items-center gap-4 flex-1 justify-center min-w-0">
-          <TimeBlock
-            scheduled={depDisplay.scheduled}
-            actual={depDisplay.actual}
-            isDelayed={!!delayInfo.dep}
-            isCancelled={delayInfo.cancelled}
-            className="font-semibold"
-          />
-          {routePill}
-          <TimeBlock
-            scheduled={arrDisplay.scheduled}
-            actual={arrDisplay.actual}
-            isDelayed={!!delayInfo.arr}
-            isCancelled={delayInfo.cancelled}
-            className="font-semibold"
-          />
+        <div className="grid grid-cols-[5rem_6.5rem_5rem] gap-3 items-center justify-items-center">
+          <div className="flex flex-col items-start w-full min-w-0">
+            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">DEP</span>
+            <TimeBlock
+              scheduled={depDisplay.scheduled}
+              actual={depDisplay.actual}
+              isDelayed={!!delayInfo.dep}
+              isCancelled={delayInfo.cancelled}
+              className="text-lg font-semibold"
+            />
+          </div>
+          <div className="flex justify-center">{routePill}</div>
+          <div className="flex flex-col items-end w-full min-w-0">
+            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">ARR</span>
+            <TimeBlock
+              scheduled={arrDisplay.scheduled}
+              actual={arrDisplay.actual}
+              isDelayed={!!delayInfo.arr}
+              isCancelled={delayInfo.cancelled}
+              className="text-lg font-semibold"
+            />
+          </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-slate-500 text-xs">Flight time {durStr}</span>
+        <div className="flex items-center gap-2 min-w-0 justify-end">
+          <span className="text-slate-500 text-xs shrink-0">Flight time {durStr}</span>
           {(opt.dep_gate || opt.arr_gate || opt.aircraft_type) && (
-            <span className="text-slate-500 text-xs tabular-nums">
-              {[opt.dep_gate && `Dep ${opt.dep_gate}`, opt.arr_gate && `Arr ${opt.arr_gate}`, opt.aircraft_type].filter(Boolean).join(" • ")}
+            <span className="text-slate-500 text-xs tabular-nums shrink-0">
+              {[opt.dep_gate && `DEP ${opt.dep_gate}`, opt.arr_gate && `ARR ${opt.arr_gate}`, opt.aircraft_type].filter(Boolean).join(" • ")}
             </span>
           )}
-          <span className="text-slate-500 text-xs flex items-center gap-1">{flightLine}</span>
+          <span className="text-slate-500 text-xs flex items-center gap-1 shrink-0">{flightLine}</span>
         </div>
       </div>
     </div>
   );
 }
 
-export function CommuteAssistProContent({ event, profile, displaySettings, tenant, portal }: Props) {
+export function CommuteAssistProContent({ event, label, profile, displaySettings, tenant, portal }: Props) {
   const [commuteError, setCommuteError] = useState<string | null>(null);
   const [commuteGroups, setCommuteGroups] = useState<Record<string, CommuteFlightOption[]>>({
     day_prior: [],
@@ -472,7 +485,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
   const hasValidBase = !!baseAirport && baseAirport.length === 3;
   const canUseCommute = hasValidHome && hasValidBase;
 
-  const [direction, setDirection] = useState<"to_base" | "to_home">("to_base");
+  const direction = label === "on_duty" ? "to_home" : "to_base";
   const dutyStart = new Date(event.start_time);
   const dutyOk = !Number.isNaN(dutyStart.getTime());
 
@@ -531,7 +544,23 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
   /** Apply flights + metadata to state. Reused for API response and sessionStorage restore. */
   const applyFlightsToState = useCallback(
     (flights: CommuteFlight[], originTzVal: string, destTzVal: string, fetchedAtVal: string | null, noticeVal: string | null) => {
-      const reportAtIso = dutyOk ? dutyDateTime.toISOString() : `${dutyDateBase}T12:00:00Z`;
+      const dutyStart = new Date(event.start_time);
+      const dutyOkLocal = !Number.isNaN(dutyStart.getTime());
+      const dutyDateBaseLocal = formatInTimeZone(dutyStart, baseTz, "yyyy-MM-dd");
+      let reportAtIso: string;
+      if (dutyOkLocal && event.report_time?.trim()) {
+        const startDateStr = formatInTimeZone(dutyStart, baseTz, "yyyy-MM-dd");
+        const startHour = parseInt(formatInTimeZone(dutyStart, baseTz, "HH"), 10);
+        const reportTime = event.report_time.length === 5 ? `${event.report_time}:00` : event.report_time;
+        const reportHour = parseInt(reportTime.slice(0, 2), 10) || 0;
+        const reportDateStr =
+          startHour >= 18 && reportHour < 12
+            ? formatInTimeZone(addDays(dutyStart, 1), baseTz, "yyyy-MM-dd")
+            : startDateStr;
+        reportAtIso = fromZonedTime(`${reportDateStr}T${reportTime}`, baseTz).toISOString();
+      } else {
+        reportAtIso = dutyOkLocal ? dutyStart.toISOString() : `${dutyDateBaseLocal}T12:00:00Z`;
+      }
       const stripOffset = (s: string) => s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
       const isReturn = direction === "to_home";
       const options: CommuteFlightOption[] = [];
@@ -596,7 +625,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
       const hasLiveTiming = options.some(
         (o) => o.arr_estimated_raw || o.arr_actual_raw || o.dep_estimated_raw || o.dep_actual_raw
       );
-      const arriveByFormatted = arriveBy ? formatInTimeZone(arriveBy, baseTz, "HH:mm") : "";
+      const arriveByFormatted = dutyOkLocal ? formatInTimeZone(subMinutes(dutyStart, arrivalBuffer), baseTz, "HH:mm") : "";
       setOriginTz(originTzVal);
       setDestTz(destTzVal);
       setSource(hasLiveTiming ? "live" : "scheduled");
@@ -607,7 +636,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
       setDayPriorPage(1);
       setSameDayPage(1);
     },
-    [direction, dutyOk, dutyDateTime, dutyDateBase, arrivalBuffer, arriveBy, baseTz]
+    [direction, dutyOk, event.start_time, event.report_time, baseTz, arrivalBuffer]
   );
 
   const loadFlights = useCallback(
@@ -651,7 +680,8 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
           forceRefresh: opts?.forceRefresh ?? false,
         });
 
-        const arriveByFormatted = arriveBy ? formatInTimeZone(arriveBy, baseTz, "HH:mm") : "";
+        const dutyStart = new Date(event.start_time);
+        const arriveByFormatted = dutyOk ? formatInTimeZone(subMinutes(dutyStart, arrivalBuffer), baseTz, "HH:mm") : "";
         const showInfo = dutyOk;
 
         if (res.ok) {
@@ -690,9 +720,10 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
       homeAirport,
       dutyEndAirport,
       baseAirport,
-      arriveBy,
+      event.start_time,
       baseTz,
       dutyOk,
+      arrivalBuffer,
       applyFlightsToState,
     ]
   );
@@ -704,7 +735,8 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
         setCommuteError("Commute Assist temporarily unavailable.");
       });
     }
-  }, [origin, destination, commuteDate, direction, canUseCommute, noCommuteNeeded, loadFlights]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadFlights omitted to avoid infinite loop; we re-run when query params change
+  }, [origin, destination, commuteDate, direction, canUseCommute, noCommuteNeeded]);
 
   // Tick every 60s when we have lastFetchedAt, so "Updated just now" transitions to timestamp
   useEffect(() => {
@@ -789,30 +821,14 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
   const commuteDateFormatted = formatInTimeZone(commuteDateObj, baseTz, "EEE MMM d, yyyy");
   const tzMissing = originTz === "UTC" || destTz === "UTC";
   const commuteWindowLabel = direction === "to_base"
-    ? (dutyOk ? "Commute window: Day prior" : "Search window: Same-day flights")
-    : (dutyEndDateBase ? "Commute window: Day of release" : "Search window: Same-day flights");
+    ? (dutyOk ? "Commute Window: Day prior" : "Search window: Same-day flights")
+    : (dutyEndDateBase ? "Commute Window: Day of release" : "Search window: Same-day flights");
 
   return (
     <div className="mt-3 space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="flex rounded border border-slate-700/60 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setDirection("to_base")}
-              className={`px-2 py-1 text-[11px] ${direction === "to_base" ? "bg-slate-600 text-white" : "text-slate-400 hover:bg-slate-800/60"}`}
-            >
-              To base
-            </button>
-            <button
-              type="button"
-              onClick={() => setDirection("to_home")}
-              className={`px-2 py-1 text-[11px] ${direction === "to_home" ? "bg-slate-600 text-white" : "text-slate-400 hover:bg-slate-800/60"}`}
-            >
-              Return home
-            </button>
-          </div>
-          <p className="text-sm text-slate-300">
+          <p className="text-base font-medium text-slate-300">
             {origin} → {destination}
           </p>
         </div>
@@ -871,14 +887,14 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
       {showInfo ? (
         <>
           <p className="text-xs text-slate-400">
-            Commute date: {commuteDateFormatted}
+            Commute Date: {commuteDateFormatted}
           </p>
           <p className="text-xs text-slate-400">
             {commuteWindowLabel}
           </p>
           {direction === "to_base" && (
             <p className="text-xs text-slate-400">
-              Arrive by: {arriveByFormatted} (base)
+              Arrive by: {arriveByFormatted} ({(baseAirport ?? "base").toUpperCase()})
             </p>
           )}
         </>
