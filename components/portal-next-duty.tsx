@@ -97,7 +97,7 @@ export async function PortalNextDuty({ tenant, portal }: { tenant: string; porta
             ) : (
               <CommuteAssistProContent
                 event={event}
-                label={label}
+                label={label ?? undefined}
                 profile={profile!}
                 displaySettings={displaySettings}
                 tenant={tenant}
