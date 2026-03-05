@@ -141,7 +141,7 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
             <div className="space-y-2">
               <div>
                 <p className="text-2xl font-normal text-amber-300/80">
-                  {formatMinutesToHhMm(stats.creditAfterGuaranteeMinutes ?? 0)}
+                  {formatMinutesToHhMm(stats.creditMinutes ?? 0)}
                 </p>
                 <p className="text-xs text-slate-300">Credit</p>
               </div>

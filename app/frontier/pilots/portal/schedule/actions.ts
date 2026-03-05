@@ -5,7 +5,11 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, isAdmin, isProActive } from "@/lib/profile";
 import { getTenantSourceTimezone, getReserveCreditPerDay } from "@/lib/tenant-config";
-import { computeTripCredit, extractPairingKey, expandEventToDaySegments, addDay } from "@/lib/schedule-time";
+import {
+  computeTripCredit,
+  expandEventToDaySegments,
+  type DaySegment,
+} from "@/lib/schedule-time";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getPayScale } from "@/lib/tenant-settings";
 import { payYearFromDOH } from "@/lib/pay-utils";
@@ -35,6 +39,26 @@ function inferEventType(summary: string): "trip" | "reserve" | "vacation" | "off
   if (isReserveAssignmentByTitle(s)) return "trip";
   if (/\b(RES|RSA|RSB|RSC|RSD|RDE|RSE|RSL)\b|Reserve/i.test(s)) return "reserve";
   return "trip";
+}
+
+function maxConsecutiveDateStrDays(dateStrs: Set<string>): number {
+  const sorted = Array.from(dateStrs).sort(); // YYYY-MM-DD sorts correctly
+  let best = 0;
+  let cur = 0;
+  let prev: Date | null = null;
+
+  for (const d of sorted) {
+    const dt = new Date(d + "T00:00:00Z");
+    if (prev) {
+      const diffDays = Math.round((dt.getTime() - prev.getTime()) / 86400000);
+      cur = diffDays === 1 ? cur + 1 : 1;
+    } else {
+      cur = 1;
+    }
+    if (cur > best) best = cur;
+    prev = dt;
+  }
+  return best;
 }
 
 /** True if trip immediately follows a reserve event (short call → pairing). */
@@ -493,8 +517,14 @@ export type MonthStats = {
   guaranteeMinutes: number;
   creditAfterGuaranteeMinutes: number;
   paidMinutes: number;
+  /** Credit minutes for display (always equals paidMinutes) */
+  creditMinutes: number;
   /** RSL days count (for guarantee logic) */
   rslDaysCount?: number;
+  /** True if RSL streak ≥ 7 consecutive days (FDO line, 75-hr guarantee) */
+  isFDO?: boolean;
+  /** Longest consecutive RSL day streak in the month */
+  rslStreak?: number;
   /** Pro with setting off: show "Pay hidden" for privacy */
   payHidden?: boolean;
   /** Pro user is eligible for pay projection */
@@ -541,6 +571,7 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
     guaranteeMinutes: 0,
     creditAfterGuaranteeMinutes: 0,
     paidMinutes: 0,
+    creditMinutes: 0,
   };
   if (!profile) return emptyStats;
 
@@ -566,6 +597,38 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
       (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : getTenantSourceTimezone(profile.tenant));
     const reserveCreditPerDay = getReserveCreditPerDay(profile.tenant ?? "frontier");
 
+    // Cache pay code rules so we don't query per-event
+    const payRuleCache = new Map<string, number>(); // key: `${tenant}|${role}|${code}` -> hours/day
+
+    async function getHoursPerDayFromRules(code: string, onFailFallback: number): Promise<number> {
+      const roleForRules =
+        profile.role === "pilot" || profile.role === "flight_attendant"
+          ? profile.role
+          : "pilot"; // safe fallback for admins viewing stats
+
+      const key = `${profile.tenant}|${roleForRules}|${code}`;
+      const cached = payRuleCache.get(key);
+      if (cached != null) return cached;
+
+      const { data: ruleData, error: ruleError } = await supabase
+        .from("pay_code_rules")
+        .select("hours_per_day")
+        .eq("tenant", profile.tenant)
+        .eq("role", roleForRules)
+        .eq("code", code)
+        .maybeSingle();
+
+      if (!ruleError && ruleData?.hours_per_day != null) {
+        const v = Number(ruleData.hours_per_day);
+        payRuleCache.set(key, v);
+        return v;
+      }
+
+      // No rule found → fallback to the old behavior
+      payRuleCache.set(key, onFailFallback);
+      return onFailFallback;
+    }
+
     const rows = (data ?? []) as {
       start_time: string;
       end_time: string;
@@ -583,24 +646,19 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
     let tripOccurrences = 0;
     let totalBlock = 0;
     let totalExtraCredit = 0;
+    let tripCreditMinutesLine = 0; // trips that touch a reserve day (not "extra")
+    let tripCreditMinutesExtra = 0; // trips that do NOT touch a reserve day ("pickup")
     let tripCreditMinutes = 0;
+    const tripStubs: Array<{
+      segments: DaySegment[];
+      payMinutes: number;
+      blockMinutes: number;
+      extraMinutes: number;
+    }> = [];
     let vacationCreditMinutes = 0;
     let tripEvents = 0;
     let reserveEvents = 0;
     let vacationEvents = 0;
-
-    // Group by pairing, then find runs (consecutive dates). Same pairing on non-consecutive days = different trips.
-    // e.g. S3019 Feb 19-20 and S3019 Feb 21-22 are two separate trips, not duplicates.
-    const byPairing = new Map<
-      string,
-      Array<{
-        creditHrs: number;
-        blockHrs: number;
-        extraHrs: number;
-        pairingDays: number;
-        dateStrs: string[];
-      }>
-    >();
 
     for (const ev of rows) {
       const segments = expandEventToDaySegments(ev.start_time, ev.end_time, y, m, baseTimezone);
@@ -614,17 +672,24 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
       }
       if (ev.event_type === "vacation") {
         vacationEvents += 1;
+
         const vacMatch = (ev.title ?? "").match(/\bV(\d+)\b/i);
-        if (vacMatch) {
-          const tenths = parseInt(vacMatch[1], 10); // V35 → 35
-          const minutesPerDay = Math.round((tenths / 10) * 60); // 3.5 * 60 = 210
-          vacationCreditMinutes += segments.length * minutesPerDay;
-        }
+        if (!vacMatch) continue;
+
+        const code = `V${vacMatch[1]}`; // e.g. V35
+        const tenths = parseInt(vacMatch[1], 10); // e.g. 35
+        const fallbackHours = tenths / 10; // old behavior (V35 -> 3.5)
+
+        const hoursPerDay = await getHoursPerDayFromRules(code, fallbackHours);
+        const minutesPerDay = Math.round(hoursPerDay * 60);
+
+        vacationCreditMinutes += segments.length * minutesPerDay;
       } else if (ev.event_type === "reserve") {
         reserveEvents += 1;
       } else if (ev.event_type === "trip") {
         tripEvents += 1;
         tripOccurrences += 1;
+
         const evCreditHrs = ev.credit_minutes != null ? ev.credit_minutes / 60 : ev.credit_hours ?? null;
         let blockHrs = 0;
         let creditHrs = 0;
@@ -644,66 +709,63 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
         } else if (evCreditHrs != null && evCreditHrs > 0) {
           creditHrs = evCreditHrs;
         }
+
         if (creditHrs > 0 && segments.length > 0) {
-          const key = extractPairingKey(ev.title);
-          const dateStrs = segments.map((s) => s.dateStr);
-          const entry = {
-            creditHrs,
-            blockHrs,
-            extraHrs,
-            pairingDays: ev.pairing_days ?? 1,
-            dateStrs,
-          };
-          if (!byPairing.has(key)) byPairing.set(key, []);
-          byPairing.get(key)!.push(entry);
+          const pairingDays = ev.pairing_days ?? 1;
+          const ratio = pairingDays > 0 ? Math.min(1, segments.length / pairingDays) : 1;
+          const payMinutes = Math.round(creditHrs * ratio * 60);
+          const blockMinutes = Math.round(blockHrs * ratio * 60);
+          const extraMinutes = Math.round(extraHrs * ratio * 60);
+          tripStubs.push({ segments, payMinutes, blockMinutes, extraMinutes });
         }
       }
     }
 
-    // Find runs: consecutive dates that share an event. Same pairing on non-consecutive/ungapped
-    // spans = different trips (e.g. S3019 Feb 19-20 vs Feb 21-22).
-    for (const [, entries] of byPairing) {
-      const allDateStrs = [...new Set(entries.flatMap((e) => e.dateStrs))].sort();
-      const runs: string[][] = [];
-      let run: string[] = [allDateStrs[0]];
-      for (let i = 1; i < allDateStrs.length; i++) {
-        const prev = allDateStrs[i - 1];
-        const curr = allDateStrs[i];
-        const isConsecutive = addDay(prev) === curr;
-        const hasEventSpanningBoth = isConsecutive && entries.some(
-          (e) => e.dateStrs.includes(prev) && e.dateStrs.includes(curr)
-        );
-        if (hasEventSpanningBoth) {
-          run.push(curr);
-        } else {
-          runs.push(run);
-          run = [curr];
-        }
-      }
-      runs.push(run);
-      for (const runDateStrs of runs) {
-        const ev = entries.find((e) => e.dateStrs.some((d) => runDateStrs.includes(d)))!;
-        const daysInMonth = runDateStrs.length;
-        const ratio = ev.pairingDays > 0 ? Math.min(1, daysInMonth / ev.pairingDays) : 1;
-        tripCreditMinutes += Math.round(ev.creditHrs * ratio * 60);
-        totalBlock += ev.blockHrs * ratio;
-        totalExtraCredit += ev.extraHrs * ratio;
-      }
+    // Classify trips: line (touches reserve) vs extra (pickup)
+    for (const t of tripStubs) {
+      const touchesReserve = t.segments.some((s) => reserveDays.has(s.dateStr));
+      if (touchesReserve) tripCreditMinutesLine += t.payMinutes;
+      else tripCreditMinutesExtra += t.payMinutes;
+      totalBlock += t.blockMinutes / 60;
+      totalExtraCredit += t.extraMinutes / 60;
     }
+    tripCreditMinutes = tripCreditMinutesLine + tripCreditMinutesExtra;
+
+    console.log("[TripBuckets]", {
+      line: tripCreditMinutesLine / 60,
+      extra: tripCreditMinutesExtra / 60,
+      reserveDays: reserveDays.size,
+      tripDays: tripDays.size,
+    });
 
     // Add reserve credit (exclude days that are also trip days—short call that converted to pairing)
     const reserveOnlyDays = [...reserveDays].filter((d) => !tripDays.has(d));
     const reserveCreditMinutes = Math.round(reserveOnlyDays.length * reserveCreditPerDay * 60);
 
-    const rawCreditMinutes = tripCreditMinutes + vacationCreditMinutes + reserveCreditMinutes;
+    const reserveStreak = maxConsecutiveDateStrDays(reserveDays);
+    const hasReserveGuarantee = reserveStreak >= 3; // Frontier calendar-month rule (temporary)
+
+    const rslStreak = maxConsecutiveDateStrDays(rslDays);
+    const isFDO = rslStreak >= 7;
 
     const PREMIUM_THRESHOLD_MIN = 4920; // 82h
-    const guaranteeMinutes = reserveOnlyDays.length > 0 || rslDays.size >= 7 ? 4500 : 0;
-    const creditAfterGuaranteeMinutes = Math.max(rawCreditMinutes, guaranteeMinutes);
+    const guaranteeMinutes = hasReserveGuarantee ? 4500 : 0; // 75:00
+
+    // "Line" credit is what can be protected/absorbed by the 75 guarantee
+    const lineCreditMinutes = tripCreditMinutesLine + vacationCreditMinutes + reserveCreditMinutes;
+
+    // Guarantee applies to the line bucket only
+    const creditAfterGuaranteeMinutes = Math.max(lineCreditMinutes, guaranteeMinutes);
+
+    // Extras ALWAYS add, regardless of guarantee
+    const finalCreditedMinutes = creditAfterGuaranteeMinutes + tripCreditMinutesExtra;
+
+    const rawCreditMinutes = tripCreditMinutes + vacationCreditMinutes + reserveCreditMinutes;
+
     const paidMinutes =
-      creditAfterGuaranteeMinutes <= PREMIUM_THRESHOLD_MIN
-        ? creditAfterGuaranteeMinutes
-        : PREMIUM_THRESHOLD_MIN + Math.round((creditAfterGuaranteeMinutes - PREMIUM_THRESHOLD_MIN) * 1.25);
+      finalCreditedMinutes <= PREMIUM_THRESHOLD_MIN
+        ? finalCreditedMinutes
+        : PREMIUM_THRESHOLD_MIN + Math.round((finalCreditedMinutes - PREMIUM_THRESHOLD_MIN) * 1.25);
 
     const lastDate = monthEnd.getDate();
     const allMonthDays = new Set<string>();
@@ -727,7 +789,10 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
       guaranteeMinutes,
       creditAfterGuaranteeMinutes,
       paidMinutes,
+      creditMinutes: paidMinutes,
       rslDaysCount: rslDays.size,
+      isFDO,
+      rslStreak,
     };
 
     const isPro = isProActive(profile);
@@ -781,7 +846,9 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
           paidHours: paidMinutes / 60,
         });
 
+        // Pay estimate derived from paidMinutes only (single source of truth)
         const paidHours = paidMinutes / 60;
+        const estimatedMonthlyPay = paidHours * rate;
         const pay20thHours = Math.min(35, paidHours);
         const pay5thHours = Math.max(0, paidHours - 35);
 
@@ -790,7 +857,7 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
           pay5thHours,
           pay20thGross: pay20thHours * rate,
           pay5thGross: pay5thHours * rate,
-          totalGross: pay20thHours * rate + pay5thHours * rate,
+          totalGross: estimatedMonthlyPay,
           rate,
           year,
         };
