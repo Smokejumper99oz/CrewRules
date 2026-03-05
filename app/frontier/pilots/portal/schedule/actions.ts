@@ -601,6 +601,7 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
     const payRuleCache = new Map<string, number>(); // key: `${tenant}|${role}|${code}` -> hours/day
 
     async function getHoursPerDayFromRules(code: string, onFailFallback: number): Promise<number> {
+      if (!profile) return onFailFallback;
       const roleForRules =
         profile.role === "pilot" || profile.role === "flight_attendant"
           ? profile.role

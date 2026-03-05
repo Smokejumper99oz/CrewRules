@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { updateProfilePreferences, startProTrial } from "@/app/frontier/pilots/portal/profile/actions";
+import { updateProfilePreferences, startProTrial, updatePassword } from "@/app/frontier/pilots/portal/profile/actions";
 import { DatePickerInput } from "@/components/date-picker-input";
 import { ProBadge } from "@/components/pro-badge";
 
@@ -113,6 +113,9 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
   const derivedFromBase = getTimezoneFromAirport(profile.base_airport ?? "DEN");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [manualTimezone, setManualTimezone] = useState(storedTimezone);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const displayTimezoneMode = profile.display_timezone_mode ?? "base";
   const timeFormat = profile.time_format ?? "24h";
@@ -304,6 +307,87 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
           <span className="text-xs font-medium text-slate-500">Email (account)</span>
           <p className="text-sm text-white">{profile.email ?? "—"}</p>
           <p className="mt-1 text-xs text-slate-500">Managed via your account provider.</p>
+          <div className="mt-3 pt-3 border-t border-white/5">
+            <button
+              type="button"
+              onClick={() => {
+                setShowChangePassword(!showChangePassword);
+                setPasswordMessage(null);
+              }}
+              className="text-sm text-[#75C043] hover:text-[#75C043]/80 font-medium"
+            >
+              {showChangePassword ? "Cancel" : "Change password"}
+            </button>
+            {showChangePassword && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const form = e.currentTarget;
+                  const newPw = (form.elements.namedItem("new_password") as HTMLInputElement)?.value ?? "";
+                  const confirm = (form.elements.namedItem("confirm_password") as HTMLInputElement)?.value ?? "";
+                  if (newPw !== confirm) {
+                    setPasswordMessage({ type: "error", text: "Passwords do not match" });
+                    return;
+                  }
+                  setPasswordSaving(true);
+                  setPasswordMessage(null);
+                  const result = await updatePassword(newPw);
+                  setPasswordSaving(false);
+                  if ("error" in result) {
+                    setPasswordMessage({ type: "error", text: result.error });
+                  } else {
+                    setPasswordMessage({ type: "success", text: "Password updated." });
+                    setShowChangePassword(false);
+                    form.reset();
+                  }
+                }}
+                className="mt-3 space-y-3"
+              >
+                <div>
+                  <label htmlFor="new_password" className="block text-xs font-medium text-slate-400">
+                    New password
+                  </label>
+                  <input
+                    id="new_password"
+                    name="new_password"
+                    type="password"
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    placeholder="At least 8 characters"
+                    className="mt-1 w-full max-w-xs rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="confirm_password" className="block text-xs font-medium text-slate-400">
+                    Confirm new password
+                  </label>
+                  <input
+                    id="confirm_password"
+                    name="confirm_password"
+                    type="password"
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    placeholder="Repeat new password"
+                    className="mt-1 w-full max-w-xs rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30"
+                  />
+                </div>
+                {passwordMessage && (
+                  <p className={`text-sm ${passwordMessage.type === "success" ? "text-emerald-400" : "text-red-400"}`}>
+                    {passwordMessage.text}
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  disabled={passwordSaving}
+                  className="rounded-lg bg-[#75C043] px-3 py-2 text-sm font-semibold text-slate-950 hover:opacity-95 transition disabled:opacity-50"
+                >
+                  {passwordSaving ? "Updating…" : "Update password"}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       </section>
 

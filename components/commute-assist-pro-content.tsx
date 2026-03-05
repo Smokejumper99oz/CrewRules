@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { subMinutes, subDays, addDays } from "date-fns";
 import type { CommuteFlightOption } from "@/lib/commute/providers/types";
@@ -90,6 +90,36 @@ type Props = {
 };
 
 const PAGE_SIZE = 5;
+
+/** Client cache TTL: 15 minutes. Avoids API calls when navigating back to Dashboard. */
+const COMMUTE_CACHE_TTL_MS = 15 * 60 * 1000;
+const COMMUTE_CACHE_PREFIX = "crewrules_commute_";
+
+function getCommuteCacheKey(origin: string, destination: string, date: string, direction: string): string {
+  return `${COMMUTE_CACHE_PREFIX}${origin}_${destination}_${date}_${direction}`;
+}
+
+function getCommuteCache(key: string): { flights: CommuteFlight[]; originTz: string; destTz: string; fetchedAt: string | null; notice: string | null } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const { flights, originTz, destTz, fetchedAt, notice, cachedAt } = JSON.parse(raw);
+    if (Date.now() - cachedAt > COMMUTE_CACHE_TTL_MS) return null;
+    return { flights, originTz, destTz, fetchedAt, notice };
+  } catch {
+    return null;
+  }
+}
+
+function setCommuteCache(key: string, data: { flights: CommuteFlight[]; originTz: string; destTz: string; fetchedAt: string | null; notice: string | null }) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ ...data, cachedAt: Date.now() }));
+  } catch {
+    // ignore
+  }
+}
 
 const riskBorderStyles = {
   recommended: "border-l-4 border-l-emerald-500",
@@ -498,145 +528,174 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
     !!dutyStartAirport &&
     dutyStartAirport.toUpperCase() === homeAirport.toUpperCase();
 
-  async function loadFlights(opts?: { forceRefresh?: boolean }) {
-    if (!canUseCommute) return null;
-    if (origin.length !== 3 || destination.length !== 3) return null;
-
-    if (process.env.NODE_ENV === "development") {
-      const tpaFallback =
-        (direction === "to_base" && origin === "TPA" && homeAirport?.toUpperCase() !== "TPA") ||
-        (direction === "to_home" && destination === "TPA" && homeAirport?.toUpperCase() !== "TPA");
-      const sjuFallback =
-        direction === "to_home" &&
-        origin === "SJU" &&
-        (dutyEndAirport ?? baseAirport)?.toUpperCase() !== "SJU";
-      if (tpaFallback || sjuFallback) {
-        throw new Error("Commute Assist: TPA/SJU must not be used as fallbacks. Use profile.home_airport and profile.base_airport only.");
-      }
-    }
-
-    try {
-      setCommuteError(null);
-      setNotice(null);
-      if (opts?.forceRefresh) setRefreshing(true);
-
-      const res = await getCommuteFlights({
-        origin,
-        destination,
-        date: commuteDate,
-        forceRefresh: opts?.forceRefresh ?? false,
-      });
-
-      const arriveByFormatted = arriveBy ? formatInTimeZone(arriveBy, baseTz, "HH:mm") : "";
-      const showInfo = dutyOk;
-
-      if (res.ok) {
-        setOriginTz(res.originTz);
-        setDestTz(res.destTz);
-        const flights = res.flights;
-        const reportAtIso = dutyOk ? dutyDateTime.toISOString() : `${dutyDateBase}T12:00:00Z`;
-
-        const stripOffset = (s: string) => s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
-        const isReturn = direction === "to_home";
-        const options: CommuteFlightOption[] = [];
-        for (let i = 0; i < (flights as CommuteFlight[]).length; i++) {
-          const f = (flights as CommuteFlight[])[i];
-          const depTz = f.origin_tz ?? res.originTz;
-          const arrTz = f.dest_tz ?? res.destTz;
-          const depClean = stripOffset(f.departureTime ?? "");
-          const arrClean = stripOffset(f.arrivalTime ?? "");
-          if (!depClean || !arrClean) continue;
-          let depUtc: string;
-          let arrUtc: string;
-          try {
-            depUtc = fromZonedTime(depClean, depTz).toISOString();
-            arrUtc = fromZonedTime(arrClean, arrTz).toISOString();
-          } catch {
-            continue;
-          }
-          let risk: "recommended" | "risky" | "not_recommended" = "recommended";
-          let reason = "";
-
-          if (isReturn) {
-            reason = `Return home • ${fmtHM(f.durationMinutes)}`;
-          } else {
-            const bufferMin = minutesBetween(arrUtc, reportAtIso);
-            if (bufferMin < arrivalBuffer) {
-              risk = "not_recommended";
-              reason = `Arrives after cutoff (${bufferMin}m < ${arrivalBuffer}m)`;
-            } else if (bufferMin < arrivalBuffer + 60) {
-              risk = "risky";
-              reason = `Meets cutoff but tight (${bufferMin}m)`;
-            } else {
-              reason = `Good buffer (${bufferMin}m)`;
-            }
-            reason = `${reason} • ${fmtHM(f.durationMinutes)}`;
-          }
-
-          options.push({
-            id: `${f.flightNumber}-${f.departureTime}-${i}`,
-            carrier: f.carrier,
-            flight: stripCarrierFromFlight(f.flightNumber, f.carrier),
-            depUtc,
-            arrUtc,
-            nonstop: true,
-            risk,
-            reason,
-            originTz: depTz,
-            destTz: arrTz,
-            dep_scheduled_raw: f.dep_scheduled_raw,
-            dep_estimated_raw: f.dep_estimated_raw,
-            dep_actual_raw: f.dep_actual_raw,
-            dep_delay_min: f.dep_delay_min,
-            arr_scheduled_raw: f.arr_scheduled_raw,
-            arr_estimated_raw: f.arr_estimated_raw,
-            arr_actual_raw: f.arr_actual_raw,
-            arr_delay_min: f.arr_delay_min,
-            status: f.status,
-            dep_gate: f.dep_gate,
-            arr_gate: f.arr_gate,
-            aircraft_type: f.aircraft_type,
-          });
+  /** Apply flights + metadata to state. Reused for API response and sessionStorage restore. */
+  const applyFlightsToState = useCallback(
+    (flights: CommuteFlight[], originTzVal: string, destTzVal: string, fetchedAtVal: string | null, noticeVal: string | null) => {
+      const reportAtIso = dutyOk ? dutyDateTime.toISOString() : `${dutyDateBase}T12:00:00Z`;
+      const stripOffset = (s: string) => s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
+      const isReturn = direction === "to_home";
+      const options: CommuteFlightOption[] = [];
+      for (let i = 0; i < flights.length; i++) {
+        const f = flights[i];
+        const depTz = f.origin_tz ?? originTzVal;
+        const arrTz = f.dest_tz ?? destTzVal;
+        const depClean = stripOffset(f.departureTime ?? "");
+        const arrClean = stripOffset(f.arrivalTime ?? "");
+        if (!depClean || !arrClean) continue;
+        let depUtc: string;
+        let arrUtc: string;
+        try {
+          depUtc = fromZonedTime(depClean, depTz).toISOString();
+          arrUtc = fromZonedTime(arrClean, arrTz).toISOString();
+        } catch {
+          continue;
         }
+        let risk: "recommended" | "risky" | "not_recommended" = "recommended";
+        let reason = "";
+        if (isReturn) {
+          reason = `Return home • ${fmtHM(f.durationMinutes)}`;
+        } else {
+          const bufferMin = minutesBetween(arrUtc, reportAtIso);
+          if (bufferMin < arrivalBuffer) {
+            risk = "not_recommended";
+            reason = `Arrives after cutoff (${bufferMin}m < ${arrivalBuffer}m)`;
+          } else if (bufferMin < arrivalBuffer + 60) {
+            risk = "risky";
+            reason = `Meets cutoff but tight (${bufferMin}m)`;
+          } else {
+            reason = `Good buffer (${bufferMin}m)`;
+          }
+          reason = `${reason} • ${fmtHM(f.durationMinutes)}`;
+        }
+        options.push({
+          id: `${f.flightNumber}-${f.departureTime}-${i}`,
+          carrier: f.carrier,
+          flight: stripCarrierFromFlight(f.flightNumber, f.carrier),
+          depUtc,
+          arrUtc,
+          nonstop: true,
+          risk,
+          reason,
+          originTz: depTz,
+          destTz: arrTz,
+          dep_scheduled_raw: f.dep_scheduled_raw,
+          dep_estimated_raw: f.dep_estimated_raw,
+          dep_actual_raw: f.dep_actual_raw,
+          dep_delay_min: f.dep_delay_min,
+          arr_scheduled_raw: f.arr_scheduled_raw,
+          arr_estimated_raw: f.arr_estimated_raw,
+          arr_actual_raw: f.arr_actual_raw,
+          arr_delay_min: f.arr_delay_min,
+          status: f.status,
+          dep_gate: f.dep_gate,
+          arr_gate: f.arr_gate,
+          aircraft_type: f.aircraft_type,
+        });
+      }
+      const grouped = { day_prior: options, same_day: [] };
+      const hasLiveTiming = options.some(
+        (o) => o.arr_estimated_raw || o.arr_actual_raw || o.dep_estimated_raw || o.dep_actual_raw
+      );
+      const arriveByFormatted = arriveBy ? formatInTimeZone(arriveBy, baseTz, "HH:mm") : "";
+      setOriginTz(originTzVal);
+      setDestTz(destTzVal);
+      setSource(hasLiveTiming ? "live" : "scheduled");
+      setLastFetchedAt(fetchedAtVal);
+      setCommuteGroups(grouped);
+      setCommuteMeta({ showInfo: dutyOk, arriveByFormatted, dutyOk });
+      setNotice(noticeVal ?? null);
+      setDayPriorPage(1);
+      setSameDayPage(1);
+    },
+    [direction, dutyOk, dutyDateTime, dutyDateBase, arrivalBuffer, arriveBy, baseTz]
+  );
 
-        const grouped: Record<string, CommuteFlightOption[]> = {
-          day_prior: options,
-          same_day: [],
-        };
+  const loadFlights = useCallback(
+    async (opts?: { forceRefresh?: boolean }) => {
+      if (!canUseCommute) return null;
+      if (origin.length !== 3 || destination.length !== 3) return null;
 
-        const hasLiveTiming = options.some(
-          (o) =>
-            o.arr_estimated_raw ||
-            o.arr_actual_raw ||
-            o.dep_estimated_raw ||
-            o.dep_actual_raw
-        );
-        setSource(hasLiveTiming ? "live" : "scheduled");
-        setLastFetchedAt(res.fetchedAt ?? null);
+      if (process.env.NODE_ENV === "development") {
+        const tpaFallback =
+          (direction === "to_base" && origin === "TPA" && homeAirport?.toUpperCase() !== "TPA") ||
+          (direction === "to_home" && destination === "TPA" && homeAirport?.toUpperCase() !== "TPA");
+        const sjuFallback =
+          direction === "to_home" &&
+          origin === "SJU" &&
+          (dutyEndAirport ?? baseAirport)?.toUpperCase() !== "SJU";
+        if (tpaFallback || sjuFallback) {
+          throw new Error("Commute Assist: TPA/SJU must not be used as fallbacks. Use profile.home_airport and profile.base_airport only.");
+        }
+      }
 
-        setCommuteGroups(grouped);
-        setCommuteMeta({ showInfo, arriveByFormatted, dutyOk });
-        setNotice(res.notice ?? null);
-        setDayPriorPage(1);
-        setSameDayPage(1);
-        return res.flights;
-      } else {
-        setNotice(res.message);
+      const cacheKey = getCommuteCacheKey(origin, destination, commuteDate, direction);
+
+      // Try sessionStorage first (skip on forceRefresh or explicit page refresh)
+      if (!opts?.forceRefresh) {
+        const cached = getCommuteCache(cacheKey);
+        if (cached) {
+          applyFlightsToState(cached.flights, cached.originTz, cached.destTz, cached.fetchedAt, cached.notice);
+          return cached.flights;
+        }
+      }
+
+      try {
+        setCommuteError(null);
+        setNotice(null);
+        if (opts?.forceRefresh) setRefreshing(true);
+
+        const res = await getCommuteFlights({
+          origin,
+          destination,
+          date: commuteDate,
+          forceRefresh: opts?.forceRefresh ?? false,
+        });
+
+        const arriveByFormatted = arriveBy ? formatInTimeZone(arriveBy, baseTz, "HH:mm") : "";
+        const showInfo = dutyOk;
+
+        if (res.ok) {
+          applyFlightsToState(res.flights, res.originTz, res.destTz, res.fetchedAt ?? null, res.notice ?? null);
+          setCommuteCache(cacheKey, {
+            flights: res.flights,
+            originTz: res.originTz,
+            destTz: res.destTz,
+            fetchedAt: res.fetchedAt ?? null,
+            notice: res.notice ?? null,
+          });
+          return res.flights;
+        } else {
+          setNotice(res.message);
+          setSource(null);
+          setLastFetchedAt(null);
+          setCommuteMeta({ showInfo, arriveByFormatted, dutyOk });
+          return null;
+        }
+      } catch (err) {
+        console.error("Commute Assist failed", err);
+        setCommuteError("Commute Assist temporarily unavailable.");
         setSource(null);
         setLastFetchedAt(null);
-        setCommuteMeta({ showInfo, arriveByFormatted, dutyOk });
         return null;
+      } finally {
+        setRefreshing(false);
       }
-    } catch (err) {
-      console.error("Commute Assist failed", err);
-      setCommuteError("Commute Assist temporarily unavailable.");
-      setSource(null);
-      setLastFetchedAt(null);
-      return null;
-    } finally {
-      setRefreshing(false);
-    }
-  }
+    },
+    [
+      canUseCommute,
+      origin,
+      destination,
+      commuteDate,
+      direction,
+      homeAirport,
+      dutyEndAirport,
+      baseAirport,
+      arriveBy,
+      baseTz,
+      dutyOk,
+      applyFlightsToState,
+    ]
+  );
 
   useEffect(() => {
     if (canUseCommute && !noCommuteNeeded) {
@@ -645,7 +704,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
         setCommuteError("Commute Assist temporarily unavailable.");
       });
     }
-  }, [event.start_time, event.end_time, event.report_time, event.route, profile, displaySettings, tenant, portal, direction]);
+  }, [origin, destination, commuteDate, direction, canUseCommute, noCommuteNeeded, loadFlights]);
 
   // Tick every 60s when we have lastFetchedAt, so "Updated just now" transitions to timestamp
   useEffect(() => {

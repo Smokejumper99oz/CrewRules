@@ -13,6 +13,18 @@ const VALID_AIRPORT = /^[A-Za-z]{3}$/;
 
 export type UpdateProfileResult = { success: true } | { error: string };
 
+export type UpdatePasswordResult = { success: true } | { error: string };
+
+export async function updatePassword(newPassword: string): Promise<UpdatePasswordResult> {
+  if (!newPassword || newPassword.length < 8) {
+    return { error: "Password must be at least 8 characters" };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
 export async function updateProfilePreferences(formData: FormData): Promise<UpdateProfileResult> {
   const profile = await getProfile();
   if (!profile) return { error: "Not signed in" };
