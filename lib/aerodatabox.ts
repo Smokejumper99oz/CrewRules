@@ -137,6 +137,12 @@ export async function fetchFlightsFromAerodataBox(
           ? Number((getArr(f) as Record<string, number>).delay)
           : null,
         status: (f as Record<string, string>)?.status ?? undefined,
+        dep_gate: (getDep(f) as Record<string, string>)?.gate ?? null,
+        arr_gate: (getArr(f) as Record<string, string>)?.gate ?? null,
+        aircraft_type:
+          (f as Record<string, { iata?: string; icao?: string }>)?.aircraft?.iata ??
+          (f as Record<string, { iata?: string; icao?: string }>)?.aircraft?.icao ??
+          null,
       };
     })
     .sort(

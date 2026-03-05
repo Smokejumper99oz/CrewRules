@@ -36,4 +36,7 @@ export type CommuteFlightOption = {
   arr_actual_raw?: string;
   arr_delay_min?: number | null;
   status?: string;
+  dep_gate?: string | null;
+  arr_gate?: string | null;
+  aircraft_type?: string | null;
 };

@@ -29,6 +29,12 @@ export type CommuteFlight = {
   arr_actual_raw?: string;
   arr_delay_min?: number | null;
   status?: string;
+  /** Departure gate (e.g. D11). */
+  dep_gate?: string | null;
+  /** Arrival gate (e.g. A22). */
+  arr_gate?: string | null;
+  /** Aircraft type (e.g. A320, B737). */
+  aircraft_type?: string | null;
 };
 
 export type FetchFlightsResult = {
@@ -58,6 +64,28 @@ function calculateDurationMinutes(
 }
 
 const devCache = new Map<string, { expiresAt: number; data: FetchFlightsResult }>();
+
+/** Extract aircraft type from AviationStack aircraft object. Prefers iata, then modelCode, then modelText. */
+function extractAircraftType(f: {
+  aircraft?: { iata?: string; modelCode?: string; modelText?: string };
+}): string | null {
+  const a = f?.aircraft;
+  if (!a) return null;
+  if (a.iata) return a.iata;
+  const code = a.modelCode?.trim().toUpperCase();
+  if (code) return code;
+  const text = a.modelText?.trim();
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  const numMatch = text.match(/(\d{3,4})/);
+  if (numMatch) {
+    const num = numMatch[1];
+    if (lower.includes("boeing")) return `B${num}`;
+    if (lower.includes("airbus")) return `A${num}`;
+    return num;
+  }
+  return text.length <= 12 ? text : null;
+}
 
 /** Pad time-only string (e.g. "06:15") to "06:15:00" for ISO datetime. */
 function padTimeToSeconds(t: string): string {
@@ -179,6 +207,9 @@ async function fetchTimetable(
         destination: (f?.arrival?.iataCode ?? destination).toUpperCase(),
         durationMinutes:
           depTime && arrTime ? calculateDurationMinutes(depTime, arrTime, originTz, destTz) : 0,
+        dep_gate: f?.departure?.gate ?? null,
+        arr_gate: f?.arrival?.gate ?? null,
+        aircraft_type: extractAircraftType(f),
       };
     })
     .sort(
@@ -316,6 +347,9 @@ async function fetchFlightsSameDay(
         arr_actual_raw: f?.arrival?.actual ?? undefined,
         arr_delay_min: f?.arrival?.delay != null ? Number(f.arrival.delay) : null,
         status: f?.flight_status ?? undefined,
+        dep_gate: f?.departure?.gate ?? null,
+        arr_gate: f?.arrival?.gate ?? null,
+        aircraft_type: extractAircraftType(f),
       };
     })
     .sort(
@@ -416,6 +450,9 @@ async function fetchFlightsFuture(
         durationMinutes: calculateDurationMinutes(depUtc, arrUtc, "UTC", "UTC"),
         origin_tz: f?.departure?.timezone ?? originTz,
         dest_tz: f?.arrival?.timezone ?? destTz,
+        dep_gate: f?.departure?.gate ?? null,
+        arr_gate: f?.arrival?.gate ?? null,
+        aircraft_type: extractAircraftType(f),
       };
     })
     .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());
@@ -477,6 +514,9 @@ async function fetchFlightsHistorical(
         depTime && arrTime ? calculateDurationMinutes(depTime, arrTime, originTz, destTz) : 0,
       origin_tz: f?.departure?.timezone ?? originTz,
       dest_tz: f?.arrival?.timezone ?? destTz,
+      dep_gate: f?.departure?.gate ?? null,
+      arr_gate: f?.arrival?.gate ?? null,
+      aircraft_type: extractAircraftType(f),
     };
   });
 

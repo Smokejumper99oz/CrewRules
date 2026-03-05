@@ -9,6 +9,7 @@ import { getCommuteFlights } from "@/app/frontier/pilots/portal/commute/actions"
 import type { CommuteFlight } from "@/lib/aviationstack";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
 import type { Profile } from "@/lib/profile";
+import { AirlineLogo } from "@/components/airline-logo";
 
 function fmtHM(totalMinutes: number) {
   const h = Math.floor(totalMinutes / 60);
@@ -46,6 +47,14 @@ function stripCarrierFromFlight(flightNumber: string, carrier: string): string {
 
 function minutesBetween(a: string, b: string) {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000);
+}
+
+function formatLastUpdate(iso: string | null, baseTz: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const ageMs = Date.now() - d.getTime();
+  if (ageMs < 60_000) return "Updated just now";
+  return `Last update: ${formatInTimeZone(d, baseTz, "HH:mm")} (LOCAL)`;
 }
 
 function parseDutyStartAirport(route?: string | null): string | null {
@@ -221,7 +230,7 @@ function CommuteFlightCard({
               ? "bg-red-500/20 text-red-400 border border-red-500/40"
               : (delayInfo.dep || delayInfo.arr)
                 ? "bg-amber-500/20 text-amber-400 border border-amber-500/40"
-                : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40",
+                : "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30",
           ].join(" ")}
         >
           {delayInfo.cancelled ? "Cancelled" : (delayInfo.dep || delayInfo.arr) ? "Delayed" : "On time"}
@@ -246,12 +255,21 @@ function CommuteFlightCard({
           className="text-2xl"
         />
       </div>
-      <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
-        <span className="font-mono tabular-nums font-medium text-slate-300">{flightLabel}</span>
+      <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+        <AirlineLogo carrier={(opt.carrier || flightLabel.match(/^([A-Z0-9]{2})/)?.[1]) ?? ""} size={24} />
+        <span className="text-slate-300 font-medium font-mono tabular-nums">{flightLabel}</span>
         {delayInfo.cancelled && (
           <span className="ml-1 px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-semibold text-[10px] tracking-wide uppercase">
             Cancelled
           </span>
+        )}
+        {(opt.dep_gate || opt.arr_gate || opt.aircraft_type) && (
+          <>
+            <span className="text-slate-600">•</span>
+            <span className="tabular-nums">
+              {[opt.dep_gate && `Dep ${opt.dep_gate}`, opt.arr_gate && `Arr ${opt.arr_gate}`, opt.aircraft_type].filter(Boolean).join(" • ")}
+            </span>
+          </>
         )}
         <span className="text-slate-600">•</span>
         <span>Flight time {durStr}</span>
@@ -290,8 +308,10 @@ function CommuteFlightRow({
   const depDisplay = delayInfo.dep ?? { scheduled: depSched, actual: undefined };
   const arrDisplay = delayInfo.arr ?? { scheduled: arrSched, actual: undefined };
 
+  const carrierForLogo = (opt.carrier || flightLabel.match(/^([A-Z0-9]{2})/)?.[1]) ?? "";
   const flightLine = (
     <>
+      <AirlineLogo carrier={carrierForLogo} size={20} />
       <span className="font-mono tabular-nums font-medium text-slate-300">{flightLabel}</span>
       {delayInfo.cancelled && <><span className="text-slate-500"> </span><span className="text-red-400 font-semibold">Cancelled</span></>}
     </>
@@ -305,7 +325,7 @@ function CommuteFlightRow({
           ? "bg-red-500/20 text-red-400 border border-red-500/40"
           : (delayInfo.dep || delayInfo.arr)
             ? "bg-amber-500/20 text-amber-400 border border-amber-500/40"
-            : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40",
+            : "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30",
       ].join(" ")}
     >
       {delayInfo.cancelled ? "Cancelled" : (delayInfo.dep || delayInfo.arr) ? "Delayed" : "On time"}
@@ -344,7 +364,13 @@ function CommuteFlightRow({
         <div className="text-sm font-semibold text-slate-400 mt-1 flex flex-wrap items-center gap-1.5">
           <span>{dateStr}</span>
           {statusBadge}
-          <span className="font-normal text-slate-500">• Flight time {durStr} • {flightLine}</span>
+          <span className="font-normal text-slate-500">
+            • Flight time {durStr}
+            {(opt.dep_gate || opt.arr_gate || opt.aircraft_type) && (
+              <> • {[opt.dep_gate && `Dep ${opt.dep_gate}`, opt.arr_gate && `Arr ${opt.arr_gate}`, opt.aircraft_type].filter(Boolean).join(" • ")}</>
+            )}
+            {" • "}{flightLine}
+          </span>
         </div>
       </div>
       {/* Desktop: date+status left | DEP route ARR centered (like Cards) | duration+flight right */}
@@ -372,7 +398,12 @@ function CommuteFlightRow({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-slate-500 text-xs">Flight time {durStr}</span>
-          <span className="text-slate-500 text-xs flex items-center gap-1.5">{flightLine}</span>
+          {(opt.dep_gate || opt.arr_gate || opt.aircraft_type) && (
+            <span className="text-slate-500 text-xs tabular-nums">
+              {[opt.dep_gate && `Dep ${opt.dep_gate}`, opt.arr_gate && `Arr ${opt.arr_gate}`, opt.aircraft_type].filter(Boolean).join(" • ")}
+            </span>
+          )}
+          <span className="text-slate-500 text-xs flex items-center gap-1">{flightLine}</span>
         </div>
       </div>
     </div>
@@ -391,6 +422,8 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
     dutyOk: boolean;
   } | null>(null);
   const [source, setSource] = useState<"live" | "scheduled" | null>(null);
+  const [lastFetchedAt, setLastFetchedAt] = useState<string | null>(null);
+  const [, setLastUpdateTick] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [dayPriorPage, setDayPriorPage] = useState(1);
@@ -560,6 +593,9 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
             arr_actual_raw: f.arr_actual_raw,
             arr_delay_min: f.arr_delay_min,
             status: f.status,
+            dep_gate: f.dep_gate,
+            arr_gate: f.arr_gate,
+            aircraft_type: f.aircraft_type,
           });
         }
 
@@ -576,6 +612,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
             o.dep_actual_raw
         );
         setSource(hasLiveTiming ? "live" : "scheduled");
+        setLastFetchedAt(res.fetchedAt ?? null);
 
         setCommuteGroups(grouped);
         setCommuteMeta({ showInfo, arriveByFormatted, dutyOk });
@@ -586,6 +623,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
       } else {
         setNotice(res.message);
         setSource(null);
+        setLastFetchedAt(null);
         setCommuteMeta({ showInfo, arriveByFormatted, dutyOk });
         return null;
       }
@@ -593,6 +631,7 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
       console.error("Commute Assist failed", err);
       setCommuteError("Commute Assist temporarily unavailable.");
       setSource(null);
+      setLastFetchedAt(null);
       return null;
     } finally {
       setRefreshing(false);
@@ -607,6 +646,13 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
       });
     }
   }, [event.start_time, event.end_time, event.report_time, event.route, profile, displaySettings, tenant, portal, direction]);
+
+  // Tick every 60s when we have lastFetchedAt, so "Updated just now" transitions to timestamp
+  useEffect(() => {
+    if (!lastFetchedAt) return;
+    const id = setInterval(() => setLastUpdateTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, [lastFetchedAt]);
 
   useEffect(() => {
     setDayPriorPage(1);
@@ -751,6 +797,11 @@ export function CommuteAssistProContent({ event, profile, displaySettings, tenan
           >
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
+          {lastFetchedAt && (
+            <span className="text-[11px] text-slate-500">
+              {formatLastUpdate(lastFetchedAt, baseTz)}
+            </span>
+          )}
         </div>
       </div>
       {notice && (

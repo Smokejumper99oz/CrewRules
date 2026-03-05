@@ -75,6 +75,7 @@ type GetCommuteFlightsSuccess = {
   ok: true;
   source: "api" | "cache";
   flights: CommuteFlight[];
+  fetchedAt?: string | null;
   notice?: string;
   originTz: string;
   destTz: string;
@@ -235,7 +236,7 @@ export async function getCommuteFlights(input: {
             }
           : undefined;
 
-      return { ok: true as const, source: "api" as const, flights, notice, originTz, destTz, debug };
+      return { ok: true as const, source: "api" as const, flights, fetchedAt: now.toISOString(), notice, originTz, destTz, debug };
     } catch (err) {
       console.error("Commute Assist failed", err);
       return { ok: false as const, reason: "unavailable" as const, message: "Commute Assist temporarily unavailable." };
@@ -264,6 +265,7 @@ export async function getCommuteFlights(input: {
       ok: true as const,
       source: "cache" as const,
       flights: cached.data,
+      fetchedAt: cached.fetched_at ?? null,
       notice: undefined,
       originTz,
       destTz,
@@ -391,7 +393,7 @@ export async function getCommuteFlights(input: {
           }
         : undefined;
 
-    return { ok: true as const, source: "api" as const, flights, notice, originTz, destTz, debug };
+    return { ok: true as const, source: "api" as const, flights, fetchedAt: now.toISOString(), notice, originTz, destTz, debug };
   } catch (err) {
     console.error("Commute Assist failed", err);
     return { ok: false as const, reason: "unavailable" as const, message: "Commute Assist temporarily unavailable." };
