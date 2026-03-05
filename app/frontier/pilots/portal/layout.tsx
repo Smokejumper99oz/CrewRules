@@ -65,7 +65,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
     <DesktopIdleLogout />
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="flex">
-        <aside className="hidden md:flex md:w-72 md:flex-col md:gap-4 border-r border-white/5 bg-slate-950/70 backdrop-blur">
+        <aside className="hidden lg:flex lg:w-72 lg:flex-col lg:gap-4 border-r border-white/5 bg-slate-950/70 backdrop-blur">
           <div className="px-6 pt-6">
             <div className="text-lg font-semibold">
               Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-xs">™</span>
@@ -88,7 +88,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
                       <li key={item.label}>
                         <Link
                           href={item.href ? `${base}/${item.href}` : base}
-                          className="block rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition"
+                          className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition"
                         >
                           {item.label}
                         </Link>
@@ -103,7 +103,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
               {admin && (
                 <Link
                   href={`/${TENANT}/${PORTAL}/admin`}
-                  className="mb-2 block rounded-xl px-3 py-2 text-sm text-amber-400/90 hover:bg-white/5 hover:text-amber-300 transition"
+                  className="touch-target touch-pad mb-2 block rounded-xl px-3 py-2 text-sm text-amber-400/90 hover:bg-white/5 hover:text-amber-300 transition"
                 >
                   Admin →
                 </Link>
@@ -112,7 +112,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
                 <div className="font-medium text-white">{displayName}</div>
                 <div className="text-xs text-slate-400">{roleLabel}</div>
               </div>
-              <SignOutButton signOut={signOut} className="mt-2">
+              <SignOutButton signOut={signOut} className="mt-2" buttonClassName="touch-target touch-pad flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-white hover:bg-white/5 transition touch-manipulation disabled:opacity-50">
                 <span className="flex-1">Sign Out</span>
                 <svg className="ml-auto h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -149,7 +149,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
             </div>
           </header>
 
-          <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 pb-[env(safe-area-inset-bottom)]">{children}</div>
+          <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 pb-[env(safe-area-inset-bottom)]">{children}</div>
         </section>
       </div>
     </main>

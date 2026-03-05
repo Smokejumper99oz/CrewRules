@@ -106,7 +106,7 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
                   key={monthKey(m.year, m.month)}
                   type="button"
                   onClick={() => setSelectedIndex(i)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                  className={`touch-target touch-pad rounded-md px-2.5 py-1 text-xs font-medium transition ${
                     i === selectedIndex
                       ? "bg-white/10 text-white"
                       : "text-slate-300 hover:text-slate-200"
@@ -124,7 +124,7 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
       </div>
       <div className="mt-4">
         <p className="mb-3 text-sm text-slate-300">{selectedMonth?.label}</p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-center">
             <p className="text-2xl font-bold text-emerald-300">{stats.trip}</p>
             <p className="text-xs text-slate-300">Trips</p>

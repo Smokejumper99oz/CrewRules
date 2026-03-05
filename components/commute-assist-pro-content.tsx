@@ -837,14 +837,14 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
             <button
               type="button"
               onClick={() => setViewMode("cards")}
-              className={`px-2 py-1 text-[11px] ${viewMode === "cards" ? "bg-slate-600 text-white" : "text-slate-400 hover:bg-slate-800/60"}`}
+              className={`touch-target touch-pad px-2 py-1 text-[11px] ${viewMode === "cards" ? "bg-slate-600 text-white" : "text-slate-400 hover:bg-slate-800/60"}`}
             >
               Cards
             </button>
             <button
               type="button"
               onClick={() => setViewMode("board")}
-              className={`px-2 py-1 text-[11px] ${viewMode === "board" ? "bg-slate-600 text-white" : "text-slate-400 hover:bg-slate-800/60"}`}
+              className={`touch-target touch-pad px-2 py-1 text-[11px] ${viewMode === "board" ? "bg-slate-600 text-white" : "text-slate-400 hover:bg-slate-800/60"}`}
             >
               Board
             </button>
@@ -852,7 +852,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as "arrAsc" | "arrDesc" | "durAsc" | "durDesc")}
-            className="rounded border border-slate-700/60 bg-slate-900/60 text-xs text-slate-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            className="touch-input rounded border border-slate-700/60 bg-slate-900/60 text-xs text-slate-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-slate-500"
           >
             <option value="arrAsc">Earliest arrival</option>
             <option value="arrDesc">Latest arrival</option>
@@ -868,7 +868,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
             type="button"
             onClick={() => loadFlights({ forceRefresh: true }).catch((err) => { console.error("Commute Assist refresh failed", err); setCommuteError("Refresh failed."); })}
             disabled={refreshing}
-            className="rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1 text-[11px] text-slate-200 hover:bg-slate-900/70 disabled:opacity-50"
+            className="touch-target touch-pad rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1 text-[11px] text-slate-200 hover:bg-slate-900/70 disabled:opacity-50"
           >
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
@@ -946,7 +946,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                         type="button"
                         onClick={() => setDayPriorPage((p) => Math.max(1, p - 1))}
                         disabled={dayPriorPage <= 1}
-                        className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="touch-target touch-pad rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Prev
                       </button>
@@ -955,7 +955,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                           key={p}
                           type="button"
                           onClick={() => setDayPriorPage(p)}
-                          className={`rounded px-2 py-1 text-xs ${p === dayPriorPage ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
+                          className={`touch-target touch-pad rounded px-2 py-1 text-xs ${p === dayPriorPage ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
                         >
                           {p}
                         </button>
@@ -964,7 +964,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                         type="button"
                         onClick={() => setDayPriorPage((p) => Math.min(dayPriorTotalPages, p + 1))}
                         disabled={dayPriorPage >= dayPriorTotalPages}
-                        className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="touch-target touch-pad rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Next
                       </button>
@@ -1006,7 +1006,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                         type="button"
                         onClick={() => setSameDayPage((p) => Math.max(1, p - 1))}
                         disabled={sameDayPage <= 1}
-                        className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="touch-target touch-pad rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Prev
                       </button>
@@ -1015,7 +1015,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                           key={p}
                           type="button"
                           onClick={() => setSameDayPage(p)}
-                          className={`rounded px-2 py-1 text-xs ${p === sameDayPage ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
+                          className={`touch-target touch-pad rounded px-2 py-1 text-xs ${p === sameDayPage ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
                         >
                           {p}
                         </button>
@@ -1024,7 +1024,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                         type="button"
                         onClick={() => setSameDayPage((p) => Math.min(sameDayTotalPages, p + 1))}
                         disabled={sameDayPage >= sameDayTotalPages}
-                        className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="touch-target touch-pad rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Next
                       </button>

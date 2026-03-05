@@ -31,7 +31,7 @@ export function PortalMobileNav({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="md:hidden flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10 shadow-[0_0_25px_rgba(117,192,67,0.15)] touch-manipulation"
+        className="lg:hidden flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10 shadow-[0_0_25px_rgba(117,192,67,0.15)] touch-manipulation"
         aria-label="Open menu"
       >
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -42,12 +42,12 @@ export function PortalMobileNav({
       {open && (
         <>
           <div
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm lg:hidden"
             aria-hidden
             onClick={() => setOpen(false)}
           />
           <aside
-            className="fixed left-0 top-0 z-50 h-full w-72 bg-slate-900/85 backdrop-blur-xl border-r border-white/10 shadow-2xl ring-1 ring-white/10 md:hidden"
+            className="fixed left-0 top-0 z-50 h-full w-72 bg-slate-900/85 backdrop-blur-xl border-r border-white/10 shadow-2xl ring-1 ring-white/10 lg:hidden"
             role="dialog"
             aria-label="Navigation menu"
           >

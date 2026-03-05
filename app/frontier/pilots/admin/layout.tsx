@@ -54,7 +54,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 <Link
                   key={item.label}
                   href={item.href ? `${base}/${item.href}` : base}
-                  className="block rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition"
+                  className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition"
                 >
                   {item.label}
                 </Link>
@@ -64,7 +64,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             <div className="mt-6 border-t border-white/5 pt-4">
               <Link
                 href={`/${TENANT}/${PORTAL}/portal`}
-                className="block rounded-xl px-3 py-2 text-sm text-slate-400 hover:bg-white/5 hover:text-white transition"
+                className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-slate-400 hover:bg-white/5 hover:text-white transition"
               >
                 ← Back to Portal
               </Link>

@@ -25,6 +25,31 @@
     background-color: #0f172a;
     color: #e2e8f0;
   }
+
+  /* iPad + touch devices: make controls easy to tap */
+  .touch-target {
+    @media (pointer: coarse) {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+
+  .touch-pad {
+    @media (pointer: coarse) {
+      padding-left: 1rem;  /* px-4 */
+      padding-right: 1rem;
+      padding-top: 0.5rem; /* py-2 */
+      padding-bottom: 0.5rem;
+    }
+  }
+
+  .touch-input {
+    @media (pointer: coarse) {
+      min-height: 44px;
+      padding-top: 0.5rem;
+      padding-bottom: 0.5rem;
+    }
+  }
 }
 
 /* Profile date picker - dark theme to match portal (slate-900 / #75C043) */
