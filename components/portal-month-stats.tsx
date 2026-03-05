@@ -33,7 +33,6 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
   const nowMonth = new Date().getMonth();
   const currentIndex = availableMonths.findIndex((m) => m.year === nowYear && m.month === nowMonth);
   const [selectedIndex, setSelectedIndex] = useState(currentIndex >= 0 ? currentIndex : 0);
-  const scheduleHref = `/${tenant}/${portal}/portal/schedule`;
 
   const selectedMonth = availableMonths[selectedIndex];
   const stats = selectedMonth ? statsByMonth[monthKey(selectedMonth.year, selectedMonth.month)] : null;
@@ -96,7 +95,7 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
 
   return (
     <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20">
-      <div className="flex flex-col gap-3 border-b border-white/5 pb-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-b border-white/5 pb-2 sm:flex-row sm:items-center">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-semibold tracking-tight">Month Overview</h2>
           {availableMonths.length > 1 && (
@@ -118,35 +117,32 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
             </div>
           )}
         </div>
-        <Link href={scheduleHref} className="text-sm font-medium text-[#75C043] hover:underline shrink-0">
-          View schedule →
-        </Link>
       </div>
       <div className="mt-4">
         <p className="mb-3 text-sm text-slate-300">{selectedMonth?.label}</p>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-center">
-            <p className="text-2xl font-bold text-emerald-300">{stats.trip}</p>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-center">
+            <p className="truncate tabular-nums text-2xl font-bold text-emerald-300">{stats.trip}</p>
             <p className="text-xs text-slate-300">Trips</p>
           </div>
-          <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-center">
-            <p className="text-2xl font-bold text-blue-300">{stats.reserve}</p>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-center">
+            <p className="truncate tabular-nums text-2xl font-bold text-blue-300">{stats.reserve}</p>
             <p className="text-xs text-slate-300">Reserve days</p>
           </div>
-          <div className="rounded-xl border border-slate-500/20 bg-slate-500/5 px-4 py-3 text-center">
-            <p className="text-2xl font-bold text-slate-300">{stats.vacationOff}</p>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-slate-500/20 bg-slate-500/5 px-4 py-3 text-center">
+            <p className="truncate tabular-nums text-2xl font-bold text-slate-300">{stats.vacationOff}</p>
             <p className="text-xs text-slate-300">Days off</p>
           </div>
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-center">
+          <div className="min-w-0 overflow-hidden rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-center">
             <div className="space-y-2">
               <div>
-                <p className="text-2xl font-normal text-amber-300/80">
+                <p className="truncate tabular-nums text-2xl font-normal text-amber-300/80">
                   {formatMinutesToHhMm(stats.creditMinutes ?? 0)}
                 </p>
                 <p className="text-xs text-slate-300">Credit</p>
               </div>
               <div className="border-t border-white/5 pt-2">
-                <p className="text-xs font-normal text-amber-300/80">
+                <p className="truncate tabular-nums text-xs font-normal text-amber-300/80">
                   {formatMinutesToHhMm(Math.round((stats.totalBlock ?? 0) * 60))}
                 </p>
                 <p className="text-xs text-slate-300">Block</p>
@@ -228,27 +224,27 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
             ) : (
             <>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-white/5 bg-black/20 p-3">
+              <div className="min-w-0 overflow-hidden rounded-xl border border-white/5 bg-black/20 p-3">
                 <p className="text-xs text-slate-300">Estimated Payment</p>
                 <p className="text-xs text-slate-300">(20th)</p>
-                <p className="mt-1 font-semibold tracking-tight text-emerald-200">
+                <p className="mt-1 break-words font-semibold tabular-nums tracking-tight text-emerald-200">
                   {optimisticShow && stats.payProjection
                     ? formatUSD(stats.payProjection.pay20thGross)
                     : "••••••"}
                 </p>
               </div>
 
-              <div className="rounded-xl border border-white/5 bg-black/20 p-3">
+              <div className="min-w-0 overflow-hidden rounded-xl border border-white/5 bg-black/20 p-3">
                 <p className="text-xs text-slate-300">Estimated Payment</p>
                 <p className="text-xs text-slate-300">(5th)</p>
-                <p className="mt-1 text-base font-medium tracking-tight text-emerald-200/90">
+                <p className="mt-1 break-words text-base font-medium tabular-nums tracking-tight text-emerald-200/90">
                   {optimisticShow && stats.payProjection
                     ? formatUSD(stats.payProjection.pay5thGross)
                     : "••••••"}
                 </p>
               </div>
 
-              <div className="relative overflow-hidden rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3">
+              <div className="relative min-w-0 overflow-hidden rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3">
                 {/* subtle glow */}
                 <div className="pointer-events-none absolute -inset-10 opacity-40 blur-2xl bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.35),transparent_60%)]" />
                 <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.25),transparent_70%)]" />
@@ -257,7 +253,7 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
                   Estimated Monthly <span className="text-emerald-100/60">(Total)</span>
                 </p>
 
-                <p className="relative mt-1 text-xl font-bold tracking-tight text-emerald-100">
+                <p className="relative mt-1 break-words text-xl font-bold tabular-nums tracking-tight text-emerald-100">
                   {optimisticShow && stats.payProjection
                     ? formatUSD(animatedTotal)
                     : "••••••"}
