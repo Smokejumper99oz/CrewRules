@@ -68,7 +68,7 @@ export function PortalLayoutShell({
       <DesktopIdleLogout />
       <main className="min-h-screen bg-slate-950 text-white">
         <div className="flex">
-          <aside className="hidden shrink-0 flex-col gap-4 overflow-hidden border-r border-white/5 bg-slate-950/70 backdrop-blur transition-[width] duration-300 lg:flex lg:w-72">
+          <aside className="hidden shrink-0 flex-col gap-4 overflow-hidden border-r border-white/5 bg-slate-950/70 backdrop-blur transition-[width] duration-300 xl:flex xl:w-72">
             <div className="px-6 pt-6">
               <div className="text-lg font-semibold">
                 Crew<span className="text-[#75C043]">Rules</span>
@@ -94,7 +94,7 @@ export function PortalLayoutShell({
           </aside>
 
           {tabletNavOpen && (
-            <aside className="hidden shrink-0 flex-col gap-4 border-r border-white/5 bg-slate-950/88 backdrop-blur-xl md:flex md:w-56 lg:hidden">
+            <aside className="hidden shrink-0 flex-col gap-4 border-r border-white/5 bg-slate-950/88 backdrop-blur-xl md:flex md:w-56 xl:hidden">
               <div className="px-5 pt-6">
                 <div className="text-lg font-semibold">
                   Crew<span className="text-[#75C043]">Rules</span>

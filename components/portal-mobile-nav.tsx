@@ -33,7 +33,7 @@ export function PortalMobileNav({
   const [open, setOpen] = useState(false);
 
   const handleHamburgerClick = () => {
-    if (window.innerWidth >= 768 && window.innerWidth < 1024) {
+    if (window.innerWidth >= 768 && window.innerWidth < 1280) {
       setTabletNavOpen(!tabletNavOpen);
     } else {
       setOpen(true);
@@ -45,7 +45,7 @@ export function PortalMobileNav({
       <button
         type="button"
         onClick={handleHamburgerClick}
-        className="lg:hidden flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10 shadow-[0_0_25px_rgba(117,192,67,0.15)] touch-manipulation"
+        className="xl:hidden flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10 shadow-[0_0_25px_rgba(117,192,67,0.15)] touch-manipulation"
         aria-label={tabletNavOpen ? "Close menu" : "Open menu"}
       >
         {tabletNavOpen ? (
@@ -62,12 +62,12 @@ export function PortalMobileNav({
       {open && (
         <>
           <div
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm lg:hidden"
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm xl:hidden"
             aria-hidden
             onClick={() => setOpen(false)}
           />
           <aside
-            className="fixed left-0 top-0 z-50 h-full w-72 bg-slate-900/85 backdrop-blur-xl border-r border-white/10 shadow-2xl ring-1 ring-white/10 lg:hidden"
+            className="fixed left-0 top-0 z-50 h-full w-72 bg-slate-900/85 backdrop-blur-xl border-r border-white/10 shadow-2xl ring-1 ring-white/10 xl:hidden"
             role="dialog"
             aria-label="Navigation menu"
           >
