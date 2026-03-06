@@ -34,6 +34,7 @@ const NAV_GROUPS = [
       { label: "Updates", href: "updates" },
       { label: "Archive", href: "archive" },
       { label: "Profile", href: "profile" },
+      { label: "About", href: "profile/about" },
     ],
   },
 ] as const;
@@ -68,7 +69,7 @@ export function PortalLayoutShell({
       <DesktopIdleLogout />
       <main className="min-h-screen bg-slate-950 text-white">
         <div className="flex h-screen overflow-hidden">
-          <aside className="hidden shrink-0 flex-col gap-4 overflow-y-auto border-r border-white/5 bg-slate-950/70 backdrop-blur transition-[width] duration-300 xl:flex xl:h-screen xl:w-72">
+          <aside className="sidebar-scrollbar-hide hidden shrink-0 flex-col gap-4 overflow-y-auto border-r border-white/5 bg-slate-950/70 backdrop-blur transition-[width] duration-300 xl:flex xl:h-screen xl:w-72">
             <div className="px-6 pt-6">
               <div className="text-lg font-semibold">
                 Crew<span className="text-[#75C043]">Rules</span>
@@ -106,7 +107,7 @@ export function PortalLayoutShell({
                 </div>
               </div>
 
-              <nav className="flex-1 overflow-y-auto px-3 pb-6 pt-2">
+              <nav className="sidebar-scrollbar-hide flex-1 overflow-y-auto px-3 pb-6 pt-2">
                 <PortalSidebarContent
                   base={base}
                   navGroups={NAV_GROUPS}

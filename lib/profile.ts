@@ -98,6 +98,15 @@ export function isProActive(profile?: Profile | null): boolean {
   return expiresMs > Date.now();
 }
 
+/** Subscription type for display: Free, Pro, or Enterprise. */
+export function getSubscriptionDisplayType(profile?: Profile | null): "Free" | "Pro" | "Enterprise" {
+  if (!profile) return "Free";
+  const tier = profile.subscription_tier;
+  if (tier === "enterprise") return "Enterprise";
+  if (tier === "pro") return "Pro";
+  return "Free";
+}
+
 /** Pro badge label: "Pro Active" or "Pro Trial — X days remaining", or null. */
 export function getProBadgeLabel(profile: Profile | null): string | null {
   if (!profile) return null;

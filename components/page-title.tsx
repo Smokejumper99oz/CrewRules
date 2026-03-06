@@ -38,10 +38,13 @@ export function PageTitle({ portalDisplayName = "", isAdmin = false }: PageTitle
   const inAdmin = parts.includes("admin") || isAdmin;
   const segmentIndex = inAdmin ? parts.indexOf("admin") + 1 : parts.indexOf("portal") + 1;
   const currentSegment = parts[segmentIndex] ?? "";
+  const nextSegment = parts[segmentIndex + 1] ?? "";
 
   const pageTitle = inAdmin
     ? (ADMIN_TITLES[currentSegment] ?? "Dashboard")
-    : (PORTAL_TITLES[currentSegment] ?? "Dashboard");
+    : currentSegment === "profile" && nextSegment === "about"
+      ? "About"
+      : (PORTAL_TITLES[currentSegment] ?? "Dashboard");
 
   const role = roleFromPortalDisplayName(portalDisplayName);
   const context = inAdmin && role ? `${role} Admin` : role || (inAdmin ? "Admin" : "");

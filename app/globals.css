@@ -6,6 +6,15 @@
   --cr-green: #75C043; /* CrewRules green */
 }
 
+/* Hide scrollbar but keep scroll (sidebar) */
+.sidebar-scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sidebar-scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Touch-friendly: remove tap highlight on iOS/Android */
 @layer base {
   * {
