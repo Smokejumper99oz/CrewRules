@@ -136,6 +136,21 @@ export function formatDayLabel(isoUtc: string, timezone: string): string {
   }
 }
 
+/** Day range label for multi-day events: e.g. "Tue • Mar 17 – Sat • Mar 21". Returns single day if start and end are same day. */
+export function formatDayRangeLabel(startIso: string, endIso: string, timezone: string): string {
+  try {
+    const start = new Date(startIso);
+    const end = new Date(endIso);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return formatDayLabel(startIso, timezone);
+    const startStr = formatInTimeZone(start, timezone, "yyyy-MM-dd");
+    const endStr = formatInTimeZone(end, timezone, "yyyy-MM-dd");
+    if (startStr === endStr) return formatDayLabel(startIso, timezone);
+    return `${formatDayLabel(startIso, timezone)} – ${formatDayLabel(endIso, timezone)}`;
+  } catch {
+    return formatDayLabel(startIso, timezone);
+  }
+}
+
 /**
  * Expand a schedule event (start_time/end_time) into the list of local calendar dates it overlaps,
  * clipped to the selected month boundaries. Each segment includes isStart/isMiddle/isEnd for through-bar styling.

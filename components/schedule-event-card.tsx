@@ -1,4 +1,4 @@
-import { formatScheduleTime, formatDayLabel, computeTripCredit, formatMinutesToHhMm } from "@/lib/schedule-time";
+import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, computeTripCredit, formatMinutesToHhMm } from "@/lib/schedule-time";
 import type { ScheduleEvent } from "@/app/frontier/pilots/portal/schedule/actions";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
 
@@ -69,11 +69,15 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
       : `Report ${reportPart} • ${dutyRange}`;
 
   const borderStyle = EVENT_STYLES[event.event_type] ?? EVENT_STYLES.other;
+  const showDateRange = event.event_type === "vacation" || event.event_type === "off";
+  const dateLabel = showDateRange
+    ? formatDayRangeLabel(event.start_time, event.end_time, displaySettings.baseTimezone)
+    : formatDayLabel(event.start_time, displaySettings.baseTimezone);
 
   if (compact) {
     return (
       <div className={`flex flex-col gap-0.5 rounded-xl border px-3 py-2 ${borderStyle} bg-slate-950/40`}>
-        <span className="text-xs font-medium text-slate-500">{formatDayLabel(event.start_time, displaySettings.baseTimezone)}</span>
+        <span className="text-xs font-medium text-slate-500">{dateLabel}</span>
         <span className="font-medium text-white">{headerLine}</span>
         {showRoute && <span className="text-xs text-slate-500">{event.route}</span>}
         {showReportCredit && (
@@ -89,7 +93,7 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
 
   return (
     <div className={`flex flex-col gap-0.5 rounded-xl border px-4 py-3 ${borderStyle} bg-slate-950/40`}>
-      <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{formatDayLabel(event.start_time, displaySettings.baseTimezone)}</span>
+      <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{dateLabel}</span>
       <span className="text-lg font-medium text-white">{headerLine}</span>
       {showRoute && <span className="text-sm text-slate-500">{event.route}</span>}
       {showReportCredit && (

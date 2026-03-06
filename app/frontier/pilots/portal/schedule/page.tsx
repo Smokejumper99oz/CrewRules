@@ -12,7 +12,7 @@ import {
   type ScheduleDisplaySettings,
 } from "./actions";
 import { ScheduleStatusChip } from "@/components/schedule-status-chip";
-import { formatScheduleTime, formatDayLabel, eventOverlapsDay } from "@/lib/schedule-time";
+import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, eventOverlapsDay } from "@/lib/schedule-time";
 
 const EVENT_STYLES: Record<string, string> = {
   trip: "bg-emerald-500/20 border-emerald-500/40 text-emerald-200",
@@ -54,7 +54,13 @@ function getCalendarDays(year: number, month: number): (Date | null)[] {
 }
 
 function eventsForDay(events: ScheduleEvent[], day: Date, baseTimezone: string): ScheduleEvent[] {
-  return events.filter((e) => eventOverlapsDay(e.start_time, e.end_time, day, baseTimezone));
+  const overlapping = events.filter((e) => eventOverlapsDay(e.start_time, e.end_time, day, baseTimezone));
+  const workEvents = overlapping.filter((e) => e.event_type === "trip" || e.event_type === "reserve");
+  const vacationOffEvents = overlapping.filter((e) => e.event_type === "vacation" || e.event_type === "off");
+  if (workEvents.length > 0 && vacationOffEvents.length > 0) {
+    return workEvents;
+  }
+  return overlapping;
 }
 
 const isSameDay = (d1: Date, d2: Date) =>
@@ -345,7 +351,11 @@ export default function SchedulePage() {
                     className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition hover:opacity-90 ${eventStyle(ev.event_type)}`}
                   >
                     <span className="font-medium truncate">{ev.title || "Untitled"}</span>
-                    <span className="text-xs shrink-0 ml-2">{formatDayLabel(ev.start_time, displaySettings.baseTimezone)}</span>
+                    <span className="text-xs shrink-0 ml-2">
+                      {(ev.event_type === "vacation" || ev.event_type === "off")
+                        ? formatDayRangeLabel(ev.start_time, ev.end_time, displaySettings.baseTimezone)
+                        : formatDayLabel(ev.start_time, displaySettings.baseTimezone)}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -405,7 +415,10 @@ export default function SchedulePage() {
           >
             <p className="font-medium text-white">{selectedEvent.title || "Untitled"}</p>
             <p className="mt-2 text-sm text-slate-400">
-              {formatDayLabel(selectedEvent.start_time, displaySettings.baseTimezone)} •{" "}
+              {(selectedEvent.event_type === "vacation" || selectedEvent.event_type === "off")
+                ? formatDayRangeLabel(selectedEvent.start_time, selectedEvent.end_time, displaySettings.baseTimezone)
+                : formatDayLabel(selectedEvent.start_time, displaySettings.baseTimezone)}
+              {" • "}
               {formatTimeForDisplay(selectedEvent.start_time, displaySettings)} –{" "}
               {formatTimeForDisplay(selectedEvent.end_time, displaySettings)}
             </p>
