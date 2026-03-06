@@ -27,10 +27,10 @@ export default async function PortalDashboard() {
 
       {/* Upcoming + Month Stats (when schedule exists) */}
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1 lg:max-w-[260px] lg:flex-[0.7] xl:max-w-none xl:flex-1">
           <PortalScheduleUpcoming tenant={TENANT} portal={PORTAL} />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1 lg:flex-[1.3] xl:flex-1">
           <PortalMonthStats tenant={TENANT} portal={PORTAL} />
         </div>
       </div>

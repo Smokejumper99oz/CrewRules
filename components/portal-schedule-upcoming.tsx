@@ -5,14 +5,14 @@ import { ScheduleEventCard } from "@/components/schedule-event-card";
 export async function PortalScheduleUpcoming({ tenant, portal }: { tenant: string; portal: string }) {
   const [nextDuty, { events: rawEvents }, displaySettings, profile] = await Promise.all([
     getNextDuty(),
-    getUpcomingEvents(4),
+    getUpcomingEvents(7),
     getScheduleDisplaySettings(),
     getProfile(),
   ]);
   const excludeId = nextDuty.event?.id;
   const upcomingEvents = excludeId
-    ? rawEvents.filter((e) => e.id !== excludeId).slice(0, 3)
-    : rawEvents.slice(0, 3);
+    ? rawEvents.filter((e) => e.id !== excludeId).slice(0, 5)
+    : rawEvents.slice(0, 5);
 
   if (upcomingEvents.length === 0) return null;
 
@@ -22,8 +22,8 @@ export async function PortalScheduleUpcoming({ tenant, portal }: { tenant: strin
         <h2 className="text-xl font-semibold tracking-tight">Upcoming</h2>
       </div>
       <ul className="mt-4 space-y-2">
-        {upcomingEvents.map((ev) => (
-          <li key={ev.id}>
+        {upcomingEvents.map((ev, i) => (
+          <li key={ev.id} className={i === 4 ? "xl:hidden" : undefined}>
             <ScheduleEventCard event={ev} displaySettings={displaySettings} position={profile?.position ?? null} compact />
           </li>
         ))}

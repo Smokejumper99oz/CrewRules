@@ -67,8 +67,8 @@ export function PortalLayoutShell({
     <PortalFadeIn>
       <DesktopIdleLogout />
       <main className="min-h-screen bg-slate-950 text-white">
-        <div className="flex">
-          <aside className="hidden shrink-0 flex-col gap-4 overflow-hidden border-r border-white/5 bg-slate-950/70 backdrop-blur transition-[width] duration-300 xl:flex xl:w-72">
+        <div className="flex h-screen overflow-hidden">
+          <aside className="hidden shrink-0 flex-col gap-4 overflow-y-auto border-r border-white/5 bg-slate-950/70 backdrop-blur transition-[width] duration-300 xl:flex xl:h-screen xl:w-72">
             <div className="px-6 pt-6">
               <div className="text-lg font-semibold">
                 Crew<span className="text-[#75C043]">Rules</span>
@@ -94,7 +94,7 @@ export function PortalLayoutShell({
           </aside>
 
           {tabletNavOpen && (
-            <aside className="hidden shrink-0 flex-col gap-4 border-r border-white/5 bg-slate-950/88 backdrop-blur-xl md:flex md:w-56 xl:hidden">
+            <aside className="hidden shrink-0 flex-col gap-4 overflow-hidden border-r border-white/5 bg-slate-950/88 backdrop-blur-xl md:flex md:h-screen md:w-56 xl:hidden">
               <div className="px-5 pt-6">
                 <div className="text-lg font-semibold">
                   Crew<span className="text-[#75C043]">Rules</span>
@@ -122,11 +122,11 @@ export function PortalLayoutShell({
 
           <section
             className={[
-              "min-w-0 flex-1 transition-[transform,margin] duration-200 ease-out",
+              "flex min-w-0 flex-1 flex-col overflow-hidden transition-[transform,margin] duration-200 ease-out",
               tabletNavOpen ? "md:ml-0" : "md:ml-0",
             ].join(" ")}
           >
-            <header className="sticky top-0 z-40 border-b border-white/5 bg-slate-950/70 backdrop-blur">
+            <header className="shrink-0 border-b border-white/5 bg-slate-950/70 backdrop-blur">
               <PortalDebugLine
                 email={user.email}
                 role={profile.role}
@@ -159,8 +159,10 @@ export function PortalLayoutShell({
               </div>
             </header>
 
-            <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 pb-[env(safe-area-inset-bottom)]">
-              {children}
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 pb-[env(safe-area-inset-bottom)]">
+                {children}
+              </div>
             </div>
           </section>
         </div>
