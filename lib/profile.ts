@@ -104,7 +104,7 @@ export function getSubscriptionDisplayType(profile?: Profile | null): "Free" | "
   if (!profile) return "Free";
   const tier = profile.subscription_tier;
   if (tier === "enterprise") return "Enterprise";
-  if (tier === "pro") return "PRO";
+  if (tier === "pro") return "Pro";
   return "Free";
 }
 
