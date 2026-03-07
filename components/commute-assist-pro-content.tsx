@@ -103,6 +103,14 @@ type Props = {
   displaySettings: ScheduleDisplaySettings;
   tenant: string;
   portal: string;
+  /** When set, use as duty date for to_base (dayPriorBase = displayDateStr - 1). */
+  displayDateStr?: string | null;
+  /** When true, show to_home (return when pairing ends); when false, show to_base (commute to duty). */
+  isInPairing?: boolean;
+  /** When set (e.g. from legsToShow[0].origin), use as duty start airport for to_base. */
+  dutyStartAirportOverride?: string | null;
+  /** When set (e.g. 05:15 when out of base = first leg dep - 45 min), use for arrive-by. */
+  reportTimeOverride?: string | null;
 };
 
 const PAGE_SIZE = 5;
@@ -526,7 +534,7 @@ function CommuteFlightRow({
   );
 }
 
-export function CommuteAssistProContent({ event, label, profile, displaySettings, tenant, portal }: Props) {
+export function CommuteAssistProContent({ event, label, profile, displaySettings, tenant, portal, displayDateStr, isInPairing, dutyStartAirportOverride, reportTimeOverride }: Props) {
   const [commuteError, setCommuteError] = useState<string | null>(null);
   const [commuteGroups, setCommuteGroups] = useState<Record<"home" | "alternate", CommuteFlightOption[]>>({
     home: [],
@@ -560,34 +568,64 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const hasValidBase = !!baseAirport && baseAirport.length === 3;
   const canUseCommute = hasValidHome && hasValidBase;
 
-  const direction = label === "on_duty" ? "to_home" : "to_base";
+  const direction = isInPairing !== undefined
+    ? (isInPairing ? "to_home" : "to_base")
+    : (label === "on_duty" ? "to_home" : "to_base");
   const dutyStart = new Date(event.start_time);
   const dutyOk = !Number.isNaN(dutyStart.getTime());
 
+  // When displayDateStr is set (e.g. next duty's date), use it for to_base commute date.
+  // dayPriorBase = day before duty start (fly in the day before to report).
+  const dayPriorBase = (() => {
+    if (direction === "to_base" && displayDateStr?.trim()) {
+      const dutyDate = fromZonedTime(`${displayDateStr.trim()}T12:00:00`, baseTz);
+      return formatInTimeZone(subDays(dutyDate, 1), baseTz, "yyyy-MM-dd");
+    }
+    if (!dutyOk) return new Date().toISOString().slice(0, 10);
+    const dutyDateTime = (() => {
+      if (event.report_time?.trim()) {
+        const startDateStr = formatInTimeZone(dutyStart, baseTz, "yyyy-MM-dd");
+        const startHour = parseInt(formatInTimeZone(dutyStart, baseTz, "HH"), 10);
+        const reportTime = event.report_time.length === 5 ? `${event.report_time}:00` : event.report_time;
+        const reportHour = parseInt(reportTime.slice(0, 2), 10) || 0;
+        const reportDateStr =
+          startHour >= 18 && reportHour < 12
+            ? formatInTimeZone(addDays(dutyStart, 1), baseTz, "yyyy-MM-dd")
+            : startDateStr;
+        return fromZonedTime(`${reportDateStr}T${reportTime}`, baseTz);
+      }
+      return dutyStart;
+    })();
+    return formatInTimeZone(subDays(dutyDateTime, 1), baseTz, "yyyy-MM-dd");
+  })();
+
   // Compute duty date/time in base timezone; use report_time if available.
-  // When duty spans midnight (event starts late night, report is early morning), use the next
-  // calendar day as the report date so commute = day prior to report, not day prior to event start.
   const dutyDateTime = (() => {
     if (!dutyOk) return new Date();
-    if (event.report_time?.trim()) {
-      const startDateStr = formatInTimeZone(dutyStart, baseTz, "yyyy-MM-dd");
-      const startHour = parseInt(formatInTimeZone(dutyStart, baseTz, "HH"), 10);
-      const reportTime = event.report_time.length === 5 ? `${event.report_time}:00` : event.report_time;
-      const reportHour = parseInt(reportTime.slice(0, 2), 10) || 0;
-      // Report is next day if event starts late (>=18) and report is early morning (<12)
+    const reportTime = reportTimeOverride?.trim()
+      ? (reportTimeOverride.length === 5 ? `${reportTimeOverride}:00` : reportTimeOverride)
+      : event.report_time?.trim()
+        ? (event.report_time.length === 5 ? `${event.report_time}:00` : event.report_time)
+        : null;
+    if (reportTime) {
       const reportDateStr =
-        startHour >= 18 && reportHour < 12
-          ? formatInTimeZone(addDays(dutyStart, 1), baseTz, "yyyy-MM-dd")
-          : startDateStr;
+        displayDateStr?.trim() ??
+        (() => {
+          const startDateStr = formatInTimeZone(dutyStart, baseTz, "yyyy-MM-dd");
+          const startHour = parseInt(formatInTimeZone(dutyStart, baseTz, "HH"), 10);
+          const reportHour = parseInt(reportTime.slice(0, 2), 10) || 0;
+          return startHour >= 18 && reportHour < 12
+            ? formatInTimeZone(addDays(dutyStart, 1), baseTz, "yyyy-MM-dd")
+            : startDateStr;
+        })();
       return fromZonedTime(`${reportDateStr}T${reportTime}`, baseTz);
     }
     return dutyStart;
   })();
   const dutyDateBase = formatInTimeZone(dutyDateTime, baseTz, "yyyy-MM-dd");
-  const dayPriorBase = formatInTimeZone(subDays(dutyDateTime, 1), baseTz, "yyyy-MM-dd");
   const arriveBy = dutyOk ? subMinutes(dutyDateTime, arrivalBuffer) : null;
 
-  const dutyStartAirport = parseDutyStartAirport(event.route);
+  const dutyStartAirport = dutyStartAirportOverride?.trim() || parseDutyStartAirport(event.route);
   const dutyEndAirport = baseAirport ?? null;
   const dutyEndTime = event.end_time ? new Date(event.end_time) : null;
   const dutyEndDateBase = dutyEndTime && !Number.isNaN(dutyEndTime.getTime())

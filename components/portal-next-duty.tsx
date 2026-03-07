@@ -6,6 +6,16 @@ import { CommuteAssistProContent } from "@/components/commute-assist-pro-content
 import { ScheduleEventCard } from "@/components/schedule-event-card";
 import { OnDutyTimer } from "@/components/on-duty-timer";
 
+/** Subtract minutes from HH:MM; returns HH:MM. */
+function subtractMinutesFromTime(time: string, minutes: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const totalMin = (h ?? 0) * 60 + (m ?? 0) - minutes;
+  const wrapped = ((totalMin % (24 * 60)) + 24 * 60) % (24 * 60);
+  const nh = Math.floor(wrapped / 60);
+  const nm = wrapped % 60;
+  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
+}
+
 const DUTY_LABELS: Record<string, string> = {
   on_duty: "On Duty",
   later_today: "Later today",
@@ -13,7 +23,7 @@ const DUTY_LABELS: Record<string, string> = {
 };
 
 export async function PortalNextDuty({ tenant, portal }: { tenant: string; portal: string }) {
-  const [{ event, label, hasSchedule }, statusData, displaySettings, profile] = await Promise.all([
+  const [{ event, label, hasSchedule, legsToShow, displayDateStr, isInPairing }, statusData, displaySettings, profile] = await Promise.all([
     getNextDuty(),
     getScheduleImportStatus(),
     getScheduleDisplaySettings(),
@@ -23,6 +33,13 @@ export async function PortalNextDuty({ tenant, portal }: { tenant: string; porta
   const heading = label ? DUTY_LABELS[label] : "Next Duty";
   const isOnDuty = label === "on_duty";
   const proActive = isProActive(profile);
+  const baseAirport = profile?.base_airport?.trim().toUpperCase() ?? displaySettings.baseAirport?.trim().toUpperCase() ?? "";
+  const firstLegOrigin = legsToShow?.[0]?.origin?.trim().toUpperCase();
+  const isOutOfBase = !!firstLegOrigin && !!baseAirport && firstLegOrigin !== baseAirport;
+  const reportTimeOverride =
+    isOutOfBase && legsToShow?.[0]?.depTime
+      ? subtractMinutesFromTime(legsToShow[0].depTime, 45)
+      : undefined;
 
   return (
     <div
@@ -66,7 +83,15 @@ export async function PortalNextDuty({ tenant, portal }: { tenant: string; porta
 
       {hasSchedule && event && (
         <div className="mt-4 space-y-2">
-          <ScheduleEventCard event={event} displaySettings={displaySettings} position={profile?.position ?? null} compact={false} />
+          <ScheduleEventCard
+            event={event}
+            displaySettings={displaySettings}
+            position={profile?.position ?? null}
+            compact={false}
+            legsToShow={legsToShow}
+            displayDateStr={displayDateStr}
+            reportTimeOverride={reportTimeOverride}
+          />
           {isOnDuty && (
             <OnDutyTimer startTime={event.start_time} endTime={event.end_time} timezone={displaySettings.baseTimezone} />
           )}
@@ -102,6 +127,10 @@ export async function PortalNextDuty({ tenant, portal }: { tenant: string; porta
                 displaySettings={displaySettings}
                 tenant={tenant}
                 portal={portal}
+                displayDateStr={displayDateStr}
+                isInPairing={isInPairing}
+                dutyStartAirportOverride={legsToShow?.[0]?.origin}
+                reportTimeOverride={reportTimeOverride}
               />
             )}
           </div>

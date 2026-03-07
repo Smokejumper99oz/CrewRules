@@ -333,6 +333,10 @@ export async function getNextDuty(): Promise<{
   event: ScheduleEvent | null;
   label: NextDutyLabel | null;
   hasSchedule: boolean;
+  legsToShow?: ScheduleEventLeg[] | null;
+  displayDateStr?: string | null;
+  /** True when event overlaps now (start <= now < end); Commute Assist uses for to_home vs to_base. */
+  isInPairing?: boolean;
   error?: string;
 }> {
   const profile = await getProfile();
@@ -342,6 +346,10 @@ export async function getNextDuty(): Promise<{
     const supabase = await createClient();
     const nowIso = new Date().toISOString();
 
+    const baseAirport = profile.base_airport ?? null;
+    const baseTimezone =
+      profile.base_timezone ?? (baseAirport ? getTimezoneFromAirport(baseAirport) : getTenantSourceTimezone(profile.tenant));
+
     const { count } = await supabase
       .from("schedule_events")
       .select("id", { count: "exact", head: true })
@@ -349,6 +357,19 @@ export async function getNextDuty(): Promise<{
       .eq("source", FLICA_SOURCE);
 
     const hasSchedule = (count ?? 0) > 0;
+
+    const {
+      getTripDateStrings,
+      getLegsForDate,
+      getNextLegForDate,
+      isDateFullyComplete,
+      todayStr,
+    } = await import("@/lib/leg-dates");
+    const { addDays } = await import("date-fns");
+    const { formatInTimeZone } = await import("date-fns-tz");
+
+    const today = todayStr(baseTimezone);
+    const tomorrow = formatInTimeZone(addDays(new Date(), 1), baseTimezone, "yyyy-MM-dd");
 
     // 1. On duty: start <= now < end
     const { data: onDutyData, error: onDutyError } = await supabase
@@ -364,13 +385,56 @@ export async function getNextDuty(): Promise<{
 
     if (onDutyError) return { event: null, label: null, hasSchedule, error: onDutyError.message };
     if (onDutyData) {
-      return { event: onDutyData as ScheduleEvent, label: "on_duty", hasSchedule };
+      const ev = onDutyData as ScheduleEvent;
+      const legs = ev.legs ?? [];
+      const tripDates = getTripDateStrings(ev.start_time, ev.end_time, baseTimezone);
+
+      if (legs.length > 0 && tripDates.length > 0) {
+        if (isDateFullyComplete(legs, today, tripDates, baseTimezone)) {
+          const legsForTomorrow = getLegsForDate(legs, tomorrow, tripDates, baseTimezone);
+          if (legsForTomorrow.length > 0) {
+            return {
+              event: ev,
+              label: "next_duty",
+              hasSchedule,
+              legsToShow: legsForTomorrow,
+              displayDateStr: tomorrow,
+              isInPairing: true,
+            };
+          }
+          const nextEvent = await findNextEventForDate(supabase, profile.id, tomorrow, baseTimezone);
+          if (nextEvent) {
+            const nextTripDates = getTripDateStrings(nextEvent.start_time, nextEvent.end_time, baseTimezone);
+            const nextLegs = getLegsForDate(nextEvent.legs ?? [], tomorrow, nextTripDates, baseTimezone);
+            return {
+              event: nextEvent,
+              label: "next_duty",
+              hasSchedule,
+              legsToShow: nextLegs.length > 0 ? nextLegs : null,
+              displayDateStr: tomorrow,
+              isInPairing: true,
+            };
+          }
+        }
+        const nextLeg = getNextLegForDate(legs, today, tripDates, baseTimezone);
+        if (nextLeg) {
+          return {
+            event: ev,
+            label: "on_duty",
+            hasSchedule,
+            legsToShow: [nextLeg],
+            displayDateStr: today,
+            isInPairing: true,
+          };
+        }
+      }
+      return { event: ev, label: "on_duty", hasSchedule, isInPairing: true };
     }
 
     // 2. Upcoming events: start >= now
     const { data: upcomingData, error: upcomingError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .gte("start_time", nowIso)
@@ -384,37 +448,85 @@ export async function getNextDuty(): Promise<{
       return { event: null, label: null, hasSchedule };
     }
 
-    // Need base timezone to determine "today"
-    const baseAirport = profile.base_airport ?? null;
-    const baseTimezone =
-      profile.base_timezone ?? (baseAirport ? getTimezoneFromAirport(baseAirport) : getTenantSourceTimezone(profile.tenant));
-
     const { isEventStartToday } = await import("@/lib/schedule-time");
-    const { addDays } = await import("date-fns");
-    const { formatInTimeZone } = await import("date-fns-tz");
 
     // 2a. Later today: first event that starts today
     const laterToday = upcoming.find((e) => isEventStartToday(e.start_time, baseTimezone));
     if (laterToday) {
-      // For commute: if "later today" starts in the morning and there's an event that starts
-      // tomorrow, use the tomorrow event instead (first leg departs today, main duty reports tomorrow)
       const laterStartHour = parseInt(formatInTimeZone(new Date(laterToday.start_time), baseTimezone, "HH"), 10);
-      const tomorrowStr = formatInTimeZone(addDays(new Date(), 1), baseTimezone, "yyyy-MM-dd");
       const firstTomorrow = upcoming.find((e) => {
         const startStr = formatInTimeZone(new Date(e.start_time), baseTimezone, "yyyy-MM-dd");
-        return startStr === tomorrowStr;
+        return startStr === tomorrow;
       });
+      const legDates = { getTripDateStrings, getLegsForDate, todayStr };
       if (laterStartHour < 12 && firstTomorrow) {
-        return { event: firstTomorrow, label: "next_duty", hasSchedule };
+        return { ...withLegsToShow(firstTomorrow, tomorrow, baseTimezone, "next_duty", hasSchedule, legDates), isInPairing: false };
       }
-      return { event: laterToday, label: "later_today", hasSchedule };
+      return { ...withLegsToShow(laterToday, today, baseTimezone, "later_today", hasSchedule, legDates), isInPairing: false };
     }
 
-    // 2b. Next duty: first future event
-    return { event: upcoming[0], label: "next_duty", hasSchedule };
+    // 2b. Next duty: first future event — use first day of that duty
+    const firstEvent = upcoming[0];
+    const legDates = { getTripDateStrings, getLegsForDate, todayStr };
+    const firstEventStartStr = formatInTimeZone(new Date(firstEvent.start_time), baseTimezone, "yyyy-MM-dd");
+    return { ...withLegsToShow(firstEvent, firstEventStartStr, baseTimezone, "next_duty", hasSchedule, legDates), isInPairing: false };
   } catch (e) {
     return { event: null, label: null, hasSchedule: false, error: e instanceof Error ? e.message : "Unknown error" };
   }
+}
+
+async function findNextEventForDate(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  dateStr: string,
+  timezone: string
+): Promise<ScheduleEvent | null> {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dayStart = new Date(Date.UTC(y, m - 1, d, 0, 0, 0)).toISOString();
+  const dayEnd = new Date(Date.UTC(y, m - 1, d, 23, 59, 59)).toISOString();
+  const { data } = await supabase
+    .from("schedule_events")
+    .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
+    .eq("user_id", userId)
+    .eq("source", FLICA_SOURCE)
+    .lte("start_time", dayEnd)
+    .gte("end_time", dayStart)
+    .order("start_time", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return (data ?? null) as ScheduleEvent | null;
+}
+
+function withLegsToShow(
+  event: ScheduleEvent,
+  dateStr: string | null,
+  timezone: string,
+  label: NextDutyLabel,
+  hasSchedule: boolean,
+  legDates: {
+    getTripDateStrings: (a: string, b: string, tz: string) => string[];
+    getLegsForDate: (legs: ScheduleEventLeg[], d: string, trip: string[], tz: string) => ScheduleEventLeg[];
+    todayStr: (tz: string) => string;
+  }
+): {
+  event: ScheduleEvent;
+  label: NextDutyLabel;
+  hasSchedule: boolean;
+  legsToShow?: ScheduleEventLeg[] | null;
+  displayDateStr?: string | null;
+} {
+  const legs = event.legs ?? [];
+  if (legs.length === 0) return { event, label, hasSchedule };
+  const tripDates = legDates.getTripDateStrings(event.start_time, event.end_time, timezone);
+  const targetDate = dateStr ?? legDates.todayStr(timezone);
+  const legsForDate = legDates.getLegsForDate(legs, targetDate, tripDates, timezone);
+  return {
+    event,
+    label,
+    hasSchedule,
+    legsToShow: legsForDate.length > 0 ? legsForDate : null,
+    displayDateStr: dateStr ?? legDates.todayStr(timezone),
+  };
 }
 
 export async function getScheduleEvents(fromIso: string, toIso: string): Promise<{

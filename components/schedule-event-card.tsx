@@ -32,9 +32,15 @@ type Props = {
   displaySettings: ScheduleDisplaySettings;
   position?: "captain" | "first_officer" | "flight_attendant" | null;
   compact?: boolean;
+  /** When set, show only these legs instead of all event.legs (dashboard next-duty). */
+  legsToShow?: ScheduleEventLeg[] | null;
+  /** When set with legsToShow, use this date for the date label (e.g. tomorrow). */
+  displayDateStr?: string | null;
+  /** When set (e.g. 05:15 when out of base = first leg dep - 45 min), use for Report display. */
+  reportTimeOverride?: string | null;
 };
 
-export function ScheduleEventCard({ event, displaySettings, position, compact }: Props) {
+export function ScheduleEventCard({ event, displaySettings, position, compact, legsToShow, displayDateStr, reportTimeOverride }: Props) {
   const timeOpts = {
     timezone: displaySettings.baseTimezone,
     timeFormat: displaySettings.timeFormat,
@@ -47,11 +53,12 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
   const titlePart = event.event_type === "reserve" ? rawTitle.replace(/^Trip\s+/i, "") : rawTitle;
   const typePrefix = event.event_type === "reserve" ? "" : `${typeLabel(event.event_type)} `;
   const headerLine = pos ? `${typePrefix}${titlePart} • ${pos}` : `${typePrefix}${titlePart}`;
-  const hasLegs = event.event_type === "trip" && event.legs && event.legs.length > 0;
+  const effectiveLegs = legsToShow ?? event.legs;
+  const hasLegs = event.event_type === "trip" && effectiveLegs && effectiveLegs.length > 0;
   const showRoute = event.event_type === "trip" && (hasLegs || (event.route?.trim() ?? false));
 
   const showReportCredit = event.event_type === "trip" || event.event_type === "reserve";
-  const reportPart = event.report_time ?? "—";
+  const reportPart = reportTimeOverride ?? event.report_time ?? "—";
   const tripCredit =
     event.event_type === "trip" && (event.pairing_days != null || event.block_minutes != null)
       ? computeTripCredit(event.pairing_days, event.block_minutes)
@@ -69,7 +76,10 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
       ? event.first_leg_departure_time
       : formatScheduleTime(event.start_time, timeOpts);
 
-  const dutyRange = `${rangeStart}–${formatScheduleTime(event.end_time, timeOpts)}`;
+  const dutyRange =
+    legsToShow && legsToShow.length > 0 && legsToShow[0].depTime && legsToShow[legsToShow.length - 1].arrTime
+      ? `${legsToShow[0].depTime}–${legsToShow[legsToShow.length - 1].arrTime}`
+      : `${rangeStart}–${formatScheduleTime(event.end_time, timeOpts)}`;
   const timeLine =
     event.event_type === "reserve"
       ? `On Call • ${dutyRange}`
@@ -79,7 +89,9 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
   const showDateRange = event.event_type === "vacation" || event.event_type === "off";
   const dateLabel = showDateRange
     ? formatDayRangeLabel(event.start_time, event.end_time, displaySettings.baseTimezone)
-    : formatDayLabel(event.start_time, displaySettings.baseTimezone);
+    : displayDateStr
+      ? formatDayLabel(`${displayDateStr}T12:00:00.000Z`, displaySettings.baseTimezone)
+      : formatDayLabel(event.start_time, displaySettings.baseTimezone);
 
   if (compact) {
     return (
@@ -105,7 +117,7 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
       {showRoute && (
         <div className="text-sm text-slate-500 space-y-0.5">
           {hasLegs ? (
-            event.legs!.map((l, i) => (
+            effectiveLegs!.map((l, i) => (
               <div key={i} className="font-mono text-xs">
                 {formatLeg(l)}
               </div>

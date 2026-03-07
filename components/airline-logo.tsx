@@ -3,9 +3,9 @@
 import * as React from "react";
 import { getLocalAirlineLogoPath, getAirlineLogoUrl } from "@/lib/airlines";
 
-/** Frontier-style container: rounded-xl, soft border, subtle shadow */
+/** Apple-style square icon: subtle rounded corners (~22% radius), logo fills the square */
 const LOGO_CONTAINER_CLASS =
-  "inline-flex items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/5 p-0.5 shadow-[0_0_15px_rgba(255,255,255,0.06)]";
+  "inline-flex items-center justify-center overflow-hidden rounded-[6px] border border-white/10 bg-white/5 shadow-[0_0_15px_rgba(255,255,255,0.06)]";
 
 export function AirlineLogo({
   carrier,
@@ -73,9 +73,9 @@ export function AirlineLogo({
         key={currentSrc}
         src={currentSrc}
         alt={`${carrier} logo`}
-        width={size - 4}
-        height={size - 4}
-        className="object-contain"
+        width={size}
+        height={size}
+        className="size-full object-contain"
         loading="lazy"
         referrerPolicy="no-referrer"
         onError={() => {
