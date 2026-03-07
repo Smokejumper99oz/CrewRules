@@ -2,6 +2,13 @@
 
 import { useEffect } from "react";
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  const str = String(error);
+  if (str === "[object Event]") return "A network or unexpected error occurred.";
+  return str || "An unexpected error occurred.";
+}
+
 export default function PortalError({
   error,
   reset,
@@ -13,6 +20,8 @@ export default function PortalError({
     console.error("Portal error:", error);
   }, [error]);
 
+  const message = getErrorMessage(error);
+
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
       <h1 className="text-xl font-semibold text-rose-400 mb-2">Something went wrong</h1>
@@ -21,7 +30,7 @@ export default function PortalError({
       </p>
       {process.env.NODE_ENV === "development" && (
         <pre className="text-xs text-slate-500 bg-slate-900 p-4 rounded-lg overflow-auto max-w-2xl mb-4">
-          {error.message}
+          {message}
         </pre>
       )}
       <button
