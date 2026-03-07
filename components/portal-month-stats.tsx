@@ -209,7 +209,9 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
                   Complete your Profile to enable pay estimate
                 </p>
                 <p className="text-xs text-slate-500">
-                  Missing: {stats.payMissingInputs?.length ? stats.payMissingInputs.join(", ") : "required info"}
+                  Missing: {Array.isArray(stats.payMissingInputs) && stats.payMissingInputs.length
+                  ? stats.payMissingInputs.join(", ")
+                  : "required info"}
                 </p>
                 <p className="text-xs text-slate-500">
                   Add it in your Profile to calculate your pay scale year.

@@ -65,13 +65,15 @@ function calculateDurationMinutes(
 
 const devCache = new Map<string, { expiresAt: number; data: FetchFlightsResult }>();
 
-/** Extract aircraft type from AviationStack aircraft object. Prefers iata, then modelCode, then modelText. */
+/** Extract aircraft type from AviationStack aircraft object. Prefers icao (B737), then iata, modelCode, modelText. */
 function extractAircraftType(f: {
-  aircraft?: { iata?: string; modelCode?: string; modelText?: string };
+  aircraft?: { iata?: string; icao?: string; modelCode?: string; modelText?: string };
 }): string | null {
   const a = f?.aircraft;
   if (!a) return null;
-  if (a.iata) return a.iata;
+  const icao = (a as { icao?: string }).icao?.trim().toUpperCase();
+  if (icao && /^[AB]\d{3,4}$/.test(icao)) return icao;
+  if (a.iata) return a.iata.trim().toUpperCase();
   const code = a.modelCode?.trim().toUpperCase();
   if (code) return code;
   const text = a.modelText?.trim();
@@ -84,7 +86,7 @@ function extractAircraftType(f: {
     if (lower.includes("airbus")) return `A${num}`;
     return num;
   }
-  return text.length <= 12 ? text : null;
+  return text.length <= 12 ? text.toUpperCase() : null;
 }
 
 /** Pad time-only string (e.g. "06:15") to "06:15:00" for ISO datetime. */

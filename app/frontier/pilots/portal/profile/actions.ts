@@ -41,6 +41,7 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   const timeFormat = (formData.get("time_format") as string) || "24h";
   const showTimezoneLabel = formData.get("show_timezone_label") === "1";
   const homeAirport = (formData.get("home_airport") as string)?.trim().toUpperCase() || null;
+  const alternateHomeAirport = (formData.get("alternate_home_airport") as string)?.trim().toUpperCase() || null;
   const commuteArrivalRaw = (formData.get("commute_arrival_buffer_minutes") as string)?.trim();
   const commuteArrival = commuteArrivalRaw ? parseInt(commuteArrivalRaw, 10) : 180;
   const commuteReleaseRaw = (formData.get("commute_release_buffer_minutes") as string)?.trim();
@@ -49,10 +50,10 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   const showPayProjection = formData.get("show_pay_projection") === "1";
 
   if (fullName && fullName.length > 128) {
-    return { error: "Full name is too long" };
+    return { error: "Full Name is too long" };
   }
   if (employeeNumber && employeeNumber.length > 32) {
-    return { error: "Employee number is too long" };
+    return { error: "Employee Number is too long" };
   }
   if (position && !["captain", "first_officer", "flight_attendant"].includes(position)) {
     return { error: "Invalid role" };
@@ -78,6 +79,9 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   if (homeAirport && !VALID_AIRPORT.test(homeAirport)) {
     return { error: "Home airport must be a 3-letter IATA code" };
   }
+  if (alternateHomeAirport && !VALID_AIRPORT.test(alternateHomeAirport)) {
+    return { error: "Alternate airport must be a 3-letter IATA code" };
+  }
   if (![30, 60, 90, 120, 180].includes(commuteArrival)) {
     return { error: "Invalid commute arrival buffer" };
   }
@@ -100,6 +104,7 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
       time_format: timeFormat,
       show_timezone_label: showTimezoneLabel,
       home_airport: homeAirport,
+      alternate_home_airport: alternateHomeAirport,
       commute_arrival_buffer_minutes: commuteArrival,
       commute_release_buffer_minutes: commuteRelease,
       commute_nonstop_only: commuteNonstopOnly,

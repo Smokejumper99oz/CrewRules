@@ -22,6 +22,7 @@ export type Profile = {
   time_format?: "24h" | "12h";
   show_timezone_label?: boolean;
   home_airport?: string | null;
+  alternate_home_airport?: string | null;
   commute_arrival_buffer_minutes?: number;
   commute_release_buffer_minutes?: number;
   commute_nonstop_only?: boolean;
@@ -122,16 +123,16 @@ export function getProBadgeLabel(profile: Profile | null): string | null {
   return null;
 }
 
-/** Pro badge color variant: emerald (paid or >7 days), amber (2–7 days), red (≤1 day). */
-export function getProBadgeVariant(profile: Profile | null): "emerald" | "amber" | "red" {
-  if (!profile) return "emerald";
+/** Pro badge color variant: gold (paid or trial >7 days), amber (2–7 days), red (≤1 day). */
+export function getProBadgeVariant(profile: Profile | null): "gold" | "emerald" | "amber" | "red" {
+  if (!profile) return "gold";
   const tier = profile.subscription_tier;
-  if (tier === "pro" || tier === "enterprise") return "emerald";
-  if (!profile.pro_trial_expires_at) return "emerald";
+  if (tier === "pro" || tier === "enterprise") return "gold";
+  if (!profile.pro_trial_expires_at) return "gold";
   const ms = new Date(profile.pro_trial_expires_at).getTime();
-  if (Number.isNaN(ms) || ms <= Date.now()) return "emerald";
+  if (Number.isNaN(ms) || ms <= Date.now()) return "gold";
   const daysRemaining = Math.ceil((ms - Date.now()) / (24 * 60 * 60 * 1000));
-  if (daysRemaining > 7) return "emerald";
+  if (daysRemaining > 7) return "gold";
   if (daysRemaining > 1) return "amber";
   return "red";
 }

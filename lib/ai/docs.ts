@@ -1,7 +1,12 @@
 import mammoth from "mammoth";
 
 // pdf-parse v1.1.1 - works with text-based PDFs (avoid unpdf which returned 0 chunks)
-const pdfParse = require("pdf-parse");
+// Dynamic require to avoid Webpack "reading 'run'" errors with serverExternalPackages
+async function getPdfParse(): Promise<(buffer: Buffer, opts?: object) => Promise<{ numpages: number; numrender: number; info: object; metadata: object; text: string }>> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pdfParse = require("pdf-parse") as (buffer: Buffer, opts?: object) => Promise<{ numpages: number; numrender: number; info: object; metadata: object; text: string }>;
+  return pdfParse;
+}
 
 export type PageText = { text: string; pageNumber: number };
 
@@ -40,6 +45,7 @@ export async function extractTextFromBufferWithPages(
         return text;
       });
     };
+    const pdfParse = await getPdfParse();
     const data = await pdfParse(buffer, { pagerender });
     return { pages };
   }

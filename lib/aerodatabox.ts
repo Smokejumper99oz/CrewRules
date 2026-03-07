@@ -1,16 +1,42 @@
 /**
  * AerodataBox API client for flight data (via RapidAPI).
  * FIDS endpoint: airport departures filtered by destination.
+ * API requires time window: positive, max 12 hours.
  * @see https://doc.aerodatabox.com/rapidapi.html
  */
 
-import { fromZonedTime } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import type { CommuteFlight, FetchFlightsResult } from "@/lib/aviationstack";
 import { getRouteTzs } from "@/lib/airports";
 
-/** Strip timezone offset from timestamp. */
-function stripOffset(s: string): string {
-  return s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
+/** Serializes AeroDataBox calls so multiple routes are not fetched in parallel. */
+let adbQueue = Promise.resolve<FetchFlightsResult>({ flights: [] });
+
+/** Minimum ms between AeroDataBox HTTP requests (windows + routes). */
+const ADB_REQUEST_DELAY_MS = 1500;
+let lastAdbRequestAt = 0;
+
+async function waitBeforeAdbRequest(): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastAdbRequestAt;
+  if (elapsed < ADB_REQUEST_DELAY_MS && lastAdbRequestAt > 0) {
+    await new Promise((r) => setTimeout(r, ADB_REQUEST_DELAY_MS - elapsed));
+  }
+  lastAdbRequestAt = Date.now();
+}
+
+function formatLocalForApi(d: Date, tz: string): string {
+  return formatInTimeZone(d, tz, "yyyy-MM-dd'T'HH:mm");
+}
+
+/** Strip timezone offset from timestamp. Coerce non-strings safely. */
+function stripOffset(s: unknown): string {
+  if (s == null) return "";
+  let str: string;
+  if (typeof s === "string") str = s;
+  else if (s instanceof Date) str = s.toISOString();
+  else str = String(s);
+  return str.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
 }
 
 function calculateDurationMinutes(
@@ -32,69 +58,155 @@ function getIata(obj: unknown): string {
   return typeof code === "string" ? code.toUpperCase() : "";
 }
 
-/** Extract time string from movement object. */
+/** Extract time string from movement object. AeroDataBox uses scheduledTime: { local, utc }. */
 function getTime(obj: unknown): string {
   if (!obj || typeof obj !== "object") return "";
   const o = obj as Record<string, unknown>;
-  return (
-    (o.scheduledTimeLocal ?? o.scheduledTime ?? o.scheduled ?? o.estimatedTime ?? o.actualTime) as string
-  ) ?? "";
+  const raw =
+    o.scheduledTimeLocal ??
+    o.scheduledTime ??
+    o.ScheduledTime ??
+    o.scheduled ??
+    o.estimatedTime ??
+    o.actualTime;
+  if (typeof raw === "string") return raw;
+  if (raw && typeof raw === "object") {
+    const dt = raw as Record<string, unknown>;
+    const local = dt.local ?? dt.Local;
+    if (typeof local === "string") return local;
+  }
+  return "";
 }
 
 /**
  * Fetch flights from AerodataBox FIDS (airport departures).
  * Returns flights from origin to destination on the given date.
+ * Serialized so multiple routes are not called in parallel (avoids rate limit).
  */
 export async function fetchFlightsFromAerodataBox(
   origin: string,
   destination: string,
   date: string
 ): Promise<FetchFlightsResult> {
-  const apiKey = process.env.RAPIDAPI_KEY;
-  const host =
-    process.env.AERODATABOX_RAPIDAPI_HOST ?? "aerodatabox.p.rapidapi.com";
+  const prev = adbQueue;
+  adbQueue = prev.then(() => fetchFlightsFromAerodataBoxImpl(origin, destination, date));
+  return adbQueue;
+}
 
-  if (!apiKey) {
-    throw new Error("Missing RAPIDAPI_KEY");
-  }
+async function fetchFlightsFromAerodataBoxImpl(
+  origin: string,
+  destination: string,
+  date: string
+): Promise<FetchFlightsResult> {
+  try {
+    const apiKey = process.env.RAPIDAPI_KEY;
+    const host =
+      process.env.AERODATABOX_RAPIDAPI_HOST ?? "aerodatabox.p.rapidapi.com";
 
-  const { originTz, destTz } = await getRouteTzs(origin, destination);
+    if (!apiKey) {
+      return { flights: [] };
+    }
 
-  const fromLocal = `${date}T00:00`;
-  const toLocal = `${date}T23:59`;
+    const { originTz, destTz } = await getRouteTzs(origin, destination);
 
-  const url = new URL(
-    `https://${host}/flights/airports/iata/${origin}/${fromLocal}/${toLocal}`
-  );
-  url.searchParams.set("direction", "Departure");
-  url.searchParams.set("withLeg", "true");
+    // AeroDataBox FIDS requires: positive window, max 12 hours. Clamp each request.
+    const MAX_HOURS = 12;
+    const dateStr = date.slice(0, 10);
+    const startOfDay = fromZonedTime(`${dateStr}T00:00:00`, originTz);
+    const endOfDay = fromZonedTime(`${dateStr}T23:59:00`, originTz);
 
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    cache: "no-store",
-    headers: {
-      "X-RapidAPI-Key": apiKey,
-      "X-RapidAPI-Host": host,
-      "User-Agent": "CrewRules/1.0 (CommuteAssist)",
-    },
-  });
+    const windows: { start: Date; end: Date; fromLocal: string; toLocal: string }[] = [];
+    let windowStart = startOfDay.getTime();
+    const endOfDayMs = endOfDay.getTime();
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(
-      `AerodataBox FIDS failed: ${res.status} - ${body.slice(0, 200)}`
-    );
-  }
+    while (windowStart < endOfDayMs) {
+      const maxEnd = Math.min(endOfDayMs, windowStart + MAX_HOURS * 60 * 60 * 1000);
+      const end = maxEnd;
+      const start = new Date(windowStart);
+      const endDate = new Date(end);
+      const fromLocal = formatLocalForApi(start, originTz);
+      const toLocal = formatLocalForApi(endDate, originTz);
+      const hours = (end - windowStart) / (1000 * 60 * 60);
+      if (hours <= 0) break;
 
-  const json = (await res.json()) as unknown;
-  const departures = Array.isArray(json)
-    ? json
-    : (json as Record<string, unknown>).departures ?? (json as Record<string, unknown>).data ?? [];
+      console.log("[Commute Assist] ADB WINDOW", {
+        origin,
+        destination,
+        start: fromLocal,
+        end: toLocal,
+        hours: Math.round(hours * 100) / 100,
+      });
 
-  const destUpper = destination.toUpperCase();
-  const dateStr = date.slice(0, 10);
+      windows.push({ start, end: endDate, fromLocal, toLocal });
+      windowStart = end;
+    }
 
-  const flights: CommuteFlight[] = (departures as unknown[])
+    const allDepartures: unknown[] = [];
+    for (const { fromLocal, toLocal } of windows) {
+      await waitBeforeAdbRequest();
+
+      const url = new URL(
+        `https://${host}/flights/airports/iata/${origin}/${fromLocal}/${toLocal}`
+      );
+      url.searchParams.set("direction", "Departure");
+      url.searchParams.set("withLeg", "true");
+
+      console.log("[Commute Assist] ADB REQUEST", {
+        url: url.toString(),
+        origin,
+        destination,
+        windowStart: fromLocal,
+        windowEnd: toLocal,
+        sentAt: new Date().toISOString(),
+      });
+
+      const res = await fetch(url.toString(), {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          "X-RapidAPI-Key": apiKey,
+          "X-RapidAPI-Host": host,
+          "User-Agent": "CrewRules/1.0 (CommuteAssist)",
+        },
+      });
+
+      if (!res.ok) {
+        const body = await res.text();
+        console.log("[Commute Assist] ADB ERROR", `${res.status} - ${body.slice(0, 200)}`);
+        continue;
+      }
+
+      const json = (await res.json()) as unknown;
+
+      const topLevelKeys = json && typeof json === "object" ? Object.keys(json as object) : [];
+      const obj = json as Record<string, unknown>;
+      const departuresRaw = obj?.departures ?? obj?.Departures;
+      const arrivalsRaw = obj?.arrivals ?? obj?.Arrivals;
+      const dataRaw = obj?.data;
+      const departuresArr = Array.isArray(departuresRaw) ? departuresRaw : [];
+      const arrivalsArr = Array.isArray(arrivalsRaw) ? arrivalsRaw : [];
+      const dataArr = Array.isArray(dataRaw) ? dataRaw : [];
+
+      console.log("[Commute Assist] ADB RESPONSE", {
+        topLevelKeys,
+        departuresLength: departuresArr.length,
+        arrivalsLength: arrivalsArr.length,
+        dataLength: dataArr.length,
+      });
+
+      const pageDepartures = departuresArr.length > 0
+        ? departuresArr
+        : dataArr.length > 0
+          ? dataArr
+          : Array.isArray(json)
+            ? json
+            : [];
+      allDepartures.push(...(pageDepartures as unknown[]));
+    }
+
+    const destUpper = destination.toUpperCase();
+
+    const flights: CommuteFlight[] = (allDepartures as unknown[])
     .filter((f) => {
       const dest = getDestIata(f);
       if (dest !== destUpper) return false;
@@ -109,7 +221,7 @@ export async function fetchFlightsFromAerodataBox(
       const arrTime = getArrTime(f);
       const carrier = getCarrier(f);
       const number = getFlightNumber(f);
-      const flightNumber = carrier && number ? `${carrier}${number}` : "";
+      const flightNumber = buildFlightNumber(carrier, number);
 
       return {
         carrier,
@@ -139,10 +251,7 @@ export async function fetchFlightsFromAerodataBox(
         status: (f as Record<string, string>)?.status ?? undefined,
         dep_gate: (getDep(f) as Record<string, string>)?.gate ?? null,
         arr_gate: (getArr(f) as Record<string, string>)?.gate ?? null,
-        aircraft_type:
-          (f as Record<string, { iata?: string; icao?: string }>)?.aircraft?.iata ??
-          (f as Record<string, { iata?: string; icao?: string }>)?.aircraft?.icao ??
-          null,
+        aircraft_type: getAircraftType(f),
       };
     })
     .sort(
@@ -151,7 +260,12 @@ export async function fetchFlightsFromAerodataBox(
         fromZonedTime(stripOffset(b.arrivalTime), b.dest_tz ?? destTz).getTime()
     );
 
-  return { flights };
+    return { flights };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log("[Commute Assist] ADB ERROR", msg);
+    return { flights: [] };
+  }
 }
 
 /** With withLeg=true, each item has Departure and Arrival for the leg. */
@@ -190,4 +304,41 @@ function getFlightNumber(f: unknown): string {
   const o = f as Record<string, unknown>;
   const n = o.number ?? o.Number ?? o.flightNumber;
   return typeof n === "string" ? n : String(n ?? "");
+}
+
+/** Extract aircraft type (e.g. B737, A320). AeroDataBox uses aircraft.iata, icao, or model. */
+function getAircraftType(f: unknown): string | null {
+  const o = f as Record<string, unknown>;
+  const ac = o?.aircraft ?? o?.Aircraft;
+  if (!ac || typeof ac !== "object") return null;
+  const a = ac as Record<string, unknown>;
+  const iata = a.iata ?? a.Iata;
+  if (typeof iata === "string" && iata.trim()) return iata.trim().toUpperCase();
+  const icao = a.icao ?? a.Icao;
+  if (typeof icao === "string" && icao.trim()) return icao.trim().toUpperCase();
+  const model = a.model ?? a.Model ?? a.modelCode ?? a.ModelCode;
+  if (typeof model !== "string" || !model.trim()) return null;
+  const m = model.trim();
+  const numMatch = m.match(/(\d{3,4})/);
+  if (numMatch) {
+    const num = numMatch[1];
+    const lower = m.toLowerCase();
+    if (lower.includes("boeing") || lower.includes("b7")) return `B${num}`;
+    if (lower.includes("airbus") || lower.includes("a3")) return `A${num}`;
+    if (m.length <= 6) return m.toUpperCase();
+  }
+  return m.length <= 8 ? m.toUpperCase() : null;
+}
+
+/** Build flightNumber without duplicating carrier. AeroDataBox number often includes carrier (e.g. "B6 2752"). */
+function buildFlightNumber(carrier: string, number: string): string {
+  if (!number) return "";
+  const num = String(number).trim();
+  const carrierUp = (carrier || "").toUpperCase();
+  const numNoSpace = num.replace(/\s/g, "");
+  if (carrierUp && numNoSpace.toUpperCase().startsWith(carrierUp)) {
+    const numericPart = numNoSpace.slice(carrierUp.length);
+    return carrierUp + (numericPart ? " " + numericPart : "");
+  }
+  return carrierUp ? `${carrierUp} ${num}` : num;
 }

@@ -35,6 +35,7 @@ type Props = {
     time_format?: "24h" | "12h";
     show_timezone_label?: boolean;
     home_airport?: string | null;
+    alternate_home_airport?: string | null;
     commute_arrival_buffer_minutes?: number;
     commute_release_buffer_minutes?: number;
     commute_nonstop_only?: boolean;
@@ -44,7 +45,7 @@ type Props = {
   };
   proActive: boolean;
   proBadgeLabel: string | null;
-  proBadgeVariant: "emerald" | "amber" | "red";
+  proBadgeVariant: "gold" | "emerald" | "amber" | "red";
 };
 
 /** Frontier Airlines crew bases (IATA codes). */
@@ -100,7 +101,6 @@ function getTimezoneAbbreviation(iana: string): string {
 }
 
 const COMMUTE_BUFFER_OPTIONS = [30, 60, 90, 120, 180] as const;
-const COMMUTE_RELEASE_OPTIONS = [0, 30, 60] as const;
 
 export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant }: Props) {
   const router = useRouter();
@@ -121,6 +121,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
   const timeFormat = profile.time_format ?? "24h";
   const showTimezoneLabel = profile.show_timezone_label ?? false;
   const homeAirport = profile.home_airport ?? "";
+  const alternateHomeAirport = profile.alternate_home_airport ?? "";
   const commuteArrival = profile.commute_arrival_buffer_minutes ?? 60;
   const commuteRelease = profile.commute_release_buffer_minutes ?? 30;
   const commuteNonstopOnly = profile.commute_nonstop_only ?? true;
@@ -158,21 +159,24 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
 
   return (
     <>
-      <div className="flex items-center justify-between gap-4 border-b border-white/5 pb-4">
-        <h1 className="text-xl font-semibold tracking-tight">Profile</h1>
+      <div className="flex items-start justify-between gap-4 border-b border-white/5 pb-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Profile Settings</h1>
+          <p className="mt-2 text-sm text-slate-400">
+            Manage your profile, commute settings, display preferences, and Pro features.
+          </p>
+        </div>
         <ProBadge label={proBadgeLabel} variant={proBadgeVariant} />
       </div>
-      <p className="mt-2 text-sm text-slate-400">
-        Identity, base, subscription, and display preferences.
-      </p>
       <form onSubmit={handleSubmit} className="mt-6 space-y-8">
-      {/* 1. Personal Information */}
+      {/* Personal Information */}
       <section>
-        <h2 className="text-base font-semibold text-white mb-4">1. Personal Information</h2>
+        <h2 className="text-base font-semibold text-white mb-1">Personal Information</h2>
+        <p className="text-xs text-slate-500 mb-4">Core identity and employment details.</p>
         <div className="space-y-4">
           <div>
             <label htmlFor="full_name" className="block text-sm font-medium text-slate-300">
-              Full name
+              Full Name
             </label>
             <input
               id="full_name"
@@ -185,7 +189,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
           </div>
           <div>
             <label htmlFor="employee_number" className="block text-sm font-medium text-slate-300">
-              Employee number
+              Employee Number
             </label>
             <input
               id="employee_number"
@@ -196,7 +200,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               className="mt-1.5 w-full max-w-sm rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30"
             />
             <p className="mt-1 text-xs text-slate-500">
-              Employee number is used for internal portal identification
+              Employee Number is used for internal portal identification
             </p>
           </div>
           <div>
@@ -250,7 +254,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   </option>
                 ))}
             </select>
-            <p className="mt-1 text-xs text-slate-500">3-letter IATA code. Commute Assist arrives here.</p>
+            <p className="mt-1 text-xs text-slate-500">3-letter IATA code. Used for reserve calculations and default commute planning. If your uploaded trip starts from another airport, Commute Assist uses that airport instead.</p>
             <p className="mt-2 text-sm text-slate-400">
               Timezone: <span className="font-medium text-slate-200">{tzLabel}</span>
             </p>
@@ -303,11 +307,19 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             />
           </div>
         </div>
-        <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3">
-          <span className="text-xs font-medium text-slate-500">Email (account)</span>
-          <p className="text-sm text-white">{profile.email ?? "—"}</p>
-          <p className="mt-1 text-xs text-slate-500">Managed via your account provider.</p>
-          <div className="mt-3 pt-3 border-t border-white/5">
+      </section>
+
+      {/* Account */}
+      <section>
+        <h2 className="text-base font-semibold text-white mb-1">Account</h2>
+        <p className="text-xs text-slate-500 mb-4">Account management.</p>
+        <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 space-y-3">
+          <div>
+            <span className="text-xs font-medium text-slate-500">Email</span>
+            <p className="text-sm text-white">{profile.email ?? "—"}</p>
+            <p className="mt-1 text-xs text-slate-500">Managed via your account provider.</p>
+          </div>
+          <div className="pt-3 border-t border-white/5">
             <button
               type="button"
               onClick={() => {
@@ -316,7 +328,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               }}
               className="text-sm text-[#75C043] hover:text-[#75C043]/80 font-medium"
             >
-              {showChangePassword ? "Cancel" : "Change password"}
+              {showChangePassword ? "Cancel" : "Change Password"}
             </button>
             {showChangePassword && (
               <form
@@ -391,20 +403,22 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
         </div>
       </section>
 
-      {/* Subscription */}
+      {/* CrewRules™ Pro Features */}
       <section>
-        <h2 className="text-base font-semibold text-white mb-3">Subscription</h2>
-        <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-6 text-center">
-          <p className="text-sm text-slate-500">Coming soon.</p>
-        </div>
-      </section>
-
-      {/* CrewRules™ Commute Assist™ Settings */}
-      <section>
-        <h2 className="text-base font-semibold text-white mb-4">
-          Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Commute Assist<span className="align-super text-[10px]">™</span> Settings
+        <h2 className="text-base font-semibold text-white mb-1">
+          Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> <span className="text-amber-400">Pro</span> Features
         </h2>
-        <div
+        <p className="text-xs text-slate-500 mb-4">
+          Advanced tools available with CrewRules™ Pro.
+        </p>
+
+        {/* CrewRules™ Commute Assist™ */}
+        <div className="mb-8">
+          <h3 className="text-sm font-semibold text-slate-200 mb-1">
+            Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Commute Assist<span className="align-super text-[10px]">™</span>
+          </h3>
+          <p className="text-xs text-slate-500 mb-4">Tools to help plan safer and more reliable commutes.</p>
+          <div
           className={`space-y-4 rounded-xl border px-4 py-4 ${
             proActive
               ? "border-white/10 bg-slate-950/40"
@@ -415,6 +429,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             <>
               <p className="text-sm text-amber-200/90">Commute Assist is a Pro feature.</p>
               <input type="hidden" name="home_airport" value={homeAirport} />
+              <input type="hidden" name="alternate_home_airport" value={alternateHomeAirport} />
               <input type="hidden" name="commute_arrival_buffer_minutes" value={commuteArrival} />
               <input type="hidden" name="commute_release_buffer_minutes" value={commuteRelease} />
               <input type="hidden" name="commute_nonstop_only" value={commuteNonstopOnly ? "1" : "0"} />
@@ -423,7 +438,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
           <div className={!proActive ? "pointer-events-none select-none" : ""}>
             <div>
               <label htmlFor="home_airport" className="block text-sm font-medium text-slate-300">
-                Home airport <span className="text-slate-500 font-normal">(commute from)</span>
+                Home Airport
               </label>
               <input
                 id="home_airport"
@@ -439,14 +454,36 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   e.currentTarget.value = e.currentTarget.value.toUpperCase();
                 }}
               />
-              <p className="mt-1 text-xs text-slate-500">3-letter IATA code. Commute Assist departs from here.</p>
+              <p className="mt-1 text-xs text-slate-500">3-letter IATA code. This is where your commute normally begins.</p>
+            </div>
+            <div className="mt-4">
+              <label htmlFor="alternate_home_airport" className="block text-sm font-medium text-slate-300">
+                Alternate Airport <span className="text-slate-500 font-normal">(Optional)</span>
+              </label>
+              <input
+                id="alternate_home_airport"
+                name="alternate_home_airport"
+                type="text"
+                defaultValue={alternateHomeAirport}
+                maxLength={3}
+                placeholder="e.g. MCO"
+                disabled={!proActive}
+                className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 disabled:opacity-60 disabled:cursor-not-allowed uppercase"
+                style={{ textTransform: "uppercase" }}
+                onInput={(e) => {
+                  e.currentTarget.value = e.currentTarget.value.toUpperCase();
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Recommended backup airport to expand your commute options when flights from your home airport are limited.
+              </p>
             </div>
             <div className="mt-4">
               <label
                 htmlFor="commute_arrival_buffer_minutes"
                 className="block text-sm font-medium text-slate-300"
               >
-                Arrival buffer (minutes before duty)
+                Arrival Buffer Before Duty
               </label>
               <select
                 id="commute_arrival_buffer_minutes"
@@ -457,47 +494,16 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               >
                 {COMMUTE_BUFFER_OPTIONS.map((m) => (
                   <option key={m} value={m}>
-                    {m}min
+                    {m} minutes
                   </option>
                 ))}
               </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Minimum time you want to arrive before your report time. Used for commute safety calculations.
+              </p>
             </div>
-            <div className="mt-4">
-              <label
-                htmlFor="commute_release_buffer_minutes"
-                className="block text-sm font-medium text-slate-300"
-              >
-                Release buffer (minutes after duty)
-              </label>
-              <select
-                id="commute_release_buffer_minutes"
-                name="commute_release_buffer_minutes"
-                defaultValue={commuteRelease}
-                disabled={!proActive}
-                className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {COMMUTE_RELEASE_OPTIONS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}min
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="mt-4 flex items-center gap-3">
-              <input
-                id="commute_nonstop_only"
-                name="commute_nonstop_only"
-                type="checkbox"
-                defaultChecked={commuteNonstopOnly}
-                value="1"
-                disabled={!proActive}
-                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-60 disabled:cursor-not-allowed"
-              />
-              <input type="hidden" name="commute_nonstop_only" value="0" />
-              <label htmlFor="commute_nonstop_only" className="text-sm text-slate-300">
-                Prefer nonstop commute flights
-              </label>
-            </div>
+            <input type="hidden" name="commute_release_buffer_minutes" value="0" />
+            <input type="hidden" name="commute_nonstop_only" value="1" />
           </div>
           {!proActive && (
             <div className="mt-4 space-y-2">
@@ -526,16 +532,47 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               )}
             </div>
           )}
+          </div>
+        </div>
+
+        {/* Pay & Earnings */}
+        <div className={!proActive ? "pointer-events-none select-none opacity-60" : ""}>
+          <h3 className="text-sm font-semibold text-slate-200 mb-1">Pay & Earnings</h3>
+          <p className="text-xs text-slate-500 mb-4">Financial visibility tools.</p>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              {!proActive && (
+                <input type="hidden" name="show_pay_projection" value={profile?.show_pay_projection ? "1" : "0"} />
+              )}
+              <input
+                id="show_pay_projection"
+                name="show_pay_projection"
+                type="checkbox"
+                defaultChecked={Boolean(profile?.show_pay_projection ?? false)}
+                value="1"
+                disabled={!proActive}
+                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+              {proActive && <input type="hidden" name="show_pay_projection" value="0" />}
+              <label htmlFor="show_pay_projection" className="text-sm text-slate-300">
+                Enable Pay Projections
+              </label>
+            </div>
+            <p className="text-xs text-slate-500">
+              Display estimated monthly pay and credit calculations. Available with CrewRules™ Pro.
+            </p>
+          </div>
         </div>
       </section>
 
-      {/* Schedule display */}
+      {/* Schedule Display */}
       <section>
-        <h2 className="text-base font-semibold text-white mb-4">Schedule display</h2>
+        <h2 className="text-base font-semibold text-white mb-1">Schedule Display</h2>
+        <p className="text-xs text-slate-500 mb-4">Controls how your schedule is shown.</p>
         <div className="space-y-4">
           <div>
             <label htmlFor="display_timezone_mode" className="block text-sm font-medium text-slate-300">
-              Schedule display mode
+              Schedule Time Reference
             </label>
             <select
               id="display_timezone_mode"
@@ -543,14 +580,17 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               defaultValue={displayTimezoneMode === "toggle" ? "both" : displayTimezoneMode}
               className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
             >
-              <option value="base">Base time (recommended)</option>
+              <option value="base">Base Time (Recommended)</option>
               <option value="device">Device local time</option>
               <option value="both">Show both (Base + Device)</option>
             </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Choose which timezone is used when displaying schedule times.
+            </p>
           </div>
           <div>
             <label htmlFor="time_format" className="block text-sm font-medium text-slate-300">
-              Time format
+              Time Format
             </label>
             <select
               id="time_format"
@@ -558,9 +598,12 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               defaultValue={timeFormat}
               className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
             >
-              <option value="24h">24-hour (default)</option>
-              <option value="12h">12-hour</option>
+              <option value="24h">24-hour (Default)</option>
+              <option value="12h">12-hour (AM/PM)</option>
             </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Choose how times are displayed in the schedule.
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <input
@@ -576,22 +619,6 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               Show timezone label next to times <span className="text-slate-500">(e.g., 2230 SJU)</span>
             </label>
           </div>
-          {proActive && (
-            <div className="flex items-center gap-3">
-              <input
-                id="show_pay_projection"
-                name="show_pay_projection"
-                type="checkbox"
-                defaultChecked={profile.show_pay_projection ?? false}
-                value="1"
-                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
-              />
-              <input type="hidden" name="show_pay_projection" value="0" />
-              <label htmlFor="show_pay_projection" className="text-sm text-slate-300">
-                Show pay
-              </label>
-            </div>
-          )}
         </div>
       </section>
 
@@ -606,7 +633,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
         disabled={saving}
         className="rounded-xl bg-[#75C043] px-4 py-2.5 text-sm font-semibold text-slate-950 hover:opacity-95 transition disabled:opacity-50"
       >
-        {saving ? "Saving…" : "Save"}
+        {saving ? "Saving…" : "Save Profile Changes"}
       </button>
     </form>
     </>

@@ -164,33 +164,68 @@ export async function getCommuteFlights(input: {
 
     try {
       const aerodataboxSkipped = !process.env.RAPIDAPI_KEY;
-      const asPromise = safe(() =>
+      const asRes = await safe(() =>
         withTimeout(
           fetchFlightsFromAviationStack(origin, destination, input.date, { noCache: true }),
           PROVIDER_TIMEOUT_MS
         )
       );
-      const adbPromise = aerodataboxSkipped
-        ? Promise.resolve({ ok: true as const, data: { flights: [] as CommuteFlight[] } })
-        : safe(() =>
+      const adbRes = aerodataboxSkipped
+        ? { ok: true as const, data: { flights: [] as CommuteFlight[] } }
+        : await safe(() =>
             withTimeout(
               fetchFlightsFromAerodataBox(origin, destination, input.date),
               PROVIDER_TIMEOUT_MS
             )
           );
 
-      const [asRes, adbRes] = await Promise.all([asPromise, adbPromise]);
-
       const aviationstackFlights = asRes.ok ? asRes.data.flights : [];
       const aerodataboxFlights = adbRes.ok ? adbRes.data.flights : [];
       const aviationstackFailed = !asRes.ok;
       const aerodataboxFailed = !adbRes.ok && !aerodataboxSkipped;
 
-      if (aviationstackFailed) console.error("AviationStack failed", (asRes as { ok: false; error: unknown }).error);
-      if (aerodataboxFailed) console.error("AerodataBox failed", (adbRes as { ok: false; error: unknown }).error);
+      console.log(
+        "[Commute Assist] RAW PROVIDER FLIGHTS",
+        JSON.stringify({
+          provider: "AviationStack",
+          origin,
+          destination,
+          rawCount: aviationstackFlights?.length ?? 0,
+          sample: aviationstackFlights?.slice(0, 5),
+        }, null, 2)
+      );
+      console.log(
+        "[Commute Assist] RAW PROVIDER FLIGHTS",
+        JSON.stringify({
+          provider: "AeroDataBox",
+          origin,
+          destination,
+          rawCount: aerodataboxFlights?.length ?? 0,
+          sample: aerodataboxFlights?.slice(0, 5),
+        }, null, 2)
+      );
+
+      if (aviationstackFailed) console.error("AviationStack failed:", (asRes as { ok: false; error: unknown }).error);
+      if (aerodataboxFailed)
+        console.error(
+          "AeroDataBox failed (continuing with AviationStack):",
+          (adbRes as { ok: false; error: unknown }).error
+        );
+
+      const allFlightsBeforeFilter = [...aviationstackFlights, ...aerodataboxFlights];
+      console.log(
+        "[Commute Assist] BEFORE DEST FILTER",
+        JSON.stringify({
+          destinationRequested: destination,
+          first5Destinations: allFlightsBeforeFilter?.slice(0, 5).map((f) => ({
+            dep: (f as any).departure?.airport?.iata ?? (f as any).origin ?? null,
+            arr: (f as any).arrival?.airport?.iata ?? (f as any).destination ?? null,
+          })),
+        }, null, 2)
+      );
 
       const merged = dedupeFlights(
-        [...aviationstackFlights, ...aerodataboxFlights],
+        allFlightsBeforeFilter,
         asRes.ok ? asRes.data.notice : undefined
       );
       const { flights, notice } = merged;
@@ -315,37 +350,72 @@ export async function getCommuteFlights(input: {
     }
   }
 
-  // 3) Hit both providers (cache miss)
+  // 3) Hit both providers (cache miss) — AeroDataBox after AviationStack to avoid parallel ADB calls across routes
   try {
     const { originTz, destTz } = await getRouteTzs(origin, destination);
     const aerodataboxSkipped = !process.env.RAPIDAPI_KEY;
-    const asPromise = safe(() =>
+    const asRes = await safe(() =>
       withTimeout(
         fetchFlightsFromAviationStack(origin, destination, input.date),
         PROVIDER_TIMEOUT_MS
       )
     );
-    const adbPromise = aerodataboxSkipped
-      ? Promise.resolve({ ok: true as const, data: { flights: [] as CommuteFlight[] } })
-      : safe(() =>
+    const adbRes = aerodataboxSkipped
+      ? { ok: true as const, data: { flights: [] as CommuteFlight[] } }
+      : await safe(() =>
           withTimeout(
             fetchFlightsFromAerodataBox(origin, destination, input.date),
             PROVIDER_TIMEOUT_MS
           )
         );
 
-    const [asRes, adbRes] = await Promise.all([asPromise, adbPromise]);
-
     const aviationstackFlights = asRes.ok ? asRes.data.flights : [];
     const aerodataboxFlights = adbRes.ok ? adbRes.data.flights : [];
     const aviationstackFailed = !asRes.ok;
     const aerodataboxFailed = !adbRes.ok && !aerodataboxSkipped;
 
-    if (aviationstackFailed) console.error("AviationStack failed", (asRes as { ok: false; error: unknown }).error);
-    if (aerodataboxFailed) console.error("AerodataBox failed", (adbRes as { ok: false; error: unknown }).error);
+    console.log(
+      "[Commute Assist] RAW PROVIDER FLIGHTS",
+      JSON.stringify({
+        provider: "AviationStack",
+        origin,
+        destination,
+        rawCount: aviationstackFlights?.length ?? 0,
+        sample: aviationstackFlights?.slice(0, 5),
+      }, null, 2)
+    );
+    console.log(
+      "[Commute Assist] RAW PROVIDER FLIGHTS",
+      JSON.stringify({
+        provider: "AeroDataBox",
+        origin,
+        destination,
+        rawCount: aerodataboxFlights?.length ?? 0,
+        sample: aerodataboxFlights?.slice(0, 5),
+      }, null, 2)
+    );
+
+    if (aviationstackFailed) console.error("AviationStack failed:", (asRes as { ok: false; error: unknown }).error);
+    if (aerodataboxFailed)
+      console.error(
+        "AeroDataBox failed (continuing with AviationStack):",
+        (adbRes as { ok: false; error: unknown }).error
+      );
+
+    const allFlightsBeforeFilter = [...aviationstackFlights, ...aerodataboxFlights];
+    console.log(
+      "[Commute Assist] BEFORE DEST FILTER",
+      JSON.stringify({
+        destinationRequested: destination,
+        first5Destinations: allFlightsBeforeFilter?.slice(0, 5).map((f) => ({
+          dep: (f as any).departure?.airport?.iata ?? (f as any).origin ?? null,
+          arr: (f as any).arrival?.airport?.iata ?? (f as any).destination ?? null,
+        })),
+      }, null, 2)
+    );
 
     const merged = dedupeFlights(
-      [...aviationstackFlights, ...aerodataboxFlights],
+      allFlightsBeforeFilter,
       asRes.ok ? asRes.data.notice : undefined
     );
     const { flights, notice } = merged;

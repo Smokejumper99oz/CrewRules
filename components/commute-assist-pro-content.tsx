@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { subMinutes, subDays, addDays } from "date-fns";
 import type { CommuteFlightOption } from "@/lib/commute/providers/types";
@@ -10,6 +10,7 @@ import type { CommuteFlight } from "@/lib/aviationstack";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
 import type { Profile } from "@/lib/profile";
 import { AirlineLogo } from "@/components/airline-logo";
+import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 
 function fmtHM(totalMinutes: number) {
   const h = Math.floor(totalMinutes / 60);
@@ -47,6 +48,20 @@ function stripCarrierFromFlight(flightNumber: string, carrier: string): string {
 
 function minutesBetween(a: string, b: string) {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000);
+}
+
+/** Flight duration in minutes from UTC timestamps. Always returns >= 0. */
+function durationMinutesUtc(depUtc: string, arrUtc: string): number {
+  return Math.max(0, minutesBetween(depUtc, arrUtc));
+}
+
+/** Round trip end/release time DOWN to nearest full hour in the given timezone. Returns ISO string. */
+function roundDownToHour(iso: string, tz: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const dateStr = formatInTimeZone(d, tz, "yyyy-MM-dd");
+  const hourStr = formatInTimeZone(d, tz, "HH");
+  return fromZonedTime(`${dateStr}T${hourStr}:00:00`, tz).toISOString();
 }
 
 function formatLastUpdate(iso: string | null, baseTz: string): string | null {
@@ -120,6 +135,16 @@ function setCommuteCache(key: string, data: { flights: CommuteFlight[]; originTz
   } catch {
     // ignore
   }
+}
+
+/** Resolve display timezone; fallback to airport-based lookup when stored tz is UTC. */
+function resolveDisplayTz(
+  storedTz: string | undefined,
+  fallbackTz: string,
+  airportIata: string
+): string {
+  const tz = storedTz ?? fallbackTz;
+  return tz === "UTC" ? getTimezoneFromAirport(airportIata) : tz;
 }
 
 const riskBorderStyles = {
@@ -225,6 +250,7 @@ function CommuteFlightCard({
   destination,
   originTz,
   destTz,
+  isLastFlight,
 }: {
   opt: CommuteFlightOption;
   baseTz: string;
@@ -232,21 +258,25 @@ function CommuteFlightCard({
   destination: string;
   originTz: string;
   destTz: string;
+  isLastFlight?: boolean;
 }) {
-  const depTz = opt.originTz ?? originTz;
-  const arrTz = opt.destTz ?? destTz;
+  const depTz = resolveDisplayTz(opt.originTz, originTz, origin);
+  const arrTz = resolveDisplayTz(opt.destTz, destTz, destination);
   const dep = new Date(opt.depUtc);
   const arr = new Date(opt.arrUtc);
   const dateStr = formatInTimeZone(dep, depTz, "EEE • MMM d");
   const depSched = formatInTimeZone(dep, depTz, "HH:mm");
   const arrSched = formatInTimeZone(arr, arrTz, "HH:mm");
-  const durMin = minutesBetween(opt.depUtc, opt.arrUtc);
+  const durMin = durationMinutesUtc(opt.depUtc, opt.arrUtc);
   const durStr = fmtHM(durMin);
   const flightLabel = formatFlightLabel(opt.carrier, opt.flight);
-  const delayInfo = computeDelayInfo(opt, originTz, destTz);
+  const delayInfo = computeDelayInfo(opt, depTz, arrTz);
 
   const depDisplay = delayInfo.dep ?? { scheduled: depSched, actual: undefined };
   const arrDisplay = delayInfo.arr ?? { scheduled: arrSched, actual: undefined };
+  const depDateStr = formatInTimeZone(dep, depTz, "yyyy-MM-dd");
+  const arrDateStr = formatInTimeZone(arr, arrTz, "yyyy-MM-dd");
+  const arrivesNextDay = arrDateStr > depDateStr;
 
   return (
     <div
@@ -268,23 +298,33 @@ function CommuteFlightCard({
         </span>
       </div>
       <div className="flex items-baseline gap-2 mt-1">
-        <TimeBlock
-          scheduled={depDisplay.scheduled}
-          actual={depDisplay.actual}
-          isDelayed={!!delayInfo.dep}
-          isCancelled={delayInfo.cancelled}
-          className="text-2xl"
-        />
+        <div className="flex flex-col items-start">
+          <TimeBlock
+            scheduled={depDisplay.scheduled}
+            actual={depDisplay.actual}
+            isDelayed={!!delayInfo.dep}
+            isCancelled={delayInfo.cancelled}
+            className="text-2xl"
+          />
+          {isLastFlight && (
+            <span className="text-xs font-semibold text-amber-400/90 mt-0.5">Last Flight</span>
+          )}
+        </div>
         <span className="text-[11px] tabular-nums font-medium text-slate-300 bg-slate-800/50 border border-slate-700/40 px-1.5 py-0.5 rounded">
           {origin} → {destination}
         </span>
-        <TimeBlock
-          scheduled={arrDisplay.scheduled}
-          actual={arrDisplay.actual}
-          isDelayed={!!delayInfo.arr}
-          isCancelled={delayInfo.cancelled}
-          className="text-2xl"
-        />
+        <div className="flex flex-col items-end">
+          <TimeBlock
+            scheduled={arrDisplay.scheduled}
+            actual={arrDisplay.actual}
+            isDelayed={!!delayInfo.arr}
+            isCancelled={delayInfo.cancelled}
+            className="text-2xl"
+          />
+          {arrivesNextDay && (
+            <span className="text-xs font-semibold text-slate-300 mt-0.5">+1 day</span>
+          )}
+        </div>
       </div>
       <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
         <AirlineLogo carrier={(opt.carrier || flightLabel.match(/^([A-Z0-9]{2})/)?.[1]) ?? ""} size={24} />
@@ -294,16 +334,22 @@ function CommuteFlightCard({
             Cancelled
           </span>
         )}
-        {(opt.dep_gate || opt.arr_gate || opt.aircraft_type) && (
+        {(opt.dep_gate || opt.arr_gate) && (
           <>
             <span className="text-slate-600">•</span>
             <span className="tabular-nums">
-              {[opt.dep_gate && `DEP ${opt.dep_gate}`, opt.arr_gate && `ARR ${opt.arr_gate}`, opt.aircraft_type].filter(Boolean).join(" • ")}
+              {[opt.dep_gate && `DEP ${opt.dep_gate}`, opt.arr_gate && `ARR ${opt.arr_gate}`].filter(Boolean).join(" • ")}
             </span>
           </>
         )}
         <span className="text-slate-600">•</span>
         <span>Flight time {durStr}</span>
+        {opt.aircraft_type && (
+          <>
+            <span className="text-slate-600">•</span>
+            <span className="tabular-nums">{opt.aircraft_type}</span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -316,6 +362,7 @@ function CommuteFlightRow({
   destination,
   originTz,
   destTz,
+  isLastFlight,
 }: {
   opt: CommuteFlightOption;
   baseTz: string;
@@ -323,21 +370,25 @@ function CommuteFlightRow({
   destination: string;
   originTz: string;
   destTz: string;
+  isLastFlight?: boolean;
 }) {
-  const depTz = opt.originTz ?? originTz;
-  const arrTz = opt.destTz ?? destTz;
+  const depTz = resolveDisplayTz(opt.originTz, originTz, origin);
+  const arrTz = resolveDisplayTz(opt.destTz, destTz, destination);
   const dep = new Date(opt.depUtc);
   const arr = new Date(opt.arrUtc);
   const dateStr = formatInTimeZone(dep, depTz, "EEE • MMM d");
   const depSched = formatInTimeZone(dep, depTz, "HH:mm");
   const arrSched = formatInTimeZone(arr, arrTz, "HH:mm");
-  const durMin = minutesBetween(opt.depUtc, opt.arrUtc);
+  const durMin = durationMinutesUtc(opt.depUtc, opt.arrUtc);
   const durStr = fmtHM(durMin);
   const flightLabel = formatFlightLabel(opt.carrier, opt.flight);
-  const delayInfo = computeDelayInfo(opt, originTz, destTz);
+  const delayInfo = computeDelayInfo(opt, depTz, arrTz);
 
   const depDisplay = delayInfo.dep ?? { scheduled: depSched, actual: undefined };
   const arrDisplay = delayInfo.arr ?? { scheduled: arrSched, actual: undefined };
+  const depDateStr = formatInTimeZone(dep, depTz, "yyyy-MM-dd");
+  const arrDateStr = formatInTimeZone(arr, arrTz, "yyyy-MM-dd");
+  const arrivesNextDay = arrDateStr > depDateStr;
 
   const carrierForLogo = (opt.carrier || flightLabel.match(/^([A-Z0-9]{2})/)?.[1]) ?? "";
   const flightLine = (
@@ -385,6 +436,9 @@ function CommuteFlightRow({
               isCancelled={delayInfo.cancelled}
               className="text-xl"
             />
+            {isLastFlight && (
+              <span className="text-xs font-semibold text-amber-400/90 mt-0.5">Last Flight</span>
+            )}
           </div>
           <div className="flex justify-center">{routePill}</div>
           <div className="flex flex-col items-end">
@@ -396,6 +450,9 @@ function CommuteFlightRow({
               isCancelled={delayInfo.cancelled}
               className="text-xl"
             />
+            {arrivesNextDay && (
+              <span className="text-xs font-semibold text-slate-300 mt-0.5">+1 day</span>
+            )}
           </div>
         </div>
         <div className="text-sm font-semibold text-slate-400 mt-1 flex flex-wrap items-center gap-1.5">
@@ -403,8 +460,9 @@ function CommuteFlightRow({
           {statusBadge}
           <span className="font-normal text-slate-500">
             • Flight time {durStr}
-            {(opt.dep_gate || opt.arr_gate || opt.aircraft_type) && (
-              <> • {[opt.dep_gate && `DEP ${opt.dep_gate}`, opt.arr_gate && `ARR ${opt.arr_gate}`, opt.aircraft_type].filter(Boolean).join(" • ")}</>
+            {opt.aircraft_type && <> • {opt.aircraft_type}</>}
+            {(opt.dep_gate || opt.arr_gate) && (
+              <> • {[opt.dep_gate && `DEP ${opt.dep_gate}`, opt.arr_gate && `ARR ${opt.arr_gate}`].filter(Boolean).join(" • ")}</>
             )}
             {" • "}{flightLine}
           </span>
@@ -426,6 +484,9 @@ function CommuteFlightRow({
               isCancelled={delayInfo.cancelled}
               className="text-lg font-semibold"
             />
+            {isLastFlight && (
+              <span className="text-xs font-semibold text-amber-400/90 mt-0.5">Last Flight</span>
+            )}
           </div>
           <div className="flex justify-center">{routePill}</div>
           <div className="flex flex-col items-end w-full min-w-0">
@@ -437,14 +498,26 @@ function CommuteFlightRow({
               isCancelled={delayInfo.cancelled}
               className="text-lg font-semibold"
             />
+            {arrivesNextDay && (
+              <span className="text-xs font-semibold text-slate-300 mt-0.5">+1 day</span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 min-w-0 justify-end">
           <span className="text-slate-500 text-xs shrink-0">Flight time {durStr}</span>
-          {(opt.dep_gate || opt.arr_gate || opt.aircraft_type) && (
-            <span className="text-slate-500 text-xs tabular-nums shrink-0">
-              {[opt.dep_gate && `DEP ${opt.dep_gate}`, opt.arr_gate && `ARR ${opt.arr_gate}`, opt.aircraft_type].filter(Boolean).join(" • ")}
-            </span>
+          {opt.aircraft_type && (
+            <>
+              <span className="text-slate-600">•</span>
+              <span className="text-slate-500 text-xs tabular-nums shrink-0">{opt.aircraft_type}</span>
+            </>
+          )}
+          {(opt.dep_gate || opt.arr_gate) && (
+            <>
+              <span className="text-slate-600">•</span>
+              <span className="text-slate-500 text-xs tabular-nums shrink-0">
+                {[opt.dep_gate && `DEP ${opt.dep_gate}`, opt.arr_gate && `ARR ${opt.arr_gate}`].filter(Boolean).join(" • ")}
+              </span>
+            </>
           )}
           <span className="text-slate-500 text-xs flex items-center gap-1 shrink-0">{flightLine}</span>
         </div>
@@ -455,9 +528,9 @@ function CommuteFlightRow({
 
 export function CommuteAssistProContent({ event, label, profile, displaySettings, tenant, portal }: Props) {
   const [commuteError, setCommuteError] = useState<string | null>(null);
-  const [commuteGroups, setCommuteGroups] = useState<Record<string, CommuteFlightOption[]>>({
-    day_prior: [],
-    same_day: [],
+  const [commuteGroups, setCommuteGroups] = useState<Record<"home" | "alternate", CommuteFlightOption[]>>({
+    home: [],
+    alternate: [],
   });
   const [commuteMeta, setCommuteMeta] = useState<{
     showInfo: boolean;
@@ -469,8 +542,9 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const [, setLastUpdateTick] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [dayPriorPage, setDayPriorPage] = useState(1);
-  const [sameDayPage, setSameDayPage] = useState(1);
+  const [homePage, setHomePage] = useState(1);
+  const [alternatePage, setAlternatePage] = useState(1);
+  const cardsTopRef = useRef<HTMLDivElement>(null);
   const [viewMode, setViewMode] = useState<"cards" | "board">("cards");
   const [sortBy, setSortBy] = useState<"arrAsc" | "arrDesc" | "durAsc" | "durDesc">("arrAsc");
   const [originTz, setOriginTz] = useState<string>("UTC");
@@ -480,6 +554,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const arrivalBuffer = profile?.commute_arrival_buffer_minutes ?? 60;
 
   const homeAirport = profile?.home_airport?.trim();
+  const alternateHomeAirport = profile?.alternate_home_airport?.trim();
   const baseAirport = profile?.base_airport?.trim();
   const hasValidHome = !!homeAirport && homeAirport.length === 3;
   const hasValidBase = !!baseAirport && baseAirport.length === 3;
@@ -519,21 +594,42 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     ? formatInTimeZone(dutyEndTime, baseTz, "yyyy-MM-dd")
     : null;
 
-  const { origin, destination, commuteDate } = (() => {
+  /** Routes to search: [{ origin, destination, label }]. label = "home" | "alternate" */
+  const routes = useMemo(() => {
+    const commuteDate =
+      direction === "to_base"
+        ? dutyOk ? dayPriorBase : new Date().toISOString().slice(0, 10)
+        : dutyEndDateBase ?? new Date().toISOString().slice(0, 10);
+
     if (direction === "to_base") {
       const dest = (dutyStartAirport ?? baseAirport)?.toUpperCase() ?? "";
-      return {
-        origin: homeAirport?.toUpperCase() ?? "",
-        destination: dest,
-        commuteDate: dutyOk ? dayPriorBase : new Date().toISOString().slice(0, 10),
-      };
+      const result: { origin: string; destination: string; label: "home" | "alternate"; commuteDate: string }[] = [
+        { origin: homeAirport?.toUpperCase() ?? "", destination: dest, label: "home", commuteDate },
+      ];
+      if (alternateHomeAirport?.length === 3) {
+        result.push({ origin: alternateHomeAirport.toUpperCase(), destination: dest, label: "alternate", commuteDate });
+      }
+      return result;
     }
-    return {
-      origin: (dutyEndAirport ?? baseAirport ?? "").toUpperCase(),
-      destination: homeAirport?.toUpperCase() ?? "",
-      commuteDate: dutyEndDateBase ?? new Date().toISOString().slice(0, 10),
-    };
-  })();
+    const orig = (dutyEndAirport ?? baseAirport ?? "").toUpperCase();
+    const result: { origin: string; destination: string; label: "home" | "alternate"; commuteDate: string }[] = [
+      { origin: orig, destination: homeAirport?.toUpperCase() ?? "", label: "home", commuteDate },
+    ];
+    if (alternateHomeAirport?.length === 3) {
+      result.push({ origin: orig, destination: alternateHomeAirport.toUpperCase(), label: "alternate", commuteDate });
+    }
+    return result;
+  }, [
+    direction,
+    homeAirport,
+    alternateHomeAirport,
+    baseAirport,
+    dutyStartAirport,
+    dutyEndAirport,
+    dutyOk,
+    dayPriorBase,
+    dutyEndDateBase,
+  ]);
 
   const noCommuteNeeded =
     direction === "to_base" &&
@@ -543,7 +639,14 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
 
   /** Apply flights + metadata to state. Reused for API response and sessionStorage restore. */
   const applyFlightsToState = useCallback(
-    (flights: CommuteFlight[], originTzVal: string, destTzVal: string, fetchedAtVal: string | null, noticeVal: string | null) => {
+    (
+      flights: CommuteFlight[],
+      originTzVal: string,
+      destTzVal: string,
+      fetchedAtVal: string | null,
+      noticeVal: string | null,
+      destinationLabel: "home" | "alternate"
+    ) => {
       const dutyStart = new Date(event.start_time);
       const dutyOkLocal = !Number.isNaN(dutyStart.getTime());
       const dutyDateBaseLocal = formatInTimeZone(dutyStart, baseTz, "yyyy-MM-dd");
@@ -563,22 +666,42 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
       }
       const stripOffset = (s: string) => s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
       const isReturn = direction === "to_home";
+      const releaseEarliestDepIso =
+        isReturn && event.end_time
+          ? roundDownToHour(event.end_time, baseTz)
+          : null;
       const options: CommuteFlightOption[] = [];
+      console.log("[Commute Assist] applyFlightsToState called\n" + JSON.stringify({
+        destinationLabel,
+        rawFlightsCount: flights.length,
+        firstFlightDep: flights[0]?.departureTime,
+        firstFlightArr: flights[0]?.arrivalTime,
+      }, null, 2));
       for (let i = 0; i < flights.length; i++) {
         const f = flights[i];
         const depTz = f.origin_tz ?? originTzVal;
         const arrTz = f.dest_tz ?? destTzVal;
-        const depClean = stripOffset(f.departureTime ?? "");
-        const arrClean = stripOffset(f.arrivalTime ?? "");
+        const depRaw = f.departureTime ?? "";
+        const arrRaw = f.arrivalTime ?? "";
+        const depClean = stripOffset(depRaw);
+        const arrClean = stripOffset(arrRaw);
         if (!depClean || !arrClean) continue;
         let depUtc: string;
         let arrUtc: string;
+        const depIsUtc = depRaw.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(depRaw);
+        const arrIsUtc = arrRaw.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(arrRaw);
         try {
-          depUtc = fromZonedTime(depClean, depTz).toISOString();
-          arrUtc = fromZonedTime(arrClean, arrTz).toISOString();
+          if (depIsUtc && arrIsUtc) {
+            depUtc = new Date(depRaw).toISOString();
+            arrUtc = new Date(arrRaw).toISOString();
+          } else {
+            depUtc = fromZonedTime(depClean, depTz).toISOString();
+            arrUtc = fromZonedTime(arrClean, arrTz).toISOString();
+          }
         } catch {
           continue;
         }
+        if (releaseEarliestDepIso && depUtc < releaseEarliestDepIso) continue;
         let risk: "recommended" | "risky" | "not_recommended" = "recommended";
         let reason = "";
         if (isReturn) {
@@ -597,7 +720,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           reason = `${reason} • ${fmtHM(f.durationMinutes)}`;
         }
         options.push({
-          id: `${f.flightNumber}-${f.departureTime}-${i}`,
+          id: `${destinationLabel}-${f.flightNumber}-${f.departureTime}-${i}`,
           carrier: f.carrier,
           flight: stripCarrierFromFlight(f.flightNumber, f.carrier),
           depUtc,
@@ -621,86 +744,117 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           aircraft_type: f.aircraft_type,
         });
       }
-      const grouped = { day_prior: options, same_day: [] };
       const hasLiveTiming = options.some(
         (o) => o.arr_estimated_raw || o.arr_actual_raw || o.dep_estimated_raw || o.dep_actual_raw
       );
       const arriveByFormatted = dutyOkLocal ? formatInTimeZone(subMinutes(dutyStart, arrivalBuffer), baseTz, "HH:mm") : "";
-      setOriginTz(originTzVal);
-      setDestTz(destTzVal);
-      setSource(hasLiveTiming ? "live" : "scheduled");
-      setLastFetchedAt(fetchedAtVal);
-      setCommuteGroups(grouped);
+      console.log("[Commute Assist] options before setState\n" + JSON.stringify({
+        destinationLabel,
+        optionsCount: options.length,
+        skipped: flights.length - options.length,
+      }, null, 2));
+      setOriginTz((prev) => (prev === "UTC" ? originTzVal : prev));
+      setDestTz((prev) => (prev === "UTC" ? destTzVal : prev));
+      setSource((prev) => (hasLiveTiming ? "live" : prev ?? "scheduled"));
+      setLastFetchedAt((prev) => fetchedAtVal ?? prev);
+      setCommuteGroups((prev) => ({ ...prev, [destinationLabel]: options }));
       setCommuteMeta({ showInfo: dutyOk, arriveByFormatted, dutyOk });
-      setNotice(noticeVal ?? null);
-      setDayPriorPage(1);
-      setSameDayPage(1);
+      setNotice((prev) => noticeVal ?? prev ?? null);
+      setHomePage(1);
+      setAlternatePage(1);
     },
-    [direction, dutyOk, event.start_time, event.report_time, baseTz, arrivalBuffer]
+    [direction, dutyOk, event.start_time, event.end_time, event.report_time, baseTz, arrivalBuffer]
   );
 
   const loadFlights = useCallback(
     async (opts?: { forceRefresh?: boolean }) => {
-      if (!canUseCommute) return null;
-      if (origin.length !== 3 || destination.length !== 3) return null;
+      if (!canUseCommute || routes.length === 0) return null;
 
       if (process.env.NODE_ENV === "development") {
-        const tpaFallback =
-          (direction === "to_base" && origin === "TPA" && homeAirport?.toUpperCase() !== "TPA") ||
-          (direction === "to_home" && destination === "TPA" && homeAirport?.toUpperCase() !== "TPA");
-        const sjuFallback =
-          direction === "to_home" &&
-          origin === "SJU" &&
-          (dutyEndAirport ?? baseAirport)?.toUpperCase() !== "SJU";
-        if (tpaFallback || sjuFallback) {
-          throw new Error("Commute Assist: TPA/SJU must not be used as fallbacks. Use profile.home_airport and profile.base_airport only.");
-        }
-      }
-
-      const cacheKey = getCommuteCacheKey(origin, destination, commuteDate, direction);
-
-      // Try sessionStorage first (skip on forceRefresh or explicit page refresh)
-      if (!opts?.forceRefresh) {
-        const cached = getCommuteCache(cacheKey);
-        if (cached) {
-          applyFlightsToState(cached.flights, cached.originTz, cached.destTz, cached.fetchedAt, cached.notice);
-          return cached.flights;
+        for (const r of routes) {
+          const tpaFallback =
+            (direction === "to_base" && r.origin === "TPA" && homeAirport?.toUpperCase() !== "TPA") ||
+            (direction === "to_home" && r.destination === "TPA" && homeAirport?.toUpperCase() !== "TPA");
+          const sjuFallback =
+            direction === "to_home" &&
+            r.origin === "SJU" &&
+            (dutyEndAirport ?? baseAirport)?.toUpperCase() !== "SJU";
+          if (tpaFallback || sjuFallback) {
+            throw new Error("Commute Assist: TPA/SJU must not be used as fallbacks. Use profile.home_airport and profile.base_airport only.");
+          }
         }
       }
 
       try {
         setCommuteError(null);
         setNotice(null);
-        if (opts?.forceRefresh) setRefreshing(true);
+        if (opts?.forceRefresh) {
+          setRefreshing(true);
+          setCommuteGroups({ home: [], alternate: [] });
+        }
 
-        const res = await getCommuteFlights({
-          origin,
-          destination,
-          date: commuteDate,
-          forceRefresh: opts?.forceRefresh ?? false,
+        const fetchOne = async (route: (typeof routes)[0]) => {
+          const cacheKey = getCommuteCacheKey(route.origin, route.destination, route.commuteDate, direction);
+          if (!opts?.forceRefresh) {
+            const cached = getCommuteCache(cacheKey);
+            if (cached) {
+              applyFlightsToState(cached.flights, cached.originTz, cached.destTz, cached.fetchedAt, cached.notice, route.label);
+              return cached.flights;
+            }
+          }
+          const res = await getCommuteFlights({
+            origin: route.origin,
+            destination: route.destination,
+            date: route.commuteDate,
+            forceRefresh: opts?.forceRefresh ?? false,
+          });
+          if (res.ok) {
+            applyFlightsToState(res.flights, res.originTz, res.destTz, res.fetchedAt ?? null, res.notice ?? null, route.label);
+            setCommuteCache(cacheKey, {
+              flights: res.flights,
+              originTz: res.originTz,
+              destTz: res.destTz,
+              fetchedAt: res.fetchedAt ?? null,
+              notice: res.notice ?? null,
+            });
+            return res.flights;
+          }
+          setNotice(res.message);
+          return null;
+        };
+
+        console.log("[Commute Assist] BEFORE Promise.all\n" + JSON.stringify({
+          direction,
+          routes: routes.map((r) => ({
+            origin: r.origin,
+            destination: r.destination,
+            commuteDate: r.commuteDate,
+            label: r.label,
+          })),
+        }, null, 2));
+        const results = await Promise.all(routes.map(fetchOne));
+        routes.forEach((route, idx) => {
+          const res = results[idx];
+          const flights = Array.isArray(res) ? res : [];
+          const first3 = flights.slice(0, 3).map((f) =>
+            f ? `${(f as any).carrier}${(f as any).flightNumber}-${(f as any).departureTime}` : null
+          );
+          console.log("[Commute Assist] ROUTE RESULT\n" + JSON.stringify({
+            destination: route.destination,
+            label: route.label,
+            ok: Array.isArray(res),
+            flightCount: flights.length,
+            first3Ids: first3,
+          }, null, 2));
         });
-
         const dutyStart = new Date(event.start_time);
         const arriveByFormatted = dutyOk ? formatInTimeZone(subMinutes(dutyStart, arrivalBuffer), baseTz, "HH:mm") : "";
-        const showInfo = dutyOk;
-
-        if (res.ok) {
-          applyFlightsToState(res.flights, res.originTz, res.destTz, res.fetchedAt ?? null, res.notice ?? null);
-          setCommuteCache(cacheKey, {
-            flights: res.flights,
-            originTz: res.originTz,
-            destTz: res.destTz,
-            fetchedAt: res.fetchedAt ?? null,
-            notice: res.notice ?? null,
-          });
-          return res.flights;
-        } else {
-          setNotice(res.message);
+        setCommuteMeta({ showInfo: dutyOk, arriveByFormatted, dutyOk });
+        if (results.every((r) => r === null) && routes.length > 0) {
           setSource(null);
           setLastFetchedAt(null);
-          setCommuteMeta({ showInfo, arriveByFormatted, dutyOk });
-          return null;
         }
+        return results;
       } catch (err) {
         console.error("Commute Assist failed", err);
         setCommuteError("Commute Assist temporarily unavailable.");
@@ -713,9 +867,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     },
     [
       canUseCommute,
-      origin,
-      destination,
-      commuteDate,
+      routes,
       direction,
       homeAirport,
       dutyEndAirport,
@@ -735,8 +887,8 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
         setCommuteError("Commute Assist temporarily unavailable.");
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadFlights omitted to avoid infinite loop; we re-run when query params change
-  }, [origin, destination, commuteDate, direction, canUseCommute, noCommuteNeeded]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadFlights omitted to avoid infinite loop; we re-run when routes change
+  }, [routes, direction, canUseCommute, noCommuteNeeded]);
 
   // Tick every 60s when we have lastFetchedAt, so "Updated just now" transitions to timestamp
   useEffect(() => {
@@ -746,28 +898,51 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   }, [lastFetchedAt]);
 
   useEffect(() => {
-    setDayPriorPage(1);
-    setSameDayPage(1);
+    setHomePage(1);
+    setAlternatePage(1);
   }, [sortBy]);
 
-  const dayPriorList = sortFlights(commuteGroups.day_prior ?? [], sortBy);
-  const sameDayList = sortFlights(commuteGroups.same_day ?? [], sortBy);
-  const dayPriorDisplayList = dayPriorList;
-  const sameDayDisplayList = sameDayList;
-  const dayPriorTotalPages = Math.max(1, Math.ceil(dayPriorDisplayList.length / PAGE_SIZE));
-  const sameDayTotalPages = Math.max(1, Math.ceil(sameDayDisplayList.length / PAGE_SIZE));
-  const dayPriorPageItems = dayPriorDisplayList.slice((dayPriorPage - 1) * PAGE_SIZE, dayPriorPage * PAGE_SIZE);
-  const sameDayPageItems = sameDayDisplayList.slice((sameDayPage - 1) * PAGE_SIZE, sameDayPage * PAGE_SIZE);
+  const homeList = sortFlights(commuteGroups.home ?? [], sortBy);
+  const alternateList = sortFlights(commuteGroups.alternate ?? [], sortBy);
+  const homeLastFlightId =
+    homeList.length > 0
+      ? homeList.reduce((best, f) =>
+          new Date(f.depUtc).getTime() > new Date(best.depUtc).getTime() ? f : best
+        ).id
+      : null;
+  const alternateLastFlightId =
+    alternateList.length > 0
+      ? alternateList.reduce((best, f) =>
+          new Date(f.depUtc).getTime() > new Date(best.depUtc).getTime() ? f : best
+        ).id
+      : null;
+  const homeTotalPages = Math.max(1, Math.ceil(homeList.length / PAGE_SIZE));
+  const alternateTotalPages = Math.max(1, Math.ceil(alternateList.length / PAGE_SIZE));
+  const homePageItems = homeList.slice((homePage - 1) * PAGE_SIZE, homePage * PAGE_SIZE);
+  const alternatePageItems = alternateList.slice((alternatePage - 1) * PAGE_SIZE, alternatePage * PAGE_SIZE);
 
   useEffect(() => {
-    if (dayPriorDisplayList.length === 0) setDayPriorPage(1);
-    else if (dayPriorPage > dayPriorTotalPages) setDayPriorPage(dayPriorTotalPages);
-  }, [dayPriorDisplayList.length, dayPriorPage, dayPriorTotalPages]);
+    if (homeList.length === 0) setHomePage(1);
+    else if (homePage > homeTotalPages) setHomePage(homeTotalPages);
+  }, [homeList.length, homePage, homeTotalPages]);
 
   useEffect(() => {
-    if (sameDayDisplayList.length === 0) setSameDayPage(1);
-    else if (sameDayPage > sameDayTotalPages) setSameDayPage(sameDayTotalPages);
-  }, [sameDayDisplayList.length, sameDayPage, sameDayTotalPages]);
+    if (alternateList.length === 0) setAlternatePage(1);
+    else if (alternatePage > alternateTotalPages) setAlternatePage(alternateTotalPages);
+  }, [alternateList.length, alternatePage, alternateTotalPages]);
+
+  const didPaginateRef = useRef(false);
+  useEffect(() => {
+    if (!didPaginateRef.current) {
+      didPaginateRef.current = true;
+      return;
+    }
+    cardsTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [homePage, alternatePage]);
+
+  const primaryRoute = routes[0];
+  const displayOrigin = primaryRoute?.origin ?? "";
+  const displayDestination = primaryRoute?.destination ?? "";
 
   if (!hasValidHome) {
     return (
@@ -796,9 +971,13 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   if (commuteError) {
     return (
       <div className="mt-3 space-y-2">
-        <p className="text-sm text-slate-300">
-          {origin} → {destination}
-        </p>
+        <div className="text-sm text-slate-300 space-y-0.5">
+          {routes.map((r) => (
+            <p key={r.label}>
+              {r.label === "home" ? "🏠" : "🅰️"} {r.origin} → {r.destination} • {r.label === "home" ? "Home Airport" : "Alternate Option"}
+            </p>
+          ))}
+        </div>
         <p className="text-xs text-amber-200/90">{commuteError}</p>
       </div>
     );
@@ -807,30 +986,37 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   if (!commuteMeta) {
     return (
       <div className="mt-3 space-y-2">
-        <p className="text-sm text-slate-300">
-          {origin} → {destination}
-        </p>
+        <div className="text-sm text-slate-300 space-y-0.5">
+          {routes.map((r) => (
+            <p key={r.label}>
+              {r.label === "home" ? "🏠" : "🅰️"} {r.origin} → {r.destination} • {r.label === "home" ? "Home Airport" : "Alternate Option"}
+            </p>
+          ))}
+        </div>
         <p className="text-xs text-slate-500">Loading commute options…</p>
       </div>
     );
   }
 
   const { showInfo, arriveByFormatted } = commuteMeta;
+  const commuteDate = primaryRoute?.commuteDate ?? new Date().toISOString().slice(0, 10);
   // Parse commuteDate as local date in baseTz (noon avoids UTC-midnight → wrong-day display)
   const commuteDateObj = fromZonedTime(`${commuteDate}T12:00:00`, baseTz);
   const commuteDateFormatted = formatInTimeZone(commuteDateObj, baseTz, "EEE MMM d, yyyy");
   const tzMissing = originTz === "UTC" || destTz === "UTC";
-  const commuteWindowLabel = direction === "to_base"
-    ? (dutyOk ? "Commute Window: Day prior" : "Search window: Same-day flights")
-    : (dutyEndDateBase ? "Commute Window: Day of release" : "Search window: Same-day flights");
+  const commuteWindowValue = direction === "to_base"
+    ? (dutyOk ? "Day Prior" : "Same-day flights")
+    : (dutyEndDateBase ? "Day of Release" : "Same-day flights");
 
   return (
     <div className="mt-3 space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <p className="text-base font-medium text-slate-300">
-            {origin} → {destination}
-          </p>
+        <div className="flex flex-col gap-0.5">
+          {routes.map((r) => (
+            <p key={r.label} className="text-base font-medium text-slate-300">
+              {r.label === "home" ? "🏠" : "🅰️"} {r.origin} → {r.destination} • {r.label === "home" ? "Home Airport" : "Alternate Option"}
+            </p>
+          ))}
         </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded border border-slate-700/60 overflow-hidden">
@@ -887,10 +1073,10 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
       {showInfo ? (
         <>
           <p className="text-xs text-slate-400">
-            Commute Date: {commuteDateFormatted}
+            Commute Date  •  {commuteDateFormatted}
           </p>
           <p className="text-xs text-slate-400">
-            {commuteWindowLabel}
+            Search Window •  {commuteWindowValue}
           </p>
           {direction === "to_base" && (
             <p className="text-xs text-slate-400">
@@ -902,68 +1088,82 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
         <p className="text-xs text-slate-400">Commute timing unavailable for this event.</p>
       )}
       {dutyOk && (
-        <div className="space-y-4">
+        <div className="mt-6 space-y-4">
           {tzMissing && (
             <div className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
-              Timezone data missing for {origin} or {destination}. Ask an admin to add it in Airports.
+              Timezone data missing for route. Ask an admin to add it in Airports.
             </div>
           )}
-          {(!dayPriorList.length && !sameDayList.length) ? (
+          {(() => {
+            console.log("[Commute Assist] EMPTY CHECK\n" + JSON.stringify({
+              commuteGroupsHomeLength: (commuteGroups.home ?? []).length,
+              commuteGroupsAlternateLength: (commuteGroups.alternate ?? []).length,
+              homeListLength: homeList.length,
+              alternateListLength: alternateList.length,
+              isEmpty: !homeList.length && !alternateList.length,
+            }, null, 2));
+            return null;
+          })()}
+          {!homeList.length && !alternateList.length ? (
             <p className="text-xs text-slate-500">No commute options found in this window.</p>
           ) : (
-            <>
-              {dayPriorList.length ? (
+            <div ref={cardsTopRef} className="space-y-6">
+              {homeList.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-500">Day prior</p>
+                  <p className="text-sm font-semibold text-slate-300">
+                    {direction === "to_home" ? "Flights to Home Airport" : "Flights from Home Airport"}
+                  </p>
                   <div className="space-y-2">
-                    {dayPriorPageItems.map((opt, idx) =>
+                    {homePageItems.map((opt) =>
                       viewMode === "cards" ? (
                         <CommuteFlightCard
                           key={opt.id}
                           opt={opt}
                           baseTz={baseTz}
-                          origin={origin}
-                          destination={destination}
-                          originTz={originTz}
-                          destTz={destTz}
+                          origin={primaryRoute?.origin ?? displayOrigin}
+                          destination={primaryRoute?.destination ?? displayDestination}
+                          originTz={opt.originTz ?? originTz}
+                          destTz={opt.destTz ?? destTz}
+                          isLastFlight={opt.id === homeLastFlightId}
                         />
                       ) : (
                         <CommuteFlightRow
                           key={opt.id}
                           opt={opt}
                           baseTz={baseTz}
-                          origin={origin}
-                          destination={destination}
-                          originTz={originTz}
-                          destTz={destTz}
+                          origin={primaryRoute?.origin ?? displayOrigin}
+                          destination={primaryRoute?.destination ?? displayDestination}
+                          originTz={opt.originTz ?? originTz}
+                          destTz={opt.destTz ?? destTz}
+                          isLastFlight={opt.id === homeLastFlightId}
                         />
                       )
                     )}
                   </div>
-                  {dayPriorTotalPages > 1 && (
+                  {homeTotalPages > 1 && (
                     <div className="flex items-center justify-center gap-2 pt-1">
                       <button
                         type="button"
-                        onClick={() => setDayPriorPage((p) => Math.max(1, p - 1))}
-                        disabled={dayPriorPage <= 1}
+                        onClick={() => setHomePage((p) => Math.max(1, p - 1))}
+                        disabled={homePage <= 1}
                         className="touch-target touch-pad rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Prev
                       </button>
-                      {Array.from({ length: dayPriorTotalPages }, (_, i) => i + 1).map((p) => (
+                      {Array.from({ length: homeTotalPages }, (_, i) => i + 1).map((p) => (
                         <button
                           key={p}
                           type="button"
-                          onClick={() => setDayPriorPage(p)}
-                          className={`touch-target touch-pad rounded px-2 py-1 text-xs ${p === dayPriorPage ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
+                          onClick={() => setHomePage(p)}
+                          className={`touch-target touch-pad rounded px-2 py-1 text-xs ${p === homePage ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
                         >
                           {p}
                         </button>
                       ))}
                       <button
                         type="button"
-                        onClick={() => setDayPriorPage((p) => Math.min(dayPriorTotalPages, p + 1))}
-                        disabled={dayPriorPage >= dayPriorTotalPages}
+                        onClick={() => setHomePage((p) => Math.min(homeTotalPages, p + 1))}
+                        disabled={homePage >= homeTotalPages}
                         className="touch-target touch-pad rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Next
@@ -971,59 +1171,64 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                     </div>
                   )}
                 </div>
-              ) : null}
-              {sameDayList.length ? (
+              )}
+              {alternateList.length > 0 && routes.length > 1 && (
                 <div className="space-y-2">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-500">Day of (before duty)</p>
+                  <p className="text-sm font-semibold text-slate-300">
+                    {direction === "to_home" ? "Flights to Alternate Airport" : "Flights from Alternate Airport"}
+                  </p>
                   <div className="space-y-2">
-                    {sameDayPageItems.map((opt, idx) =>
-                      viewMode === "cards" ? (
+                    {alternatePageItems.map((opt) => {
+                      const altRoute = routes.find((r) => r.label === "alternate");
+                      return viewMode === "cards" ? (
                         <CommuteFlightCard
                           key={opt.id}
                           opt={opt}
                           baseTz={baseTz}
-                          origin={origin}
-                          destination={destination}
-                          originTz={originTz}
-                          destTz={destTz}
+                          origin={altRoute?.origin ?? ""}
+                          destination={altRoute?.destination ?? ""}
+                          originTz={opt.originTz ?? originTz}
+                          destTz={opt.destTz ?? destTz}
+                          isLastFlight={opt.id === alternateLastFlightId}
                         />
                       ) : (
                         <CommuteFlightRow
                           key={opt.id}
                           opt={opt}
                           baseTz={baseTz}
-                          origin={origin}
-                          destination={destination}
-                          originTz={originTz}
-                          destTz={destTz}
+                          origin={altRoute?.origin ?? ""}
+                          destination={altRoute?.destination ?? ""}
+                          originTz={opt.originTz ?? originTz}
+                          destTz={opt.destTz ?? destTz}
+                          isLastFlight={opt.id === alternateLastFlightId}
                         />
-                      )
-                    )}
+                      );
+                    })}
                   </div>
-                  {sameDayTotalPages > 1 && (
+                  {alternateTotalPages > 1 && (
                     <div className="flex items-center justify-center gap-2 pt-1">
                       <button
                         type="button"
-                        onClick={() => setSameDayPage((p) => Math.max(1, p - 1))}
-                        disabled={sameDayPage <= 1}
+                        onClick={() => setAlternatePage((p) => Math.max(1, p - 1))}
+                        disabled={alternatePage <= 1}
                         className="touch-target touch-pad rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Prev
                       </button>
-                      {Array.from({ length: sameDayTotalPages }, (_, i) => i + 1).map((p) => (
+                      {Array.from({ length: alternateTotalPages }, (_, i) => i + 1).map((p) => (
                         <button
                           key={p}
                           type="button"
-                          onClick={() => setSameDayPage(p)}
-                          className={`touch-target touch-pad rounded px-2 py-1 text-xs ${p === sameDayPage ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
+                          onClick={() => setAlternatePage(p)}
+                          className={`touch-target touch-pad rounded px-2 py-1 text-xs ${p === alternatePage ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
                         >
                           {p}
                         </button>
                       ))}
                       <button
                         type="button"
-                        onClick={() => setSameDayPage((p) => Math.min(sameDayTotalPages, p + 1))}
-                        disabled={sameDayPage >= sameDayTotalPages}
+                        onClick={() => setAlternatePage((p) => Math.min(alternateTotalPages, p + 1))}
+                        disabled={alternatePage >= alternateTotalPages}
                         className="touch-target touch-pad rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Next
@@ -1031,8 +1236,8 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                     </div>
                   )}
                 </div>
-              ) : null}
-            </>
+              )}
+            </div>
           )}
           <div className="pt-3 border-t border-slate-700/50 space-y-2">
             <p className="text-[11px] uppercase tracking-wide text-slate-500">Legend</p>
