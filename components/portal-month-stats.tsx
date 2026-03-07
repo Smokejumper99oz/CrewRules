@@ -5,8 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { formatMinutesToHhMm } from "@/lib/schedule-time";
+import { ProBadge } from "@/components/pro-badge";
+import { getPlanBadgeLabel, getPlanBadgeVariant } from "@/lib/profile-badge";
 import type { MonthOption, MonthStats } from "@/app/frontier/pilots/portal/schedule/actions";
 import { setShowPayProjection } from "@/app/frontier/pilots/portal/profile/actions";
+import type { Profile } from "@/lib/profile";
 
 const formatUSD = (n: number) =>
   new Intl.NumberFormat("en-US", {
@@ -19,6 +22,7 @@ const formatUSD = (n: number) =>
 type Props = {
   tenant: string;
   portal: string;
+  profile: Profile | null;
   availableMonths: MonthOption[];
   statsByMonth: Record<string, MonthStats>;
 };
@@ -27,7 +31,7 @@ function monthKey(year: number, month: number): string {
   return `${year}-${month}`;
 }
 
-export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsByMonth }: Props) {
+export function PortalMonthStatsClient({ tenant, portal, profile, availableMonths, statsByMonth }: Props) {
   const router = useRouter();
   const nowYear = new Date().getFullYear();
   const nowMonth = new Date().getMonth();
@@ -95,7 +99,7 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
 
   return (
     <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20">
-      <div className="flex flex-col gap-3 border-b border-white/5 pb-2 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 border-b border-white/5 pb-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-semibold tracking-tight">Month Overview</h2>
           {availableMonths.length > 1 && (
@@ -117,6 +121,7 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
             </div>
           )}
         </div>
+        <ProBadge label={getPlanBadgeLabel(profile)} variant={getPlanBadgeVariant(profile)} size="sm" />
       </div>
       <div className="mt-4">
         <p className="mb-3 text-sm text-slate-300">{selectedMonth?.label}</p>
@@ -158,10 +163,10 @@ export function PortalMonthStatsClient({ tenant, portal, availableMonths, statsB
           {!stats.payEligible ? (
             <div className="mt-3 space-y-2">
               <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
-                Pay Estimate{"\u00A0"}·{"\u00A0"}Pro
+                Pay Estimate{"\u00A0"}·{"\u00A0"}PRO
               </span>
               <p className="text-xs text-slate-500">See your projected monthly pay based on credit and guarantee.</p>
-              <p className="text-xs text-slate-500">Start a 14-day Pro trial to unlock this feature.</p>
+              <p className="text-xs text-slate-500">Start a 14-day PRO trial to unlock this feature.</p>
               <Link
                 href={`/${tenant}/${portal}/portal/profile`}
                 className="inline-block text-sm font-medium text-[#75C043] hover:underline"

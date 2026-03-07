@@ -1,3 +1,22 @@
+/** IATA code → display name for Current Trip flight identity. */
+export const AIRLINE_NAMES: Record<string, string> = {
+  AA: "American Airlines",
+  DL: "Delta Air Lines",
+  UA: "United Airlines",
+  WN: "Southwest Airlines",
+  F9: "Frontier Airlines",
+  NK: "Spirit Airlines",
+  B6: "JetBlue Airways",
+  AS: "Alaska Airlines",
+  HA: "Hawaiian Airlines",
+  G4: "Allegiant Air",
+  SY: "Sun Country Airlines",
+  OO: "SkyWest Airlines",
+  YX: "Republic Airways",
+  MQ: "Envoy Air",
+  "9E": "Endeavor Air",
+};
+
 export const AIRLINE_DOMAINS: Record<string, string> = {
   // US majors
   AA: "aa.com",

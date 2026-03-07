@@ -1,10 +1,24 @@
 import Link from "next/link";
+import { formatInTimeZone } from "date-fns-tz";
 import { getNextDuty, getScheduleImportStatus, getScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
 import { getProfile, isProActive } from "@/lib/profile";
+import type { ActiveTrip } from "@/lib/trips/get-active-trip";
+import { formatLegLine } from "@/lib/trips/detect-trip-changes";
+import type { TripChangeSummary } from "@/lib/trips/detect-trip-changes";
+import { resolveLegIdentity } from "@/lib/trips/resolve-leg-identity";
+import { formatDayLabel } from "@/lib/schedule-time";
+import { computeDelayInfo, getDelayStatusLabel } from "@/lib/flight-delay";
+import { AirlineLogo } from "@/components/airline-logo";
 import { ScheduleStatusChip } from "@/components/schedule-status-chip";
-import { CommuteAssistProContent } from "@/components/commute-assist-pro-content";
 import { ScheduleEventCard } from "@/components/schedule-event-card";
 import { OnDutyTimer } from "@/components/on-duty-timer";
+import { PortalNextDutyCommuteSection } from "@/components/portal-next-duty-commute-section";
+
+function fmtHM(totalMinutes: number) {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
 
 /** Subtract minutes from HH:MM; returns HH:MM. */
 function subtractMinutesFromTime(time: string, minutes: number): string {
@@ -22,7 +36,17 @@ const DUTY_LABELS: Record<string, string> = {
   next_duty: "Next Duty",
 };
 
-export async function PortalNextDuty({ tenant, portal }: { tenant: string; portal: string }) {
+export async function PortalNextDuty({
+  tenant,
+  portal,
+  activeTrip,
+  tripChangeSummaries = [],
+}: {
+  tenant: string;
+  portal: string;
+  activeTrip?: ActiveTrip | null;
+  tripChangeSummaries?: TripChangeSummary[];
+}) {
   const [{ event, label, hasSchedule, legsToShow, displayDateStr, isInPairing }, statusData, displaySettings, profile] = await Promise.all([
     getNextDuty(),
     getScheduleImportStatus(),
@@ -41,6 +65,38 @@ export async function PortalNextDuty({ tenant, portal }: { tenant: string; porta
       ? subtractMinutesFromTime(legsToShow[0].depTime, 45)
       : undefined;
 
+  const isCurrentTripMode = !!activeTrip;
+  const matchingChangeSummary = activeTrip
+    ? tripChangeSummaries.find((s) => s.pairing === activeTrip.pairing)
+    : null;
+
+  const firstLeg = activeTrip?.todayLegs?.[0];
+  const todayStr = formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
+  const resolvedFirstLeg =
+    firstLeg && firstLeg.origin && firstLeg.destination
+      ? await resolveLegIdentity({
+          flightNumber: firstLeg.flightNumber,
+          origin: firstLeg.origin,
+          destination: firstLeg.destination,
+          depTime: firstLeg.depTime,
+          date: todayStr,
+        })
+      : null;
+
+  console.log("[CurrentTrip primary mode]", { currentTripMode: isCurrentTripMode, nextDutyMode: !isCurrentTripMode });
+  console.log("[CurrentTrip change summary]", {
+    found: !!matchingChangeSummary,
+    activePairing: activeTrip?.pairing ?? null,
+    availablePairings: tripChangeSummaries.map((s) => s.pairing),
+  });
+  console.log("[CurrentTrip visual unify]", { usingUnifiedCardStyle: isCurrentTripMode });
+  console.log("[CurrentTrip flight resolve]", {
+    resolved: !!resolvedFirstLeg,
+    carrierCode: resolvedFirstLeg?.carrierCode ?? null,
+    airlineName: resolvedFirstLeg?.airlineName ?? null,
+    status: resolvedFirstLeg?.status ?? null,
+  });
+
   return (
     <div
       className={`rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-6 transition-all duration-200 hover:-translate-y-0.5 ${
@@ -50,7 +106,11 @@ export async function PortalNextDuty({ tenant, portal }: { tenant: string; porta
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
-        {isOnDuty ? (
+        {isCurrentTripMode ? (
+          <h2 className="text-xl font-semibold tracking-tight">
+            Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Current Trip<span className="align-super text-[10px]">™</span>
+          </h2>
+        ) : isOnDuty ? (
           <span className="inline-flex items-center gap-2 rounded-full bg-emerald-950/80 px-4 py-2 text-base font-bold text-emerald-200">
             <span
               className="h-2 w-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"
@@ -61,8 +121,164 @@ export async function PortalNextDuty({ tenant, portal }: { tenant: string; porta
         ) : (
           <h2 className="text-xl font-semibold tracking-tight">{heading}</h2>
         )}
-        <ScheduleStatusChip status={statusData.status} lastImportedAt={statusData.lastImportedAt} />
+        <ScheduleStatusChip
+          status={statusData.status}
+          lastImportedAt={statusData.lastImportedAt}
+          profile={isCurrentTripMode ? profile : undefined}
+          showProBadge={isCurrentTripMode}
+        />
       </div>
+
+      {activeTrip && (
+        <div className="mt-4 rounded-lg border border-slate-700/60 bg-slate-900/40 overflow-hidden">
+          <div className="border-l-4 border-l-emerald-500">
+          {activeTrip.todayLegs.length > 0 ? (
+            activeTrip.todayLegs.map((leg, i) => {
+              const resolved = i === 0 ? resolvedFirstLeg : null;
+              const f = resolved?.flight;
+              const depTz = f?.originTz ?? displaySettings.baseTimezone;
+              const arrTz = f?.destTz ?? displaySettings.baseTimezone;
+              const delayInfo = f ? computeDelayInfo(f, depTz, arrTz) : null;
+              const depSched = f ? formatInTimeZone(new Date(f.depUtc), depTz, "HH:mm") : leg.depTime;
+              const arrSched = f ? formatInTimeZone(new Date(f.arrUtc), arrTz, "HH:mm") : leg.arrTime;
+              const depDisplay = delayInfo?.dep ?? { scheduled: depSched, actual: undefined };
+              const arrDisplay = delayInfo?.arr ?? { scheduled: arrSched, actual: undefined };
+              const numPart = f && (f.flightNumber ?? "").toUpperCase().startsWith((f.carrier ?? "").toUpperCase())
+                ? (f.flightNumber ?? "").slice((f.carrier ?? "").length).trim()
+                : null;
+              const flightLabel = f ? `${f.carrier} ${numPart || f.flightNumber}` : `${leg.flightNumber}`;
+              const effectiveAircraftType = f
+                ? (f.aircraft_type ?? (f.carrier?.toUpperCase() === "WN" ? "B737" : "—"))
+                : null;
+              if (f && delayInfo) {
+                return (
+                  <div
+                    key={i}
+                    className="pl-3 pr-3 py-2.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-slate-400">
+                        {formatDayLabel(new Date().toISOString(), displaySettings.baseTimezone)}
+                      </span>
+                      <span
+                        className={[
+                          "px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide uppercase",
+                          delayInfo.cancelled
+                            ? "bg-red-500/20 text-red-400 border border-red-500/40"
+                            : (delayInfo.dep || delayInfo.arr)
+                              ? "bg-amber-500/20 text-amber-400 border border-amber-500/40"
+                              : "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30",
+                        ].join(" ")}
+                      >
+                        {getDelayStatusLabel(delayInfo)}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <div className="flex flex-col items-start">
+                        {delayInfo.cancelled ? (
+                          <span className="text-2xl tabular-nums line-through text-red-400/90">{depDisplay.scheduled}</span>
+                        ) : (delayInfo.dep && depDisplay.actual) ? (
+                          <span className="flex flex-col items-baseline gap-0">
+                            <span className="line-through text-amber-400/60 opacity-70 tabular-nums text-[0.85em]">{depDisplay.scheduled}</span>
+                            <span className="text-amber-300 font-bold tracking-wide tabular-nums text-2xl">{depDisplay.actual}</span>
+                          </span>
+                        ) : (
+                          <span className="text-2xl font-bold tabular-nums text-slate-200">{depDisplay.scheduled}</span>
+                        )}
+                      </div>
+                      <span className="text-[11px] tabular-nums font-medium text-slate-300 bg-slate-800/50 border border-slate-700/40 px-1.5 py-0.5 rounded">
+                        {leg.origin} → {leg.destination}
+                      </span>
+                      <div className="flex flex-col items-end">
+                        {delayInfo.cancelled ? (
+                          <span className="text-2xl tabular-nums line-through text-red-400/90">{arrDisplay.scheduled}</span>
+                        ) : (delayInfo.arr && arrDisplay.actual) ? (
+                          <span className="flex flex-col items-baseline gap-0">
+                            <span className="line-through text-amber-400/60 opacity-70 tabular-nums text-[0.85em]">{arrDisplay.scheduled}</span>
+                            <span className="text-amber-300 font-bold tracking-wide tabular-nums text-2xl">{arrDisplay.actual}</span>
+                          </span>
+                        ) : (
+                          <span className="text-2xl font-bold tabular-nums text-slate-200">{arrDisplay.scheduled}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                      {leg.deadhead && (
+                        <span className="inline-flex rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-200">DH</span>
+                      )}
+                      <AirlineLogo carrier={f.carrier} size={24} />
+                      <span className="text-slate-300 font-medium font-mono tabular-nums">{flightLabel}</span>
+                      <span className="text-slate-600">•</span>
+                      <span>Flight time {fmtHM(f.durationMinutes)}</span>
+                      {effectiveAircraftType && (
+                        <>
+                          <span className="text-slate-600">•</span>
+                          <span className="tabular-nums">{effectiveAircraftType}</span>
+                        </>
+                      )}
+                      {f.dep_gate && (
+                        <>
+                          <span className="text-slate-600">•</span>
+                          <span className="tabular-nums">Gate {f.dep_gate}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={i} className="pl-3 pr-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-slate-400">
+                      {formatDayLabel(new Date().toISOString(), displaySettings.baseTimezone)}
+                    </span>
+                  </div>
+                  <div className="font-mono text-xs text-slate-300 mt-1">
+                    {leg.deadhead && (
+                      <span className="mr-1 inline-flex rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-200">DH</span>
+                    )}
+                    {leg.flightNumber} {leg.origin} → {leg.destination} {leg.depTime}–{leg.arrTime}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="pl-3 pr-3 py-2.5">
+              <span className="text-sm text-slate-500">No flights today</span>
+            </div>
+          )}
+          <div className="border-t border-slate-700/60 pl-3 pr-3 py-2">
+            <span className="text-sm font-medium text-white">{activeTrip.pairing} • Day {activeTrip.tripDay} of {activeTrip.tripLength}</span>
+            {event && (
+              <span className="block text-sm text-slate-400 mt-0.5">
+                Report {reportTimeOverride ?? event.report_time ?? "—"}
+              </span>
+            )}
+          </div>
+          </div>
+          {matchingChangeSummary && (
+            <div className="border-t border-slate-700/60 pl-3 pr-3 py-2 space-y-0.5">
+              <span className="text-sm text-slate-400">Trip updated</span>
+              {matchingChangeSummary.removedLegs.length > 0 && (
+                <span className="block text-sm text-slate-400">
+                  Canceled: {matchingChangeSummary.removedLegs.map((l) => formatLegLine(l, false)).join("; ")}
+                </span>
+              )}
+              {matchingChangeSummary.addedLegs.length > 0 && (
+                <span className="block text-sm text-slate-400">
+                  Added: {matchingChangeSummary.addedLegs.map((l) => formatLegLine(l, true)).join("; ")}
+                </span>
+              )}
+              {matchingChangeSummary.reportChanged && (
+                <span className="block text-sm text-slate-400">
+                  Report: {matchingChangeSummary.reportChanged.before} → {matchingChangeSummary.reportChanged.after}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {!hasSchedule && (
         <div className="mt-4 space-y-2">
@@ -83,57 +299,36 @@ export async function PortalNextDuty({ tenant, portal }: { tenant: string; porta
 
       {hasSchedule && event && (
         <div className="mt-4 space-y-2">
-          <ScheduleEventCard
-            event={event}
-            displaySettings={displaySettings}
-            position={profile?.position ?? null}
-            compact={false}
-            legsToShow={legsToShow}
-            displayDateStr={displayDateStr}
-            reportTimeOverride={reportTimeOverride}
-          />
+          {!activeTrip && (
+            <ScheduleEventCard
+              event={event}
+              displaySettings={displaySettings}
+              position={profile?.position ?? null}
+              compact={false}
+              legsToShow={legsToShow}
+              displayDateStr={displayDateStr}
+              reportTimeOverride={reportTimeOverride}
+            />
+          )}
           {isOnDuty && (
             <OnDutyTimer startTime={event.start_time} endTime={event.end_time} timezone={displaySettings.baseTimezone} />
           )}
 
           {/* Commute Assist — layout scaffold with mock data */}
-          <div className="mt-3 rounded-2xl border border-white/5 bg-slate-950/30 p-4">
-            <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
-              <h3 className="text-xl font-semibold text-slate-200">
-                Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Commute Assist<span className="align-super text-[10px]">™</span>
-              </h3>
-              <span className="text-xs text-slate-500">
-                {proActive ? "Pro" : "Locked"}
-              </span>
-            </div>
-            {!proActive ? (
-              <div className="mt-3 space-y-2">
-                <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
-                  Commute Assist<span className="align-super text-[10px]">™</span>{"\u00A0"}·{"\u00A0"}Pro
-                </span>
-                <p className="text-xs text-slate-500">Start a 14-day Pro trial to unlock this feature.</p>
-                <Link
-                  href={`/${tenant}/${portal}/portal/profile`}
-                  className="inline-block text-sm font-medium text-[#75C043] hover:underline"
-                >
-                  Go to Profile →
-                </Link>
-              </div>
-            ) : (
-              <CommuteAssistProContent
-                event={event}
-                label={label ?? undefined}
-                profile={profile!}
-                displaySettings={displaySettings}
-                tenant={tenant}
-                portal={portal}
-                displayDateStr={displayDateStr}
-                isInPairing={isInPairing}
-                dutyStartAirportOverride={legsToShow?.[0]?.origin}
-                reportTimeOverride={reportTimeOverride}
-              />
-            )}
-          </div>
+          <PortalNextDutyCommuteSection
+            event={event}
+            label={label ?? undefined}
+            profile={profile}
+            displaySettings={displaySettings}
+            tenant={tenant}
+            portal={portal}
+            proActive={proActive}
+            displayDateStr={displayDateStr}
+            isInPairing={isInPairing}
+            dutyStartAirportOverride={legsToShow?.[0]?.origin}
+            reportTimeOverride={reportTimeOverride}
+            dutyStartTime={reportTimeOverride ?? event?.start_time ?? null}
+          />
 
           <div className="flex justify-end">
             <Link

@@ -11,6 +11,7 @@ import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/sched
 import type { Profile } from "@/lib/profile";
 import { AirlineLogo } from "@/components/airline-logo";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
+import { computeDelayInfo, getDelayStatusLabel, type DelayInfo } from "@/lib/flight-delay";
 
 function fmtHM(totalMinutes: number) {
   const h = Math.floor(totalMinutes / 60);
@@ -161,62 +162,6 @@ const riskBorderStyles = {
   not_recommended: "border-l-4 border-l-red-500",
 };
 
-/** Inline delay/cancel display: original crossed out, new time below (amber for delay, red for cancel). */
-type DelayInfo = {
-  cancelled: boolean;
-  dep?: { scheduled: string; actual: string };
-  arr?: { scheduled: string; actual: string };
-};
-
-function computeDelayInfo(
-  opt: CommuteFlightOption,
-  originTz: string,
-  destTz: string
-): DelayInfo {
-  const depTz = opt.originTz ?? originTz;
-  const arrTz = opt.destTz ?? destTz;
-
-  if (opt.status === "cancelled") {
-    const depSched = opt.dep_scheduled_raw
-      ? formatInTimeZone(parseAviationstackTs(opt.dep_scheduled_raw, depTz), depTz, "HH:mm")
-      : formatInTimeZone(new Date(opt.depUtc), depTz, "HH:mm");
-    const arrSched = opt.arr_scheduled_raw
-      ? formatInTimeZone(parseAviationstackTs(opt.arr_scheduled_raw, arrTz), arrTz, "HH:mm")
-      : formatInTimeZone(new Date(opt.arrUtc), arrTz, "HH:mm");
-    return { cancelled: true, dep: { scheduled: depSched, actual: depSched }, arr: { scheduled: arrSched, actual: arrSched } };
-  }
-
-  const result: DelayInfo = { cancelled: false };
-
-  const depWasRaw = opt.dep_scheduled_raw;
-  const depNowRaw = opt.dep_actual_raw ?? opt.dep_estimated_raw;
-  if (depWasRaw && depNowRaw) {
-    const wasMs = parseAviationstackTs(depWasRaw, depTz).getTime();
-    const nowMs = parseAviationstackTs(depNowRaw, depTz).getTime();
-    if (!Number.isNaN(wasMs) && !Number.isNaN(nowMs) && nowMs - wasMs >= 60000) {
-      result.dep = {
-        scheduled: formatInTimeZone(parseAviationstackTs(depWasRaw, depTz), depTz, "HH:mm"),
-        actual: formatInTimeZone(parseAviationstackTs(depNowRaw, depTz), depTz, "HH:mm"),
-      };
-    }
-  }
-
-  const arrWasRaw = opt.arr_scheduled_raw;
-  const arrNowRaw = opt.arr_actual_raw ?? opt.arr_estimated_raw;
-  if (arrWasRaw && arrNowRaw) {
-    const wasMs = parseAviationstackTs(arrWasRaw, arrTz).getTime();
-    const nowMs = parseAviationstackTs(arrNowRaw, arrTz).getTime();
-    if (!Number.isNaN(wasMs) && !Number.isNaN(nowMs) && nowMs - wasMs >= 60000) {
-      result.arr = {
-        scheduled: formatInTimeZone(parseAviationstackTs(arrWasRaw, arrTz), arrTz, "HH:mm"),
-        actual: formatInTimeZone(parseAviationstackTs(arrNowRaw, arrTz), arrTz, "HH:mm"),
-      };
-    }
-  }
-
-  return result;
-}
-
 function TimeBlock({
   scheduled,
   actual,
@@ -302,7 +247,7 @@ function CommuteFlightCard({
                 : "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30",
           ].join(" ")}
         >
-          {delayInfo.cancelled ? "Cancelled" : (delayInfo.dep || delayInfo.arr) ? "Delayed" : "On time"}
+          {getDelayStatusLabel(delayInfo)}
         </span>
       </div>
       <div className="flex items-baseline gap-2 mt-1">
@@ -418,7 +363,7 @@ function CommuteFlightRow({
             : "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30",
       ].join(" ")}
     >
-      {delayInfo.cancelled ? "Cancelled" : (delayInfo.dep || delayInfo.arr) ? "Delayed" : "On time"}
+      {getDelayStatusLabel(delayInfo)}
     </span>
   );
 

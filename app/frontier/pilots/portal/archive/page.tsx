@@ -50,7 +50,7 @@ export default function ArchivePage() {
       <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-6">
         <h1 className="text-xl font-semibold border-b border-white/5">Archive</h1>
         <p className="mt-4 text-slate-400">
-          Q&A archive is available for Pro and Enterprise plans.{" "}
+          Q&A archive is available for PRO and Enterprise plans.{" "}
           <Link href="/" className="text-[#75C043] hover:underline">
             Upgrade
           </Link>{" "}

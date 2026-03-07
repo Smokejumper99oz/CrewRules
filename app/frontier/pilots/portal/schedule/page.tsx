@@ -11,6 +11,9 @@ import {
   type ScheduleEvent,
   type ScheduleDisplaySettings,
 } from "./actions";
+import { formatLegLine } from "@/lib/trips/detect-trip-changes";
+import type { TripChangeSummary } from "@/lib/trips/detect-trip-changes";
+import { formatMinutesToHhMm } from "@/lib/schedule-time";
 import { formatInTimeZone } from "date-fns-tz";
 import { ScheduleStatusChip } from "@/components/schedule-status-chip";
 import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, eventOverlapsDay, addDay } from "@/lib/schedule-time";
@@ -276,6 +279,7 @@ export default function SchedulePage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importTechnicalError, setImportTechnicalError] = useState<string | null>(null);
+  const [tripChangeSummaries, setTripChangeSummaries] = useState<TripChangeSummary[] | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [status, setStatus] = useState<{ count: number; lastImportedAt: string | null; status: "no_schedule" | "up_to_date" | "outdated" } | null>(null);
@@ -340,6 +344,7 @@ export default function SchedulePage() {
 
     setImportError(null);
     setImportTechnicalError(null);
+    setTripChangeSummaries(null);
     setImporting(true);
     const formData = new FormData();
     formData.set("file", file);
@@ -350,6 +355,12 @@ export default function SchedulePage() {
       setImportError(result.error);
       setImportTechnicalError(result.technicalError ?? null);
       return;
+    }
+    if (result.tripChangeSummaries.length > 0) {
+      setTripChangeSummaries(result.tripChangeSummaries);
+      if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+        console.log("[Trip change UI]", { rendered: result.tripChangeSummaries.length, pairings: result.tripChangeSummaries.map((s) => s.pairing) });
+      }
     }
     await loadData();
   }
@@ -363,6 +374,7 @@ export default function SchedulePage() {
     if (clearing || !status?.count) return;
     setShowClearConfirm(false);
     setImportError(null);
+    setTripChangeSummaries(null);
     setClearing(true);
     const result = await clearScheduleImport();
     setClearing(false);
@@ -456,6 +468,37 @@ export default function SchedulePage() {
           </div>
         </div>
       </div>
+
+      {tripChangeSummaries && tripChangeSummaries.length > 0 && (
+        <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-slate-200">Trip updated</h3>
+          {tripChangeSummaries.map((s, i) => (
+            <div key={i} className="space-y-2 text-xs">
+              <p className="font-mono text-slate-300">{s.pairing}</p>
+              {s.removedLegs.length > 0 && (
+                <p className="text-slate-400">
+                  Removed: {s.removedLegs.map((l) => formatLegLine(l, false)).join("; ")}
+                </p>
+              )}
+              {s.addedLegs.length > 0 && (
+                <p className="text-slate-400">
+                  Added: {s.addedLegs.map((l) => formatLegLine(l, true)).join("; ")}
+                </p>
+              )}
+              {s.reportChanged && (
+                <p className="text-slate-400">
+                  Report: {s.reportChanged.before} → {s.reportChanged.after}
+                </p>
+              )}
+              {s.creditChanged && (
+                <p className="text-slate-400">
+                  Credit: {formatMinutesToHhMm(s.creditChanged.before)} → {formatMinutesToHhMm(s.creditChanged.after)}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {importError && (
         <div className="space-y-2">

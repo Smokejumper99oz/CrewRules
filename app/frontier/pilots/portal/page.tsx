@@ -1,4 +1,6 @@
 import { getProfile, getDashboardGreeting } from "@/lib/profile";
+import { getActiveTrip } from "@/lib/trips/get-active-trip";
+import { getTripChangeSummariesForUser } from "@/app/frontier/pilots/portal/schedule/actions";
 import { PortalRecentQA } from "@/components/portal-recent-qa";
 import { PortalNextDuty } from "@/components/portal-next-duty";
 import { PortalScheduleUpcoming } from "@/components/portal-schedule-upcoming";
@@ -15,6 +17,10 @@ export default async function PortalDashboard() {
   const profile = await getProfile();
   const { greetingPart, namePart } = getDashboardGreeting(profile ?? null);
 
+  const activeTrip = profile?.id ? await getActiveTrip(profile.id) : null;
+  const tripChangeSummaries = profile?.id ? await getTripChangeSummariesForUser(profile.id) : [];
+  console.log("[CurrentTrip wired]", { loaded: !!profile?.id, hasActiveTrip: !!activeTrip, pairing: activeTrip?.pairing ?? null });
+
   return (
     <div className="space-y-6">
       <div>
@@ -23,7 +29,7 @@ export default async function PortalDashboard() {
       </div>
 
       {/* Next Duty */}
-      <PortalNextDuty tenant={TENANT} portal={PORTAL} />
+      <PortalNextDuty tenant={TENANT} portal={PORTAL} activeTrip={activeTrip} tripChangeSummaries={tripChangeSummaries} />
 
       {/* Upcoming + Month Stats (when schedule exists) */}
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
@@ -31,7 +37,7 @@ export default async function PortalDashboard() {
           <PortalScheduleUpcoming tenant={TENANT} portal={PORTAL} />
         </div>
         <div className="min-w-0 flex-1 lg:flex-[1.3] xl:flex-1">
-          <PortalMonthStats tenant={TENANT} portal={PORTAL} />
+          <PortalMonthStats tenant={TENANT} portal={PORTAL} profile={profile} />
         </div>
       </div>
 

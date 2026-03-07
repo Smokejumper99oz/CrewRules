@@ -420,11 +420,11 @@ export default function HomePage() {
 
           <div className="relative rounded-3xl border border-emerald-500/30 bg-gradient-to-b from-[#75C043]/10 to-white/[0.03] p-7">
             <div className="absolute right-6 top-6 rounded-full bg-emerald-500/20 px-3 py-1 text-xs text-emerald-200 ring-1 ring-emerald-500/30">
-              Pro Features Coming Soon
+              PRO Features Coming Soon
             </div>
 
             <div className="text-sm text-slate-300">Pilot + Mentor</div>
-            <div className="mt-2 text-2xl font-bold">Crew<span className="text-[#75C043]">Rules</span>™ Pro</div>
+            <div className="mt-2 text-2xl font-bold">Crew<span className="text-[#75C043]">Rules</span>™ PRO</div>
             <div className="mt-3 text-slate-200 text-sm">
               Advanced tools for mentoring, career progression, and deeper contract insights — built specifically for airline crew.
             </div>
@@ -473,7 +473,7 @@ export default function HomePage() {
               {
                 key: "mentoring",
                 q: "Will you offer mentoring features?",
-                a: "Yes. Mentoring tools and notes workflows are planned as a Pro feature set once the core platform is stable.",
+                a: "Yes. Mentoring tools and notes workflows are planned as a PRO feature set once the core platform is stable.",
               },
               {
                 key: "updates",

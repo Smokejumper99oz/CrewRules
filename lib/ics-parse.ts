@@ -15,6 +15,7 @@ export type ParsedLeg = {
   depTime?: string;
   arrTime?: string;
   blockMinutes?: number;
+  deadhead?: boolean;
   raw?: string;
 };
 
@@ -261,7 +262,8 @@ function parseDescription(desc: string): {
   }
   result.pairingDays = dutyDays.size > 0 ? Math.min(dutyDays.size, 31) : (legLines.length > 0 ? Math.min(legLines.length, 31) : undefined);
 
-  // Parse each leg into structured format: "Th 3546 Sju-Jfk 0850 1204 0414"
+  // Parse each leg into structured format: "Th 3546 Sju-Jfk 0850 1204 0414" or "Sa 1440 Mdw-Atl 1245 1535 0150Dh"
+  const depArrBlockRegex = /(\d{3,4})\s+(\d{3,4})\s+(\d{3,4})(Dh)?\s*$/i;
   const legs: ParsedLeg[] = [];
   for (const line of legLines) {
     const trimmed = line.trim();
@@ -270,7 +272,7 @@ function parseDescription(desc: string): {
     const flightMatch = trimmed.match(/^(?:Mo|Tu|We|Th|Fr|Sa|Su)\s+(\d{3,5})\b/i);
     const flightNumber = flightMatch ? flightMatch[1] : undefined;
     const routeMatch = trimmed.match(airportPair);
-    const depArrBlock = trimmed.match(/(\d{3,4})\s+(\d{3,4})\s+(\d{3,4})\s*$/);
+    const depArrBlock = trimmed.match(depArrBlockRegex);
     const depArrOnly = !depArrBlock && trimmed.match(/(\d{3,4})\s+(\d{3,4})\s*$/);
     let origin = "";
     let destination = "";
@@ -282,6 +284,7 @@ function parseDescription(desc: string): {
     let depTime: string | undefined;
     let arrTime: string | undefined;
     let blockMinutes: number | undefined;
+    let deadhead = false;
     if (depArrBlock) {
       let dep = depArrBlock[1];
       if (dep.length === 3) dep = dep.padStart(4, "0");
@@ -290,6 +293,7 @@ function parseDescription(desc: string): {
       if (arr.length === 3) arr = arr.padStart(4, "0");
       arrTime = `${arr.slice(0, 2)}:${arr.slice(2)}`;
       blockMinutes = hhmmToMinutes(parseInt(depArrBlock[3], 10));
+      deadhead = !!depArrBlock[4];
     } else if (depArrOnly && depArrOnly[1] && depArrOnly[2]) {
       let dep = depArrOnly[1];
       if (dep.length === 3) dep = dep.padStart(4, "0");
@@ -298,14 +302,28 @@ function parseDescription(desc: string): {
       if (arr.length === 3) arr = arr.padStart(4, "0");
       arrTime = `${arr.slice(0, 2)}:${arr.slice(2)}`;
     }
-    legs.push({ day, flightNumber, origin, destination, depTime, arrTime, blockMinutes, raw: trimmed });
+    const leg: ParsedLeg = { day, flightNumber, origin, destination, depTime, arrTime, blockMinutes, raw: trimmed };
+    if (deadhead) leg.deadhead = true;
+    legs.push(leg);
+    if (process.env.NODE_ENV === "development") {
+      console.log("[ICS deadhead parse debug]", {
+        raw: trimmed,
+        flightNumber: leg.flightNumber ?? "",
+        origin: leg.origin,
+        destination: leg.destination,
+        depTime: leg.depTime ?? "",
+        arrTime: leg.arrTime ?? "",
+        blockMinutes: leg.blockMinutes ?? null,
+        deadhead: leg.deadhead ?? false,
+      });
+    }
   }
   if (legs.length > 0) result.legs = legs;
 
   // First leg departure time: "Th 3546 Sju-Jfk 0850 1204 0414" → dep=0850 → "08:50"
   for (const leg of legLines) {
     if (result.firstLegDepartureTime) break;
-    const depArrBlock = leg.match(/(\d{3,4})\s+(\d{3,4})\s+(\d{3,4})\s*$/);
+    const depArrBlock = leg.match(/(\d{3,4})\s+(\d{3,4})\s+(\d{3,4})(?:Dh)?\s*$/i);
     if (depArrBlock) {
       let dep = depArrBlock[1];
       if (dep.length === 3) dep = dep.padStart(4, "0");
@@ -339,8 +357,8 @@ function parseDescription(desc: string): {
     } else {
       let totalBlock = 0;
       for (const leg of legLines) {
-        // Leg format: "Th 3546 Sju-Jfk 0850 1204 0414" (dep, arr, block in HHMM)
-        const depArrBlock = leg.match(/(\d{3,4})\s+(\d{3,4})\s+(\d{3,4})\s*$/);
+        // Leg format: "Th 3546 Sju-Jfk 0850 1204 0414" or "Sa 1440 Mdw-Atl 1245 1535 0150Dh"
+        const depArrBlock = leg.match(/(\d{3,4})\s+(\d{3,4})\s+(\d{3,4})(?:Dh)?\s*$/i);
         if (depArrBlock) {
           const blockHhmm = parseInt(depArrBlock[3], 10);
           totalBlock += hhmmToMinutes(blockHhmm);

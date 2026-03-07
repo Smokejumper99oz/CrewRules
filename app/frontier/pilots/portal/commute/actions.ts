@@ -136,7 +136,7 @@ export async function getCommuteFlights(input: {
       return {
         ok: false as const,
         reason: "demo_only" as const,
-        message: "Commute Assist is demo-only after 30 days on Free. Upgrade to Pro to refresh live data.",
+        message: "Commute Assist is demo-only after 30 days on Free. Upgrade to PRO to refresh live data.",
       };
     }
     if (!isPaid && accountAgeDays < 30) {
@@ -157,7 +157,7 @@ export async function getCommuteFlights(input: {
         return {
           ok: false as const,
           reason: "free_limit_reached" as const,
-          message: "Free plan limit reached (3 refreshes/month during the first 30 days). Upgrade to Pro for unlimited refresh.",
+          message: "Free plan limit reached (3 refreshes/month during the first 30 days). Upgrade to PRO for unlimited refresh.",
         };
       }
     }
@@ -321,7 +321,7 @@ export async function getCommuteFlights(input: {
     return {
       ok: false as const,
       reason: "demo_only" as const,
-      message: "Commute Assist is demo-only after 30 days on Free. Upgrade to Pro to refresh live data.",
+      message: "Commute Assist is demo-only after 30 days on Free. Upgrade to PRO to refresh live data.",
     };
   }
 
@@ -345,7 +345,7 @@ export async function getCommuteFlights(input: {
       return {
         ok: false as const,
         reason: "free_limit_reached" as const,
-        message: "Free plan limit reached (3 refreshes/month during the first 30 days). Upgrade to Pro for unlimited refresh.",
+        message: "Free plan limit reached (3 refreshes/month during the first 30 days). Upgrade to PRO for unlimited refresh.",
       };
     }
   }

@@ -44,8 +44,8 @@ type Props = {
     show_pay_projection?: boolean;
   };
   proActive: boolean;
-  proBadgeLabel: string | null;
-  proBadgeVariant: "gold" | "emerald" | "amber" | "red";
+  proBadgeLabel: string;
+  proBadgeVariant: "slate" | "gold" | "emerald" | "amber" | "red";
 };
 
 /** Frontier Airlines crew bases (IATA codes). */
@@ -163,7 +163,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Profile Settings</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Manage your profile, commute settings, display preferences, and Pro features.
+            Manage your profile, commute settings, display preferences, and PRO features.
           </p>
         </div>
         <ProBadge label={proBadgeLabel} variant={proBadgeVariant} />
@@ -408,10 +408,10 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
         {proActive ? (
           <>
         <h2 className="text-base font-semibold text-white mb-1">
-          Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> <span className="text-amber-400">Pro</span> Features
+          Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> <span className="text-amber-400">PRO</span> Features
         </h2>
         <p className="text-xs text-slate-500 mb-4">
-          Advanced tools available with CrewRules™ Pro.
+          Advanced tools available with CrewRules™ PRO.
         </p>
 
         {/* CrewRules™ Commute Assist™ */}
@@ -509,7 +509,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               </label>
             </div>
             <p className="text-xs text-slate-500">
-              Display estimated monthly pay and credit calculations. Available with CrewRules™ Pro.
+              Display estimated monthly pay and credit calculations. Available with CrewRules™ PRO.
             </p>
           </div>
         </div>
@@ -523,7 +523,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             <input type="hidden" name="commute_nonstop_only" value={commuteNonstopOnly ? "1" : "0"} />
             <input type="hidden" name="show_pay_projection" value={profile?.show_pay_projection ? "1" : "0"} />
             <h2 className="text-base font-semibold text-white mb-1">
-              Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> <span className="text-amber-400">Pro</span> Features 🔒
+              Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> <span className="text-amber-400">PRO</span> Features 🔒
             </h2>
             <p className="text-xs text-slate-500 mb-4">Upgrade to unlock advanced tools.</p>
             <button
@@ -538,13 +538,13 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 } else if (result.reason === "trial_active") {
                   setTrialMessage("Trial already active");
                 } else if (result.reason === "already_paid") {
-                  setTrialMessage("You already have Pro access");
+                  setTrialMessage("You already have PRO access");
                 }
               }}
               disabled={trialStarting}
               className="rounded-xl bg-amber-500/90 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-amber-500 transition disabled:opacity-50"
             >
-              {trialStarting ? "Starting…" : "Start 14-Day Pro Trial"}
+              {trialStarting ? "Starting…" : "Start 14-Day PRO Trial"}
             </button>
             {trialMessage && (
               <p className="mt-2 text-sm text-amber-200/90">{trialMessage}</p>

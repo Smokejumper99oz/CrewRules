@@ -13,6 +13,7 @@ import {
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getPayScale } from "@/lib/tenant-settings";
 import { payYearFromDOH } from "@/lib/pay-utils";
+import { detectTripChanges, type TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 
 const FLICA_SOURCE = "flica_import";
 
@@ -79,7 +80,7 @@ function tripFollowsReserve(
 }
 
 export type ImportIcsResult =
-  | { success: string; count: number; importedAt: string }
+  | { success: string; count: number; importedAt: string; tripChangeSummaries: TripChangeSummary[] }
   | { error: string; technicalError?: string };
 
 /** Check if current user is admin (for showing technical error details). */
@@ -234,6 +235,28 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
     }
   }
 
+  // Trip change detection: compare with existing before overwrite
+  const tripChangeSummaries: TripChangeSummary[] = [];
+  const tripRows = rows.filter((r) => r.event_type === "trip" && r.external_uid);
+  if (tripRows.length > 0) {
+    const uids = tripRows.map((r) => r.external_uid!);
+    const { data: existing } = await supabase
+      .from("schedule_events")
+      .select("external_uid, start_time, end_time, title, report_time, credit_minutes, legs")
+      .eq("user_id", profile.id)
+      .eq("source", FLICA_SOURCE)
+      .in("external_uid", uids);
+    const existingByUid = new Map((existing ?? []).map((e) => [(e as { external_uid: string }).external_uid, e]));
+    for (const incoming of tripRows) {
+      const prev = existingByUid.get(incoming.external_uid);
+      if (prev) {
+        const summary = detectTripChanges(prev as Parameters<typeof detectTripChanges>[0], incoming);
+        console.log("[Trip change detect]", summary);
+        if (summary.hasChanges) tripChangeSummaries.push(summary);
+      }
+    }
+  }
+
   const { error: upsertError } = await supabase
     .from("schedule_events")
     .upsert(rows, {
@@ -259,10 +282,25 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
   revalidatePath(`/${tenant}/${portal}/portal`);
   revalidatePath(`/${tenant}/${portal}/portal/schedule`);
 
+  // Persist trip change summaries for dashboard (Current Trip card)
+  if (tripChangeSummaries.length > 0) {
+    await supabase.from("trip_change_summaries").delete().eq("user_id", profile.id);
+    await supabase.from("trip_change_summaries").insert(
+      tripChangeSummaries.map((s) => ({
+        user_id: profile.id,
+        pairing: s.pairing,
+        summary: s,
+      }))
+    );
+  }
+
+  console.log("[Trip change return]", { count: tripChangeSummaries.length, pairings: tripChangeSummaries.map((s) => s.pairing) });
+
   return {
     success: `Imported ${events.length} events`,
     count: events.length,
     importedAt,
+    tripChangeSummaries,
   };
 }
 
@@ -281,6 +319,8 @@ export async function clearScheduleImport(): Promise<{ success: boolean; error?:
 
     if (error) return { success: false, error: error.message };
 
+    await supabase.from("trip_change_summaries").delete().eq("user_id", profile.id);
+
     const tenant = profile.tenant ?? "frontier";
     const portal = profile.portal ?? "pilots";
     revalidatePath(`/${tenant}/${portal}/portal`);
@@ -289,6 +329,20 @@ export async function clearScheduleImport(): Promise<{ success: boolean; error?:
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "Unknown error" };
   }
+}
+
+/** Fetch recent trip change summaries for the current user (from last import). Used by dashboard Current Trip card. */
+export async function getTripChangeSummariesForUser(userId: string): Promise<TripChangeSummary[]> {
+  if (!userId?.trim()) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("trip_change_summaries")
+    .select("summary")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (!data?.length) return [];
+  return data.map((r) => r.summary as TripChangeSummary);
 }
 
 export type ScheduleImportStatus = {
@@ -306,6 +360,7 @@ export type ScheduleEventLeg = {
   depTime?: string;
   arrTime?: string;
   blockMinutes?: number;
+  deadhead?: boolean;
   raw?: string;
 };
 
