@@ -7,6 +7,17 @@
 
 import { fromZonedTime } from "date-fns-tz";
 
+export type ParsedLeg = {
+  day?: string;
+  flightNumber?: string;
+  origin: string;
+  destination: string;
+  depTime?: string;
+  arrTime?: string;
+  blockMinutes?: number;
+  raw?: string;
+};
+
 export type ParsedEvent = {
   start: Date;
   end: Date;
@@ -19,6 +30,7 @@ export type ParsedEvent = {
   firstLegDepartureTime?: string;
   pairingDays?: number;
   blockMinutes?: number;
+  legs?: ParsedLeg[];
 };
 
 export type ParseIcsOptions = {
@@ -125,7 +137,7 @@ function hasRrule(block: string): boolean {
   return /^RRULE(?:;[^:]*)?:/im.test(block);
 }
 
-/** Parse DESCRIPTION for Report time, Credit, route, pairing_days, block. FLICA/airline ICS. */
+/** Parse DESCRIPTION for Report time, Credit, route, pairing_days, block, legs. FLICA/airline ICS. */
 function parseDescription(desc: string): {
   reportTime?: string;
   creditMinutes?: number;
@@ -133,6 +145,7 @@ function parseDescription(desc: string): {
   firstLegDepartureTime?: string;
   pairingDays?: number;
   blockMinutes?: number;
+  legs?: ParsedLeg[];
 } {
   const result: {
     reportTime?: string;
@@ -141,6 +154,7 @@ function parseDescription(desc: string): {
     firstLegDepartureTime?: string;
     pairingDays?: number;
     blockMinutes?: number;
+    legs?: ParsedLeg[];
   } = {};
   const raw = desc.replace(/\\n/g, "\n").replace(/\\,/g, ",");
   const normalized = raw.toLowerCase();
@@ -236,7 +250,8 @@ function parseDescription(desc: string): {
     return false;
   };
   const dutyDays = new Set<string>();
-  for (const line of raw.split(/\r?\n/)) {
+  // Split by newlines or tabs (FLICA folds DESCRIPTION; tabs or double-tabs separate leg lines)
+  for (const line of raw.split(/\r?\n|\t+/)) {
     const trimmed = line.trim();
     if (!flightLegLine.test(trimmed)) continue;
     legLines.push(line);
@@ -245,6 +260,47 @@ function parseDescription(desc: string): {
     if (dayMatch) dutyDays.add(dayMatch[1].toLowerCase());
   }
   result.pairingDays = dutyDays.size > 0 ? Math.min(dutyDays.size, 31) : (legLines.length > 0 ? Math.min(legLines.length, 31) : undefined);
+
+  // Parse each leg into structured format: "Th 3546 Sju-Jfk 0850 1204 0414"
+  const legs: ParsedLeg[] = [];
+  for (const line of legLines) {
+    const trimmed = line.trim();
+    const dayMatch = trimmed.match(/^(Mo|Tu|We|Th|Fr|Sa|Su)/i);
+    const day = dayMatch ? dayMatch[1] : undefined;
+    const flightMatch = trimmed.match(/^(?:Mo|Tu|We|Th|Fr|Sa|Su)\s+(\d{3,5})\b/i);
+    const flightNumber = flightMatch ? flightMatch[1] : undefined;
+    const routeMatch = trimmed.match(airportPair);
+    const depArrBlock = trimmed.match(/(\d{3,4})\s+(\d{3,4})\s+(\d{3,4})\s*$/);
+    const depArrOnly = !depArrBlock && trimmed.match(/(\d{3,4})\s+(\d{3,4})\s*$/);
+    let origin = "";
+    let destination = "";
+    if (routeMatch && routeMatch[1] && routeMatch[2]) {
+      origin = routeMatch[1].toUpperCase();
+      destination = routeMatch[2].toUpperCase();
+      if (origin === destination || !/^[A-Za-z]{3}$/.test(origin) || !/^[A-Za-z]{3}$/.test(destination)) continue;
+    } else continue;
+    let depTime: string | undefined;
+    let arrTime: string | undefined;
+    let blockMinutes: number | undefined;
+    if (depArrBlock) {
+      let dep = depArrBlock[1];
+      if (dep.length === 3) dep = dep.padStart(4, "0");
+      depTime = `${dep.slice(0, 2)}:${dep.slice(2)}`;
+      let arr = depArrBlock[2];
+      if (arr.length === 3) arr = arr.padStart(4, "0");
+      arrTime = `${arr.slice(0, 2)}:${arr.slice(2)}`;
+      blockMinutes = hhmmToMinutes(parseInt(depArrBlock[3], 10));
+    } else if (depArrOnly && depArrOnly[1] && depArrOnly[2]) {
+      let dep = depArrOnly[1];
+      if (dep.length === 3) dep = dep.padStart(4, "0");
+      depTime = `${dep.slice(0, 2)}:${dep.slice(2)}`;
+      let arr = depArrOnly[2];
+      if (arr.length === 3) arr = arr.padStart(4, "0");
+      arrTime = `${arr.slice(0, 2)}:${arr.slice(2)}`;
+    }
+    legs.push({ day, flightNumber, origin, destination, depTime, arrTime, blockMinutes, raw: trimmed });
+  }
+  if (legs.length > 0) result.legs = legs;
 
   // First leg departure time: "Th 3546 Sju-Jfk 0850 1204 0414" → dep=0850 → "08:50"
   for (const leg of legLines) {
@@ -381,8 +437,16 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
 
         if (!dtstartRaw?.value) continue;
 
-        const { reportTime, creditMinutes, firstLegRoute, firstLegDepartureTime, pairingDays, blockMinutes } =
+        const { reportTime, creditMinutes, firstLegRoute, firstLegDepartureTime, pairingDays, blockMinutes, legs } =
           parseDescription(description ?? "");
+        if (process.env.NODE_ENV === "development" && (summary ?? "").includes("S3090") && (!legs || legs.length === 0)) {
+          console.log("[ICS parse] S3090 DESCRIPTION (legs=0)", {
+            summary,
+            descriptionLength: (description ?? "").length,
+            descriptionPreview: (description ?? "").slice(0, 500),
+            descriptionFull: description ?? "",
+          });
+        }
         const creditFromSummary = !creditMinutes ? parseCreditFromText(summary ?? "") : null;
         const creditFromComment = !creditMinutes && !creditFromSummary ? parseCreditFromText(comment ?? "") : null;
         const resolvedCreditMinutes =
@@ -416,6 +480,7 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
           firstLegDepartureTime: firstLegDepartureTime ?? undefined,
           pairingDays: pairingDays ?? undefined,
           blockMinutes: blockMinutes ?? undefined,
+          legs: legs ?? undefined,
         });
       }
     }

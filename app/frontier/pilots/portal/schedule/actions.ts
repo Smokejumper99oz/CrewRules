@@ -109,7 +109,7 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
     profile.base_timezone ??
     (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : getTenantSourceTimezone(profile.tenant));
 
-  let parsed: { start: Date; end: Date; title: string; uid: string | null; reportTime?: string; creditMinutes?: number; firstLegRoute?: string; firstLegDepartureTime?: string; pairingDays?: number; blockMinutes?: number }[];
+  let parsed: { start: Date; end: Date; title: string; uid: string | null; reportTime?: string; creditMinutes?: number; firstLegRoute?: string; firstLegDepartureTime?: string; pairingDays?: number; blockMinutes?: number; legs?: Array<{ day?: string; flightNumber?: string; origin: string; destination: string; depTime?: string; arrTime?: string; blockMinutes?: number; raw?: string }> }[];
   try {
     const { parseIcs } = await import("@/lib/ics-parse");
     parsed = parseIcs(icsText, { sourceTimezone });
@@ -132,7 +132,20 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
       firstLegDepartureTime: ev.firstLegDepartureTime ?? null,
       pairingDays: ev.pairingDays ?? null,
       blockMinutes: ev.blockMinutes ?? null,
+      legs: ev.legs ?? null,
     }));
+
+  if (process.env.NODE_ENV === "development") {
+    for (const ev of events) {
+      console.log("[ICS parsed event]", {
+        title: ev.title,
+        start: ev.start,
+        firstLegRoute: ev.route,
+        legsCount: ev.legs?.length ?? 0,
+        legs: ev.legs,
+      });
+    }
+  }
 
   if (events.length === 0) {
     return { error: "No calendar events found in the file" };
@@ -192,6 +205,7 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
       block_minutes: blockMinutes,
       is_reserve_assignment: isReserveAssignment,
       first_leg_departure_time: e.firstLegDepartureTime ?? null,
+      legs: e.legs ?? null,
       source: FLICA_SOURCE,
       external_uid: e.externalUid,
       import_batch_id: importBatchId,
@@ -206,6 +220,19 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
     const externalUid = `${baseUid}-${e.start.toISOString()}`;
     return toRow({ ...e, externalUid });
   });
+
+  if (process.env.NODE_ENV === "development") {
+    for (const row of rows) {
+      console.log("[schedule row before save]", {
+        title: row.title,
+        start_time: row.start_time,
+        external_uid: row.external_uid,
+        route: row.route,
+        legsCount: row.legs?.length ?? 0,
+        legs: row.legs,
+      });
+    }
+  }
 
   const { error: upsertError } = await supabase
     .from("schedule_events")
@@ -271,6 +298,17 @@ export type ScheduleImportStatus = {
   error?: string;
 };
 
+export type ScheduleEventLeg = {
+  day?: string;
+  flightNumber?: string;
+  origin: string;
+  destination: string;
+  depTime?: string;
+  arrTime?: string;
+  blockMinutes?: number;
+  raw?: string;
+};
+
 export type ScheduleEvent = {
   id: string;
   start_time: string;
@@ -286,6 +324,7 @@ export type ScheduleEvent = {
   first_leg_departure_time?: string | null;
   /** Trip from short-call reserve (RSA/RSB/etc): credit = 4 hrs/day, no block. */
   is_reserve_assignment?: boolean | null;
+  legs?: ScheduleEventLeg[] | null;
 };
 
 export type NextDutyLabel = "on_duty" | "later_today" | "next_duty";
@@ -314,7 +353,7 @@ export async function getNextDuty(): Promise<{
     // 1. On duty: start <= now < end
     const { data: onDutyData, error: onDutyError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", nowIso)
@@ -389,7 +428,7 @@ export async function getScheduleEvents(fromIso: string, toIso: string): Promise
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", toIso)
@@ -455,7 +494,7 @@ export async function getUpcomingEvents(limit = 8): Promise<{ events: ScheduleEv
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .gte("start_time", nowIso)

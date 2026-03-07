@@ -405,6 +405,8 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
 
       {/* CrewRules™ Pro Features */}
       <section>
+        {proActive ? (
+          <>
         <h2 className="text-base font-semibold text-white mb-1">
           Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> <span className="text-amber-400">Pro</span> Features
         </h2>
@@ -418,24 +420,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Commute Assist<span className="align-super text-[10px]">™</span>
           </h3>
           <p className="text-xs text-slate-500 mb-4">Tools to help plan safer and more reliable commutes.</p>
-          <div
-          className={`space-y-4 rounded-xl border px-4 py-4 ${
-            proActive
-              ? "border-white/10 bg-slate-950/40"
-              : "border-amber-500/30 bg-amber-950/10 opacity-90"
-          }`}
-        >
-          {!proActive && (
-            <>
-              <p className="text-sm text-amber-200/90">Commute Assist is a Pro feature.</p>
-              <input type="hidden" name="home_airport" value={homeAirport} />
-              <input type="hidden" name="alternate_home_airport" value={alternateHomeAirport} />
-              <input type="hidden" name="commute_arrival_buffer_minutes" value={commuteArrival} />
-              <input type="hidden" name="commute_release_buffer_minutes" value={commuteRelease} />
-              <input type="hidden" name="commute_nonstop_only" value={commuteNonstopOnly ? "1" : "0"} />
-            </>
-          )}
-          <div className={!proActive ? "pointer-events-none select-none" : ""}>
+          <div className="space-y-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
             <div>
               <label htmlFor="home_airport" className="block text-sm font-medium text-slate-300">
                 Home Airport
@@ -447,8 +432,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 defaultValue={homeAirport}
                 maxLength={3}
                 placeholder="e.g. MCO"
-                disabled={!proActive}
-                className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 disabled:opacity-60 disabled:cursor-not-allowed uppercase"
+                className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase"
                 style={{ textTransform: "uppercase" }}
                 onInput={(e) => {
                   e.currentTarget.value = e.currentTarget.value.toUpperCase();
@@ -467,8 +451,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 defaultValue={alternateHomeAirport}
                 maxLength={3}
                 placeholder="e.g. MCO"
-                disabled={!proActive}
-                className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 disabled:opacity-60 disabled:cursor-not-allowed uppercase"
+                className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase"
                 style={{ textTransform: "uppercase" }}
                 onInput={(e) => {
                   e.currentTarget.value = e.currentTarget.value.toUpperCase();
@@ -489,8 +472,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 id="commute_arrival_buffer_minutes"
                 name="commute_arrival_buffer_minutes"
                 defaultValue={commuteArrival}
-                disabled={!proActive}
-                className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
               >
                 {COMMUTE_BUFFER_OPTIONS.map((m) => (
                   <option key={m} value={m}>
@@ -505,55 +487,23 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             <input type="hidden" name="commute_release_buffer_minutes" value="0" />
             <input type="hidden" name="commute_nonstop_only" value="1" />
           </div>
-          {!proActive && (
-            <div className="mt-4 space-y-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  setTrialMessage(null);
-                  setTrialStarting(true);
-                  const result = await startProTrial();
-                  setTrialStarting(false);
-                  if (result.ok) {
-                    router.refresh();
-                  } else if (result.reason === "trial_active") {
-                    setTrialMessage("Trial already active");
-                  } else if (result.reason === "already_paid") {
-                    setTrialMessage("You already have Pro access");
-                  }
-                }}
-                disabled={trialStarting}
-                className="rounded-xl bg-amber-500/90 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-amber-500 transition disabled:opacity-50"
-              >
-                {trialStarting ? "Starting…" : "Start 14-Day Pro Trial"}
-              </button>
-              {trialMessage && (
-                <p className="text-sm text-amber-200/90">{trialMessage}</p>
-              )}
-            </div>
-          )}
-          </div>
         </div>
 
         {/* Pay & Earnings */}
-        <div className={!proActive ? "pointer-events-none select-none opacity-60" : ""}>
+        <div>
           <h3 className="text-sm font-semibold text-slate-200 mb-1">Pay & Earnings</h3>
           <p className="text-xs text-slate-500 mb-4">Financial visibility tools.</p>
-          <div className="space-y-4">
+          <div className="space-y-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
             <div className="flex items-center gap-3">
-              {!proActive && (
-                <input type="hidden" name="show_pay_projection" value={profile?.show_pay_projection ? "1" : "0"} />
-              )}
+              <input type="hidden" name="show_pay_projection" value="0" />
               <input
                 id="show_pay_projection"
                 name="show_pay_projection"
                 type="checkbox"
                 defaultChecked={Boolean(profile?.show_pay_projection ?? false)}
                 value="1"
-                disabled={!proActive}
-                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
               />
-              {proActive && <input type="hidden" name="show_pay_projection" value="0" />}
               <label htmlFor="show_pay_projection" className="text-sm text-slate-300">
                 Enable Pay Projections
               </label>
@@ -563,6 +513,56 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             </p>
           </div>
         </div>
+          </>
+        ) : (
+          <>
+            <input type="hidden" name="home_airport" value={homeAirport} />
+            <input type="hidden" name="alternate_home_airport" value={alternateHomeAirport} />
+            <input type="hidden" name="commute_arrival_buffer_minutes" value={commuteArrival} />
+            <input type="hidden" name="commute_release_buffer_minutes" value={commuteRelease} />
+            <input type="hidden" name="commute_nonstop_only" value={commuteNonstopOnly ? "1" : "0"} />
+            <input type="hidden" name="show_pay_projection" value={profile?.show_pay_projection ? "1" : "0"} />
+            <h2 className="text-base font-semibold text-white mb-1">
+              Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> <span className="text-amber-400">Pro</span> Features 🔒
+            </h2>
+            <p className="text-xs text-slate-500 mb-4">Upgrade to unlock advanced tools.</p>
+            <button
+              type="button"
+              onClick={async () => {
+                setTrialMessage(null);
+                setTrialStarting(true);
+                const result = await startProTrial();
+                setTrialStarting(false);
+                if (result.ok) {
+                  router.refresh();
+                } else if (result.reason === "trial_active") {
+                  setTrialMessage("Trial already active");
+                } else if (result.reason === "already_paid") {
+                  setTrialMessage("You already have Pro access");
+                }
+              }}
+              disabled={trialStarting}
+              className="rounded-xl bg-amber-500/90 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-amber-500 transition disabled:opacity-50"
+            >
+              {trialStarting ? "Starting…" : "Start 14-Day Pro Trial"}
+            </button>
+            {trialMessage && (
+              <p className="mt-2 text-sm text-amber-200/90">{trialMessage}</p>
+            )}
+            <div className="mt-6 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4 opacity-60">
+              <ul className="space-y-2 text-sm text-slate-400">
+                <li className="flex items-center gap-2">
+                  <span className="text-slate-500">•</span>
+                  CrewRules™ Commute Assist™
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-slate-500">•</span>
+                  Pay Projections
+                </li>
+              </ul>
+            </div>
+          </>
+        )}
       </section>
 
       {/* Schedule Display */}

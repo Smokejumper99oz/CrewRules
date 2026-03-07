@@ -11,8 +11,9 @@ import {
   type ScheduleEvent,
   type ScheduleDisplaySettings,
 } from "./actions";
+import { formatInTimeZone } from "date-fns-tz";
 import { ScheduleStatusChip } from "@/components/schedule-status-chip";
-import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, eventOverlapsDay } from "@/lib/schedule-time";
+import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, eventOverlapsDay, addDay } from "@/lib/schedule-time";
 
 const EVENT_STYLES: Record<string, string> = {
   trip: "bg-emerald-500/20 border-emerald-500/40 text-emerald-200",
@@ -68,6 +69,206 @@ const isSameDay = (d1: Date, d2: Date) =>
   d1.getMonth() === d2.getMonth() &&
   d1.getDate() === d2.getDate();
 
+const DAY_ABBREVS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+/** Parse HH:MM or HHMM to minutes. Returns null if invalid. */
+function timeToMinutes(t: string | undefined): number | null {
+  if (!t?.trim()) return null;
+  const s = t.trim().replace(":", "");
+  if (!/^\d{3,4}$/.test(s)) return null;
+  const h = parseInt(s.slice(0, -2) || "0", 10);
+  const m = parseInt(s.slice(-2), 10);
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return h * 60 + m;
+}
+
+/** True if leg is overnight (arrives next calendar day). */
+function isOvernightLeg(leg: { depTime?: string; arrTime?: string }): boolean {
+  const dep = timeToMinutes(leg.depTime);
+  const arr = timeToMinutes(leg.arrTime);
+  if (dep == null || arr == null) return false;
+  return arr < dep;
+}
+
+type ScheduleEventLeg = {
+  day?: string;
+  flightNumber?: string;
+  origin: string;
+  destination: string;
+  depTime?: string;
+  arrTime?: string;
+  blockMinutes?: number;
+  raw?: string;
+};
+
+/** Get weekday abbreviation (Mo, Tu, etc.) for a YYYY-MM-DD date in the given timezone. */
+function getWeekdayAbbrev(dateStr: string, timezone: string): string {
+  const d = new Date(dateStr + "T12:00:00.000Z");
+  const dayIdx = parseInt(formatInTimeZone(d, timezone, "i"), 10) % 7; // ISO 1=Mon -> 0=Sun
+  return DAY_ABBREVS[dayIdx];
+}
+
+/** Get all YYYY-MM-DD dates from event start to end (inclusive) in the given timezone. */
+function getTripDateStrings(startTime: string, endTime: string, timezone: string): string[] {
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
+  const dates: string[] = [];
+  let cur = formatInTimeZone(start, timezone, "yyyy-MM-dd");
+  const endStr = formatInTimeZone(end, timezone, "yyyy-MM-dd");
+  while (cur <= endStr) {
+    dates.push(cur);
+    cur = addDay(cur);
+  }
+  return dates;
+}
+
+/**
+ * Derive departure and arrival dates for each leg relative to the trip.
+ * If arrTime < depTime, treat as overnight and arrival is next calendar day.
+ * Uses leg order to handle multiple legs on the same weekday (e.g. two Sunday legs).
+ */
+function computeLegDates(
+  legs: ScheduleEventLeg[],
+  tripDateStrs: string[],
+  timezone: string
+): { leg: ScheduleEventLeg; departureDate: string | null; arrivalDate: string | null }[] {
+  const usedCountByWeekday = new Map<string, number>();
+  return legs.map((leg) => {
+    if (!leg.day) return { leg, departureDate: null, arrivalDate: null };
+    const legDayNorm = leg.day.slice(0, 2).toLowerCase();
+    const datesForWeekday = tripDateStrs.filter(
+      (d) => getWeekdayAbbrev(d, timezone).toLowerCase() === legDayNorm
+    );
+    const usedCount = usedCountByWeekday.get(legDayNorm) ?? 0;
+    const departureDate = datesForWeekday[usedCount] ?? null;
+    if (departureDate) usedCountByWeekday.set(legDayNorm, usedCount + 1);
+    if (!departureDate) return { leg, departureDate: null, arrivalDate: null };
+    const arrivalDate = isOvernightLeg(leg) ? addDay(departureDate) : departureDate;
+    return { leg, departureDate, arrivalDate };
+  });
+}
+
+function toYyyyMmDd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export type SelectedPopoverState = {
+  event: ScheduleEvent;
+  clickedDate: string | null; // YYYY-MM-DD, null when from Upcoming list
+};
+
+function EventDetailPopover({
+  event,
+  clickedDate,
+  displaySettings,
+  eventStyle,
+  formatDayLabel,
+  formatDayRangeLabel,
+  formatTimeForDisplay,
+  position,
+}: {
+  event: ScheduleEvent;
+  clickedDate: string | null;
+  displaySettings: ScheduleDisplaySettings;
+  eventStyle: (type: string) => string;
+  formatDayLabel: (iso: string, tz: string) => string;
+  formatDayRangeLabel: (start: string, end: string, tz: string) => string;
+  formatTimeForDisplay: (iso: string, opts: ScheduleDisplaySettings) => string;
+  position: { x: number; y: number };
+}) {
+  const dateLabel =
+    event.event_type === "vacation" || event.event_type === "off"
+      ? formatDayRangeLabel(event.start_time, event.end_time, displaySettings.baseTimezone)
+      : clickedDate
+        ? formatDayLabel(`${clickedDate}T12:00:00.000Z`, displaySettings.baseTimezone)
+        : formatDayLabel(event.start_time, displaySettings.baseTimezone);
+
+  const legsToShow =
+    event.event_type === "trip" && event.legs && event.legs.length > 0
+      ? clickedDate
+        ? (() => {
+            const tz = displaySettings.baseTimezone;
+            const tripDateStrs = getTripDateStrings(event.start_time, event.end_time, tz);
+            const legDates = computeLegDates(event.legs!, tripDateStrs, tz);
+            return legDates
+              .filter(
+                ({ departureDate, arrivalDate }) =>
+                  departureDate === clickedDate || arrivalDate === clickedDate
+              )
+              .map(({ leg }) => leg);
+          })()
+        : event.legs!
+      : null;
+
+  const timeRange =
+    legsToShow && legsToShow.length > 0 && clickedDate
+      ? (() => {
+          const tz = displaySettings.baseTimezone;
+          const tripDateStrs = getTripDateStrings(event.start_time, event.end_time, tz);
+          const legDates = computeLegDates(event.legs!, tripDateStrs, tz);
+          const timesOnDate: string[] = [];
+          for (const { leg, departureDate, arrivalDate } of legDates) {
+            if (departureDate === clickedDate && leg.depTime) timesOnDate.push(leg.depTime);
+            if (arrivalDate === clickedDate && leg.arrTime) timesOnDate.push(leg.arrTime);
+          }
+          if (timesOnDate.length > 0) {
+            timesOnDate.sort();
+            return `${timesOnDate[0]} – ${timesOnDate[timesOnDate.length - 1]}`;
+          }
+          return `${legsToShow[0].depTime ?? "—"} – ${legsToShow[legsToShow.length - 1].arrTime ?? "—"}`;
+        })()
+      : legsToShow && legsToShow.length > 0 && legsToShow[0].depTime && legsToShow[legsToShow.length - 1].arrTime
+        ? `${legsToShow[0].depTime} – ${legsToShow[legsToShow.length - 1].arrTime}`
+        : `${formatTimeForDisplay(event.start_time, displaySettings)} – ${formatTimeForDisplay(event.end_time, displaySettings)}`;
+
+  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+    console.log("[EventDetailPopover] render", {
+      eventId: event.id,
+      title: event.title,
+      clickedDate,
+      legsCount: event.legs?.length ?? 0,
+      legsToShowCount: legsToShow?.length ?? 0,
+    });
+  }
+
+  return (
+    <div
+      className="fixed z-50 min-w-[200px] max-w-[320px] rounded-xl border border-white/10 bg-slate-900 shadow-xl p-4"
+      style={{ left: Math.min(position.x, window.innerWidth - 340), top: position.y + 8 }}
+    >
+      <p className="font-medium text-white">{event.title || "Untitled"}</p>
+      <p className="mt-2 text-sm text-slate-400">
+        {dateLabel}
+        {" • "}
+        {timeRange}
+      </p>
+      {event.event_type === "trip" &&
+        (legsToShow && legsToShow.length > 0 ? (
+          <div className="mt-2 space-y-1">
+            {legsToShow.map((l, i) => (
+              <p key={i} className="text-sm text-slate-400 font-mono">
+                {l.flightNumber ? `${l.flightNumber} ` : ""}
+                {l.origin} → {l.destination}
+                {l.depTime && l.arrTime ? ` ${l.depTime}–${l.arrTime}` : ""}
+              </p>
+            ))}
+          </div>
+        ) : event.legs && event.legs.length > 0 && clickedDate ? (
+          <p className="mt-2 text-sm text-slate-500 italic">Layover day — no flights</p>
+        ) : (event.legs == null || event.legs.length === 0) && event.route?.trim() ? (
+          <p className="mt-2 text-sm text-slate-400">{event.route}</p>
+        ) : null)}
+      <span className={`mt-2 inline-block rounded px-2 py-0.5 text-xs ${eventStyle(event.event_type)}`}>
+        {event.event_type}
+      </span>
+    </div>
+  );
+}
+
 export default function SchedulePage() {
   const today = new Date();
   const [importing, setImporting] = useState(false);
@@ -87,9 +288,25 @@ export default function SchedulePage() {
     showTimezoneLabel: false,
   });
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
-  const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
+  const [selectedPopover, setSelectedPopover] = useState<SelectedPopoverState | null>(null);
   const [detailPosition, setDetailPosition] = useState<{ x: number; y: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!selectedPopover) return;
+    function handleClickOutside(e: MouseEvent | TouchEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        closeDetail();
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [selectedPopover]);
 
   async function loadData() {
     const [s, settings, admin] = await Promise.all([
@@ -156,13 +373,23 @@ export default function SchedulePage() {
     await loadData();
   }
 
-  function handleEventClick(ev: ScheduleEvent, clientX: number, clientY: number) {
-    setSelectedEvent(ev);
+  function handleEventClick(ev: ScheduleEvent, clientX: number, clientY: number, clickedDay?: Date | null) {
+    const clickedDate = clickedDay ? toYyyyMmDd(clickedDay) : null;
+    if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+      console.log("[Schedule] handleEventClick", {
+        eventId: ev.id,
+        title: ev.title,
+        clickedDate,
+        legsCount: ev.legs?.length ?? 0,
+        legs: ev.legs,
+      });
+    }
+    setSelectedPopover({ event: ev, clickedDate });
     setDetailPosition({ x: clientX, y: clientY });
   }
 
   function closeDetail() {
-    setSelectedEvent(null);
+    setSelectedPopover(null);
     setDetailPosition(null);
   }
 
@@ -317,9 +544,9 @@ export default function SchedulePage() {
                       <div className="space-y-0.5">
                         {eventsForDay(events, day, displaySettings.baseTimezone).slice(0, 3).map((ev) => (
                           <button
-                            key={ev.id}
+                            key={`${ev.id}-${toYyyyMmDd(day)}`}
                             type="button"
-                            onClick={(e) => handleEventClick(ev, e.clientX, e.clientY)}
+                            onClick={(e) => handleEventClick(ev, e.clientX, e.clientY, day)}
                             className={`block w-full truncate rounded border px-1.5 py-0.5 text-left text-xs ${eventStyle(ev.event_type)}`}
                           >
                             {ev.title || "Untitled"}
@@ -406,28 +633,20 @@ export default function SchedulePage() {
       )}
 
       {/* Event detail popover */}
-      {selectedEvent && detailPosition && (
+      {selectedPopover && detailPosition && (
         <>
-          <div className="fixed inset-0 z-40" aria-hidden onClick={closeDetail} />
-          <div
-            className="fixed z-50 min-w-[200px] max-w-[320px] rounded-xl border border-white/10 bg-slate-900 shadow-xl p-4"
-            style={{ left: Math.min(detailPosition.x, window.innerWidth - 340), top: detailPosition.y + 8 }}
-          >
-            <p className="font-medium text-white">{selectedEvent.title || "Untitled"}</p>
-            <p className="mt-2 text-sm text-slate-400">
-              {(selectedEvent.event_type === "vacation" || selectedEvent.event_type === "off")
-                ? formatDayRangeLabel(selectedEvent.start_time, selectedEvent.end_time, displaySettings.baseTimezone)
-                : formatDayLabel(selectedEvent.start_time, displaySettings.baseTimezone)}
-              {" • "}
-              {formatTimeForDisplay(selectedEvent.start_time, displaySettings)} –{" "}
-              {formatTimeForDisplay(selectedEvent.end_time, displaySettings)}
-            </p>
-            {selectedEvent.event_type === "trip" && selectedEvent.route?.trim() && (
-              <p className="mt-2 text-sm text-slate-400">{selectedEvent.route}</p>
-            )}
-            <span className={`mt-2 inline-block rounded px-2 py-0.5 text-xs ${eventStyle(selectedEvent.event_type)}`}>
-              {selectedEvent.event_type}
-            </span>
+          <div className="fixed inset-0 z-40 pointer-events-none" aria-hidden />
+          <div ref={popoverRef} className="relative z-50">
+            <EventDetailPopover
+              event={selectedPopover.event}
+              clickedDate={selectedPopover.clickedDate}
+              displaySettings={displaySettings}
+              eventStyle={eventStyle}
+              formatDayLabel={formatDayLabel}
+              formatDayRangeLabel={formatDayRangeLabel}
+              formatTimeForDisplay={formatTimeForDisplay}
+              position={detailPosition}
+            />
           </div>
         </>
       )}

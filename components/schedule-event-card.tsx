@@ -1,6 +1,12 @@
 import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, computeTripCredit, formatMinutesToHhMm } from "@/lib/schedule-time";
-import type { ScheduleEvent } from "@/app/frontier/pilots/portal/schedule/actions";
+import type { ScheduleEvent, ScheduleEventLeg } from "@/app/frontier/pilots/portal/schedule/actions";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
+
+function formatLeg(leg: ScheduleEventLeg): string {
+  const route = `${leg.origin} → ${leg.destination}`;
+  const time = leg.depTime && leg.arrTime ? ` ${leg.depTime}–${leg.arrTime}` : "";
+  return leg.flightNumber ? `${leg.flightNumber} ${route}${time}` : `${route}${time}`;
+}
 
 const EVENT_STYLES: Record<string, string> = {
   trip: "border-emerald-500/40 text-emerald-200",
@@ -41,7 +47,8 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
   const titlePart = event.event_type === "reserve" ? rawTitle.replace(/^Trip\s+/i, "") : rawTitle;
   const typePrefix = event.event_type === "reserve" ? "" : `${typeLabel(event.event_type)} `;
   const headerLine = pos ? `${typePrefix}${titlePart} • ${pos}` : `${typePrefix}${titlePart}`;
-  const showRoute = event.event_type === "trip" && event.route?.trim();
+  const hasLegs = event.event_type === "trip" && event.legs && event.legs.length > 0;
+  const showRoute = event.event_type === "trip" && (hasLegs || (event.route?.trim() ?? false));
 
   const showReportCredit = event.event_type === "trip" || event.event_type === "reserve";
   const reportPart = event.report_time ?? "—";
@@ -95,7 +102,19 @@ export function ScheduleEventCard({ event, displaySettings, position, compact }:
     <div className={`flex flex-col gap-0.5 rounded-xl border px-4 py-3 ${borderStyle} bg-slate-950/40`}>
       <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{dateLabel}</span>
       <span className="text-lg font-medium text-white">{headerLine}</span>
-      {showRoute && <span className="text-sm text-slate-500">{event.route}</span>}
+      {showRoute && (
+        <div className="text-sm text-slate-500 space-y-0.5">
+          {hasLegs ? (
+            event.legs!.map((l, i) => (
+              <div key={i} className="font-mono text-xs">
+                {formatLeg(l)}
+              </div>
+            ))
+          ) : (
+            <span>{event.route}</span>
+          )}
+        </div>
+      )}
       {showReportCredit && (
         <>
           <span className="text-sm text-slate-400">{timeLine}</span>
