@@ -1,10 +1,21 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { parseCrewEmailText } from "@/lib/email/parse-crew-email-text";
 
 export async function POST(req: Request) {
-  const secret = req.headers.get("x-inbound-secret");
-  if (secret !== process.env.INBOUND_EMAIL_WEBHOOK_SECRET) {
+  const url = new URL(req.url);
+
+  const headerSecret = req.headers.get("x-inbound-secret");
+  const querySecret = url.searchParams.get("secret");
+
+  const expectedSecret = process.env.INBOUND_EMAIL_WEBHOOK_SECRET;
+
+  if (headerSecret !== expectedSecret && querySecret !== expectedSecret) {
+    console.error("Inbound email rejected: invalid secret", {
+      headerSecret,
+      querySecret,
+    });
+
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
@@ -25,7 +36,7 @@ export async function POST(req: Request) {
 
   console.log("[inbound-email] alias:", alias);
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data: aliasRow, error: aliasError } = await supabase
     .from("inbound_email_aliases")
