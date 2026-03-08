@@ -72,8 +72,6 @@ export async function POST(req: Request) {
 
   console.log("[inbound-email] user_id:", aliasRow.user_id);
 
-  const body = text;
-
   console.log("[inbound-email] subject:", subject);
   console.log("[inbound-email] body:", body.slice(0, 1000));
 
