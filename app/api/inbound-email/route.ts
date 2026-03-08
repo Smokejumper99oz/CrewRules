@@ -19,25 +19,19 @@ export async function POST(req: Request) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
-  // --- RAW EMAIL MODE (Mailgun) ---
-
   const rawBody = await req.text();
 
   console.log("[inbound-email] content-type:", req.headers.get("content-type"));
   console.log("[inbound-email] raw first 300:", rawBody.slice(0, 300));
 
-  // Extract headers from the raw email
-  function extractHeader(name: string, text: string) {
-    const regex = new RegExp(`^${name}:\\s*(.*)$`, "im");
-    const match = text.match(regex);
-    return match ? match[1].trim() : "";
-  }
+  const params = new URLSearchParams(rawBody);
 
-  const from = extractHeader("From", rawBody);
-  const to = extractHeader("To", rawBody);
-  const subject = extractHeader("Subject", rawBody);
+  const from = params.get("from") ?? "";
+  const to = params.get("To") ?? params.get("recipient") ?? "";
+  const subject = params.get("subject") ?? "";
+  const bodyPlain = params.get("body-plain") ?? "";
+  const bodyHtml = params.get("body-html") ?? "";
 
-  // Extract alias from email address
   const aliasMatch = to.match(/([^@<\s]+)@import\.crewrules\.com/i);
   const alias = aliasMatch ? aliasMatch[1].trim().toLowerCase() : "";
 
@@ -46,10 +40,6 @@ export async function POST(req: Request) {
   console.log("[inbound-email] subject:", subject);
 
   const recipientText = to;
-
-  // Extract body (content after headers)
-  const bodyMatch = rawBody.match(/\r?\n\r?\n([\s\S]*)/);
-  const body = bodyMatch ? bodyMatch[1].trim() : "";
 
   const supabase = createAdminClient();
 
@@ -73,12 +63,19 @@ export async function POST(req: Request) {
   console.log("[inbound-email] user_id:", aliasRow.user_id);
 
   console.log("[inbound-email] subject:", subject);
-  console.log("[inbound-email] body:", body.slice(0, 1000));
+  console.log("[inbound-email] body:", bodyPlain.slice(0, 1000));
 
-  const parsed = parseCrewEmailText(body);
+  const parsed = parseCrewEmailText(bodyPlain);
   console.log("[inbound-email] parsed pairing:", parsed.pairingCode);
 
-  const payload = { from, to, subject, rawBody };
+  const payload = {
+    from,
+    to,
+    subject,
+    bodyPlain,
+    bodyHtml,
+    rawBody,
+  };
 
   const { data: eventRow, error: eventInsertError } = await supabase
     .from("inbound_email_events")
@@ -88,7 +85,7 @@ export async function POST(req: Request) {
       sender: from,
       recipient: recipientText,
       subject,
-      body_plain: body,
+      body_plain: bodyPlain,
       payload,
     })
     .select("id")
