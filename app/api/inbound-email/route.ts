@@ -19,20 +19,19 @@ export async function POST(req: Request) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
-  const payload = await req.json();
+  const form = await req.formData();
 
-  const recipient =
-    payload.recipient ||
-    payload.To ||
-    payload.to ||
-    payload.envelope?.to;
+  const from = String(form.get("from") ?? "");
+  const to = String(form.get("To") ?? form.get("recipient") ?? "");
+  const subject = String(form.get("subject") ?? "");
+  const text = String(form.get("body-plain") ?? "");
+  const html = String(form.get("body-html") ?? "");
 
-  console.log("[inbound-email] recipient:", recipient);
-
-  const recipientValue = Array.isArray(recipient) ? recipient[0] : recipient;
-  const recipientText = typeof recipientValue === "string" ? recipientValue : "";
+  const recipientText = to;
 
   const alias = recipientText.split("@")[0]?.trim().toLowerCase() ?? "";
+
+  console.log("[inbound-email] recipient:", to);
 
   console.log("[inbound-email] alias:", alias);
 
@@ -55,13 +54,7 @@ export async function POST(req: Request) {
 
   console.log("[inbound-email] user_id:", aliasRow.user_id);
 
-  const subject = payload.subject || payload.Subject || "";
-  const body =
-    payload["body-plain"] ||
-    payload["stripped-text"] ||
-    payload.text ||
-    payload.body ||
-    "";
+  const body = text;
 
   console.log("[inbound-email] subject:", subject);
   console.log("[inbound-email] body:", body.slice(0, 1000));
@@ -69,12 +62,14 @@ export async function POST(req: Request) {
   const parsed = parseCrewEmailText(body);
   console.log("[inbound-email] parsed pairing:", parsed.pairingCode);
 
+  const payload = { from, to, subject, "body-plain": text, "body-html": html };
+
   const { data: eventRow, error: eventInsertError } = await supabase
     .from("inbound_email_events")
     .insert({
       user_id: aliasRow.user_id,
       alias,
-      sender: payload.sender || payload.from || "",
+      sender: from,
       recipient: recipientText,
       subject,
       body_plain: body,
