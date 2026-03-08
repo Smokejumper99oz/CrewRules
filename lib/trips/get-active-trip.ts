@@ -5,8 +5,15 @@
 
 import { fromZonedTime } from "date-fns-tz";
 import { createClient } from "@/lib/supabase/server";
-import { getTripDateStrings, getLegsForDate, todayStr } from "@/lib/leg-dates";
+import { getTripDateStrings, getLegsForDate, isDateFullyComplete, todayStr } from "@/lib/leg-dates";
 import { extractPairingKey } from "@/lib/schedule-time";
+
+/** Add one day to YYYY-MM-DD (matches schedule-time.addDay). */
+function addDay(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  return next.toISOString().slice(0, 10);
+}
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getTenantSourceTimezone } from "@/lib/tenant-config";
 
@@ -27,6 +34,8 @@ export type ActiveTrip = {
   tripLength: number;
   tripStartDate: string;
   todayLegs: ActiveTripTodayLeg[];
+  /** When today's duty is done, we show tomorrow's legs; this is the date being displayed (YYYY-MM-DD). */
+  displayDateStr: string;
 };
 
 type ScheduleEventRow = {
@@ -101,7 +110,25 @@ export async function getActiveTrip(userId: string): Promise<ActiveTrip | null> 
   const legs = ev.legs ?? [];
   const legsForToday = getLegsForDate(legs, today, tripDates, timezone);
 
-  const todayLegs: ActiveTripTodayLeg[] = legsForToday.map((leg) => ({
+  // When today's duty is done, show tomorrow's legs instead (if tomorrow is still in the trip)
+  let displayDate = today;
+  let displayIndex = todayIndex;
+  let legsToShow = legsForToday;
+
+  if (isDateFullyComplete(legs, today, tripDates, timezone)) {
+    const tomorrow = addDay(today);
+    const tomorrowIndex = tripDates.indexOf(tomorrow);
+    if (tomorrowIndex >= 0) {
+      const legsForTomorrow = getLegsForDate(legs, tomorrow, tripDates, timezone);
+      if (legsForTomorrow.length > 0) {
+        displayDate = tomorrow;
+        displayIndex = tomorrowIndex;
+        legsToShow = legsForTomorrow;
+      }
+    }
+  }
+
+  const todayLegs: ActiveTripTodayLeg[] = legsToShow.map((leg) => ({
     flightNumber: leg.flightNumber ?? "",
     origin: leg.origin ?? "",
     destination: leg.destination ?? "",
@@ -114,9 +141,10 @@ export async function getActiveTrip(userId: string): Promise<ActiveTrip | null> 
 
   return {
     pairing: extractPairingKey(ev.title),
-    tripDay: todayIndex + 1,
+    tripDay: displayIndex + 1,
     tripLength: tripDates.length,
     tripStartDate,
     todayLegs,
+    displayDateStr: displayDate,
   };
 }

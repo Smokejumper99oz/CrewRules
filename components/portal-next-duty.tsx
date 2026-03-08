@@ -20,6 +20,21 @@ function fmtHM(totalMinutes: number) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+/** Compute flight duration in minutes from HH:MM times (same-day or overnight). */
+function legDurationMinutes(depTime: string, arrTime: string): number {
+  const parse = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return ((h ?? 0) * 60 + (m ?? 0)) % (24 * 60);
+  };
+  let dep = parse(depTime);
+  let arr = parse(arrTime);
+  if (arr < dep) arr += 24 * 60; // overnight
+  return Math.max(0, arr - dep);
+}
+
+/** Default carrier for tenant when API has no data (e.g. Frontier = F9). */
+const TENANT_CARRIER: Record<string, string> = { frontier: "F9" };
+
 /** Subtract minutes from HH:MM; returns HH:MM. */
 function subtractMinutesFromTime(time: string, minutes: number): string {
   const [h, m] = time.split(":").map(Number);
@@ -71,7 +86,7 @@ export async function PortalNextDuty({
     : null;
 
   const firstLeg = activeTrip?.todayLegs?.[0];
-  const todayStr = formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
+  const displayDateForResolve = activeTrip?.displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
   const resolvedFirstLeg =
     firstLeg && firstLeg.origin && firstLeg.destination
       ? await resolveLegIdentity({
@@ -79,7 +94,7 @@ export async function PortalNextDuty({
           origin: firstLeg.origin,
           destination: firstLeg.destination,
           depTime: firstLeg.depTime,
-          date: todayStr,
+          date: displayDateForResolve,
         })
       : null;
 
@@ -158,7 +173,7 @@ export async function PortalNextDuty({
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-slate-400">
-                        {formatDayLabel(new Date().toISOString(), displaySettings.baseTimezone)}
+                        {formatDayLabel(`${(activeTrip?.displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd"))}T12:00:00.000Z`, displaySettings.baseTimezone)}
                       </span>
                       <span
                         className={[
@@ -227,18 +242,43 @@ export async function PortalNextDuty({
                 );
               }
 
+              // Fallback when API has no data (e.g. tomorrow's flights): show schedule-derived info to match Commute Assist style
+              const displayDate = activeTrip?.displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
+              const fallbackCarrier = tenant ? TENANT_CARRIER[tenant] ?? null : null;
+              const fallbackFlightLabel = fallbackCarrier ? `${fallbackCarrier} ${leg.flightNumber}` : leg.flightNumber;
+              const durMin = leg.depTime && leg.arrTime ? legDurationMinutes(leg.depTime, leg.arrTime) : 0;
+
               return (
                 <div key={i} className="pl-3 pr-3 py-2.5">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-slate-400">
-                      {formatDayLabel(new Date().toISOString(), displaySettings.baseTimezone)}
+                      {formatDayLabel(`${displayDate}T12:00:00.000Z`, displaySettings.baseTimezone)}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                      Scheduled
                     </span>
                   </div>
-                  <div className="font-mono text-xs text-slate-300 mt-1">
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-2xl font-bold tabular-nums text-slate-200">{leg.depTime}</span>
+                    <span className="text-[11px] tabular-nums font-medium text-slate-300 bg-slate-800/50 border border-slate-700/40 px-1.5 py-0.5 rounded">
+                      {leg.origin} → {leg.destination}
+                    </span>
+                    <span className="text-2xl font-bold tabular-nums text-slate-200">{leg.arrTime}</span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
                     {leg.deadhead && (
-                      <span className="mr-1 inline-flex rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-200">DH</span>
+                      <span className="inline-flex rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-200">DH</span>
                     )}
-                    {leg.flightNumber} {leg.origin} → {leg.destination} {leg.depTime}–{leg.arrTime}
+                    {fallbackCarrier && <AirlineLogo carrier={fallbackCarrier} size={24} />}
+                    <span className="text-slate-300 font-medium font-mono tabular-nums">{fallbackFlightLabel}</span>
+                    {durMin > 0 && (
+                      <>
+                        <span className="text-slate-600">•</span>
+                        <span>Flight time {fmtHM(durMin)}</span>
+                      </>
+                    )}
+                    <span className="text-slate-600">•</span>
+                    <span className="tabular-nums">—</span>
                   </div>
                 </div>
               );
