@@ -19,25 +19,47 @@ export async function POST(req: Request) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
-  const rawBody = await req.text();
+  const contentType = req.headers.get("content-type") ?? "";
 
-  console.log("[inbound-email] content-type:", req.headers.get("content-type"));
-  console.log("[inbound-email] raw first 300:", rawBody.slice(0, 300));
+  console.log("[inbound-email] content-type:", contentType);
 
-  const params = new URLSearchParams(rawBody);
+  let from = "";
+  let to = "";
+  let subject = "";
+  let bodyPlain = "";
+  let bodyHtml = "";
+  let rawBody = "";
 
-  console.log("[inbound-email] params keys:", [...params.keys()]);
-  console.log("[inbound-email] params recipient:", params.get("recipient"));
-  console.log("[inbound-email] params To:", params.get("To"));
-  console.log("[inbound-email] params to:", params.get("to"));
-  console.log("[inbound-email] params subject:", params.get("subject"));
-  console.log("[inbound-email] params from:", params.get("from"));
+  if (contentType.includes("multipart/form-data")) {
+    const form = await req.formData();
 
-  const from = params.get("from") ?? "";
-  const to = params.get("To") ?? params.get("recipient") ?? "";
-  const subject = params.get("subject") ?? "";
-  const bodyPlain = params.get("body-plain") ?? "";
-  const bodyHtml = params.get("body-html") ?? "";
+    from = String(form.get("from") ?? form.get("From") ?? "");
+    to = String(form.get("To") ?? form.get("recipient") ?? "");
+    subject = String(form.get("subject") ?? form.get("Subject") ?? "");
+    bodyPlain = String(form.get("body-plain") ?? form.get("stripped-text") ?? "");
+    bodyHtml = String(form.get("body-html") ?? form.get("stripped-html") ?? "");
+
+    console.log("[inbound-email] multipart keys:", [...form.keys()]);
+  } else {
+    rawBody = await req.text();
+
+    console.log("[inbound-email] raw first 300:", rawBody.slice(0, 300));
+
+    const params = new URLSearchParams(rawBody);
+
+    console.log("[inbound-email] params keys:", [...params.keys()]);
+    console.log("[inbound-email] params recipient:", params.get("recipient"));
+    console.log("[inbound-email] params To:", params.get("To"));
+    console.log("[inbound-email] params to:", params.get("to"));
+    console.log("[inbound-email] params subject:", params.get("subject"));
+    console.log("[inbound-email] params from:", params.get("from"));
+
+    from = params.get("from") ?? params.get("From") ?? "";
+    to = params.get("To") ?? params.get("recipient") ?? "";
+    subject = params.get("subject") ?? params.get("Subject") ?? "";
+    bodyPlain = params.get("body-plain") ?? params.get("stripped-text") ?? "";
+    bodyHtml = params.get("body-html") ?? params.get("stripped-html") ?? "";
+  }
 
   const aliasMatch = to.match(/([^@<\s]+)@import\.crewrules\.com/i);
   const alias = aliasMatch ? aliasMatch[1].trim().toLowerCase() : "";
