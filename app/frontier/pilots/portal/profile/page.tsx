@@ -1,5 +1,6 @@
 import { getProfile, isProActive, getPlanBadgeLabel, getPlanBadgeVariant } from "@/lib/profile";
 import { ProfileForm } from "@/components/profile-form";
+import { InboundEmailDisplay } from "@/components/inbound-email-display";
 import { getOrCreateInboundAlias } from "@/lib/email/get-or-create-inbound-alias";
 import { getInboundAddress } from "@/lib/email/get-inbound-address";
 
@@ -12,7 +13,9 @@ export default async function ProfilePage() {
   try {
     if (profile) {
       const inboundAlias = await getOrCreateInboundAlias(profile.id);
-      inboundEmail = getInboundAddress(inboundAlias);
+      if (!inboundAlias.startsWith("u_")) {
+        inboundEmail = getInboundAddress(inboundAlias);
+      }
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? "n/a";
@@ -27,11 +30,7 @@ export default async function ProfilePage() {
       {profile ? (
         <>
           <ProfileForm profile={profile} proActive={isProActive(profile)} proBadgeLabel={planBadgeLabel} proBadgeVariant={planBadgeVariant} />
-          {inboundEmail && (
-            <div className="text-xs text-slate-500 mt-4">
-              Email Import Alias: {inboundEmail}
-            </div>
-          )}
+          {inboundEmail && <InboundEmailDisplay email={inboundEmail} />}
         </>
       ) : (
         <p className="text-sm text-slate-500">Sign in to manage your profile.</p>

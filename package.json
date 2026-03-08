@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "backfill:inbound-aliases": "tsx scripts/backfill-inbound-aliases.ts",
     "dev": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first next dev",
     "dev:turbopack": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first next dev --turbopack",
     "build": "next build",
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@types/node": "^22",
+    "tsx": "^4.19.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10",

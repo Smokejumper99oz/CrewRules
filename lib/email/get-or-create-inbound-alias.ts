@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { generateInboundAlias } from "@/lib/email/generate-inbound-alias";
+import { assignInboundAlias } from "@/lib/email/assign-inbound-alias";
 import { isProActive } from "@/lib/profile";
 import type { Profile } from "@/lib/profile";
 
@@ -26,13 +26,5 @@ export async function getOrCreateInboundAlias(userId: string) {
   if (existingError) throw existingError;
   if (existing?.alias) return existing.alias;
 
-  const alias = generateInboundAlias(userId);
-
-  const { error: insertError } = await supabase
-    .from("inbound_email_aliases")
-    .insert({ user_id: userId, alias });
-
-  if (insertError) throw insertError;
-
-  return alias;
+  return assignInboundAlias(userId);
 }

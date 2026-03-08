@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createActionClient } from "@/lib/supabase/server-action";
+import { assignInboundAlias } from "@/lib/email/assign-inbound-alias";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -42,6 +43,12 @@ export async function createProfile(_prev: CreateProfileState): Promise<CreatePr
   if (error) {
     console.error("[createProfile] upsert failed:", error.code, error.message);
     return { error: error.message };
+  }
+
+  try {
+    await assignInboundAlias(user.id);
+  } catch (err) {
+    console.warn("[createProfile] alias assignment failed:", err);
   }
 
   redirect(PORTAL_PATH);

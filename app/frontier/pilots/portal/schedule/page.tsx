@@ -8,9 +8,11 @@ import {
   getScheduleEvents,
   getScheduleDisplaySettings,
   getIsAdmin,
+  getScheduleImportEmail,
   type ScheduleEvent,
   type ScheduleDisplaySettings,
 } from "./actions";
+import { InboundEmailDisplay } from "@/components/inbound-email-display";
 import { formatLegLine } from "@/lib/trips/detect-trip-changes";
 import type { TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { formatMinutesToHhMm } from "@/lib/schedule-time";
@@ -283,6 +285,7 @@ export default function SchedulePage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [status, setStatus] = useState<{ count: number; lastImportedAt: string | null; status: "no_schedule" | "up_to_date" | "outdated" } | null>(null);
+  const [importEmail, setImportEmail] = useState<string | null>(null);
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [displaySettings, setDisplaySettings] = useState<ScheduleDisplaySettings>({
     baseTimezone: "America/Denver",
@@ -313,14 +316,16 @@ export default function SchedulePage() {
   }, [selectedPopover]);
 
   async function loadData() {
-    const [s, settings, admin] = await Promise.all([
+    const [s, settings, admin, email] = await Promise.all([
       getScheduleImportStatus(),
       getScheduleDisplaySettings(),
       getIsAdmin(),
+      getScheduleImportEmail(),
     ]);
     setStatus({ count: s.count, lastImportedAt: s.lastImportedAt, status: s.status });
     setDisplaySettings(settings);
     setIsAdmin(admin);
+    setImportEmail(email);
 
     const monthStart = getMonthStart(calendarMonth.getFullYear(), calendarMonth.getMonth());
     const monthEnd = getMonthEnd(calendarMonth.getFullYear(), calendarMonth.getMonth());
@@ -433,6 +438,7 @@ export default function SchedulePage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
+              {importEmail && <InboundEmailDisplay email={importEmail} />}
               {status != null && (
                 <ScheduleStatusChip status={status.status} lastImportedAt={status.lastImportedAt} />
               )}

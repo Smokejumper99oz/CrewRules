@@ -1,8 +1,13 @@
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseCrewEmailText } from "@/lib/email/parse-crew-email-text";
 
 export async function POST(req: Request) {
+  if (req.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+
   const url = new URL(req.url);
 
   const headerSecret = req.headers.get("x-inbound-secret");
@@ -21,7 +26,33 @@ export async function POST(req: Request) {
 
   const contentType = req.headers.get("content-type") ?? "";
 
-  console.log("[inbound-email] content-type:", contentType);
+  console.log("[inbound-email] parsed content-type:", contentType);
+
+  function pickField(
+    source: FormData | URLSearchParams,
+    keys: string[]
+  ): string {
+    for (const key of keys) {
+      const value = source.get(key);
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return "";
+  }
+
+  function htmlToText(html: string): string {
+    return html
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/\r/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim();
+  }
 
   let from = "";
   let to = "";
@@ -29,15 +60,23 @@ export async function POST(req: Request) {
   let bodyPlain = "";
   let bodyHtml = "";
   let rawBody = "";
+  let timestamp = "";
+  let token = "";
+  let signature = "";
+  let messageId = "";
 
   if (contentType.includes("multipart/form-data")) {
     const form = await req.formData();
 
-    from = String(form.get("from") ?? form.get("From") ?? "");
-    to = String(form.get("To") ?? form.get("recipient") ?? "");
-    subject = String(form.get("subject") ?? form.get("Subject") ?? "");
-    bodyPlain = String(form.get("body-plain") ?? form.get("stripped-text") ?? "");
-    bodyHtml = String(form.get("body-html") ?? form.get("stripped-html") ?? "");
+    from = pickField(form, ["from", "From", "sender"]);
+    to = pickField(form, ["recipient", "To", "to"]);
+    subject = pickField(form, ["subject", "Subject"]);
+    bodyPlain = pickField(form, ["body-plain", "stripped-text", "text"]);
+    bodyHtml = pickField(form, ["body-html", "stripped-html", "html"]);
+    timestamp = pickField(form, ["timestamp"]);
+    token = pickField(form, ["token"]);
+    signature = pickField(form, ["signature"]);
+    messageId = pickField(form, ["Message-Id", "message-id", "Message-ID"]);
 
     console.log("[inbound-email] multipart keys:", [...form.keys()]);
   } else {
@@ -54,17 +93,63 @@ export async function POST(req: Request) {
     console.log("[inbound-email] params subject:", params.get("subject"));
     console.log("[inbound-email] params from:", params.get("from"));
 
-    from = params.get("from") ?? params.get("From") ?? "";
-    to = params.get("To") ?? params.get("recipient") ?? "";
-    subject = params.get("subject") ?? params.get("Subject") ?? "";
-    bodyPlain = params.get("body-plain") ?? params.get("stripped-text") ?? "";
-    bodyHtml = params.get("body-html") ?? params.get("stripped-html") ?? "";
+    from = pickField(params, ["from", "From", "sender"]);
+    to = pickField(params, ["recipient", "To", "to"]);
+    subject = pickField(params, ["subject", "Subject"]);
+    bodyPlain = pickField(params, ["body-plain", "stripped-text", "text"]);
+    bodyHtml = pickField(params, ["body-html", "stripped-html", "html"]);
+    timestamp = pickField(params, ["timestamp"]);
+    token = pickField(params, ["token"]);
+    signature = pickField(params, ["signature"]);
+    messageId = pickField(params, ["Message-Id", "message-id", "Message-ID"]);
   }
 
-  const aliasMatch = to.match(/([^@<\s]+)@import\.crewrules\.com/i);
+  if (!timestamp || !token || !signature) {
+    console.warn("[inbound-email] missing Mailgun signature fields");
+    return new Response("Missing signature fields", { status: 400 });
+  }
+
+  const signingKey = process.env.MAILGUN_SIGNING_KEY!;
+  const expected = crypto
+    .createHmac("sha256", signingKey)
+    .update(timestamp + token)
+    .digest("hex");
+
+  if (expected !== signature) {
+    console.warn("[inbound-email] invalid Mailgun signature");
+    return new Response("Invalid signature", { status: 403 });
+  }
+
+  console.log("[inbound-email] Mailgun signature verified");
+
+  const bodyText = bodyPlain || (bodyHtml ? htmlToText(bodyHtml) : "");
+
+  if (!bodyText.trim() && !bodyHtml.trim()) {
+    console.warn("[inbound-email] missing email body", {
+      subject,
+      from,
+      to,
+      messageId,
+    });
+    return new Response("Missing body", { status: 400 });
+  }
+
+  // Extract email from "Name <email>" or use whole string
+  const angleMatch = to.match(/<([^>]+)>/);
+  const emailPart = angleMatch ? angleMatch[1].trim() : to;
+  const aliasMatch = emailPart.trim().match(/([^@\s]+)@import\.crewrules\.com$/i);
   const alias = aliasMatch ? aliasMatch[1].trim().toLowerCase() : "";
 
-  console.log("[inbound-email] extracted alias:", alias);
+  console.log("[inbound-email] extracted alias from normalized to:", {
+    to,
+    alias,
+  });
+
+  if (!alias) {
+    console.warn("[inbound-email] missing alias from recipient", { to });
+    return new Response("Missing alias", { status: 400 });
+  }
+
   console.log("[inbound-email] from:", from);
   console.log("[inbound-email] subject:", subject);
 
@@ -92,9 +177,9 @@ export async function POST(req: Request) {
   console.log("[inbound-email] user_id:", aliasRow.user_id);
 
   console.log("[inbound-email] subject:", subject);
-  console.log("[inbound-email] body:", bodyPlain.slice(0, 1000));
+  console.log("[inbound-email] body:", bodyText.slice(0, 1000));
 
-  const parsed = parseCrewEmailText(bodyPlain);
+  const parsed = parseCrewEmailText(bodyText);
   console.log("[inbound-email] parsed pairing:", parsed.pairingCode);
 
   const payload = {
@@ -106,6 +191,19 @@ export async function POST(req: Request) {
     rawBody,
   };
 
+  if (messageId) {
+    const { data: existing } = await supabase
+      .from("inbound_email_events")
+      .select("id")
+      .eq("message_id", messageId)
+      .maybeSingle();
+
+    if (existing) {
+      console.log("[inbound-email] duplicate message ignored:", messageId);
+      return new Response("ok", { status: 200 });
+    }
+  }
+
   const { data: eventRow, error: eventInsertError } = await supabase
     .from("inbound_email_events")
     .insert({
@@ -114,8 +212,9 @@ export async function POST(req: Request) {
       sender: from,
       recipient: recipientText,
       subject,
-      body_plain: bodyPlain,
+      body_plain: bodyText,
       payload,
+      message_id: messageId,
     })
     .select("id")
     .single();
@@ -127,5 +226,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "event_insert_failed" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, eventId: eventRow.id });
+  return new Response("ok", { status: 200 });
 }
