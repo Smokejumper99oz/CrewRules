@@ -26,6 +26,13 @@ export async function POST(req: Request) {
 
   const params = new URLSearchParams(rawBody);
 
+  console.log("[inbound-email] params keys:", [...params.keys()]);
+  console.log("[inbound-email] params recipient:", params.get("recipient"));
+  console.log("[inbound-email] params To:", params.get("To"));
+  console.log("[inbound-email] params to:", params.get("to"));
+  console.log("[inbound-email] params subject:", params.get("subject"));
+  console.log("[inbound-email] params from:", params.get("from"));
+
   const from = params.get("from") ?? "";
   const to = params.get("To") ?? params.get("recipient") ?? "";
   const subject = params.get("subject") ?? "";
