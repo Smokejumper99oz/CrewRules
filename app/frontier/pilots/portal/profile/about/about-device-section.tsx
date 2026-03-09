@@ -16,11 +16,16 @@ function parseUserAgent(): Pick<DeviceInfo, "deviceType" | "os" | "browser"> {
   }
   const ua = navigator.userAgent;
   let deviceType = "Desktop";
-  if (/Mobile|Android|iPhone|iPad|iPod/i.test(ua)) {
+  // iPad in desktop mode (iPadOS 13+) sends Mac-like UA; detect via touch support
+  const isLikelyIPad = /Mac/.test(ua) && navigator.maxTouchPoints > 1;
+  if (isLikelyIPad) {
+    deviceType = "Tablet";
+  } else if (/Mobile|Android|iPhone|iPad|iPod/i.test(ua)) {
     deviceType = /iPad|Tablet/i.test(ua) ? "Tablet" : "Mobile";
   }
   let os = "Unknown";
-  if (/Windows/i.test(ua)) os = "Windows";
+  if (isLikelyIPad) os = "iPadOS";
+  else if (/Windows/i.test(ua)) os = "Windows";
   else if (/Mac OS/i.test(ua)) os = "macOS";
   else if (/Linux/i.test(ua)) os = "Linux";
   else if (/Android/i.test(ua)) os = "Android";
