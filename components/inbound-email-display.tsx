@@ -26,7 +26,12 @@ export function InboundEmailDisplay({ email, variant = "default", suffix }: Prop
   if (variant === "schedule") {
     return (
       <div className="space-y-1.5">
-        <span className="text-xs text-slate-500">Schedule Import Email</span>
+        <div>
+          <span className="text-xs text-slate-500">Schedule Import Email</span>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Forward your airline schedule email to this address to automatically import it.
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center rounded-lg border border-slate-600 bg-slate-800/50 px-3 py-2 text-sm font-mono text-slate-200">
             {email}

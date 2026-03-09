@@ -126,7 +126,26 @@ export async function POST(req: Request) {
 
   const bodyText = bodyPlain || (bodyHtml ? htmlToText(bodyHtml) : "");
 
-  if (!bodyText.trim() && !bodyHtml.trim()) {
+  // Check for ICS attachment before requiring body (FLICA sends attachment-only emails)
+  let hasIcsAttachment = false;
+  const attachmentCount = form?.get("attachment-count");
+  const attachmentCountNum = typeof attachmentCount === "string" ? parseInt(attachmentCount, 10) : 0;
+  if (form && attachmentCountNum > 0) {
+    for (let i = 1; i <= attachmentCountNum; i++) {
+      const part = form.get(`attachment-${i}`);
+      if (part instanceof File) {
+        const name = (part.name ?? "").toLowerCase();
+        const type = (part.type ?? "").toLowerCase();
+        if (name.endsWith(".ics") || type === "text/calendar" || type === "application/ics") {
+          hasIcsAttachment = true;
+          console.log("[inbound-email] found ics attachment");
+          break;
+        }
+      }
+    }
+  }
+
+  if (!bodyText.trim() && !bodyHtml.trim() && !hasIcsAttachment) {
     console.warn("[inbound-email] missing email body", {
       subject,
       from,
@@ -228,18 +247,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "event_insert_failed" }, { status: 500 });
   }
 
-  // ICS detection (for future auto-import)
+  // ICS detection and import
   let icsText: string | null = null;
-  const attachmentCount = form?.get("attachment-count");
-  const count = typeof attachmentCount === "string" ? parseInt(attachmentCount, 10) : 0;
-  if (form && count > 0) {
-    for (let i = 1; i <= count; i++) {
+  let icsFromAttachment = false;
+  if (form && attachmentCountNum > 0) {
+    for (let i = 1; i <= attachmentCountNum; i++) {
       const part = form.get(`attachment-${i}`);
       if (part instanceof File) {
         const name = (part.name ?? "").toLowerCase();
         const type = (part.type ?? "").toLowerCase();
         if (name.endsWith(".ics") || type === "text/calendar" || type === "application/ics") {
           icsText = await part.text();
+          icsFromAttachment = true;
           console.log("[inbound-email] ics source: attachment");
           break;
         }
@@ -255,7 +274,11 @@ export async function POST(req: Request) {
   }
 
   if (icsText) {
-    console.log("[inbound-email] importing ics for user:", aliasRow.user_id);
+    if (icsFromAttachment) {
+      console.log("[inbound-email] importing ics attachment for user:", aliasRow.user_id);
+    } else {
+      console.log("[inbound-email] importing ics for user:", aliasRow.user_id);
+    }
     const { data: profile } = await supabase
       .from("profiles")
       .select("tenant, portal, base_timezone")
