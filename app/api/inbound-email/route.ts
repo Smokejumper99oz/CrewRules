@@ -142,22 +142,31 @@ export async function POST(req: Request) {
 
   const supabase = createAdminClient();
 
-  // 1. Check for ICS attachment FIRST (before body check) — FLICA sends attachment-only emails
+  // 1. Multipart: read attachment text and detect ICS or FLICA HTML (before body check)
   const attachmentCount = form?.get("attachment-count");
   const attachmentCountNum = typeof attachmentCount === "string" ? parseInt(attachmentCount, 10) : 0;
-  const maxAttachments = attachmentCountNum > 0 ? attachmentCountNum : 10; // fallback when attachment-count missing
+  const maxAttachments = attachmentCountNum > 0 ? attachmentCountNum : 10;
   let icsTextFromAttachment: string | null = null;
+  let flicaHtmlFromAttachment: string | null = null;
 
   if (form) {
     for (let i = 1; i <= maxAttachments; i++) {
-      const part = form.get(`attachment-${i}`);
+      const key = `attachment-${i}`;
+      const part = form.get(key);
       if (!part) break;
       if (part instanceof File) {
-        const name = (part.name ?? "").toLowerCase();
-        const type = (part.type ?? "").toLowerCase();
-        if (name.endsWith(".ics") || type === "text/calendar" || type === "application/ics") {
-          console.log("[inbound-email] found ics attachment");
-          icsTextFromAttachment = await part.text();
+        const text = await part.text();
+        console.log("[inbound-email] reading attachment text from:", key);
+        console.log("[inbound-email] attachment text length:", text.length);
+
+        if (/BEGIN:VCALENDAR/i.test(text)) {
+          icsTextFromAttachment = text;
+          console.log("[inbound-email] detected ics content from attachment");
+          break;
+        }
+        if (isFlicaHtml(text)) {
+          flicaHtmlFromAttachment = text;
+          console.log("[inbound-email] detected flica html calendar from attachment");
           break;
         }
       }
@@ -198,8 +207,43 @@ export async function POST(req: Request) {
     }
   }
 
-  // 3. Only NOW perform body check — return missing body only if no body AND no ICS attachment
-  if (!bodyText.trim() && !bodyHtml.trim() && !icsTextFromAttachment) {
+  // 3. If FLICA HTML attachment found: resolve alias, import, return success immediately
+  if (flicaHtmlFromAttachment && alias) {
+    const { data: aliasRow, error: aliasError } = await supabase
+      .from("inbound_email_aliases")
+      .select("user_id, alias, is_active")
+      .eq("alias", alias)
+      .maybeSingle();
+
+    if (!aliasError && aliasRow?.is_active) {
+      console.log("[inbound-email] detected flica html calendar");
+      console.log("[inbound-email] importing flica html for user:", aliasRow.user_id);
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("tenant, portal, base_timezone")
+        .eq("id", aliasRow.user_id)
+        .maybeSingle();
+
+      const result = await importFlicaHtmlFromText({
+        supabase,
+        userId: aliasRow.user_id,
+        htmlText: flicaHtmlFromAttachment,
+        sourceTimezone: profile?.base_timezone ?? null,
+        tenant: profile?.tenant ?? "frontier",
+        portal: profile?.portal ?? "pilots",
+      });
+
+      if ("error" in result) {
+        console.log("[inbound-email] flica html import error:", result.error, result.technicalError ?? "");
+      } else {
+        console.log("[inbound-email] flica html import result:", result.success, "count:", result.count);
+      }
+      return new Response("ok", { status: 200 });
+    }
+  }
+
+  // 4. Only NOW perform body check — return missing body only if no body AND no usable attachment
+  if (!bodyText.trim() && !bodyHtml.trim() && !icsTextFromAttachment && !flicaHtmlFromAttachment) {
     console.warn("[inbound-email] missing email body", {
       subject,
       from,
@@ -209,7 +253,7 @@ export async function POST(req: Request) {
     return new Response("Missing body", { status: 400 });
   }
 
-  // 4. Rest of flow: alias required for non-attachment path
+  // 5. Rest of flow: alias required for non-attachment path
   if (!alias) {
     console.warn("[inbound-email] missing alias from recipient", { to });
     return new Response("Missing alias", { status: 400 });
