@@ -1,6 +1,5 @@
 "use server";
 
-import { createHash } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, isAdmin, isProActive } from "@/lib/profile";
@@ -13,36 +12,12 @@ import {
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getPayScale } from "@/lib/tenant-settings";
 import { payYearFromDOH } from "@/lib/pay-utils";
-import { detectTripChanges, type TripChangeSummary } from "@/lib/trips/detect-trip-changes";
+import { type TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { getOrCreateInboundAlias } from "@/lib/email/get-or-create-inbound-alias";
 import { getInboundAddress } from "@/lib/email/get-inbound-address";
+import { importIcsFromText } from "@/lib/schedule/import-ics-from-text";
 
 const FLICA_SOURCE = "flica_import";
-
-/** Reserve codes: RSA, RSB, RSC, RSD, RSE, RSL. */
-const RESERVE_CODE = /\b(RSA|RSB|RSC|RSD|RSE|RSL)\b/i;
-
-/** True if title indicates a trip assigned from reserve (e.g. "RSA Trip S3019"). */
-function isReserveAssignmentByTitle(title: string): boolean {
-  return RESERVE_CODE.test(title ?? "") && (/\bTrip\b/i.test(title ?? "") || /\bS\d{4}\b/i.test(title ?? ""));
-}
-
-/**
- * Infer event_type from ICS summary/title (FLICA-style labels).
- * Reserve assignment (RSA/RSB/etc + Trip): treat as trip, 4 hrs/day credit.
- * Reserve: RSA, RSB, RSC, RSD, RDE, RSE, RSL, RES (standalone).
- * Vacation: VAC, Vacation, V15, V20 (V + digits).
- * Off: OFF, Off, OFF DUTY, Off Duty, DAY OFF.
- * Else → trip.
- */
-function inferEventType(summary: string): "trip" | "reserve" | "vacation" | "off" {
-  const s = summary ?? "";
-  if (/\bVAC\b|Vacation|\bV\d+\b/i.test(s)) return "vacation"; // V15, V20, etc.
-  if (/\bOFF\b|\bOff\b|Off Duty|DAY OFF/i.test(s)) return "off";
-  if (isReserveAssignmentByTitle(s)) return "trip";
-  if (/\b(RES|RSA|RSB|RSC|RSD|RDE|RSE|RSL)\b|Reserve/i.test(s)) return "reserve";
-  return "trip";
-}
 
 function maxConsecutiveDateStrDays(dateStrs: Set<string>): number {
   const sorted = Array.from(dateStrs).sort(); // YYYY-MM-DD sorts correctly
@@ -62,23 +37,6 @@ function maxConsecutiveDateStrDays(dateStrs: Set<string>): number {
     prev = dt;
   }
   return best;
-}
-
-/** True if trip immediately follows a reserve event (short call → pairing). */
-function tripFollowsReserve(
-  tripStart: Date,
-  allEvents: Array<{ start: Date; end: Date; title: string }>
-): boolean {
-  const tripStartMs = tripStart.getTime();
-  const preceding = allEvents
-    .filter((e) => e.end.getTime() < tripStartMs)
-    .sort((a, b) => b.end.getTime() - a.end.getTime());
-  const lastBefore = preceding[0];
-  if (!lastBefore) return false;
-  const type = inferEventType(lastBefore.title);
-  if (type !== "reserve") return false;
-  const gapMs = tripStartMs - lastBefore.end.getTime();
-  return gapMs <= 48 * 60 * 60 * 1000;
 }
 
 export type ImportIcsResult =
@@ -125,198 +83,24 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
     profile.base_timezone ??
     (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : getTenantSourceTimezone(profile.tenant));
 
-  let parsed: { start: Date; end: Date; title: string; uid: string | null; reportTime?: string; creditMinutes?: number; firstLegRoute?: string; firstLegDepartureTime?: string; pairingDays?: number; blockMinutes?: number; legs?: Array<{ day?: string; flightNumber?: string; origin: string; destination: string; depTime?: string; arrTime?: string; blockMinutes?: number; raw?: string }> }[];
-  try {
-    const { parseIcs } = await import("@/lib/ics-parse");
-    parsed = parseIcs(icsText, { sourceTimezone });
-  } catch {
-    return { error: "Invalid ICS file. Could not parse calendar." };
-  }
-
-  const now = new Date();
-  const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
-  const events = parsed
-    .filter((ev) => ev.start < oneYearFromNow)
-    .map((ev) => ({
-      start: ev.start,
-      end: ev.end,
-      title: ev.title,
-      externalUid: ev.uid,
-      reportTime: ev.reportTime ?? null,
-      creditMinutes: ev.creditMinutes ?? null,
-      route: ev.firstLegRoute ?? null,
-      firstLegDepartureTime: ev.firstLegDepartureTime ?? null,
-      pairingDays: ev.pairingDays ?? null,
-      blockMinutes: ev.blockMinutes ?? null,
-      legs: ev.legs ?? null,
-    }));
-
-  if (process.env.NODE_ENV === "development") {
-    for (const ev of events) {
-      console.log("[ICS parsed event]", {
-        title: ev.title,
-        start: ev.start,
-        firstLegRoute: ev.route,
-        legsCount: ev.legs?.length ?? 0,
-        legs: ev.legs,
-      });
-    }
-  }
-
-  if (events.length === 0) {
-    return { error: "No calendar events found in the file" };
-  }
-
   const supabase = await createClient();
-  const importBatchId = crypto.randomUUID();
-  const importedAt = new Date().toISOString();
-  const tenant = profile.tenant ?? "frontier";
-  const portal = profile.portal ?? "pilots";
-
-  const reserveCreditPerDay = getReserveCreditPerDay(profile.tenant ?? "frontier");
-  const RESERVE_CREDIT_PER_DAY_MINUTES = Math.round(reserveCreditPerDay * 60);
-
-  const sortedByStart = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
-
-  const toRow = (e: (typeof events)[0] & { externalUid: string }) => {
-    const eventType = inferEventType(e.title);
-    let creditMinutes: number | null = null;
-    let blockMinutes: number | null = e.blockMinutes ?? null;
-    let pairingDays: number | null = e.pairingDays ?? null;
-    let isReserveAssignment = false;
-
-    if (eventType === "trip") {
-      const followsReserve = tripFollowsReserve(e.start, sortedByStart);
-      const titleIndicatesReserveAssign = isReserveAssignmentByTitle(e.title);
-      isReserveAssignment = titleIndicatesReserveAssign || followsReserve;
-
-      if (isReserveAssignment) {
-        const days = e.pairingDays ?? 1;
-        creditMinutes = RESERVE_CREDIT_PER_DAY_MINUTES * days;
-        blockMinutes = null;
-      } else if (e.creditMinutes != null && e.creditMinutes > 0) {
-        creditMinutes = e.creditMinutes;
-        blockMinutes = e.blockMinutes ?? blockMinutes ?? creditMinutes;
-      } else if (e.pairingDays != null || e.blockMinutes != null) {
-        const { creditMinutes: computed } = computeTripCredit(e.pairingDays, e.blockMinutes);
-        creditMinutes = computed;
-      }
-    } else if (eventType === "reserve") {
-      creditMinutes = RESERVE_CREDIT_PER_DAY_MINUTES;
-    }
-
-    return {
-      tenant,
-      portal,
-      user_id: profile.id,
-      start_time: e.start.toISOString(),
-      end_time: e.end.toISOString(),
-      title: e.title,
-      event_type: eventType,
-      report_time: e.reportTime,
-      credit_hours: creditMinutes != null ? creditMinutes / 60 : null,
-      credit_minutes: creditMinutes,
-      route: e.route ?? null,
-      pairing_days: pairingDays,
-      block_minutes: blockMinutes,
-      is_reserve_assignment: isReserveAssignment,
-      first_leg_departure_time: e.firstLegDepartureTime ?? null,
-      legs: e.legs ?? null,
-      source: FLICA_SOURCE,
-      external_uid: e.externalUid,
-      import_batch_id: importBatchId,
-      imported_at: importedAt,
-    };
-  };
-
-  const rows = events.map((e) => {
-    const baseUid =
-      e.externalUid?.trim() ||
-      `anon-${createHash("sha256").update(`${e.start.toISOString()}|${e.end.toISOString()}|${e.title}`).digest("hex").slice(0, 24)}`;
-    const externalUid = `${baseUid}-${e.start.toISOString()}`;
-    return toRow({ ...e, externalUid });
+  const result = await importIcsFromText({
+    supabase,
+    userId: profile.id,
+    icsText,
+    sourceTimezone,
+    tenant: profile.tenant ?? "frontier",
+    portal: profile.portal ?? "pilots",
   });
 
-  if (process.env.NODE_ENV === "development") {
-    for (const row of rows) {
-      console.log("[schedule row before save]", {
-        title: row.title,
-        start_time: row.start_time,
-        external_uid: row.external_uid,
-        route: row.route,
-        legsCount: row.legs?.length ?? 0,
-        legs: row.legs,
-      });
-    }
-  }
+  if ("error" in result) return result;
 
-  // Trip change detection: compare with existing before overwrite
-  const tripChangeSummaries: TripChangeSummary[] = [];
-  const tripRows = rows.filter((r) => r.event_type === "trip" && r.external_uid);
-  if (tripRows.length > 0) {
-    const uids = tripRows.map((r) => r.external_uid!);
-    const { data: existing } = await supabase
-      .from("schedule_events")
-      .select("external_uid, start_time, end_time, title, report_time, credit_minutes, legs")
-      .eq("user_id", profile.id)
-      .eq("source", FLICA_SOURCE)
-      .in("external_uid", uids);
-    const existingByUid = new Map((existing ?? []).map((e) => [(e as { external_uid: string }).external_uid, e]));
-    for (const incoming of tripRows) {
-      const prev = existingByUid.get(incoming.external_uid);
-      if (prev) {
-        const summary = detectTripChanges(prev as Parameters<typeof detectTripChanges>[0], incoming);
-        console.log("[Trip change detect]", summary);
-        if (summary.hasChanges) tripChangeSummaries.push(summary);
-      }
-    }
-  }
-
-  const { error: upsertError } = await supabase
-    .from("schedule_events")
-    .upsert(rows, {
-      onConflict: "user_id,external_uid",
-      ignoreDuplicates: false,
-    });
-
-  if (upsertError) {
-    const technicalMsg = `Failed to import: ${upsertError.message}`;
-    const isSchemaError =
-      /could not find|schema cache|column.*does not exist|relation.*does not exist/i.test(
-        upsertError.message
-      );
-    if (isSchemaError) {
-      return {
-        error: "Import failed. We're missing a required field on the server. Please try again in a minute.",
-        technicalError: technicalMsg,
-      };
-    }
-    return { error: technicalMsg };
-  }
-
+  const tenant = profile.tenant ?? "frontier";
+  const portal = profile.portal ?? "pilots";
   revalidatePath(`/${tenant}/${portal}/portal`);
   revalidatePath(`/${tenant}/${portal}/portal/schedule`);
 
-  // Persist trip change summaries for dashboard (Current Trip card)
-  if (tripChangeSummaries.length > 0) {
-    await supabase.from("trip_change_summaries").delete().eq("user_id", profile.id);
-    await supabase.from("trip_change_summaries").insert(
-      tripChangeSummaries.map((s) => ({
-        user_id: profile.id,
-        pairing: s.pairing,
-        summary: s,
-      }))
-    );
-  }
-
-  console.log("[Trip change return]", { count: tripChangeSummaries.length, pairings: tripChangeSummaries.map((s) => s.pairing) });
-
-  return {
-    success: `Imported ${events.length} events`,
-    count: events.length,
-    importedAt,
-    tripChangeSummaries,
-  };
+  return result;
 }
 
 /** Clear FLICA-imported schedule for the current user. Use before re-uploading to test. */

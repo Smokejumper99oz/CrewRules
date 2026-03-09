@@ -4,9 +4,13 @@ import { useState } from "react";
 
 type Props = {
   email: string;
+  /** When "schedule", renders label above + email pill + Copy. Optional suffix (e.g. status chip) rendered inline. */
+  variant?: "default" | "schedule";
+  /** Rendered on same row as email+Copy when variant=schedule. Wraps below on smaller screens. */
+  suffix?: React.ReactNode;
 };
 
-export function InboundEmailDisplay({ email }: Props) {
+export function InboundEmailDisplay({ email, variant = "default", suffix }: Props) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -18,6 +22,27 @@ export function InboundEmailDisplay({ email }: Props) {
       setCopied(false);
     }
   };
+
+  if (variant === "schedule") {
+    return (
+      <div className="space-y-1.5">
+        <span className="text-xs text-slate-500">Schedule Import Email</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center rounded-lg border border-slate-600 bg-slate-800/50 px-3 py-2 text-sm font-mono text-slate-200">
+            {email}
+          </span>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="shrink-0 rounded-lg border border-slate-600 bg-slate-800/50 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700/50 hover:text-white transition-colors"
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+          {suffix}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2 mt-4">

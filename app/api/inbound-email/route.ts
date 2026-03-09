@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseCrewEmailText } from "@/lib/email/parse-crew-email-text";
+import { importIcsFromText } from "@/lib/schedule/import-ics-from-text";
 
 export async function POST(req: Request) {
   if (req.method !== "POST") {
@@ -64,9 +65,10 @@ export async function POST(req: Request) {
   let token = "";
   let signature = "";
   let messageId = "";
+  let form: FormData | null = null;
 
   if (contentType.includes("multipart/form-data")) {
-    const form = await req.formData();
+    form = await req.formData();
 
     from = pickField(form, ["from", "From", "sender"]);
     to = pickField(form, ["recipient", "To", "to"]);
@@ -224,6 +226,56 @@ export async function POST(req: Request) {
   if (eventInsertError) {
     console.error("[inbound-email] event insert error", eventInsertError);
     return NextResponse.json({ ok: false, error: "event_insert_failed" }, { status: 500 });
+  }
+
+  // ICS detection (for future auto-import)
+  let icsText: string | null = null;
+  const attachmentCount = form?.get("attachment-count");
+  const count = typeof attachmentCount === "string" ? parseInt(attachmentCount, 10) : 0;
+  if (form && count > 0) {
+    for (let i = 1; i <= count; i++) {
+      const part = form.get(`attachment-${i}`);
+      if (part instanceof File) {
+        const name = (part.name ?? "").toLowerCase();
+        const type = (part.type ?? "").toLowerCase();
+        if (name.endsWith(".ics") || type === "text/calendar" || type === "application/ics") {
+          icsText = await part.text();
+          console.log("[inbound-email] ics source: attachment");
+          break;
+        }
+      }
+    }
+  }
+  if (!icsText && /BEGIN:VCALENDAR/i.test(bodyText)) {
+    icsText = bodyText;
+    console.log("[inbound-email] ics source: body");
+  }
+  if (!icsText) {
+    console.log("[inbound-email] no ics content found");
+  }
+
+  if (icsText) {
+    console.log("[inbound-email] importing ics for user:", aliasRow.user_id);
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("tenant, portal, base_timezone")
+      .eq("id", aliasRow.user_id)
+      .maybeSingle();
+
+    const result = await importIcsFromText({
+      supabase,
+      userId: aliasRow.user_id,
+      icsText,
+      sourceTimezone: profile?.base_timezone ?? null,
+      tenant: profile?.tenant ?? "frontier",
+      portal: profile?.portal ?? "pilots",
+    });
+
+    if ("error" in result) {
+      console.log("[inbound-email] ics import error:", result.error, result.technicalError ?? "");
+    } else {
+      console.log("[inbound-email] ics import result:", result.success, "count:", result.count);
+    }
   }
 
   return new Response("ok", { status: 200 });

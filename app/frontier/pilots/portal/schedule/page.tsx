@@ -428,51 +428,44 @@ export default function SchedulePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-slate-900/50 backdrop-blur-sm border-b border-white/5 md:bg-transparent md:backdrop-blur-none md:border-b-0">
-        <div className="px-4 py-4 sm:px-6 sm:py-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight">My Schedule</h1>
-              <p className="mt-1 text-sm text-slate-400">
-                In FLICA: Export Schedule → iCalendar (.ICS) → Upload here.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              {importEmail && <InboundEmailDisplay email={importEmail} />}
-              {status != null && (
-                <ScheduleStatusChip status={status.status} lastImportedAt={status.lastImportedAt} />
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".ics,.vcs,text/calendar"
-                className="hidden"
-                onChange={handleFileChange}
-                disabled={importing}
-              />
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={importing}
-                  className="rounded-xl bg-[#75C043] px-4 py-2.5 text-sm font-semibold text-slate-950 hover:opacity-95 transition disabled:opacity-50"
-                >
-                  {importing ? "Uploading…" : "Upload FLICA Schedule (.ICS)"}
-                </button>
-                {status != null && status.count > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleClearClick}
-                    disabled={clearing}
-                    className="rounded-xl border border-white/20 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 transition disabled:opacity-50"
-                  >
-                    {clearing ? "Clearing…" : "Clear schedule"}
-                  </button>
-                )}
-              </div>
-            </div>
+      <div className="px-4 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold tracking-tight">My Schedule</h1>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".ics,.vcs,text/calendar"
+            className="hidden"
+            onChange={handleFileChange}
+            disabled={importing}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            {status != null && (
+              <ScheduleStatusChip status={status.status} lastImportedAt={status.lastImportedAt} />
+            )}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="rounded-xl bg-[#75C043] px-4 py-2.5 text-sm font-semibold text-slate-950 hover:opacity-95 transition disabled:opacity-50"
+            >
+              {importing ? "Uploading…" : "Upload FLICA Schedule (.ICS)"}
+            </button>
+            {status != null && status.count > 0 && (
+              <button
+                type="button"
+                onClick={handleClearClick}
+                disabled={clearing}
+                className="rounded-xl border border-white/20 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 transition disabled:opacity-50"
+              >
+                {clearing ? "Clearing…" : "Clear schedule"}
+              </button>
+            )}
           </div>
         </div>
+        <p className="mt-1 text-sm text-slate-400">
+          Import your Frontier FLICA schedule by uploading an .ics file or forwarding it to your CrewRules™ import email.
+        </p>
       </div>
 
       {tripChangeSummaries && tripChangeSummaries.length > 0 && (
@@ -528,13 +521,10 @@ export default function SchedulePage() {
 
       {/* Empty state */}
       {status != null && status.count === 0 && (
-        <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-12 text-center">
-          <p className="text-slate-400">No schedule imported yet.</p>
-          <p className="mt-2 text-sm text-slate-500">
-            Use the upload button above to import your schedule.
-          </p>
-          <p className="mt-2 text-xs text-slate-500">
-            This uploads a file from your computer — it does not connect CrewRules™ to FLICA.
+        <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-6 sm:p-8 text-center">
+          <p className="font-medium text-slate-300">No schedule imported yet.</p>
+          <p className="mt-1.5 text-sm text-slate-500">
+            Upload your FLICA .ics file above to get started.
           </p>
         </div>
       )}
@@ -637,6 +627,13 @@ export default function SchedulePage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Import section - below schedule card (email, copy) */}
+      {importEmail && (
+        <div className="px-4 sm:px-6 pt-6 border-t border-white/5">
+          <InboundEmailDisplay email={importEmail} variant="schedule" />
         </div>
       )}
 

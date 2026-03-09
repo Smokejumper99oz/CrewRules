@@ -24,7 +24,7 @@ export function ScheduleStatusChip({
   showProBadge?: boolean;
 }) {
   const config = {
-    no_schedule: { label: "No schedule imported", className: "border-slate-500/30 bg-slate-500/10 text-slate-400" },
+    no_schedule: { label: "No schedule imported yet", className: "border-slate-500/30 bg-slate-500/10 text-slate-400" },
     up_to_date: { label: "Up to date", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" },
     outdated: { label: "May be outdated", className: "border-amber-500/30 bg-amber-500/10 text-amber-300" },
   }[status];
