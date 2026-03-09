@@ -274,7 +274,6 @@ export async function POST(req: Request) {
       subject,
       body_plain: bodyText,
       payload,
-      message_id: messageId,
     })
     .select("id")
     .single();
