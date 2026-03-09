@@ -126,36 +126,7 @@ export async function POST(req: Request) {
 
   const bodyText = bodyPlain || (bodyHtml ? htmlToText(bodyHtml) : "");
 
-  // Check for ICS attachment before requiring body (FLICA sends attachment-only emails)
-  let hasIcsAttachment = false;
-  const attachmentCount = form?.get("attachment-count");
-  const attachmentCountNum = typeof attachmentCount === "string" ? parseInt(attachmentCount, 10) : 0;
-  if (form && attachmentCountNum > 0) {
-    for (let i = 1; i <= attachmentCountNum; i++) {
-      const part = form.get(`attachment-${i}`);
-      if (part instanceof File) {
-        const name = (part.name ?? "").toLowerCase();
-        const type = (part.type ?? "").toLowerCase();
-        if (name.endsWith(".ics") || type === "text/calendar" || type === "application/ics") {
-          hasIcsAttachment = true;
-          console.log("[inbound-email] found ics attachment");
-          break;
-        }
-      }
-    }
-  }
-
-  if (!bodyText.trim() && !bodyHtml.trim() && !hasIcsAttachment) {
-    console.warn("[inbound-email] missing email body", {
-      subject,
-      from,
-      to,
-      messageId,
-    });
-    return new Response("Missing body", { status: 400 });
-  }
-
-  // Extract email from "Name <email>" or use whole string
+  // Extract alias first (needed for ICS import from attachment)
   const angleMatch = to.match(/<([^>]+)>/);
   const emailPart = angleMatch ? angleMatch[1].trim() : to;
   const aliasMatch = emailPart.trim().match(/([^@\s]+)@import\.crewrules\.com$/i);
@@ -166,6 +137,76 @@ export async function POST(req: Request) {
     alias,
   });
 
+  const supabase = createAdminClient();
+
+  // 1. Check for ICS attachment FIRST (before body check) — FLICA sends attachment-only emails
+  const attachmentCount = form?.get("attachment-count");
+  const attachmentCountNum = typeof attachmentCount === "string" ? parseInt(attachmentCount, 10) : 0;
+  const maxAttachments = attachmentCountNum > 0 ? attachmentCountNum : 10; // fallback when attachment-count missing
+  let icsTextFromAttachment: string | null = null;
+
+  if (form) {
+    for (let i = 1; i <= maxAttachments; i++) {
+      const part = form.get(`attachment-${i}`);
+      if (!part) break;
+      if (part instanceof File) {
+        const name = (part.name ?? "").toLowerCase();
+        const type = (part.type ?? "").toLowerCase();
+        if (name.endsWith(".ics") || type === "text/calendar" || type === "application/ics") {
+          console.log("[inbound-email] found ics attachment");
+          icsTextFromAttachment = await part.text();
+          break;
+        }
+      }
+    }
+  }
+
+  // 2. If ICS attachment found: resolve alias, import, return success immediately
+  if (icsTextFromAttachment && alias) {
+    const { data: aliasRow, error: aliasError } = await supabase
+      .from("inbound_email_aliases")
+      .select("user_id, alias, is_active")
+      .eq("alias", alias)
+      .maybeSingle();
+
+    if (!aliasError && aliasRow?.is_active) {
+      console.log("[inbound-email] importing ics attachment for user:", aliasRow.user_id);
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("tenant, portal, base_timezone")
+        .eq("id", aliasRow.user_id)
+        .maybeSingle();
+
+      const result = await importIcsFromText({
+        supabase,
+        userId: aliasRow.user_id,
+        icsText: icsTextFromAttachment,
+        sourceTimezone: profile?.base_timezone ?? null,
+        tenant: profile?.tenant ?? "frontier",
+        portal: profile?.portal ?? "pilots",
+      });
+
+      if ("error" in result) {
+        console.log("[inbound-email] ics import error:", result.error, result.technicalError ?? "");
+      } else {
+        console.log("[inbound-email] ics import result:", result.success, "count:", result.count);
+      }
+      return new Response("ok", { status: 200 });
+    }
+  }
+
+  // 3. Only NOW perform body check — return missing body only if no body AND no ICS attachment
+  if (!bodyText.trim() && !bodyHtml.trim() && !icsTextFromAttachment) {
+    console.warn("[inbound-email] missing email body", {
+      subject,
+      from,
+      to,
+      messageId,
+    });
+    return new Response("Missing body", { status: 400 });
+  }
+
+  // 4. Rest of flow: alias required for non-attachment path
   if (!alias) {
     console.warn("[inbound-email] missing alias from recipient", { to });
     return new Response("Missing alias", { status: 400 });
@@ -175,8 +216,6 @@ export async function POST(req: Request) {
   console.log("[inbound-email] subject:", subject);
 
   const recipientText = to;
-
-  const supabase = createAdminClient();
 
   const { data: aliasRow, error: aliasError } = await supabase
     .from("inbound_email_aliases")
@@ -247,24 +286,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "event_insert_failed" }, { status: 500 });
   }
 
-  // ICS detection and import
-  let icsText: string | null = null;
-  let icsFromAttachment = false;
-  if (form && attachmentCountNum > 0) {
-    for (let i = 1; i <= attachmentCountNum; i++) {
-      const part = form.get(`attachment-${i}`);
-      if (part instanceof File) {
-        const name = (part.name ?? "").toLowerCase();
-        const type = (part.type ?? "").toLowerCase();
-        if (name.endsWith(".ics") || type === "text/calendar" || type === "application/ics") {
-          icsText = await part.text();
-          icsFromAttachment = true;
-          console.log("[inbound-email] ics source: attachment");
-          break;
-        }
-      }
-    }
-  }
+  // ICS from body (when not from attachment)
+  let icsText: string | null = icsTextFromAttachment;
   if (!icsText && /BEGIN:VCALENDAR/i.test(bodyText)) {
     icsText = bodyText;
     console.log("[inbound-email] ics source: body");
@@ -274,11 +297,7 @@ export async function POST(req: Request) {
   }
 
   if (icsText) {
-    if (icsFromAttachment) {
-      console.log("[inbound-email] importing ics attachment for user:", aliasRow.user_id);
-    } else {
-      console.log("[inbound-email] importing ics for user:", aliasRow.user_id);
-    }
+    console.log("[inbound-email] importing ics for user:", aliasRow.user_id);
     const { data: profile } = await supabase
       .from("profiles")
       .select("tenant, portal, base_timezone")
