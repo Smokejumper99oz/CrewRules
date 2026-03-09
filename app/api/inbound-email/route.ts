@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseCrewEmailText } from "@/lib/email/parse-crew-email-text";
 import { importIcsFromText } from "@/lib/schedule/import-ics-from-text";
+import { importFlicaHtmlFromText } from "@/lib/schedule/import-flica-html";
+import { isFlicaHtml } from "@/lib/schedule/parse-flica-html";
 
 export async function POST(req: Request) {
   if (req.method !== "POST") {
@@ -66,6 +68,7 @@ export async function POST(req: Request) {
   let signature = "";
   let messageId = "";
   let form: FormData | null = null;
+  let params: URLSearchParams | null = null;
 
   if (contentType.includes("multipart/form-data")) {
     form = await req.formData();
@@ -86,7 +89,7 @@ export async function POST(req: Request) {
 
     console.log("[inbound-email] raw first 300:", rawBody.slice(0, 300));
 
-    const params = new URLSearchParams(rawBody);
+    params = new URLSearchParams(rawBody);
 
     console.log("[inbound-email] params keys:", [...params.keys()]);
     console.log("[inbound-email] params recipient:", params.get("recipient"));
@@ -292,6 +295,94 @@ export async function POST(req: Request) {
     console.log("[inbound-email] ics source: body");
   }
   if (!icsText) {
+    // Try FLICA HTML (body or attachment)
+    let htmlContent: string | null = null;
+    if (bodyHtml?.trim()) htmlContent = bodyHtml;
+    if (!htmlContent && form) {
+      for (let i = 1; i <= maxAttachments; i++) {
+        const part = form.get(`attachment-${i}`);
+        if (!part) break;
+        if (part instanceof File) {
+          const name = (part.name ?? "").toLowerCase();
+          const type = (part.type ?? "").toLowerCase();
+          if (name.endsWith(".html") || type === "text/html") {
+            htmlContent = await part.text();
+            break;
+          }
+        }
+      }
+    }
+    if (htmlContent && isFlicaHtml(htmlContent) && aliasRow) {
+      console.log("[inbound-email] detected flica html calendar");
+      console.log("[inbound-email] importing flica html for user:", aliasRow.user_id);
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("tenant, portal, base_timezone")
+        .eq("id", aliasRow.user_id)
+        .maybeSingle();
+
+      const result = await importFlicaHtmlFromText({
+        supabase,
+        userId: aliasRow.user_id,
+        htmlText: htmlContent,
+        sourceTimezone: profile?.base_timezone ?? null,
+        tenant: profile?.tenant ?? "frontier",
+        portal: profile?.portal ?? "pilots",
+      });
+
+      if ("error" in result) {
+        console.log("[inbound-email] flica html import error:", result.error, result.technicalError ?? "");
+      } else {
+        console.log("[inbound-email] flica html import result:", result.success, "count:", result.count);
+      }
+      return new Response("ok", { status: 200 });
+    }
+
+    // Debug: why no ICS content found
+    const source = form ?? params;
+    const hasBodyPlain = source && (() => {
+      const v = source.get("body-plain");
+      return typeof v === "string" && v.trim().length > 0;
+    })();
+    const hasBodyHtml = source && (() => {
+      const v = source.get("body-html");
+      return typeof v === "string" && v.trim().length > 0;
+    })();
+    const hasStrippedText = source && (() => {
+      const v = source.get("stripped-text");
+      return typeof v === "string" && v.trim().length > 0;
+    })();
+    const attachmentCandidates: { key: string; filename?: string; mimeType?: string; size?: number }[] = [];
+    if (form) {
+      const count = typeof form.get("attachment-count") === "string" ? parseInt(form.get("attachment-count") as string, 10) : 0;
+      const max = count > 0 ? count : 10;
+      for (let i = 1; i <= max; i++) {
+        const key = `attachment-${i}`;
+        const part = form.get(key);
+        if (!part) break;
+        if (part instanceof File) {
+          attachmentCandidates.push({
+            key,
+            filename: part.name ?? undefined,
+            mimeType: part.type || undefined,
+            size: part.size,
+          });
+        }
+      }
+    }
+    const bodyHasBeginVcalendar = /BEGIN:VCALENDAR/i.test(bodyText);
+    const bodyHasBeginVevent = /BEGIN:VEVENT/i.test(bodyText);
+    const candidatePreview = bodyText.trim().slice(0, 200) || "(empty)";
+    console.log("[inbound-email] ics debug: no ics content found", {
+      hasBodyPlain,
+      hasBodyHtml,
+      hasStrippedText,
+      attachmentCandidatesCount: attachmentCandidates.length,
+      attachmentCandidates,
+      bodyHasBeginVcalendar,
+      bodyHasBeginVevent,
+      candidatePreviewFirst200: candidatePreview,
+    });
     console.log("[inbound-email] no ics content found");
   }
 
