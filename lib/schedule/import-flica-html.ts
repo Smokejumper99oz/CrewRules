@@ -5,7 +5,7 @@
 
 import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { parseFlicaHtml, type ParsedFlicaEvent } from "@/lib/schedule/parse-flica-html";
+import { parseFlicaHtml, parseFlicaHtmlDays, extractMonthYear, type ParsedFlicaEvent } from "@/lib/schedule/parse-flica-html";
 import { computeTripCredit } from "@/lib/schedule-time";
 import { getReserveCreditPerDay } from "@/lib/tenant-config";
 import { detectTripChanges, type TripChangeSummary } from "@/lib/trips/detect-trip-changes";
@@ -75,18 +75,35 @@ export async function importFlicaHtmlFromText(
 
   const tenant = tenantParam;
   const portal = portalParam;
-  const sourceTimezone = sourceTimezoneParam ?? "America/Denver";
+  const sourceTimezone =
+    (typeof sourceTimezoneParam === "string" && sourceTimezoneParam.trim())
+      ? sourceTimezoneParam.trim()
+      : "America/Denver";
   const importBatchId = importBatchIdParam ?? crypto.randomUUID();
   const importedAt = new Date().toISOString();
   const reserveCreditPerDay = getReserveCreditPerDay(tenant);
   const RESERVE_CREDIT_PER_DAY_MINUTES = Math.round(reserveCreditPerDay * 60);
 
+  const monthYear = extractMonthYear(htmlText);
+  const days = parseFlicaHtmlDays(htmlText);
+  console.log("[inbound-email] parsed month/year:", monthYear ? `${monthYear.year}-${monthYear.month}` : "null");
+  console.log("[inbound-email] number of td cells found:", days.length);
+
   let parsed: ParsedFlicaEvent[];
   try {
     parsed = parseFlicaHtml(htmlText, { sourceTimezone });
-  } catch {
-    return { error: "Invalid FLICA HTML. Could not parse calendar." };
+  } catch (parseErr) {
+    const ex = parseErr instanceof Error ? parseErr : new Error(String(parseErr));
+    console.error("[inbound-email] flica html parse crash:", ex.message);
+    console.error("[inbound-email] flica html parse stack:", ex.stack);
+    console.error("[inbound-email] flica html parse first 200 chars:", htmlText.slice(0, 200));
+    return {
+      error: "Invalid FLICA HTML. Could not parse calendar.",
+      technicalError: ex.message,
+    };
   }
+
+  console.log("[inbound-email] number of parsed events:", parsed.length);
 
   const now = new Date();
   const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);

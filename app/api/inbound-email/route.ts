@@ -217,26 +217,35 @@ export async function POST(req: Request) {
 
     if (!aliasError && aliasRow?.is_active) {
       console.log("[inbound-email] detected flica html calendar");
-      console.log("[inbound-email] importing flica html for user:", aliasRow.user_id);
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("tenant, portal, base_timezone")
-        .eq("id", aliasRow.user_id)
-        .maybeSingle();
+      console.log("[inbound-email] flica html import start");
+      console.log("[inbound-email] attachment text length:", flicaHtmlFromAttachment.length);
 
-      const result = await importFlicaHtmlFromText({
-        supabase,
-        userId: aliasRow.user_id,
-        htmlText: flicaHtmlFromAttachment,
-        sourceTimezone: profile?.base_timezone ?? null,
-        tenant: profile?.tenant ?? "frontier",
-        portal: profile?.portal ?? "pilots",
-      });
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("tenant, portal, base_timezone")
+          .eq("id", aliasRow.user_id)
+          .maybeSingle();
 
-      if ("error" in result) {
-        console.log("[inbound-email] flica html import error:", result.error, result.technicalError ?? "");
-      } else {
-        console.log("[inbound-email] flica html import result:", result.success, "count:", result.count);
+        const result = await importFlicaHtmlFromText({
+          supabase,
+          userId: aliasRow.user_id,
+          htmlText: flicaHtmlFromAttachment,
+          sourceTimezone: profile?.base_timezone ?? null,
+          tenant: profile?.tenant ?? "frontier",
+          portal: profile?.portal ?? "pilots",
+        });
+
+        if ("error" in result) {
+          console.log("[inbound-email] flica html import error:", result.error, result.technicalError ?? "");
+        } else {
+          console.log("[inbound-email] flica html import result:", result.success, "count:", result.count);
+        }
+      } catch (err) {
+        const ex = err instanceof Error ? err : new Error(String(err));
+        console.error("[inbound-email] flica html import crash:", ex.message);
+        console.error("[inbound-email] flica html import stack:", ex.stack);
+        console.error("[inbound-email] flica html first 200 chars:", flicaHtmlFromAttachment.slice(0, 200));
       }
       return new Response("ok", { status: 200 });
     }
