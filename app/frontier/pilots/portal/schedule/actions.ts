@@ -524,6 +524,8 @@ export type MonthStats = {
   paidMinutes: number;
   /** Credit minutes for display (always equals paidMinutes) */
   creditMinutes: number;
+  /** credit_minutes - baseline_credit_minutes (delta from imported baseline) */
+  creditDeltaMinutes?: number;
   /** RSL days count (for guarantee logic) */
   rslDaysCount?: number;
   /** True if RSL streak ≥ 7 consecutive days (FDO line, 75-hr guarantee) */
@@ -589,9 +591,10 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("start_time, end_time, event_type, title, credit_hours, credit_minutes, pairing_days, block_minutes")
+      .select("start_time, end_time, event_type, title, credit_hours, credit_minutes, baseline_credit_minutes, pairing_days, block_minutes")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
+      .or("is_muted.eq.false,is_muted.is.null")
       .lte("start_time", endStr)
       .gte("end_time", startStr);
 
@@ -642,6 +645,7 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
       title: string | null;
       credit_hours: number | null;
       credit_minutes: number | null;
+      baseline_credit_minutes: number | null;
       pairing_days: number | null;
       block_minutes: number | null;
     }[];
@@ -660,6 +664,7 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
       payMinutes: number;
       blockMinutes: number;
       extraMinutes: number;
+      credit_delta_minutes: number;
     }> = [];
     let vacationCreditMinutes = 0;
     let tripEvents = 0;
@@ -722,7 +727,10 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
           const payMinutes = Math.round(creditHrs * ratio * 60);
           const blockMinutes = Math.round(blockHrs * ratio * 60);
           const extraMinutes = Math.round(extraHrs * ratio * 60);
-          tripStubs.push({ segments, payMinutes, blockMinutes, extraMinutes });
+          const creditMinutes = Math.round(creditHrs * 60);
+          const baselineMinutes = ev.baseline_credit_minutes ?? creditMinutes;
+          const credit_delta_minutes = creditMinutes - baselineMinutes;
+          tripStubs.push({ segments, payMinutes, blockMinutes, extraMinutes, credit_delta_minutes });
         }
       }
     }
@@ -736,6 +744,8 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
       totalExtraCredit += t.extraMinutes / 60;
     }
     tripCreditMinutes = tripCreditMinutesLine + tripCreditMinutesExtra;
+
+    const totalCreditDeltaMinutes = tripStubs.reduce((sum, t) => sum + t.credit_delta_minutes, 0);
 
     console.log("[TripBuckets]", {
       line: tripCreditMinutesLine / 60,
@@ -796,6 +806,7 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
       creditAfterGuaranteeMinutes,
       paidMinutes,
       creditMinutes: paidMinutes,
+      creditDeltaMinutes: totalCreditDeltaMinutes,
       rslDaysCount: rslDays.size,
       isFDO,
       rslStreak,

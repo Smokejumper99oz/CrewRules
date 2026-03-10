@@ -169,6 +169,7 @@ export async function importIcsFromText(
       report_time: e.reportTime,
       credit_hours: creditMinutes != null ? creditMinutes / 60 : null,
       credit_minutes: creditMinutes,
+      baseline_credit_minutes: creditMinutes,
       route: e.route ?? null,
       pairing_days: pairingDays,
       block_minutes: blockMinutes,
@@ -179,6 +180,7 @@ export async function importIcsFromText(
       external_uid: e.externalUid,
       import_batch_id: importBatchId,
       imported_at: importedAt,
+      is_muted: false,
     };
   };
 
@@ -223,6 +225,24 @@ export async function importIcsFromText(
         if (summary.hasChanges) tripChangeSummaries.push(summary);
       }
     }
+  }
+
+  if (rows.length > 0) {
+    const startTimes = rows.map((r) => r.start_time);
+    const minStart = startTimes.reduce((a, b) => (a < b ? a : b));
+    const maxStart = startTimes.reduce((a, b) => (a > b ? a : b));
+    const monthStart = minStart.slice(0, 7) + "-01T00:00:00.000Z";
+    const maxDate = new Date(maxStart);
+    const lastDay = new Date(Date.UTC(maxDate.getUTCFullYear(), maxDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+    const monthEnd = lastDay.toISOString();
+
+    await supabase
+      .from("schedule_events")
+      .update({ is_muted: true })
+      .eq("user_id", userId)
+      .eq("source", FLICA_SOURCE)
+      .gte("start_time", monthStart)
+      .lte("start_time", monthEnd);
   }
 
   const { error: upsertError } = await supabase
