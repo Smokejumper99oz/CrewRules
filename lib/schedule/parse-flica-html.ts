@@ -59,7 +59,7 @@ export function extractMonthYear(html: string): { year: number; month: number } 
     const monthNames = "january,february,march,april,may,june,july,august,september,october,november,december".split(",");
     const monthStr = match[1].toLowerCase();
     const year = parseInt(match[2], 10);
-    const monthIdx = monthNames.findIndex((m) => monthStr.startsWith(m));
+    const monthIdx = monthNames.findIndex((m) => m.startsWith(monthStr));
     if (monthIdx >= 0 && year >= 2020 && year <= 2030) {
       return { year, month: monthIdx + 1 };
     }
