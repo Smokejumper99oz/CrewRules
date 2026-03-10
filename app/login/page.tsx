@@ -122,7 +122,7 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-8 text-center text-xs text-slate-500 leading-relaxed">
-          Crew<span className="text-[#75C043]">Rules</span>™ is an independent pilot/crew resource
+          CrewRules™ is an independent pilot/crew resource
           and is not affiliated with any airline, union, or regulator.
         </p>
       </div>

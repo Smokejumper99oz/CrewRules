@@ -313,6 +313,51 @@ export function expandEventToDaySegments(
   }
 }
 
+/**
+ * Expand a schedule event into day segments within an arbitrary date range.
+ * Iterates day by day from rangeStartStr through rangeEndStr; includes a segment
+ * only if the event overlaps that day. Return shape matches expandEventToDaySegments.
+ */
+export function expandEventToDaySegmentsInRange(
+  startTime: string,
+  endTime: string,
+  rangeStartStr: string,
+  rangeEndStr: string,
+  timezone: string
+): DaySegment[] {
+  const segments: DaySegment[] = [];
+  try {
+    const eventStart = new Date(startTime);
+    const eventEnd = new Date(endTime);
+    if (isNaN(eventStart.getTime()) || isNaN(eventEnd.getTime())) return [];
+    if (rangeStartStr > rangeEndStr) return [];
+
+    const overlapping: string[] = [];
+    let cur = rangeStartStr;
+    while (cur <= rangeEndStr) {
+      const day = new Date(cur + "T12:00:00.000Z");
+      if (eventOverlapsDay(startTime, endTime, day, timezone)) {
+        overlapping.push(cur);
+      }
+      cur = addDay(cur);
+    }
+
+    for (let i = 0; i < overlapping.length; i++) {
+      const dateStr = overlapping[i];
+      segments.push({
+        dateStr,
+        isStart: i === 0,
+        isMiddle: i > 0 && i < overlapping.length - 1,
+        isEnd: i === overlapping.length - 1,
+      });
+    }
+
+    return segments;
+  } catch {
+    return [];
+  }
+}
+
 /** Get start and end of calendar day in timezone as UTC Dates. */
 function getDayBounds(day: Date, timezone: string): { start: Date; end: Date } {
   const y = day.getFullYear();

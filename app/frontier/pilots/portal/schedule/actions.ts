@@ -5,10 +5,13 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile, isAdmin, isProActive } from "@/lib/profile";
 import { getTenantSourceTimezone, getReserveCreditPerDay } from "@/lib/tenant-config";
 import {
+  addDay,
   computeTripCredit,
-  expandEventToDaySegments,
+  expandEventToDaySegmentsInRange,
   type DaySegment,
 } from "@/lib/schedule-time";
+import { formatInTimeZone } from "date-fns-tz";
+import { getBidPeriodBounds, getBidPeriodForTimestamp, getAllBidPeriodsForYear, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getPayScale } from "@/lib/tenant-settings";
 import { payYearFromDOH } from "@/lib/pay-utils";
@@ -81,7 +84,7 @@ export async function importIcsFile(formData: FormData): Promise<ImportIcsResult
 
   const sourceTimezone =
     profile.base_timezone ??
-    (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : getTenantSourceTimezone(profile.tenant));
+    (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : null);
 
   const supabase = await createClient();
   const result = await importIcsFromText({
@@ -178,6 +181,9 @@ export type ScheduleEvent = {
   first_leg_departure_time?: string | null;
   /** Trip from short-call reserve (RSA/RSB/etc): credit = 4 hrs/day, no block. */
   is_reserve_assignment?: boolean | null;
+  is_muted?: boolean | null;
+  import_batch_id?: string | null;
+  imported_at?: string | null;
   legs?: ScheduleEventLeg[] | null;
 };
 
@@ -394,7 +400,7 @@ export async function getScheduleEvents(fromIso: string, toIso: string): Promise
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, is_muted, import_batch_id, imported_at")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", toIso)
@@ -486,7 +492,7 @@ export async function getScheduleDisplaySettings(): Promise<ScheduleDisplaySetti
   const profile = await getProfile();
   if (!profile) {
     return {
-      baseTimezone: "America/Denver",
+      baseTimezone: getFrontierBidPeriodTimezone(),
       baseAirport: null,
       displayTimezoneMode: "base",
       timeFormat: "24h",
@@ -495,8 +501,10 @@ export async function getScheduleDisplaySettings(): Promise<ScheduleDisplaySetti
   }
   const mode = profile.display_timezone_mode ?? "base";
   const baseAirport = profile.base_airport ?? null;
-  const baseTimezone =
-    profile.base_timezone ?? (baseAirport ? getTimezoneFromAirport(baseAirport) : "America/Denver");
+  const baseTimezone = getFrontierBidPeriodTimezone({
+    baseTimezone: profile.base_timezone ?? (baseAirport ? getTimezoneFromAirport(baseAirport) : null),
+    profileBaseTimezone: profile.base_timezone,
+  });
   return {
     baseTimezone,
     baseAirport,
@@ -560,10 +568,7 @@ export type MonthStats = {
 
 export type MonthOption = { year: number; month: number; label: string; shortLabel: string };
 
-export async function getMonthStats(year?: number, month?: number): Promise<MonthStats> {
-  const now = new Date();
-  const y = year ?? now.getFullYear();
-  const m = month ?? now.getMonth();
+export async function getMonthStats(year?: number, bidMonthIndex?: number): Promise<MonthStats> {
   const profile = await getProfile();
   const emptyStats: MonthStats = {
     trip: 0,
@@ -582,11 +587,20 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
   };
   if (!profile) return emptyStats;
 
+  const baseTimezone = getFrontierBidPeriodTimezone({
+    baseTimezone: profile.base_timezone ?? (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : null),
+    profileBaseTimezone: profile.base_timezone,
+  });
+  const now = new Date();
+  const y = year ?? now.getFullYear();
+  const bidIdx =
+    bidMonthIndex ?? getBidPeriodForTimestamp(now.toISOString(), baseTimezone, y)?.bidMonthIndex ?? 0;
+  const bidPeriod = getBidPeriodBounds(y, bidIdx);
+  if (!bidPeriod) return emptyStats;
+
   try {
-    const monthStart = new Date(y, m, 1);
-    const monthEnd = new Date(y, m + 1, 0);
-    const startStr = monthStart.toISOString().slice(0, 10) + "T00:00:00.000Z";
-    const endStr = monthEnd.toISOString().slice(0, 10) + "T23:59:59.999Z";
+    const startStr = bidPeriod.startStr + "T00:00:00.000Z";
+    const endStr = bidPeriod.endStr + "T23:59:59.999Z";
 
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -600,9 +614,6 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
 
     if (error) return { ...emptyStats, error: error.message };
 
-    const baseTimezone =
-      profile.base_timezone ??
-      (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : getTenantSourceTimezone(profile.tenant));
     const reserveCreditPerDay = getReserveCreditPerDay(profile.tenant ?? "frontier");
 
     // Cache pay code rules so we don't query per-event
@@ -672,7 +683,24 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
     let vacationEvents = 0;
 
     for (const ev of rows) {
-      const segments = expandEventToDaySegments(ev.start_time, ev.end_time, y, m, baseTimezone);
+      const period = getBidPeriodForTimestamp(ev.start_time, baseTimezone);
+      if (process.env.NODE_ENV === "development") {
+        console.log("[bid-period-check]", {
+          title: ev.title ?? null,
+          start_time: ev.start_time ?? null,
+          timezone: baseTimezone,
+          resolvedLocalDateTime: formatInTimeZone(new Date(ev.start_time), baseTimezone, "yyyy-MM-dd HH:mm"),
+          bidPeriod: period?.name ?? null,
+          bidMonthIndex: period?.bidMonthIndex ?? null,
+        });
+      }
+      const segments = expandEventToDaySegmentsInRange(
+        ev.start_time,
+        ev.end_time,
+        bidPeriod.startStr,
+        bidPeriod.endStr,
+        baseTimezone
+      );
       for (const seg of segments) {
         if (ev.event_type === "trip") {
           tripDays.add(seg.dateStr);
@@ -759,7 +787,7 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
     const reserveCreditMinutes = Math.round(reserveOnlyDays.length * reserveCreditPerDay * 60);
 
     const reserveStreak = maxConsecutiveDateStrDays(reserveDays);
-    const hasReserveGuarantee = reserveStreak >= 3; // Frontier calendar-month rule (temporary)
+    const hasReserveGuarantee = reserveStreak >= 3; // Frontier bid-period rule
 
     const rslStreak = maxConsecutiveDateStrDays(rslDays);
     const isFDO = rslStreak >= 7;
@@ -783,10 +811,11 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
         ? finalCreditedMinutes
         : PREMIUM_THRESHOLD_MIN + Math.round((finalCreditedMinutes - PREMIUM_THRESHOLD_MIN) * 1.25);
 
-    const lastDate = monthEnd.getDate();
     const allMonthDays = new Set<string>();
-    for (let d = 1; d <= lastDate; d++) {
-      allMonthDays.add(`${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+    let cur = bidPeriod.startStr;
+    while (cur <= bidPeriod.endStr) {
+      allMonthDays.add(cur);
+      cur = addDay(cur);
     }
 
     const reserve = reserveOnlyDays.length;
@@ -852,7 +881,7 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
       });
 
       if (scale && seat && doh) {
-        const year = payYearFromDOH(doh, new Date(y, m + 1, 0));
+        const year = payYearFromDOH(doh, new Date(bidPeriod.endStr + "T23:59:59.999Z"));
         const cappedYear = Math.min(12, year);
         const rate = scale.seats[seat]?.[String(cappedYear)] ?? 0;
 
@@ -893,21 +922,40 @@ export async function getMonthStats(year?: number, month?: number): Promise<Mont
   }
 }
 
-/** Returns at most 2 months: current first, then next (if has events) else previous (if has events). */
+/** Returns at most 2 bid periods: current first, then next (if has events) else previous (if has events). */
 export async function getAvailableMonths(): Promise<MonthOption[]> {
   const profile = await getProfile();
   if (!profile) return [];
 
   try {
+    const baseTimezone = getFrontierBidPeriodTimezone({
+      baseTimezone: profile.base_timezone ?? (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : null),
+      profileBaseTimezone: profile.base_timezone,
+    });
     const now = new Date();
     const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth(); // 0-based
-    const currentKey = `${currentYear}-${currentMonth}`;
 
-    const rangeStart = new Date(currentYear, currentMonth - 1, 1);
-    const rangeEnd = new Date(currentYear, currentMonth + 13, 0);
-    const startStr = rangeStart.toISOString().slice(0, 10) + "T00:00:00.000Z";
-    const endStr = rangeEnd.toISOString().slice(0, 10) + "T23:59:59.999Z";
+    const periods = getAllBidPeriodsForYear(currentYear);
+    if (periods.length === 0) return [];
+
+    const periodKey = (idx: number) => `${currentYear}-${idx}`;
+
+    const toOption = (p: { index: number; name: string; startStr: string; endStr: string }): MonthOption => {
+      const fmt = (s: string) =>
+        new Date(s + "T12:00:00.000Z").toLocaleString("en-US", { month: "short", day: "numeric" });
+      return {
+        year: currentYear,
+        month: p.index,
+        label: `${p.name} ${currentYear} (${fmt(p.startStr)} – ${fmt(p.endStr)})`,
+        shortLabel: p.name,
+      };
+    };
+
+    const currentBid = getBidPeriodForTimestamp(now.toISOString(), baseTimezone, currentYear);
+    const currentIdx = currentBid?.bidMonthIndex ?? 0;
+
+    const rangeStart = periods[0].startStr + "T00:00:00.000Z";
+    const rangeEnd = periods[periods.length - 1].endStr + "T23:59:59.999Z";
 
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -915,43 +963,27 @@ export async function getAvailableMonths(): Promise<MonthOption[]> {
       .select("start_time")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
-      .gte("start_time", startStr)
-      .lte("start_time", endStr);
+      .gte("start_time", rangeStart)
+      .lte("start_time", rangeEnd);
 
     if (error) return [];
 
-    const monthSet = new Set<string>();
+    const periodSet = new Set<string>();
     for (const row of data ?? []) {
-      const d = new Date((row as { start_time: string }).start_time);
-      const key = `${d.getFullYear()}-${d.getMonth()}`;
-      monthSet.add(key);
+      const startTime = (row as { start_time: string }).start_time;
+      const period = getBidPeriodForTimestamp(startTime, baseTimezone, currentYear);
+      if (period) periodSet.add(periodKey(period.bidMonthIndex));
     }
 
-    const toOption = (y: number, m: number): MonthOption => {
-      const d = new Date(y, m, 1);
-      return {
-        year: y,
-        month: m,
-        label: d.toLocaleString(undefined, { month: "long", year: "numeric" }),
-        shortLabel: d.toLocaleString(undefined, { month: "short" }),
-      };
-    };
+    const currentOption = toOption(periods[currentIdx]);
+    const nextIdx = currentIdx + 1;
+    const prevIdx = currentIdx - 1;
 
-    const currentOption = toOption(currentYear, currentMonth);
-
-    const nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
-    const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
-    const nextKey = `${nextYear}-${nextMonth}`;
-
-    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-    const prevKey = `${prevYear}-${prevMonth}`;
-
-    if (monthSet.has(nextKey)) {
-      return [currentOption, toOption(nextYear, nextMonth)];
+    if (nextIdx < periods.length && periodSet.has(periodKey(nextIdx))) {
+      return [currentOption, toOption(periods[nextIdx])];
     }
-    if (monthSet.has(prevKey)) {
-      return [toOption(prevYear, prevMonth), currentOption];
+    if (prevIdx >= 0 && periodSet.has(periodKey(prevIdx))) {
+      return [toOption(periods[prevIdx]), currentOption];
     }
     return [currentOption];
   } catch {

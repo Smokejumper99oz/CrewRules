@@ -8,6 +8,8 @@ import { formatMinutesToHhMm } from "@/lib/schedule-time";
 import { ProBadge } from "@/components/pro-badge";
 import { getPlanBadgeLabel, getPlanBadgeVariant } from "@/lib/profile-badge";
 import type { MonthOption, MonthStats } from "@/app/frontier/pilots/portal/schedule/actions";
+import { getBidPeriodForTimestamp, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
+import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { setShowPayProjection } from "@/app/frontier/pilots/portal/profile/actions";
 import type { Profile } from "@/lib/profile";
 
@@ -42,9 +44,15 @@ function monthKey(year: number, month: number): string {
 
 export function PortalMonthStatsClient({ tenant, portal, profile, availableMonths, statsByMonth }: Props) {
   const router = useRouter();
+  const baseTimezone = getFrontierBidPeriodTimezone({
+    baseTimezone: profile?.base_timezone ?? (profile?.base_airport ? getTimezoneFromAirport(profile.base_airport) : null),
+    profileBaseTimezone: profile?.base_timezone ?? null,
+  });
   const nowYear = new Date().getFullYear();
-  const nowMonth = new Date().getMonth();
-  const currentIndex = availableMonths.findIndex((m) => m.year === nowYear && m.month === nowMonth);
+  const currentBid = getBidPeriodForTimestamp(new Date().toISOString(), baseTimezone, nowYear);
+  const currentIndex = availableMonths.findIndex(
+    (m) => m.year === nowYear && m.month === (currentBid?.bidMonthIndex ?? 0)
+  );
   const [selectedIndex, setSelectedIndex] = useState(currentIndex >= 0 ? currentIndex : 0);
 
   const selectedMonth = availableMonths[selectedIndex];

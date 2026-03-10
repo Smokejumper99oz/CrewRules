@@ -168,7 +168,7 @@ export function LoginForm() {
           </form>
 
           <p className="mt-8 text-xs text-slate-500 leading-relaxed">
-            Crew<span className="text-[#75C043]">Rules</span>™ is an independent pilot/crew
+            CrewRules™ is an independent pilot/crew
             resource and is not affiliated with any airline, union, or regulator. Always consult
             official sources for authoritative guidance.
           </p>

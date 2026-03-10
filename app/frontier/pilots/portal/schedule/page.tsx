@@ -17,8 +17,9 @@ import { formatLegLine } from "@/lib/trips/detect-trip-changes";
 import type { TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { formatMinutesToHhMm } from "@/lib/schedule-time";
 import { formatInTimeZone } from "date-fns-tz";
-import { ScheduleStatusChip } from "@/components/schedule-status-chip";
+import { ScheduleStatusChip, formatLastImport } from "@/components/schedule-status-chip";
 import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, eventOverlapsDay, addDay } from "@/lib/schedule-time";
+import { getBidPeriodForTimestamp, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
 
 const EVENT_STYLES: Record<string, string> = {
   trip: "bg-emerald-500/20 border-emerald-500/40 text-emerald-200",
@@ -27,6 +28,8 @@ const EVENT_STYLES: Record<string, string> = {
   off: "bg-slate-500/20 border-slate-500/40 text-slate-300",
   other: "bg-slate-500/20 border-slate-500/40 text-slate-300",
 };
+
+const MUTED_EVENT_STYLE = "bg-slate-700/20 border-slate-500/30 text-slate-300 opacity-70";
 
 function formatTimeForDisplay(iso: string, opts: ScheduleDisplaySettings): string {
   return formatScheduleTime(iso, {
@@ -39,6 +42,10 @@ function formatTimeForDisplay(iso: string, opts: ScheduleDisplaySettings): strin
 
 function eventStyle(type: string): string {
   return EVENT_STYLES[type] ?? EVENT_STYLES.other;
+}
+
+function eventPillStyle(ev: ScheduleEvent): string {
+  return ev.is_muted === true ? MUTED_EVENT_STYLE : eventStyle(ev.event_type);
 }
 
 function getMonthStart(year: number, month: number): Date {
@@ -63,10 +70,13 @@ function eventsForDay(events: ScheduleEvent[], day: Date, baseTimezone: string):
   const overlapping = events.filter((e) => eventOverlapsDay(e.start_time, e.end_time, day, baseTimezone));
   const workEvents = overlapping.filter((e) => e.event_type === "trip" || e.event_type === "reserve");
   const vacationOffEvents = overlapping.filter((e) => e.event_type === "vacation" || e.event_type === "off");
-  if (workEvents.length > 0 && vacationOffEvents.length > 0) {
-    return workEvents;
-  }
-  return overlapping;
+  const toReturn = workEvents.length > 0 && vacationOffEvents.length > 0 ? workEvents : overlapping;
+  return [...toReturn].sort((a, b) => {
+    const aMuted = a.is_muted === true ? 1 : 0;
+    const bMuted = b.is_muted === true ? 1 : 0;
+    if (aMuted !== bMuted) return aMuted - bMuted;
+    return (a.start_time ?? "").localeCompare(b.start_time ?? "");
+  });
 }
 
 const isSameDay = (d1: Date, d2: Date) =>
@@ -267,7 +277,7 @@ function EventDetailPopover({
         ) : (event.legs == null || event.legs.length === 0) && event.route?.trim() ? (
           <p className="mt-2 text-sm text-slate-400">{event.route}</p>
         ) : null)}
-      <span className={`mt-2 inline-block rounded px-2 py-0.5 text-xs ${eventStyle(event.event_type)}`}>
+      <span className={`mt-2 inline-block rounded px-2 py-0.5 text-xs ${eventPillStyle(event)}`}>
         {event.event_type}
       </span>
     </div>
@@ -288,13 +298,14 @@ export default function SchedulePage() {
   const [importEmail, setImportEmail] = useState<string | null>(null);
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [displaySettings, setDisplaySettings] = useState<ScheduleDisplaySettings>({
-    baseTimezone: "America/Denver",
+    baseTimezone: getFrontierBidPeriodTimezone(),
     baseAirport: null,
     displayTimezoneMode: "base",
     timeFormat: "24h",
     showTimezoneLabel: false,
   });
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [showPreviousSchedules, setShowPreviousSchedules] = useState(false);
   const [selectedPopover, setSelectedPopover] = useState<SelectedPopoverState | null>(null);
   const [detailPosition, setDetailPosition] = useState<{ x: number; y: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -410,11 +421,51 @@ export default function SchedulePage() {
     setDetailPosition(null);
   }
 
+  const latestImportedAt = events.reduce<string | null>(
+    (max, e) => (e.imported_at && (!max || e.imported_at > max) ? e.imported_at : max),
+    null
+  );
+  const baseTimezone = displaySettings.baseTimezone ?? getFrontierBidPeriodTimezone();
+  const bidPeriodsByBatch = new Map<string, Set<string>>();
+  for (const ev of events) {
+    if (!ev.imported_at) continue;
+    const period = getBidPeriodForTimestamp(ev.start_time, baseTimezone);
+    if (period) {
+      const key = `${period.startStr.slice(0, 4)}-${period.bidMonthIndex}`;
+      if (!bidPeriodsByBatch.has(ev.imported_at)) bidPeriodsByBatch.set(ev.imported_at, new Set());
+      bidPeriodsByBatch.get(ev.imported_at)!.add(key);
+    }
+    if (process.env.NODE_ENV === "development") {
+      console.log("[bid-period-check]", {
+        title: ev.title ?? null,
+        start_time: ev.start_time ?? null,
+        timezone: baseTimezone,
+        resolvedLocalDateTime: formatInTimeZone(new Date(ev.start_time), baseTimezone, "yyyy-MM-dd HH:mm"),
+        bidPeriod: period?.name ?? null,
+        bidMonthIndex: period?.bidMonthIndex ?? null,
+      });
+    }
+  }
+  const latestBidPeriods = latestImportedAt ? bidPeriodsByBatch.get(latestImportedAt) ?? new Set() : new Set<string>();
+  const batchIds = [...new Set(events.map((e) => e.imported_at).filter(Boolean))] as string[];
+  const olderBatchesOverlapLatest =
+    !!latestImportedAt &&
+    batchIds.some(
+      (id) =>
+        id !== latestImportedAt &&
+        [...(bidPeriodsByBatch.get(id) ?? [])].some((kp) => latestBidPeriods.has(kp))
+    );
+  const shouldShowReviewScheduleBox = olderBatchesOverlapLatest;
+  const eventsToShow =
+    !shouldShowReviewScheduleBox || showPreviousSchedules
+      ? events
+      : events.filter((ev) => !latestImportedAt || ev.imported_at === latestImportedAt);
+
   const now = new Date();
   const upcomingStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const upcomingEnd = new Date(upcomingStart);
   upcomingEnd.setDate(upcomingEnd.getDate() + 14);
-  const upcomingEvents = events
+  const upcomingEvents = eventsToShow
     .filter((e) => {
       const start = new Date(e.start_time);
       return start >= upcomingStart && start < upcomingEnd;
@@ -439,33 +490,43 @@ export default function SchedulePage() {
             onChange={handleFileChange}
             disabled={importing}
           />
-          <div className="flex flex-wrap items-center gap-2">
-            {status != null && (
-              <ScheduleStatusChip status={status.status} lastImportedAt={status.lastImportedAt} />
-            )}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={importing}
-              className="rounded-xl bg-[#75C043] px-4 py-2.5 text-sm font-semibold text-slate-950 hover:opacity-95 transition disabled:opacity-50"
-            >
-              {importing ? "Uploading…" : "Upload FLICA Schedule (.ICS)"}
-            </button>
-            {status != null && status.count > 0 && (
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              {status != null && (
+                <ScheduleStatusChip status={status.status} lastImportedAt={status.lastImportedAt} showLastImport={false} />
+              )}
               <button
                 type="button"
-                onClick={handleClearClick}
-                disabled={clearing}
-                className="rounded-xl border border-white/20 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 transition disabled:opacity-50"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+                className="rounded-lg bg-[#75C043] px-4 py-1.5 text-sm font-semibold text-slate-950 hover:opacity-95 transition disabled:opacity-50"
               >
-                {clearing ? "Clearing…" : "Clear schedule"}
+                {importing ? "Uploading…" : "Upload FLICA Schedule (.ICS)"}
               </button>
+              {status != null && status.count > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearClick}
+                  disabled={clearing}
+                  className="rounded-lg border border-white/20 px-4 py-1.5 text-sm font-medium text-slate-300 hover:bg-white/5 transition disabled:opacity-50"
+                >
+                  {clearing ? "Clearing…" : "Clear schedule"}
+                </button>
+              )}
+            </div>
+            {status != null && status.lastImportedAt && status.status !== "no_schedule" && (
+              <p className="text-right text-xs text-slate-400">Last Import: {formatLastImport(status.lastImportedAt)}</p>
             )}
           </div>
         </div>
         <p className="mt-1 text-sm text-slate-400">
-          Import your Frontier FLICA schedule by uploading an .ics file or forwarding it to your CrewRules™ import email.
+          Import your schedule into CrewRules™ using one of these methods:
         </p>
+        <ul className="mt-1 text-sm text-slate-400 list-disc list-inside space-y-0.5">
+          <li>Automatic updates — Add your CrewRules™ import email to ELP</li>
+          <li>Email import — Send your schedule from FLICA to your CrewRules™ import email</li>
+          <li>Manual upload — Upload your FLICA .ics file</li>
+        </ul>
       </div>
 
       {tripChangeSummaries && tripChangeSummaries.length > 0 && (
@@ -524,7 +585,7 @@ export default function SchedulePage() {
         <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-6 sm:p-8 text-center">
           <p className="font-medium text-slate-300">No schedule imported yet.</p>
           <p className="mt-1.5 text-sm text-slate-500">
-            Upload your FLICA .ics file above to get started.
+            Import your schedule using one of the methods above.
           </p>
         </div>
       )}
@@ -536,7 +597,17 @@ export default function SchedulePage() {
           <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">{monthLabel}</h2>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {shouldShowReviewScheduleBox && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPreviousSchedules((v) => !v)}
+                    className="flex flex-col items-start leading-tight rounded-lg border px-3 py-1.5 text-sm border-amber-500/40 bg-amber-500/10 text-slate-200 hover:bg-amber-500/15"
+                  >
+                    <span>{showPreviousSchedules ? "Hide schedule changes" : "Review schedule changes"}</span>
+                    <span className="text-xs text-amber-400/90 mt-0.5">Previous schedule detected</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setCalendarMonth(new Date())}
@@ -581,18 +652,21 @@ export default function SchedulePage() {
                     <>
                       <div className="text-xs text-slate-500 mb-1">{day.getDate()}</div>
                       <div className="space-y-0.5">
-                        {eventsForDay(events, day, displaySettings.baseTimezone).slice(0, 3).map((ev) => (
+                        {eventsForDay(eventsToShow, day, displaySettings.baseTimezone).slice(0, 3).map((ev) => (
                           <button
                             key={`${ev.id}-${toYyyyMmDd(day)}`}
                             type="button"
                             onClick={(e) => handleEventClick(ev, e.clientX, e.clientY, day)}
-                            className={`block w-full truncate rounded border px-1.5 py-0.5 text-left text-xs ${eventStyle(ev.event_type)}`}
+                            className={`flex w-full items-center rounded border px-1.5 py-0.5 text-left text-xs ${eventPillStyle(ev)}`}
                           >
-                            {ev.title || "Untitled"}
+                            <span className="min-w-0 truncate">{ev.title || "Untitled"}</span>
+                            {ev.is_muted === true && (
+                              <span className="ml-1 shrink-0 text-[10px] px-1 rounded bg-slate-500/20 text-slate-300">Previous</span>
+                            )}
                           </button>
                         ))}
-                        {eventsForDay(events, day, displaySettings.baseTimezone).length > 3 && (
-                          <span className="text-xs text-slate-500">+{eventsForDay(events, day, displaySettings.baseTimezone).length - 3}</span>
+                        {eventsForDay(eventsToShow, day, displaySettings.baseTimezone).length > 3 && (
+                          <span className="text-xs text-slate-500">+{eventsForDay(eventsToShow, day, displaySettings.baseTimezone).length - 3}</span>
                         )}
                       </div>
                     </>
@@ -614,9 +688,12 @@ export default function SchedulePage() {
                     key={ev.id}
                     type="button"
                     onClick={(e) => handleEventClick(ev, e.clientX, e.clientY)}
-                    className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition hover:opacity-90 ${eventStyle(ev.event_type)}`}
+                    className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition hover:opacity-90 ${eventPillStyle(ev)}`}
                   >
-                    <span className="font-medium truncate">{ev.title || "Untitled"}</span>
+                    <span className="font-medium min-w-0 truncate">{ev.title || "Untitled"}</span>
+                    {ev.is_muted === true && (
+                      <span className="ml-1 shrink-0 text-[10px] px-1 rounded bg-slate-500/20 text-slate-300">Previous</span>
+                    )}
                     <span className="text-xs shrink-0 ml-2">
                       {(ev.event_type === "vacation" || ev.event_type === "off")
                         ? formatDayRangeLabel(ev.start_time, ev.end_time, displaySettings.baseTimezone)

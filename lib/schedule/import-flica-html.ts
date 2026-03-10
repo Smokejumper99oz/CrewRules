@@ -9,6 +9,8 @@ import { parseFlicaHtml, parseFlicaHtmlDays, extractMonthYear, type ParsedFlicaE
 import { computeTripCredit } from "@/lib/schedule-time";
 import { getReserveCreditPerDay } from "@/lib/tenant-config";
 import { detectTripChanges, type TripChangeSummary } from "@/lib/trips/detect-trip-changes";
+import { formatInTimeZone } from "date-fns-tz";
+import { getBidPeriodForTimestamp, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
 
 const FLICA_SOURCE = "flica_import";
 
@@ -75,10 +77,9 @@ export async function importFlicaHtmlFromText(
 
   const tenant = tenantParam;
   const portal = portalParam;
-  const sourceTimezone =
-    (typeof sourceTimezoneParam === "string" && sourceTimezoneParam.trim())
-      ? sourceTimezoneParam.trim()
-      : "America/Denver";
+  const sourceTimezone = getFrontierBidPeriodTimezone({
+    sourceTimezone: typeof sourceTimezoneParam === "string" && sourceTimezoneParam.trim() ? sourceTimezoneParam.trim() : null,
+  });
   const importBatchId = importBatchIdParam ?? crypto.randomUUID();
   const importedAt = new Date().toISOString();
   const reserveCreditPerDay = getReserveCreditPerDay(tenant);
@@ -211,21 +212,49 @@ export async function importFlicaHtmlFromText(
   }
 
   if (rows.length > 0) {
-    const startTimes = rows.map((r) => r.start_time);
-    const minStart = startTimes.reduce((a, b) => (a < b ? a : b));
-    const maxStart = startTimes.reduce((a, b) => (a > b ? a : b));
-    const monthStart = minStart.slice(0, 7) + "-01T00:00:00.000Z";
-    const maxDate = new Date(maxStart);
-    const lastDay = new Date(Date.UTC(maxDate.getUTCFullYear(), maxDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));
-    const monthEnd = lastDay.toISOString();
-
-    await supabase
-      .from("schedule_events")
-      .update({ is_muted: true })
-      .eq("user_id", userId)
-      .eq("source", FLICA_SOURCE)
-      .gte("start_time", monthStart)
-      .lte("start_time", monthEnd);
+    const tz = sourceTimezone;
+    const countByBidPeriod = new Map<string, { startStr: string; endStr: string; count: number }>();
+    for (const r of rows) {
+      const period = getBidPeriodForTimestamp(r.start_time, tz);
+      if (period) {
+        const key = `${period.startStr.slice(0, 4)}-${period.bidMonthIndex}`;
+        const existing = countByBidPeriod.get(key);
+        if (!existing) {
+          countByBidPeriod.set(key, { startStr: period.startStr, endStr: period.endStr, count: 1 });
+        } else {
+          existing.count += 1;
+        }
+        if (process.env.NODE_ENV === "development") {
+          console.log("[bid-period-check]", {
+            title: r.title ?? null,
+            start_time: r.start_time ?? null,
+            timezone: tz,
+            resolvedLocalDateTime: formatInTimeZone(new Date(r.start_time), tz, "yyyy-MM-dd HH:mm"),
+            bidPeriod: period?.name ?? null,
+            bidMonthIndex: period?.bidMonthIndex ?? null,
+          });
+        }
+      }
+    }
+    let primary: { startStr: string; endStr: string } | null = null;
+    let maxCount = 0;
+    for (const v of countByBidPeriod.values()) {
+      if (v.count > maxCount) {
+        maxCount = v.count;
+        primary = { startStr: v.startStr, endStr: v.endStr };
+      }
+    }
+    if (primary) {
+      const rangeStart = `${primary.startStr}T00:00:00.000Z`;
+      const rangeEnd = `${primary.endStr}T23:59:59.999Z`;
+      await supabase
+        .from("schedule_events")
+        .update({ is_muted: true })
+        .eq("user_id", userId)
+        .eq("source", FLICA_SOURCE)
+        .gte("start_time", rangeStart)
+        .lte("start_time", rangeEnd);
+    }
   }
 
   const { error: upsertError } = await supabase

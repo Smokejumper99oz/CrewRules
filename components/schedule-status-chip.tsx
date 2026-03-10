@@ -4,9 +4,10 @@ import type { Profile } from "@/lib/profile";
 
 type ScheduleStatus = "no_schedule" | "up_to_date" | "outdated";
 
-function formatLastImport(iso: string): string {
+export function formatLastImport(iso: string): string {
   try {
-    return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    const d = new Date(iso);
+    return `${d.toLocaleDateString(undefined, { dateStyle: "medium" })} · ${d.toLocaleTimeString(undefined, { timeStyle: "short" })}`;
   } catch {
     return iso;
   }
@@ -17,11 +18,14 @@ export function ScheduleStatusChip({
   lastImportedAt,
   profile,
   showProBadge,
+  showLastImport = true,
 }: {
   status: ScheduleStatus;
   lastImportedAt: string | null;
   profile?: Profile | null;
   showProBadge?: boolean;
+  /** When false, Last Import is not rendered (caller can render it elsewhere) */
+  showLastImport?: boolean;
 }) {
   const config = {
     no_schedule: { label: "No schedule imported yet", className: "border-slate-500/30 bg-slate-500/10 text-slate-400" },
@@ -32,17 +36,17 @@ export function ScheduleStatusChip({
   const useStackedLayout = showProBadge && profile;
 
   return (
-    <div className={useStackedLayout ? "flex flex-col items-end gap-1" : "flex flex-wrap items-center gap-2"}>
+    <div className={useStackedLayout ? "flex flex-col items-end gap-1" : "flex items-center gap-2"}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${config.className}`}>
+        <span className={`inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-medium ${config.className}`}>
           {config.label}
         </span>
         {useStackedLayout && (
           <ProBadge label={getPlanBadgeLabel(profile)} variant={getPlanBadgeVariant(profile)} size="sm" />
         )}
       </div>
-      {lastImportedAt && status !== "no_schedule" && (
-        <span className="text-xs text-slate-400">Last Import: {formatLastImport(lastImportedAt)}</span>
+      {showLastImport && lastImportedAt && status !== "no_schedule" && (
+        <span className="shrink-0 whitespace-nowrap text-xs text-slate-400">Last Import: {formatLastImport(lastImportedAt)}</span>
       )}
     </div>
   );
