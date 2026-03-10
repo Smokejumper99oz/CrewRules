@@ -219,6 +219,10 @@ export async function POST(req: Request) {
       console.log("[inbound-email] detected flica html calendar");
       console.log("[inbound-email] flica html import start");
       console.log("[inbound-email] attachment text length:", flicaHtmlFromAttachment.length);
+      console.log(
+        "[inbound-email] attachment preview:",
+        flicaHtmlFromAttachment.slice(0, 500)
+      );
 
       try {
         const { data: profile } = await supabase
