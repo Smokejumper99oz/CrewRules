@@ -108,7 +108,12 @@ export function parseFlicaHtmlDays(html: string): ParsedFlicaDay[] {
   const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
   let match;
   let cellIndex = 0;
+  let matchCount = 0;
   while ((match = tdRegex.exec(html)) !== null) {
+    if (matchCount < 5) {
+      console.log("[flica-parse] td raw:", match[1].slice(0, 300));
+      matchCount++;
+    }
     const raw = match[1];
     const content = stripHtml(raw);
     if (!content.trim()) continue;
