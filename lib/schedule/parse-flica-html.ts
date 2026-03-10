@@ -115,6 +115,10 @@ export function parseFlicaHtmlDays(html: string): ParsedFlicaDay[] {
       matchCount++;
     }
     const raw = match[1];
+    const text = raw.replace(/<[^>]+>/g, " ").trim();
+    if (cellIndex < 10) {
+      console.log("[flica-parse] td text:", text.slice(0, 120));
+    }
     const content = stripHtml(raw);
     if (!content.trim()) continue;
 
