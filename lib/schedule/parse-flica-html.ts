@@ -143,6 +143,12 @@ export function parseFlicaHtmlDays(html: string): ParsedFlicaDay[] {
     cellIndex++;
   }
 
+  console.log("[flica-parse] summary:", {
+    cellIndex,
+    dayKeys: Object.keys(days).length,
+    sampleDayKeys: Object.keys(days).slice(0, 10),
+  });
+
   return days;
 }
 
