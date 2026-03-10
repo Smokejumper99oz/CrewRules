@@ -142,6 +142,10 @@ export function parseFlicaHtml(
   html: string,
   options: { sourceTimezone?: string } = {}
 ): ParsedFlicaEvent[] {
+  console.log("[flica-parse] input preview:", html.slice(0, 500));
+  console.log("[flica-parse] has <td:", /<td/i.test(html));
+  console.log("[flica-parse] has <table:", /<table/i.test(html));
+
   const sourceTimezone = options.sourceTimezone ?? "America/Denver";
   const days = parseFlicaHtmlDays(html);
   if (days.length === 0) return [];
