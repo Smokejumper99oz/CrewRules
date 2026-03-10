@@ -52,6 +52,8 @@ function stripHtml(html: string): string {
 
 /** Extract month/year from FLICA HTML header. (exported for debug logging) */
 export function extractMonthYear(html: string): { year: number; month: number } | null {
+  html = html.replace(/&nbsp;/gi, " ");
+
   const match = html.match(/(\w+)\s+(\d{4})/i);
   if (match) {
     const monthNames = "january,february,march,april,may,june,july,august,september,october,november,december".split(",");
