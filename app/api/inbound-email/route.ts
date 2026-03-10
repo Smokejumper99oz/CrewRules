@@ -89,6 +89,13 @@ export async function POST(req: Request) {
 
     console.log("[inbound-email] raw first 300:", rawBody.slice(0, 300));
 
+    const decodedRaw = decodeURIComponent(rawBody.replace(/\+/g, " "));
+    const htmlMatch = decodedRaw.match(/<html[\s\S]*<\/html>/i);
+    if (htmlMatch) {
+      console.log("[inbound-email] html extracted from raw body");
+      bodyHtml = htmlMatch[0];
+    }
+
     params = new URLSearchParams(rawBody);
 
     console.log("[inbound-email] form keys:", Array.from(params.keys()));
@@ -102,7 +109,7 @@ export async function POST(req: Request) {
     to = pickField(params, ["recipient", "To", "to"]);
     subject = pickField(params, ["subject", "Subject"]);
     bodyPlain = pickField(params, ["body-plain", "stripped-text", "text"]);
-    bodyHtml = pickField(params, ["body-html", "stripped-html", "html"]);
+    bodyHtml = bodyHtml || pickField(params, ["body-html", "stripped-html", "html"]);
     timestamp = pickField(params, ["timestamp"]);
     token = pickField(params, ["token"]);
     signature = pickField(params, ["signature"]);
