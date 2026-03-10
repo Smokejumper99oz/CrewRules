@@ -91,7 +91,7 @@ export async function POST(req: Request) {
 
     params = new URLSearchParams(rawBody);
 
-    console.log("[inbound-email] params keys:", [...params.keys()]);
+    console.log("[inbound-email] form keys:", Array.from(params.keys()));
     console.log("[inbound-email] params recipient:", params.get("recipient"));
     console.log("[inbound-email] params To:", params.get("To"));
     console.log("[inbound-email] params to:", params.get("to"));
