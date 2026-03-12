@@ -17,6 +17,7 @@ function riskFromDecoded(
 ): {
   level: DelayRiskLevel;
   reason: string;
+  triggers?: string[];
 } {
   if (!d) {
     return {

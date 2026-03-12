@@ -99,20 +99,23 @@ export async function fetchFiledRouteFromFlightAware(
     const targetTimeMs = targetDepartureIso ? new Date(targetDepartureIso).getTime() : null;
     const WINDOW_MS = 18 * 60 * 60 * 1000;
 
-    const matched =
-      flights.find((f: any) => {
-        const origin = f?.origin?.code_iata ?? f?.origin?.code ?? null;
-        const destination = f?.destination?.code_iata ?? f?.destination?.code ?? null;
+    const rawMatched =
+      flights.find((f: unknown) => {
+        const ff = f as Record<string, unknown>;
+        const origin = (ff?.origin as Record<string, unknown>)?.code_iata ?? (ff?.origin as Record<string, unknown>)?.code ?? null;
+        const destination = (ff?.destination as Record<string, unknown>)?.code_iata ?? (ff?.destination as Record<string, unknown>)?.code ?? null;
         if (origin !== lookup.origin || destination !== lookup.destination) return false;
 
-        const dep = f?.scheduled_out ?? f?.estimated_out ?? f?.actual_out ?? null;
+        const dep = ff?.scheduled_out ?? ff?.estimated_out ?? ff?.actual_out ?? null;
         if (!targetTimeMs) return true;
 
         if (!dep) return false;
-        const depTimeMs = new Date(dep).getTime();
+        const depTimeMs = new Date(dep as string).getTime();
         if (isNaN(depTimeMs)) return false;
         return Math.abs(depTimeMs - targetTimeMs) <= WINDOW_MS;
       }) ?? flights[0];
+
+    const matched = rawMatched as Record<string, unknown>;
 
     const route =
       matched?.route ||
@@ -123,7 +126,7 @@ export async function fetchFiledRouteFromFlightAware(
     const matchedDep = matched?.scheduled_out ?? matched?.estimated_out ?? matched?.actual_out ?? null;
     const timeDiffHours =
       targetDepartureIso && matchedDep
-        ? Math.abs(new Date(matchedDep).getTime() - new Date(targetDepartureIso).getTime()) / (60 * 60 * 1000)
+        ? Math.abs(new Date(matchedDep as string).getTime() - new Date(targetDepartureIso).getTime()) / (60 * 60 * 1000)
         : null;
 
     console.log("[flightaware] matched flight route:", {
