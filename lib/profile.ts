@@ -30,6 +30,10 @@ export type Profile = {
   pro_trial_started_at?: string | null;
   pro_trial_expires_at?: string | null;
   show_pay_projection?: boolean;
+  family_view_enabled?: boolean;
+  family_view_show_exact_times?: boolean;
+  family_view_show_overnight_cities?: boolean;
+  family_view_show_commute_estimates?: boolean;
   created_at: string;
   updated_at: string;
 };

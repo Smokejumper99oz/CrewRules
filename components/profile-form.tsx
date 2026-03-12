@@ -42,6 +42,10 @@ type Props = {
     subscription_tier?: "free" | "pro" | "enterprise";
     pro_trial_expires_at?: string | null;
     show_pay_projection?: boolean;
+    family_view_enabled?: boolean;
+    family_view_show_exact_times?: boolean;
+    family_view_show_overnight_cities?: boolean;
+    family_view_show_commute_estimates?: boolean;
   };
   proActive: boolean;
   proBadgeLabel: string;
@@ -618,6 +622,85 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             <label htmlFor="show_timezone_label" className="text-sm text-slate-300">
               Show timezone label next to times <span className="text-slate-500">(e.g., 2230 SJU)</span>
             </label>
+          </div>
+        </div>
+      </section>
+
+      {/* Family View Sharing */}
+      <section>
+        <h2 className="text-base font-semibold text-white mb-1">Family View Sharing</h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Control what your spouse, family, or trusted viewer will be able to see in Family View.
+        </p>
+        <div className="space-y-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+          <div className="flex items-center gap-3">
+            <input type="hidden" name="family_view_enabled" value="0" />
+            <input
+              id="family_view_enabled"
+              name="family_view_enabled"
+              type="checkbox"
+              defaultChecked={Boolean(profile?.family_view_enabled ?? false)}
+              value="1"
+              className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
+            />
+            <label htmlFor="family_view_enabled" className="text-sm text-slate-300">
+              Enable Family View
+            </label>
+          </div>
+          <div className="flex items-center gap-3">
+            <input type="hidden" name="family_view_show_exact_times" value="0" />
+            <input
+              id="family_view_show_exact_times"
+              name="family_view_show_exact_times"
+              type="checkbox"
+              defaultChecked={Boolean(profile?.family_view_show_exact_times ?? true)}
+              value="1"
+              className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
+            />
+            <label htmlFor="family_view_show_exact_times" className="text-sm text-slate-300">
+              Show exact times
+            </label>
+          </div>
+          <div className="flex items-center gap-3">
+            <input type="hidden" name="family_view_show_overnight_cities" value="0" />
+            <input
+              id="family_view_show_overnight_cities"
+              name="family_view_show_overnight_cities"
+              type="checkbox"
+              defaultChecked={Boolean(profile?.family_view_show_overnight_cities ?? true)}
+              value="1"
+              className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
+            />
+            <label htmlFor="family_view_show_overnight_cities" className="text-sm text-slate-300">
+              Show overnight cities
+            </label>
+          </div>
+          <div className="flex items-center gap-3">
+            <input type="hidden" name="family_view_show_commute_estimates" value="0" />
+            <input
+              id="family_view_show_commute_estimates"
+              name="family_view_show_commute_estimates"
+              type="checkbox"
+              defaultChecked={Boolean(profile?.family_view_show_commute_estimates ?? true)}
+              value="1"
+              className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
+            />
+            <label htmlFor="family_view_show_commute_estimates" className="text-sm text-slate-300">
+              Show commute estimates
+            </label>
+          </div>
+          <div className="pt-2 border-t border-white/10">
+            <p className="text-sm text-slate-400">Included viewers: 0 / 2</p>
+          </div>
+          <div>
+            <button
+              type="button"
+              disabled
+              className="rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed"
+            >
+              Invite Family Member
+            </button>
+            <p className="mt-1 text-xs text-slate-500">Coming next</p>
           </div>
         </div>
       </section>

@@ -48,6 +48,10 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   const commuteRelease = commuteReleaseRaw ? parseInt(commuteReleaseRaw, 10) : 90;
   const commuteNonstopOnly = formData.get("commute_nonstop_only") === "1";
   const showPayProjection = formData.get("show_pay_projection") === "1";
+  const familyViewEnabled = formData.get("family_view_enabled") === "1";
+  const familyViewShowExactTimes = formData.get("family_view_show_exact_times") === "1";
+  const familyViewShowOvernightCities = formData.get("family_view_show_overnight_cities") === "1";
+  const familyViewShowCommuteEstimates = formData.get("family_view_show_commute_estimates") === "1";
 
   if (fullName && fullName.length > 128) {
     return { error: "Full Name is too long" };
@@ -109,6 +113,10 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
       commute_release_buffer_minutes: commuteRelease,
       commute_nonstop_only: commuteNonstopOnly,
       show_pay_projection: showPayProjection,
+      family_view_enabled: familyViewEnabled,
+      family_view_show_exact_times: familyViewShowExactTimes,
+      family_view_show_overnight_cities: familyViewShowOvernightCities,
+      family_view_show_commute_estimates: familyViewShowCommuteEstimates,
       updated_at: new Date().toISOString(),
     })
     .eq("id", profile.id);
@@ -117,6 +125,7 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   revalidatePath("/frontier/pilots/portal");
   revalidatePath("/frontier/pilots/portal/profile");
   revalidatePath("/frontier/pilots/portal/schedule");
+  revalidatePath("/frontier/pilots/portal/family-view");
   return { success: true };
 }
 

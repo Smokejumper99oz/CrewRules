@@ -7,6 +7,7 @@ const PORTAL_TITLES: Record<string, string> = {
   ask: "Ask AI",
   library: "Library",
   schedule: "My Schedule",
+  "family-view": "Family View",
   "weather-brief": "Weather Brief",
   forum: "Forum",
   notes: "Notes",
