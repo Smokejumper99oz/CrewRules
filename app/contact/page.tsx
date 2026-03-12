@@ -5,15 +5,42 @@ import { useState } from "react";
 
 export default function ContactPage() {
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const formData = new FormData(form);
     const data = Object.fromEntries(formData.entries());
-    console.log("Contact form data:", data);
+    const { companyWebsite, ...payload } = data as Record<string, string>;
+    if (companyWebsite) return; // honeypot
 
-    setSuccess(true);
+    setError(null);
+    setSuccess(false);
+    setIsPending(true);
+
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        setSuccess(false);
+        setError(json.error ?? "Something went wrong. Please try again.");
+        return;
+      }
+      setSuccess(true);
+      form.reset();
+    } catch {
+      setSuccess(false);
+      setError("Failed to send message. Please try again.");
+    } finally {
+      setIsPending(false);
+    }
   }
 
   return (
@@ -21,7 +48,7 @@ export default function ContactPage() {
       <div className="w-full max-w-xl">
         <div className="rounded-3xl border border-white/10 bg-gradient-to-b from-slate-900/60 to-slate-950/80 p-8 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
           <h1 className="text-3xl font-bold tracking-tight">
-            Contact Crew<span className="text-[#75C043]">Rules</span>
+            Contact Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-xs text-white">™</span>
           </h1>
           <p className="mt-2 text-slate-400">
             Questions, demos, or partnership inquiries.
@@ -85,15 +112,19 @@ export default function ContactPage() {
 
             {success && (
               <p className="text-sm text-emerald-400">
-                Message sent (test mode)
+                Message sent. We&apos;ll get back to you soon.
               </p>
+            )}
+            {error && (
+              <p className="text-sm text-red-400">{error}</p>
             )}
 
             <button
               type="submit"
+              disabled={isPending}
               className="w-full mt-2 px-6 py-3 rounded-xl bg-[#75C043] text-slate-950 font-semibold hover:brightness-110 transition disabled:opacity-50"
             >
-              Send Message
+              {isPending ? "Sending…" : "Send Message"}
             </button>
           </form>
         </div>

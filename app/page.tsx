@@ -516,6 +516,7 @@ export default function HomePage() {
               <a className="hover:text-white" href="#features">Features</a>
               <a className="hover:text-white" href="#how">How it Works</a>
               <a className="hover:text-white" href="#levels">Levels</a>
+              <Link className="hover:text-white" href="/contact">Contact</Link>
               <Link className="hover:text-white" href="/login">Login</Link>
             </div>
           </div>

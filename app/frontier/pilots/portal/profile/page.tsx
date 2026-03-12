@@ -10,19 +10,19 @@ export default async function ProfilePage() {
   const planBadgeVariant = getPlanBadgeVariant(profile);
 
   let inboundEmail: string | null = null;
-  try {
-    if (profile) {
+  if (profile && isProActive(profile)) {
+    try {
       const inboundAlias = await getOrCreateInboundAlias(profile.id);
       if (!inboundAlias.startsWith("u_")) {
         inboundEmail = getInboundAddress(inboundAlias);
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? "n/a";
+      const code = (err as { code?: string })?.code ?? "n/a";
+      const details = (err as { details?: string })?.details ?? "n/a";
+      console.error(`[Profile] inbound alias error: message=${msg} code=${code} details=${details}`);
+      inboundEmail = null;
     }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? "n/a";
-    const code = (err as { code?: string })?.code ?? "n/a";
-    const details = (err as { details?: string })?.details ?? "n/a";
-    console.error(`[Profile] inbound alias error: message=${msg} code=${code} details=${details}`);
-    inboundEmail = null;
   }
 
   return (

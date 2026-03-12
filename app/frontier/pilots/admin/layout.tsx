@@ -11,16 +11,27 @@ import { PageTitle } from "@/components/page-title";
 const TENANT = "frontier";
 const PORTAL = "pilots";
 
-const ADMIN_NAV = [
+const ADMIN_NAV_BASE = [
   { label: "Dashboard", href: "" },
   { label: "Uploads", href: "documents" },
   { label: "Library", href: "library" },
   { label: "Users", href: "people" },
 ];
 
+function getAdminNav(isSuperAdmin: boolean) {
+  if (!isSuperAdmin) return ADMIN_NAV_BASE;
+  return [...ADMIN_NAV_BASE, { label: "Waitlist", href: "waitlist" }];
+}
+
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const cfg = getTenantPortalConfig(TENANT, PORTAL);
-  if (!cfg) return null;
+  if (!cfg) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-white grid place-items-center p-8">
+        <p className="text-slate-400">Portal not found</p>
+      </main>
+    );
+  }
 
   const userProfile = await getProfile();
   if (!userProfile) {
@@ -32,6 +43,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   }
 
   const base = `/${TENANT}/${PORTAL}/admin`;
+  const isSuperAdmin = userProfile.role === "super_admin";
+  const adminNav = getAdminNav(isSuperAdmin);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -50,7 +63,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
           <nav className="px-4 pb-6 pt-2">
             <div className="space-y-1">
-              {ADMIN_NAV.map((item) => (
+              {adminNav.map((item) => (
                 <Link
                   key={item.label}
                   href={item.href ? `${base}/${item.href}` : base}
@@ -78,11 +91,18 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <AdminMobileNav
                   base={`/${TENANT}/${PORTAL}/admin`}
-                  nav={ADMIN_NAV}
+                  nav={adminNav}
                   portalBase={`/${TENANT}/${PORTAL}/portal`}
                 />
                 <div className="min-w-0 space-y-0.5">
-                  <PageTitle portalDisplayName={cfg.portal.displayName} isAdmin={true} />
+                  <div className="flex items-center gap-2">
+                    <PageTitle portalDisplayName={cfg.portal.displayName} isAdmin={true} />
+                    {isSuperAdmin && (
+                      <span className="inline-flex rounded-md bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-400 ring-1 ring-amber-400/30">
+                        Super Admin
+                      </span>
+                    )}
+                  </div>
                   <div className="hidden text-xs text-slate-400 sm:block">
                     Manage content, roles, and portal configuration
                   </div>

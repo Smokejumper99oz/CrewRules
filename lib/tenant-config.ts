@@ -8,6 +8,8 @@ export type PortalConfig = {
 
 export type TenantConfig = {
   displayName: string;
+  /** IATA carrier code for flight lookups (e.g. F9 for Frontier). */
+  carrier?: string;
   /** Default IANA timezone for ICS import when times have no TZID (e.g. FLICA exports). */
   sourceTimezone?: string;
   /** Default credit hours for reserve lines when not in ICS (monthly total, per CBA). */
@@ -21,6 +23,7 @@ export type TenantConfig = {
 export const TENANT_CONFIG: Record<string, TenantConfig> = {
   frontier: {
     displayName: "Frontier Airlines",
+    carrier: "F9",
     sourceTimezone: "America/Denver",
     reserveCreditHours: 75,
     reserveCreditPerDay: 4,
@@ -43,6 +46,11 @@ export const TENANT_CONFIG: Record<string, TenantConfig> = {
     },
   },
 };
+
+/** Tenant → IATA carrier code for flight lookups (e.g. FlightAware ident). */
+export const TENANT_CARRIER: Record<string, string> = Object.fromEntries(
+  Object.entries(TENANT_CONFIG).flatMap(([k, v]) => (v.carrier ? [[k, v.carrier]] : []))
+);
 
 export function getTenantPortalConfig(tenant: string, portal: string) {
   const t = TENANT_CONFIG[tenant];

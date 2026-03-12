@@ -1,6 +1,11 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
+import {
+  isLiveForEmailAndRole,
+  getSignupRouteForEmail,
+  inferAirlineFromEmail,
+} from "@/lib/supported-airlines";
 
 function getSupabaseEnvCheck(): string | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -12,15 +17,25 @@ function getSupabaseEnvCheck(): string | null {
 }
 
 export async function submitAccessRequest(
-  _prev: { error?: string; success?: boolean } | null,
+  _prev: {
+    error?: string;
+    success?: boolean;
+    airlineLive?: boolean;
+    signupRoute?: string;
+  } | null,
   formData: FormData
 ) {
+  const fullName = (formData.get("full_name") as string)?.trim();
   const email = formData.get("email") as string;
+  const role = (formData.get("role") as string)?.trim();
   const airline = formData.get("airline") as string | null;
   const employeeNumber = formData.get("employee_number") as string | null;
 
-  if (!email?.trim()) {
-    return { error: "Email is required" };
+  if (!fullName || !email?.trim()) {
+    return { error: "Full name and email are required" };
+  }
+  if (!role || (role !== "pilot" && role !== "fa")) {
+    return { error: "Please select Pilot or Flight Attendant" };
   }
 
   const envError = getSupabaseEnvCheck();
@@ -28,21 +43,37 @@ export async function submitAccessRequest(
     return { error: envError };
   }
 
+  const trimmedEmail = email.trim();
+  const requestedPortal = role === "pilot" ? "pilot" : "fa";
+
+  if (isLiveForEmailAndRole(trimmedEmail, role)) {
+    const signupRoute = getSignupRouteForEmail(trimmedEmail);
+    return { success: true, airlineLive: true, signupRoute: signupRoute ?? undefined };
+  }
+
   try {
-    const { error } = await supabase.from("access_requests").insert({
-      email: email.trim(),
-      airline: airline?.trim() || null,
-      employee_number: employeeNumber?.trim() || null,
-    });
+    const supabase = await createClient();
+    const inferredAirline = inferAirlineFromEmail(trimmedEmail);
+    const { error } = await supabase.from("waitlist").upsert(
+      {
+        email: trimmedEmail,
+        full_name: fullName,
+        requested_portal: requestedPortal,
+        airline: airline?.trim() || inferredAirline,
+        source: "request_access",
+        status: "pending",
+      },
+      { onConflict: "email", ignoreDuplicates: true }
+    );
 
     if (error) {
-      console.error("Supabase error:", error);
+      console.error("[Request Access] waitlist insert error:", error);
       return {
         error: `${error.message}${error.code ? ` (code: ${error.code})` : ""}`,
       };
     }
 
-    return { success: true };
+    return { success: true, airlineLive: false };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : "";

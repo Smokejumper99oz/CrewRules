@@ -12,10 +12,22 @@ export default function RequestAccessPage() {
       <div className="max-w-xl w-full">
         <h1 className="text-4xl font-bold text-center">Request Access</h1>
         <p className="mt-4 text-slate-300 text-center">
-          Join the Crew<span className="text-[#75C043]">Rules</span>™ early access list. We&apos;ll reach out with next steps.
+          Crew<span className="text-[#75C043]">Rules</span>™ is launching airline by airline. Request access with your company email and we&apos;ll let you know whether your airline is live or add you to the waitlist.
         </p>
 
         <form action={formAction} className="mt-10 space-y-4">
+          <label className="block">
+            <span className="text-sm text-slate-300">Full Name</span>
+            <input
+              name="full_name"
+              type="text"
+              placeholder="Your full name"
+              required
+              disabled={isPending}
+              className="mt-2 w-full rounded-xl bg-slate-800 border border-slate-600 px-4 py-3 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
+            />
+          </label>
+
           <label className="block">
             <span className="text-sm text-slate-300">Email</span>
             <input
@@ -26,6 +38,20 @@ export default function RequestAccessPage() {
               disabled={isPending}
               className="mt-2 w-full rounded-xl bg-slate-800 border border-slate-600 px-4 py-3 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
             />
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-slate-300">Role</span>
+            <select
+              name="role"
+              required
+              disabled={isPending}
+              className="mt-2 w-full rounded-xl bg-slate-800 border border-slate-600 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
+            >
+              <option value="">Select role</option>
+              <option value="pilot">Pilot</option>
+              <option value="fa">Flight Attendant</option>
+            </select>
           </label>
 
           <label className="block">
@@ -76,10 +102,33 @@ export default function RequestAccessPage() {
               </p>
             </div>
           )}
-          {state?.success && (
-            <p className="text-sm text-emerald-400">
-              Thanks! We&apos;ve received your request. We&apos;ll be in touch soon.
-            </p>
+          {state?.success && state?.airlineLive && (
+            <div className="space-y-3 pt-2">
+              <p className="text-sm font-medium text-emerald-400">
+                Your airline is already live on CrewRules™. Please create your account to get started.
+              </p>
+              {state?.signupRoute && (
+                <Link
+                  href={state.signupRoute}
+                  className="inline-flex w-full justify-center rounded-xl bg-[#75C043] px-6 py-3 font-semibold text-slate-950 hover:brightness-110 transition"
+                >
+                  Create Account
+                </Link>
+              )}
+            </div>
+          )}
+          {state?.success && !state?.airlineLive && (
+            <div className="space-y-2 pt-2">
+              <p className="text-sm font-medium text-emerald-400">
+                You&apos;ve been added to the CrewRules™ waitlist.
+              </p>
+              <p className="text-sm text-slate-300">
+                Crew<span className="text-[#75C043]">Rules</span>™ is not live for your airline yet. We&apos;re expanding in phases and will reach out when access becomes available.
+              </p>
+              <p className="text-xs text-slate-500">
+                Launch timing may vary by airline and rollout priority.
+              </p>
+            </div>
           )}
 
           <button

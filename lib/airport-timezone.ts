@@ -22,8 +22,22 @@ export const AIRPORT_TO_TIMEZONE: Record<string, string> = {
 
 const DEFAULT_TIMEZONE = "America/Denver";
 
-/** Derive IANA timezone from IATA airport code. */
+/** ICAO 4-letter codes that need special handling (non-K prefix). */
+const ICAO_TO_IATA: Record<string, string> = {
+  TJSJ: "SJU",
+  TJNR: "NRR",
+  TIST: "STT",
+  TISX: "STX",
+};
+
+/** Derive IANA timezone from IATA or ICAO airport code. */
 export function getTimezoneFromAirport(airport: string): string {
-  if (!airport || airport.length !== 3) return DEFAULT_TIMEZONE;
-  return AIRPORT_TO_TIMEZONE[airport.toUpperCase()] ?? DEFAULT_TIMEZONE;
+  const code = (airport ?? "").trim().toUpperCase();
+  if (!code) return DEFAULT_TIMEZONE;
+  if (code.length === 3) return AIRPORT_TO_TIMEZONE[code] ?? DEFAULT_TIMEZONE;
+  if (code.length === 4) {
+    const iata = ICAO_TO_IATA[code] ?? (code.startsWith("K") ? code.slice(1) : null);
+    return iata ? AIRPORT_TO_TIMEZONE[iata] ?? DEFAULT_TIMEZONE : DEFAULT_TIMEZONE;
+  }
+  return DEFAULT_TIMEZONE;
 }

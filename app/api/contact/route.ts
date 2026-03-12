@@ -23,13 +23,51 @@ function formatTimestamp(date = new Date()) {
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+const RATE_LIMIT_MAX = 3;
+const rateLimitMap = new Map<string, number[]>();
+
+function getClientIp(req: Request): string {
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  return "unknown";
+}
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+  const timestamps = rateLimitMap.get(ip) ?? [];
+  const recent = timestamps.filter((t) => t > cutoff);
+  return recent.length >= RATE_LIMIT_MAX;
+}
+
+function recordSubmission(ip: string): void {
+  const now = Date.now();
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+  const timestamps = (rateLimitMap.get(ip) ?? []).filter((t) => t > cutoff);
+  timestamps.push(now);
+  rateLimitMap.set(ip, timestamps);
+}
+
 export async function POST(req: Request) {
   try {
+    const ip = getClientIp(req);
+    if (isRateLimited(ip)) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429 }
+      );
+    }
+
     const { name, email, subject, message } = await req.json();
 
     if (!name || !email || !message) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
+
+    recordSubmission(ip);
 
     const safeName = escapeHtml(name);
     const safeEmail = escapeHtml(email);
@@ -43,9 +81,10 @@ export async function POST(req: Request) {
 
     const { error } = await resend.emails.send({
       from: "CrewRules <support@contact.crewrules.com>",
-      to: "svenfolmer92@gmail.com",
+      to: "contact@crewrules.com",
+      cc: "svenfolmer92@gmail.com",
       replyTo: String(email),
-      subject: subject ? `CrewRules Contact: ${String(subject)}` : "CrewRules Contact Message",
+      subject: `CrewRules Contact — ${subject || "General"} — ${name}`,
       html: `<!DOCTYPE html>
 <html lang="en">
   <body style="margin:0;padding:0;background:#ffffff;">
@@ -94,6 +133,12 @@ export async function POST(req: Request) {
                   style="border-collapse:separate;border-spacing:0;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
                   <tr>
                     <td style="padding:26px 28px;">
+
+                      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#374151;line-height:1.6;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #e5e7eb;">
+                        From: ${safeName}<br />
+                        Email: ${safeEmail}<br />
+                        Subject: ${safeSubject}
+                      </div>
 
                       <!-- Details -->
                       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
@@ -183,13 +228,14 @@ export async function POST(req: Request) {
     });
 
     if (error) {
-      console.error(error);
+      console.error("[contact] resend error", error);
       return NextResponse.json({ error: "Email failed" }, { status: 500 });
     }
 
+    console.log("[contact] email sent", { to: "contact@crewrules.com" });
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error("[contact] server error", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

@@ -7,6 +7,7 @@ const PORTAL_TITLES: Record<string, string> = {
   ask: "Ask AI",
   library: "Library",
   schedule: "My Schedule",
+  "weather-brief": "Weather Brief",
   forum: "Forum",
   notes: "Notes",
   mentoring: "Mentoring",
@@ -20,6 +21,7 @@ const ADMIN_TITLES: Record<string, string> = {
   documents: "Uploads",
   library: "Library",
   people: "People & Permissions",
+  waitlist: "Waitlist",
 };
 
 function roleFromPortalDisplayName(displayName: string): string {
@@ -48,6 +50,18 @@ export function PageTitle({ portalDisplayName = "", isAdmin = false }: PageTitle
 
   const role = roleFromPortalDisplayName(portalDisplayName);
   const context = inAdmin && role ? `${role} Admin` : role || (inAdmin ? "Admin" : "");
+
+  // Weather Brief uses branded title with role context
+  if (!inAdmin && currentSegment === "weather-brief") {
+    return (
+      <h1 className="text-xl font-semibold tracking-normal border-b border-white/5 pb-1">
+        Crew<span className="text-[#75C043]">Rules</span>
+        <span className="align-super text-xs">™</span> Weather Brief
+        {context && <span className="text-slate-400 font-normal mx-1.5">|</span>}
+        {context && <span className="text-slate-400 font-normal">{context}</span>}
+      </h1>
+    );
+  }
 
   return (
     <h1 className="text-xl font-semibold tracking-normal border-b border-white/5 pb-1">
