@@ -111,6 +111,20 @@ export type FamilyViewTodayStatus = {
   detail?: string | null;
 };
 
+/** Map internal status to spouse-friendly display label. */
+export function formatStatusForDisplay(status: FamilyViewStatus): string {
+  const LABELS: Record<FamilyViewStatus, string> = {
+    "Day Off": "Day Off",
+    "Vacation": "Time Off",
+    "On Call": "On Call",
+    "Likely Commuting": "Likely Traveling to Work",
+    "At Work": "Working",
+    "Overnight Away": "Away Overnight",
+    "Expected Home": "Coming Home",
+  };
+  return LABELS[status];
+}
+
 /** Format time for Family View (always 12h). */
 function formatTime12h(isoUtc: string, timezone: string): string {
   try {
@@ -378,7 +392,7 @@ function buildReportTimeDisplay(
     const homeTime = formatTime12h(isoUtc, homeTimezone);
     const baseWithAirport = baseAirport ? `${baseTime} ${baseAirport}` : baseTime;
     const base = `at ${baseWithAirport}`;
-    const showHome = baseTimezone !== homeTimezone;
+    const showHome = baseTime !== homeTime;
     const homeLabel = showHome && homeAirport ? iataToCityName(homeAirport) : null;
     return {
       base,
@@ -413,8 +427,12 @@ export function getNextTripSummary(
   const lastDayLabel = formatDayLabel(`${tripDates[tripDates.length - 1]}T12:00:00.000Z`, baseTimezone);
   const reportTime = next.report_time ?? null;
   const expectedHomeTime = formatExpectedHomeForDisplay(next.end_time, baseTimezone, settings);
+  const baseIata = (profile?.base_airport ?? "").trim().toUpperCase();
+  const homeIata = (profile?.home_airport ?? "").trim().toUpperCase();
   const overnightCities = settings.showOvernightCities && next.legs?.length
-    ? getOvernightCitiesFromLegs(next.legs, tripDates, baseTimezone).map(iataToCityName)
+    ? getOvernightCitiesFromLegs(next.legs, tripDates, baseTimezone)
+        .filter((iata) => iata !== baseIata && iata !== homeIata)
+        .map(iataToCityName)
     : [];
 
   const commuteInfo =

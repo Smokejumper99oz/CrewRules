@@ -33,6 +33,7 @@ export default async function AboutPage() {
     const deploymentId = process.env.VERCEL_DEPLOYMENT_ID;
     return deploymentId ? deploymentId.slice(-8) : "—";
   })();
+  const deploymentShort = deploymentDisplay;
 
   return (
     <div className="max-w-2xl">

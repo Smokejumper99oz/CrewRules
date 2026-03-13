@@ -158,6 +158,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
       setMessage({ type: "error", text: result.error });
     } else {
       setMessage({ type: "success", text: "Saved." });
+      router.refresh();
     }
   }
 
@@ -627,14 +628,13 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
       </section>
 
       {/* Family View Sharing */}
-      <section>
+      <section id="family-view-sharing">
         <h2 className="text-base font-semibold text-white mb-1">Family View Sharing</h2>
         <p className="text-xs text-slate-500 mb-4">
           Control what your spouse, family, or trusted viewer will be able to see in Family View.
         </p>
         <div className="space-y-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
           <div className="flex items-center gap-3">
-            <input type="hidden" name="family_view_enabled" value="0" />
             <input
               id="family_view_enabled"
               name="family_view_enabled"
@@ -643,12 +643,12 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               value="1"
               className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
             />
+            <input type="hidden" name="family_view_enabled" value="0" />
             <label htmlFor="family_view_enabled" className="text-sm text-slate-300">
               Enable Family View
             </label>
           </div>
           <div className="flex items-center gap-3">
-            <input type="hidden" name="family_view_show_exact_times" value="0" />
             <input
               id="family_view_show_exact_times"
               name="family_view_show_exact_times"
@@ -657,12 +657,12 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               value="1"
               className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
             />
+            <input type="hidden" name="family_view_show_exact_times" value="0" />
             <label htmlFor="family_view_show_exact_times" className="text-sm text-slate-300">
-              Show exact times
+              Show Exact Times
             </label>
           </div>
           <div className="flex items-center gap-3">
-            <input type="hidden" name="family_view_show_overnight_cities" value="0" />
             <input
               id="family_view_show_overnight_cities"
               name="family_view_show_overnight_cities"
@@ -671,12 +671,12 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               value="1"
               className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
             />
+            <input type="hidden" name="family_view_show_overnight_cities" value="0" />
             <label htmlFor="family_view_show_overnight_cities" className="text-sm text-slate-300">
-              Show overnight cities
+              Show Overnight Cities
             </label>
           </div>
           <div className="flex items-center gap-3">
-            <input type="hidden" name="family_view_show_commute_estimates" value="0" />
             <input
               id="family_view_show_commute_estimates"
               name="family_view_show_commute_estimates"
@@ -685,8 +685,9 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               value="1"
               className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
             />
+            <input type="hidden" name="family_view_show_commute_estimates" value="0" />
             <label htmlFor="family_view_show_commute_estimates" className="text-sm text-slate-300">
-              Show commute estimates
+              Show Commute Estimates
             </label>
           </div>
           <div className="pt-2 border-t border-white/10">
