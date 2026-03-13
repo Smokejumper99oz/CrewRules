@@ -24,10 +24,15 @@ export default async function AboutPage() {
   const tenantConfig = getTenantPortalConfig(profile?.tenant ?? "frontier", profile?.portal ?? "pilots");
   const airlineDisplayName = tenantConfig?.tenant.displayName ?? profile?.tenant ?? "—";
 
-  const deploymentId = process.env.VERCEL_DEPLOYMENT_ID;
-  const deploymentShort = deploymentId
-    ? deploymentId.slice(-8)
-    : "—";
+  const deploymentDisplay = (() => {
+    const vercelUrl = process.env.VERCEL_URL;
+    if (vercelUrl) {
+      const match = vercelUrl.match(/-([a-zA-Z0-9]{9})(?=-|\.vercel\.app)/);
+      if (match) return match[1];
+    }
+    const deploymentId = process.env.VERCEL_DEPLOYMENT_ID;
+    return deploymentId ? deploymentId.slice(-8) : "—";
+  })();
 
   return (
     <div className="max-w-2xl">
