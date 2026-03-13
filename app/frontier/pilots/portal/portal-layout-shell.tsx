@@ -15,9 +15,9 @@ const NAV_GROUPS = [
     title: "Core",
     items: [
       { label: "Dashboard", href: "" },
+      { label: "Weather Brief", href: "weather-brief" },
       { label: "My Schedule", href: "schedule" },
       { label: "Family View", href: "family-view" },
-      { label: "Weather Brief", href: "weather-brief" },
       { label: "Ask", href: "ask" },
       { label: "Library", href: "library" },
     ],
