@@ -35,30 +35,113 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
-/** Dedupe key: carrier + flightNumber + dep time (same flight = same key). */
-function flightKey(f: CommuteFlight): string {
-  const dep = (f.departureTime ?? "").slice(0, 16);
-  return `${f.carrier}${f.flightNumber}-${dep}`;
+/**
+ * Cross-provider normalization: AS uses carrier="" + "B62751", ADB uses "B6" + "B6 2751".
+ * Extract carrier (2-char IATA) and numeric flight number so both produce the same key.
+ * Some airline codes are alphanumeric (e.g. B6, F9), so carrier regex allows digits.
+ */
+function normalizedCarrierAndNumber(f: CommuteFlight): { carrier: string; numeric: string } {
+  const fn = (f.flightNumber ?? "").replace(/[\s\-_]/g, "").trim();
+  const m = fn.match(/^([A-Z0-9]{2})(\d+)$/i);
+  const carrier = (f.carrier ?? "").trim().toUpperCase() || (m?.[1] ?? "").toUpperCase();
+  const numeric = (m?.[2] ?? fn.replace(/\D/g, "")) || "";
+  return { carrier, numeric };
 }
 
-/** Merge and deduplicate flights from multiple providers. Prefer AviationStack when duplicate (has live timing). */
+/** Dedupe key: carrier + numeric + dep date only. Time omitted so UTC (AS) and local (ADB) match. */
+function flightKey(f: CommuteFlight): string {
+  const { carrier, numeric } = normalizedCarrierAndNumber(f);
+  const dep = f.departureTime ?? "";
+  const datePart = dep.slice(0, 10);
+  return `${carrier}-${numeric}-${datePart}`;
+}
+
+/**
+ * Merge and deduplicate flights from multiple providers.
+ * Prefer AeroDataBox for same-day display timing: AviationStack scheduled timestamps may arrive
+ * in misleading UTC form (e.g. 06:00Z showing as 02:00 local); AeroDataBox uses proper local format.
+ * Keep AviationStack live/status fields (estimated, actual, gates, delay) when they add value.
+ */
 function dedupeFlights(
-  all: CommuteFlight[],
-  notice?: string
+  aviationstackFlights: CommuteFlight[],
+  aerodataboxFlights: CommuteFlight[],
+  notice?: string,
+  origin?: string,
+  destination?: string
 ): { flights: CommuteFlight[]; mergedCount: number; dedupedCount: number; notice?: string } {
-  const mergedCount = all.length;
-  const seen = new Set<string>();
-  const unique: CommuteFlight[] = [];
-  for (const f of all) {
-    const k = flightKey(f);
-    if (seen.has(k)) continue;
-    seen.add(k);
-    unique.push(f);
+  const mergedCount = aviationstackFlights.length + aerodataboxFlights.length;
+  const byKey = new Map<string, CommuteFlight>();
+  const isTpaSju = origin === "TPA" && destination === "SJU";
+
+  for (const adb of aerodataboxFlights) {
+    const k = flightKey(adb);
+    if (isTpaSju) {
+      console.log("[Commute Assist] dedupeFlights TPA→SJU row (ADB)", JSON.stringify({
+        key: k,
+        provider: "AeroDataBox",
+        carrier: adb.carrier,
+        flightNumber: adb.flightNumber,
+        departureTime: adb.departureTime,
+        arrivalTime: adb.arrivalTime,
+      }));
+    }
+    byKey.set(k, adb);
   }
+  for (const as of aviationstackFlights) {
+    const k = flightKey(as);
+    if (isTpaSju) {
+      console.log("[Commute Assist] dedupeFlights TPA→SJU row (AS)", JSON.stringify({
+        key: k,
+        provider: "AviationStack",
+        carrier: as.carrier,
+        flightNumber: as.flightNumber,
+        departureTime: as.departureTime,
+        arrivalTime: as.arrivalTime,
+      }));
+    }
+    const existing = byKey.get(k);
+    if (existing) {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Commute Assist] cross-provider merge", JSON.stringify({
+          key: k,
+          aviationstack: { carrier: as.carrier, flightNumber: as.flightNumber },
+          aerodatabox: { carrier: existing.carrier, flightNumber: existing.flightNumber },
+        }));
+      }
+      byKey.set(k, {
+        ...existing,
+        dep_estimated_raw: as.dep_estimated_raw ?? existing.dep_estimated_raw,
+        dep_actual_raw: as.dep_actual_raw ?? existing.dep_actual_raw,
+        arr_estimated_raw: as.arr_estimated_raw ?? existing.arr_estimated_raw,
+        arr_actual_raw: as.arr_actual_raw ?? existing.arr_actual_raw,
+        dep_delay_min: as.dep_delay_min ?? existing.dep_delay_min,
+        arr_delay_min: as.arr_delay_min ?? existing.arr_delay_min,
+        status: as.status ?? existing.status,
+        dep_gate: as.dep_gate ?? existing.dep_gate,
+        arr_gate: as.arr_gate ?? existing.arr_gate,
+      });
+    } else {
+      byKey.set(k, as);
+    }
+  }
+
+  const unique = Array.from(byKey.values());
   unique.sort(
     (a, b) =>
       new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime()
   );
+  if (isTpaSju) {
+    console.log("[Commute Assist] dedupeFlights TPA→SJU after dedupe", JSON.stringify({
+      mergedCount,
+      dedupedCount: unique.length,
+      keptRows: unique.map((f) => ({
+        key: flightKey(f),
+        flightNumber: f.flightNumber,
+        departureTime: f.departureTime,
+        arrivalTime: f.arrivalTime,
+      })),
+    }));
+  }
   return { flights: unique, mergedCount, dedupedCount: unique.length, notice };
 }
 
@@ -184,27 +267,6 @@ export async function getCommuteFlights(input: {
       const aviationstackFailed = !asRes.ok;
       const aerodataboxFailed = !adbRes.ok && !aerodataboxSkipped;
 
-      console.log(
-        "[Commute Assist] RAW PROVIDER FLIGHTS",
-        JSON.stringify({
-          provider: "AviationStack",
-          origin,
-          destination,
-          rawCount: aviationstackFlights?.length ?? 0,
-          sample: aviationstackFlights?.slice(0, 5),
-        }, null, 2)
-      );
-      console.log(
-        "[Commute Assist] RAW PROVIDER FLIGHTS",
-        JSON.stringify({
-          provider: "AeroDataBox",
-          origin,
-          destination,
-          rawCount: aerodataboxFlights?.length ?? 0,
-          sample: aerodataboxFlights?.slice(0, 5),
-        }, null, 2)
-      );
-
       if (aviationstackFailed) console.error("AviationStack failed:", (asRes as { ok: false; error: unknown }).error);
       if (aerodataboxFailed)
         console.error(
@@ -212,21 +274,12 @@ export async function getCommuteFlights(input: {
           (adbRes as { ok: false; error: unknown }).error
         );
 
-      const allFlightsBeforeFilter = [...aviationstackFlights, ...aerodataboxFlights];
-      console.log(
-        "[Commute Assist] BEFORE DEST FILTER",
-        JSON.stringify({
-          destinationRequested: destination,
-          first5Destinations: allFlightsBeforeFilter?.slice(0, 5).map((f) => ({
-            dep: (f as any).departure?.airport?.iata ?? (f as any).origin ?? null,
-            arr: (f as any).arrival?.airport?.iata ?? (f as any).destination ?? null,
-          })),
-        }, null, 2)
-      );
-
       const merged = dedupeFlights(
-        allFlightsBeforeFilter,
-        asRes.ok ? asRes.data.notice : undefined
+        aviationstackFlights,
+        aerodataboxFlights,
+        asRes.ok ? asRes.data.notice : undefined,
+        origin,
+        destination
       );
       const { flights, notice } = merged;
 
@@ -296,6 +349,19 @@ export async function getCommuteFlights(input: {
 
   if (cached?.data && !input.forceRefresh) {
     const { originTz, destTz } = await getRouteTzs(origin, destination);
+    if (origin === "TPA" && destination === "SJU") {
+      const data = cached.data as CommuteFlight[];
+      console.log("[Commute Assist] TPA→SJU from DB cache (no dedupe)", JSON.stringify({
+        source: "commute_flight_cache",
+        flightCount: data?.length ?? 0,
+        rows: data?.map((f) => ({
+          key: flightKey(f),
+          flightNumber: f.flightNumber,
+          departureTime: f.departureTime,
+          arrivalTime: f.arrivalTime,
+        })),
+      }));
+    }
     return {
       ok: true as const,
       source: "cache" as const,
@@ -374,27 +440,6 @@ export async function getCommuteFlights(input: {
     const aviationstackFailed = !asRes.ok;
     const aerodataboxFailed = !adbRes.ok && !aerodataboxSkipped;
 
-    console.log(
-      "[Commute Assist] RAW PROVIDER FLIGHTS",
-      JSON.stringify({
-        provider: "AviationStack",
-        origin,
-        destination,
-        rawCount: aviationstackFlights?.length ?? 0,
-        sample: aviationstackFlights?.slice(0, 5),
-      }, null, 2)
-    );
-    console.log(
-      "[Commute Assist] RAW PROVIDER FLIGHTS",
-      JSON.stringify({
-        provider: "AeroDataBox",
-        origin,
-        destination,
-        rawCount: aerodataboxFlights?.length ?? 0,
-        sample: aerodataboxFlights?.slice(0, 5),
-      }, null, 2)
-    );
-
     if (aviationstackFailed) console.error("AviationStack failed:", (asRes as { ok: false; error: unknown }).error);
     if (aerodataboxFailed)
       console.error(
@@ -402,21 +447,12 @@ export async function getCommuteFlights(input: {
         (adbRes as { ok: false; error: unknown }).error
       );
 
-    const allFlightsBeforeFilter = [...aviationstackFlights, ...aerodataboxFlights];
-    console.log(
-      "[Commute Assist] BEFORE DEST FILTER",
-      JSON.stringify({
-        destinationRequested: destination,
-        first5Destinations: allFlightsBeforeFilter?.slice(0, 5).map((f) => ({
-          dep: (f as any).departure?.airport?.iata ?? (f as any).origin ?? null,
-          arr: (f as any).arrival?.airport?.iata ?? (f as any).destination ?? null,
-        })),
-      }, null, 2)
-    );
-
     const merged = dedupeFlights(
-      allFlightsBeforeFilter,
-      asRes.ok ? asRes.data.notice : undefined
+      aviationstackFlights,
+      aerodataboxFlights,
+      asRes.ok ? asRes.data.notice : undefined,
+      origin,
+      destination
     );
     const { flights, notice } = merged;
 
