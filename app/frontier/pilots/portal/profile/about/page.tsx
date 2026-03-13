@@ -43,6 +43,7 @@ export default async function AboutPage() {
             <AboutRow label="Build" value={process.env.NEXT_BUILD_ID ?? "—"} />
             <AboutRow label="Build Date" value={process.env.NEXT_BUILD_DATE ?? "—"} />
             <AboutRow label="Environment" value={process.env.NODE_ENV ?? "—"} />
+            <AboutRow label="Deployment" value={deploymentShort} />
             <AboutRow label="API Base URL" value={apiBaseUrl ?? "—"} />
             <AboutRow label="License" value="Proprietary" />
             <AboutRow label="System Status" value="Operational" />
