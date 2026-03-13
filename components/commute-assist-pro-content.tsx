@@ -519,31 +519,6 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const dutyStart = new Date(event.start_time);
   const dutyOk = !Number.isNaN(dutyStart.getTime());
 
-  // When displayDateStr is set (e.g. next duty's date), use it for to_base commute date.
-  // dayPriorBase = day before duty start (fly in the day before to report).
-  const dayPriorBase = (() => {
-    if (direction === "to_base" && displayDateStr?.trim()) {
-      const dutyDate = fromZonedTime(`${displayDateStr.trim()}T12:00:00`, baseTz);
-      return formatInTimeZone(subDays(dutyDate, 1), baseTz, "yyyy-MM-dd");
-    }
-    if (!dutyOk) return new Date().toISOString().slice(0, 10);
-    const dutyDateTime = (() => {
-      if (event.report_time?.trim()) {
-        const startDateStr = formatInTimeZone(dutyStart, baseTz, "yyyy-MM-dd");
-        const startHour = parseInt(formatInTimeZone(dutyStart, baseTz, "HH"), 10);
-        const reportTime = event.report_time.length === 5 ? `${event.report_time}:00` : event.report_time;
-        const reportHour = parseInt(reportTime.slice(0, 2), 10) || 0;
-        const reportDateStr =
-          startHour >= 18 && reportHour < 12
-            ? formatInTimeZone(addDays(dutyStart, 1), baseTz, "yyyy-MM-dd")
-            : startDateStr;
-        return fromZonedTime(`${reportDateStr}T${reportTime}`, baseTz);
-      }
-      return dutyStart;
-    })();
-    return formatInTimeZone(subDays(dutyDateTime, 1), baseTz, "yyyy-MM-dd");
-  })();
-
   // Compute duty date/time in base timezone; use report_time if available.
   const dutyDateTime = (() => {
     if (!dutyOk) return new Date();
@@ -570,6 +545,13 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const dutyDateBase = formatInTimeZone(dutyDateTime, baseTz, "yyyy-MM-dd");
   const arriveBy = dutyOk ? subMinutes(dutyDateTime, arrivalBuffer) : null;
 
+  // Search date for to_base: derived from user's arrival cutoff (report datetime - buffer), not a fixed rule.
+  // If cutoff falls on report day → same-day flights; if on prior calendar day → day-prior flights.
+  const toBaseCommuteSearchDate =
+    dutyOk && arriveBy
+      ? formatInTimeZone(arriveBy, baseTz, "yyyy-MM-dd")
+      : new Date().toISOString().slice(0, 10);
+
   const dutyStartAirport = dutyStartAirportOverride?.trim() || parseDutyStartAirport(event.route);
   const dutyEndAirport = baseAirport ?? null;
   const dutyEndTime = event.end_time ? new Date(event.end_time) : null;
@@ -581,7 +563,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const routes = useMemo(() => {
     const commuteDate =
       direction === "to_base"
-        ? dutyOk ? dayPriorBase : new Date().toISOString().slice(0, 10)
+        ? toBaseCommuteSearchDate
         : dutyEndDateBase ?? new Date().toISOString().slice(0, 10);
 
     if (direction === "to_base") {
@@ -609,8 +591,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     baseAirport,
     dutyStartAirport,
     dutyEndAirport,
-    dutyOk,
-    dayPriorBase,
+    toBaseCommuteSearchDate,
     dutyEndDateBase,
   ]);
 
@@ -654,12 +635,6 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           ? roundDownToHour(event.end_time, baseTz)
           : null;
       const options: CommuteFlightOption[] = [];
-      console.log("[Commute Assist] applyFlightsToState called\n" + JSON.stringify({
-        destinationLabel,
-        rawFlightsCount: flights.length,
-        firstFlightDep: flights[0]?.departureTime,
-        firstFlightArr: flights[0]?.arrivalTime,
-      }, null, 2));
       for (let i = 0; i < flights.length; i++) {
         const f = flights[i];
         const depTz = f.origin_tz ?? originTzVal;
@@ -684,6 +659,8 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
         } catch {
           continue;
         }
+        // Hide impossible provider rows (arr <= dep) without changing commute rules.
+        if (new Date(arrUtc).getTime() <= new Date(depUtc).getTime()) continue;
         if (releaseEarliestDepIso && depUtc < releaseEarliestDepIso) continue;
         let risk: "recommended" | "risky" | "not_recommended" = "recommended";
         let reason = "";
@@ -702,7 +679,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           }
           reason = `${reason} • ${fmtHM(f.durationMinutes)}`;
         }
-        options.push({
+        const opt = {
           id: `${destinationLabel}-${f.flightNumber}-${f.departureTime}-${i}`,
           carrier: f.carrier,
           flight: stripCarrierFromFlight(f.flightNumber, f.carrier),
@@ -725,17 +702,13 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           dep_gate: f.dep_gate,
           arr_gate: f.arr_gate,
           aircraft_type: f.aircraft_type,
-        });
+        };
+        options.push(opt);
       }
       const hasLiveTiming = options.some(
         (o) => o.arr_estimated_raw || o.arr_actual_raw || o.dep_estimated_raw || o.dep_actual_raw
       );
       const arriveByFormatted = dutyOkLocal ? formatInTimeZone(subMinutes(dutyStart, arrivalBuffer), baseTz, "HH:mm") : "";
-      console.log("[Commute Assist] options before setState\n" + JSON.stringify({
-        destinationLabel,
-        optionsCount: options.length,
-        skipped: flights.length - options.length,
-      }, null, 2));
       setOriginTz((prev) => (prev === "UTC" ? originTzVal : prev));
       setDestTz((prev) => (prev === "UTC" ? destTzVal : prev));
       setSource((prev) => (hasLiveTiming ? "live" : prev ?? "scheduled"));
@@ -781,6 +754,13 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           if (!opts?.forceRefresh) {
             const cached = getCommuteCache(cacheKey);
             if (cached) {
+              if (route.origin === "TPA" && route.destination === "SJU") {
+                console.log("[Commute Assist] TPA→SJU from sessionStorage", {
+                  source: "sessionStorage",
+                  flightCount: cached.flights?.length ?? 0,
+                  first3: cached.flights?.slice(0, 3).map((f) => ({ flightNumber: f.flightNumber, dep: f.departureTime, arr: f.arrivalTime })),
+                });
+              }
               applyFlightsToState(cached.flights, cached.originTz, cached.destTz, cached.fetchedAt, cached.notice, route.label);
               return cached.flights;
             }
@@ -792,6 +772,13 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
             forceRefresh: opts?.forceRefresh ?? false,
           });
           if (res.ok) {
+            if (route.origin === "TPA" && route.destination === "SJU") {
+              console.log("[Commute Assist] TPA→SJU from API", {
+                source: res.source,
+                flightCount: res.flights?.length ?? 0,
+                first3: res.flights?.slice(0, 3).map((f) => ({ flightNumber: f.flightNumber, dep: f.departureTime, arr: f.arrivalTime })),
+              });
+            }
             applyFlightsToState(res.flights, res.originTz, res.destTz, res.fetchedAt ?? null, res.notice ?? null, route.label);
             setCommuteCache(cacheKey, {
               flights: res.flights,
@@ -806,30 +793,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           return null;
         };
 
-        console.log("[Commute Assist] BEFORE Promise.all\n" + JSON.stringify({
-          direction,
-          routes: routes.map((r) => ({
-            origin: r.origin,
-            destination: r.destination,
-            commuteDate: r.commuteDate,
-            label: r.label,
-          })),
-        }, null, 2));
         const results = await Promise.all(routes.map(fetchOne));
-        routes.forEach((route, idx) => {
-          const res = results[idx];
-          const flights = Array.isArray(res) ? res : [];
-          const first3 = flights.slice(0, 3).map((f) =>
-            f ? `${(f as any).carrier}${(f as any).flightNumber}-${(f as any).departureTime}` : null
-          );
-          console.log("[Commute Assist] ROUTE RESULT\n" + JSON.stringify({
-            destination: route.destination,
-            label: route.label,
-            ok: Array.isArray(res),
-            flightCount: flights.length,
-            first3Ids: first3,
-          }, null, 2));
-        });
         const dutyStart = new Date(event.start_time);
         const arriveByFormatted = dutyOk ? formatInTimeZone(subMinutes(dutyStart, arrivalBuffer), baseTz, "HH:mm") : "";
         setCommuteMeta({ showInfo: dutyOk, arriveByFormatted, dutyOk });
@@ -988,7 +952,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const commuteDateFormatted = formatInTimeZone(commuteDateObj, baseTz, "EEE MMM d, yyyy");
   const tzMissing = originTz === "UTC" || destTz === "UTC";
   const commuteWindowValue = direction === "to_base"
-    ? (dutyOk ? "Day Prior" : "Same-day flights")
+    ? (dutyOk ? (toBaseCommuteSearchDate === dutyDateBase ? "Same Day" : "Day Prior") : "Same-day flights")
     : (dutyEndDateBase ? "Day of Release" : "Same-day flights");
 
   return (
@@ -1077,16 +1041,6 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
               Timezone data missing for route. Ask an admin to add it in Airports.
             </div>
           )}
-          {(() => {
-            console.log("[Commute Assist] EMPTY CHECK\n" + JSON.stringify({
-              commuteGroupsHomeLength: (commuteGroups.home ?? []).length,
-              commuteGroupsAlternateLength: (commuteGroups.alternate ?? []).length,
-              homeListLength: homeList.length,
-              alternateListLength: alternateList.length,
-              isEmpty: !homeList.length && !alternateList.length,
-            }, null, 2));
-            return null;
-          })()}
           {!homeList.length && !alternateList.length ? (
             <p className="text-xs text-slate-500">No commute options found in this window.</p>
           ) : (

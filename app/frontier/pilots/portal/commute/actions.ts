@@ -101,13 +101,6 @@ function dedupeFlights(
     }
     const existing = byKey.get(k);
     if (existing) {
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[Commute Assist] cross-provider merge", JSON.stringify({
-          key: k,
-          aviationstack: { carrier: as.carrier, flightNumber: as.flightNumber },
-          aerodatabox: { carrier: existing.carrier, flightNumber: existing.flightNumber },
-        }));
-      }
       byKey.set(k, {
         ...existing,
         dep_estimated_raw: as.dep_estimated_raw ?? existing.dep_estimated_raw,
