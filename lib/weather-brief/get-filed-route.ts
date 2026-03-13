@@ -9,10 +9,6 @@ export type RouteLookup = {
   tenant?: string;
 };
 
-/** Window 1: T-12h to T-9h before departure */
-const WINDOW1_START_H = 12;
-const WINDOW1_END_H = 9;
-
 /** Do not refresh cache if last_checked was within this period */
 const REFRESH_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 
@@ -20,19 +16,15 @@ function isDeparted(departureIso: string): boolean {
   return new Date() > new Date(departureIso);
 }
 
+/** Allow fetch: T-12h to departure. Block if >12h before or after departure. */
 function isWithinAllowedWindow(departureIso: string): boolean {
   const now = Date.now();
   const depMs = new Date(departureIso).getTime();
   const hoursUntilDep = (depMs - now) / (60 * 60 * 1000);
 
-  if (hoursUntilDep <= 0) return false;
-
-  const inWindow1 = hoursUntilDep <= WINDOW1_START_H && hoursUntilDep >= WINDOW1_END_H;
-  const minutesUntilDep = (depMs - now) / (60 * 1000);
-  const inWindow2 =
-    minutesUntilDep <= 90 && minutesUntilDep >= 30;
-
-  return inWindow1 || inWindow2;
+  if (hoursUntilDep > 12) return false; // Too early
+  if (hoursUntilDep <= 0) return false; // Departed
+  return true; // 0 to 12h before: allow fetch
 }
 
 function lastCheckedWithinCooldown(lastChecked: string): boolean {
