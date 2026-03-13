@@ -149,6 +149,20 @@ export async function POST(req: Request) {
 
   const supabase = createAdminClient();
 
+  // Idempotency: if we already processed this message_id, return success without importing
+  if (messageId?.trim()) {
+    const { data: existing } = await supabase
+      .from("inbound_email_events")
+      .select("id")
+      .eq("message_id", messageId.trim())
+      .maybeSingle();
+
+    if (existing) {
+      console.log("[inbound-email] duplicate message ignored:", messageId);
+      return new Response("ok", { status: 200 });
+    }
+  }
+
   // 1. Multipart: read attachment text and detect ICS or FLICA HTML (before body check)
   const attachmentCount = form?.get("attachment-count");
   const attachmentCountNum = typeof attachmentCount === "string" ? parseInt(attachmentCount, 10) : 0;
@@ -180,7 +194,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // 2. If ICS attachment found: resolve alias, import, return success immediately
+  // 2. If ICS attachment found: resolve alias, mark processed, import, return success immediately
   if (icsTextFromAttachment && alias) {
     const { data: aliasRow, error: aliasError } = await supabase
       .from("inbound_email_aliases")
@@ -189,6 +203,25 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (!aliasError && aliasRow?.is_active) {
+      const { error: markError } = await supabase.from("inbound_email_events").insert({
+        user_id: aliasRow.user_id,
+        alias,
+        sender: from,
+        recipient: to,
+        subject,
+        body_plain: "",
+        payload: { from, to, subject, bodyPlain: "", bodyHtml: "", rawBody: "" },
+        message_id: messageId?.trim() || null,
+      });
+      if (markError) {
+        const isDuplicate = /duplicate key value|unique constraint/i.test(markError.message);
+        if (isDuplicate) {
+          console.log("[inbound-email] duplicate message ignored (race):", messageId);
+          return new Response("ok", { status: 200 });
+        }
+        console.error("[inbound-email] event insert error (ics attachment):", markError);
+        return NextResponse.json({ ok: false, error: "event_insert_failed" }, { status: 500 });
+      }
       console.log("[inbound-email] importing ics attachment for user:", aliasRow.user_id);
       const { data: profile } = await supabase
         .from("profiles")
@@ -214,7 +247,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // 3. If FLICA HTML attachment found: resolve alias, import, return success immediately
+  // 3. If FLICA HTML attachment found: resolve alias, mark processed, import, return success immediately
   if (flicaHtmlFromAttachment && alias) {
     const { data: aliasRow, error: aliasError } = await supabase
       .from("inbound_email_aliases")
@@ -223,6 +256,25 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (!aliasError && aliasRow?.is_active) {
+      const { error: markError } = await supabase.from("inbound_email_events").insert({
+        user_id: aliasRow.user_id,
+        alias,
+        sender: from,
+        recipient: to,
+        subject,
+        body_plain: "",
+        payload: { from, to, subject, bodyPlain: "", bodyHtml: "", rawBody: "" },
+        message_id: messageId?.trim() || null,
+      });
+      if (markError) {
+        const isDuplicate = /duplicate key value|unique constraint/i.test(markError.message);
+        if (isDuplicate) {
+          console.log("[inbound-email] duplicate message ignored (race):", messageId);
+          return new Response("ok", { status: 200 });
+        }
+        console.error("[inbound-email] event insert error (flica attachment):", markError);
+        return NextResponse.json({ ok: false, error: "event_insert_failed" }, { status: 500 });
+      }
       console.log("[inbound-email] detected flica html calendar");
       console.log("[inbound-email] flica html import start");
       console.log("[inbound-email] attachment text length:", flicaHtmlFromAttachment.length);
@@ -318,19 +370,6 @@ export async function POST(req: Request) {
     rawBody,
   };
 
-  if (messageId) {
-    const { data: existing } = await supabase
-      .from("inbound_email_events")
-      .select("id")
-      .eq("message_id", messageId)
-      .maybeSingle();
-
-    if (existing) {
-      console.log("[inbound-email] duplicate message ignored:", messageId);
-      return new Response("ok", { status: 200 });
-    }
-  }
-
   const { data: eventRow, error: eventInsertError } = await supabase
     .from("inbound_email_events")
     .insert({
@@ -341,6 +380,7 @@ export async function POST(req: Request) {
       subject,
       body_plain: bodyText,
       payload,
+      message_id: messageId?.trim() || null,
     })
     .select("id")
     .single();
@@ -348,6 +388,11 @@ export async function POST(req: Request) {
   console.log("[inbound-email] event inserted");
 
   if (eventInsertError) {
+    const isDuplicate = /duplicate key value|unique constraint/i.test(eventInsertError.message);
+    if (isDuplicate) {
+      console.log("[inbound-email] duplicate message ignored (race):", messageId);
+      return new Response("ok", { status: 200 });
+    }
     console.error("[inbound-email] event insert error", eventInsertError);
     return NextResponse.json({ ok: false, error: "event_insert_failed" }, { status: 500 });
   }

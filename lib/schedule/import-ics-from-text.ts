@@ -186,13 +186,49 @@ export async function importIcsFromText(
     };
   };
 
-  const rows = events.map((e) => {
+  let rows = events.map((e) => {
     const baseUid =
       e.externalUid?.trim() ||
       `anon-${createHash("sha256").update(`${e.start.toISOString()}|${e.end.toISOString()}|${e.title}`).digest("hex").slice(0, 24)}`;
     const externalUid = `${baseUid}-${e.start.toISOString()}`;
     return toRow({ ...e, externalUid });
   });
+
+  // Prevents duplicate trip rows when the same trip is re-imported from email updates or retries.
+  // 1. Dedupe within incoming rows (keep first by title, start_time, end_time, source)
+  const seenInBatch = new Set<string>();
+  rows = rows.filter((r) => {
+    const key = `${r.title ?? ""}|${r.start_time}|${r.end_time}|${r.source}`;
+    if (seenInBatch.has(key)) return false;
+    seenInBatch.add(key);
+    return true;
+  });
+
+  // 2. Skip rows that already exist (user_id, title, start_time, end_time, source)
+  if (rows.length > 0) {
+    const minStartTime = rows.reduce((a, r) => (r.start_time < a ? r.start_time : a), rows[0].start_time);
+    const maxStartTime = rows.reduce((a, r) => (r.start_time > a ? r.start_time : a), rows[0].start_time);
+    const { data: existingRows } = await supabase
+      .from("schedule_events")
+      .select("title, start_time, end_time")
+      .eq("user_id", userId)
+      .eq("source", FLICA_SOURCE)
+      .gte("start_time", minStartTime)
+      .lte("start_time", maxStartTime);
+    const existingKeys = new Set(
+      (existingRows ?? []).map((e) => `${(e as { title: string | null }).title ?? ""}|${(e as { start_time: string }).start_time}|${(e as { end_time: string }).end_time}|${FLICA_SOURCE}`)
+    );
+    rows = rows.filter((r) => !existingKeys.has(`${r.title ?? ""}|${r.start_time}|${r.end_time}|${r.source}`));
+  }
+
+  if (rows.length === 0) {
+    return {
+      success: `Imported 0 events (all duplicates)`,
+      count: 0,
+      importedAt,
+      tripChangeSummaries: [],
+    };
+  }
 
   if (process.env.NODE_ENV === "development") {
     for (const row of rows) {
@@ -312,8 +348,8 @@ export async function importIcsFromText(
   console.log("[Trip change return]", { count: tripChangeSummaries.length, pairings: tripChangeSummaries.map((s) => s.pairing) });
 
   return {
-    success: `Imported ${events.length} events`,
-    count: events.length,
+    success: `Imported ${rows.length} events`,
+    count: rows.length,
     importedAt,
     tripChangeSummaries,
   };
