@@ -758,7 +758,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                 console.log("[Commute Assist] TPA→SJU from sessionStorage", {
                   source: "sessionStorage",
                   flightCount: cached.flights?.length ?? 0,
-                  first3: cached.flights?.slice(0, 3).map((f) => ({ flightNumber: f.flightNumber, dep: f.departureTime, arr: f.arrivalTime })),
+                  first3: cached.flights?.slice(0, 3).map((f: CommuteFlight) => ({ flightNumber: f.flightNumber, dep: f.departureTime, arr: f.arrivalTime })),
                 });
               }
               applyFlightsToState(cached.flights, cached.originTz, cached.destTz, cached.fetchedAt, cached.notice, route.label);
@@ -776,7 +776,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
               console.log("[Commute Assist] TPA→SJU from API", {
                 source: res.source,
                 flightCount: res.flights?.length ?? 0,
-                first3: res.flights?.slice(0, 3).map((f) => ({ flightNumber: f.flightNumber, dep: f.departureTime, arr: f.arrivalTime })),
+                first3: res.flights?.slice(0, 3).map((f: CommuteFlight) => ({ flightNumber: f.flightNumber, dep: f.departureTime, arr: f.arrivalTime })),
               });
             }
             applyFlightsToState(res.flights, res.originTz, res.destTz, res.fetchedAt ?? null, res.notice ?? null, route.label);
