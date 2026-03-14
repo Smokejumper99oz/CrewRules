@@ -1,18 +1,20 @@
 import Link from "next/link";
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { getNextDuty, getScheduleImportStatus, getScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
 import { getProfile, isProActive } from "@/lib/profile";
 import type { ActiveTrip } from "@/lib/trips/get-active-trip";
 import { formatLegLine } from "@/lib/trips/detect-trip-changes";
 import type { TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { resolveLegIdentity } from "@/lib/trips/resolve-leg-identity";
-import { formatDayLabel } from "@/lib/schedule-time";
-import { computeDelayInfo, getDelayStatusLabel } from "@/lib/flight-delay";
+import { formatDayLabel, addDay } from "@/lib/schedule-time";
+import { computeDelayInfo, getDelayStatusLabel, parseIsoTs } from "@/lib/flight-delay";
 import { AirlineLogo } from "@/components/airline-logo";
 import { ScheduleStatusChip } from "@/components/schedule-status-chip";
 import { ScheduleEventCard } from "@/components/schedule-event-card";
 import { OnDutyTimer } from "@/components/on-duty-timer";
 import { PortalNextDutyCommuteSection } from "@/components/portal-next-duty-commute-section";
+import { getFiledRoute } from "@/lib/weather-brief/get-filed-route";
+import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 
 function fmtHM(totalMinutes: number) {
   const h = Math.floor(totalMinutes / 60);
@@ -87,16 +89,44 @@ export async function PortalNextDuty({
 
   const firstLeg = activeTrip?.todayLegs?.[0];
   const displayDateForResolve = activeTrip?.displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
-  const resolvedFirstLeg =
+  const [resolvedFirstLeg, filedResult] = await Promise.all([
     firstLeg && firstLeg.origin && firstLeg.destination
-      ? await resolveLegIdentity({
+      ? resolveLegIdentity({
           flightNumber: firstLeg.flightNumber,
           origin: firstLeg.origin,
           destination: firstLeg.destination,
           depTime: firstLeg.depTime,
           date: displayDateForResolve,
         })
-      : null;
+      : null,
+    (async () => {
+      if (!firstLeg?.flightNumber || !firstLeg.origin || !firstLeg.destination) return { filedResult: null, departureIso: null, arrivalIso: null };
+      const depDateStr = firstLeg.departureDate ?? displayDateForResolve;
+      const depTimeRaw = (firstLeg.depTime ?? "00:00").replace(":", "").padStart(4, "0");
+      const depTimeNorm = depTimeRaw.length >= 4 ? `${depTimeRaw.slice(0, 2)}:${depTimeRaw.slice(2, 4)}` : "00:00";
+      const depTzLeg = getTimezoneFromAirport(firstLeg.origin);
+      const arrTzLeg = getTimezoneFromAirport(firstLeg.destination);
+      const depMin = parseInt(depTimeRaw.slice(0, 2) || "0", 10) * 60 + parseInt(depTimeRaw.slice(2, 4) || "0", 10);
+      const arrTimeRaw = (firstLeg.arrTime ?? "00:00").replace(":", "").padStart(4, "0");
+      const arrMin = parseInt(arrTimeRaw.slice(0, 2) || "0", 10) * 60 + parseInt(arrTimeRaw.slice(2, 4) || "0", 10);
+      const arrDateStr = arrMin < depMin ? addDay(depDateStr) : depDateStr;
+      const arrTimeNorm = arrTimeRaw.length >= 4 ? `${arrTimeRaw.slice(0, 2)}:${arrTimeRaw.slice(2, 4)}` : "00:00";
+      const depUtc = fromZonedTime(`${depDateStr}T${depTimeNorm}:00`, depTzLeg);
+      const arrUtc = fromZonedTime(`${arrDateStr}T${arrTimeNorm}:00`, arrTzLeg);
+      const routeLookup = {
+        flightNumber: firstLeg.flightNumber,
+        origin: firstLeg.origin,
+        destination: firstLeg.destination,
+        departureIso: depUtc.toISOString(),
+        tenant: profile?.tenant ?? "frontier",
+      };
+      const filedResult = await getFiledRoute(routeLookup);
+      return { filedResult, departureIso: depUtc.toISOString(), arrivalIso: arrUtc.toISOString() };
+    })(),
+  ]);
+  const firstLegLiveStatus = filedResult?.filedResult?.status ?? null;
+  const firstLegDepIso = filedResult?.departureIso ?? null;
+  const firstLegArrIso = filedResult?.arrivalIso ?? null;
 
   console.log("[CurrentTrip primary mode]", { currentTripMode: isCurrentTripMode, nextDutyMode: !isCurrentTripMode });
   console.log("[CurrentTrip change summary]", {
@@ -151,9 +181,31 @@ export async function PortalNextDuty({
             activeTrip.todayLegs.map((leg, i) => {
               const resolved = i === 0 ? resolvedFirstLeg : null;
               const f = resolved?.flight;
-              const depTz = f?.originTz ?? displaySettings.baseTimezone;
-              const arrTz = f?.destTz ?? displaySettings.baseTimezone;
-              const delayInfo = f ? computeDelayInfo(f, depTz, arrTz) : null;
+              const depTz = f?.originTz ?? getTimezoneFromAirport(leg.origin);
+              const arrTz = f?.destTz ?? getTimezoneFromAirport(leg.destination);
+              const delayInfo =
+                i === 0 && firstLegLiveStatus && firstLegDepIso && firstLegArrIso
+                  ? computeDelayInfo(
+                      {
+                        depUtc: firstLegDepIso,
+                        arrUtc: firstLegArrIso,
+                        originTz: depTz,
+                        destTz: arrTz,
+                        dep_scheduled_raw: firstLegLiveStatus.dep_scheduled_raw ?? undefined,
+                        dep_estimated_raw: firstLegLiveStatus.dep_estimated_raw ?? undefined,
+                        dep_actual_raw: firstLegLiveStatus.dep_actual_raw ?? undefined,
+                        arr_scheduled_raw: firstLegLiveStatus.arr_scheduled_raw ?? undefined,
+                        arr_estimated_raw: firstLegLiveStatus.arr_estimated_raw ?? undefined,
+                        arr_actual_raw: firstLegLiveStatus.arr_actual_raw ?? undefined,
+                        status: firstLegLiveStatus.cancelled ? "cancelled" : undefined,
+                      },
+                      depTz,
+                      arrTz,
+                      parseIsoTs
+                    )
+                  : f
+                    ? computeDelayInfo(f, depTz, arrTz)
+                    : null;
               const depSched = f ? formatInTimeZone(new Date(f.depUtc), depTz, "HH:mm") : leg.depTime;
               const arrSched = f ? formatInTimeZone(new Date(f.arrUtc), arrTz, "HH:mm") : leg.arrTime;
               const depDisplay = delayInfo?.dep ?? { scheduled: depSched, actual: undefined };
@@ -161,11 +213,12 @@ export async function PortalNextDuty({
               const numPart = f && (f.flightNumber ?? "").toUpperCase().startsWith((f.carrier ?? "").toUpperCase())
                 ? (f.flightNumber ?? "").slice((f.carrier ?? "").length).trim()
                 : null;
-              const flightLabel = f ? `${f.carrier} ${numPart || f.flightNumber}` : `${leg.flightNumber}`;
+              const fallbackCarrierForLeg = tenant ? TENANT_CARRIER[tenant] ?? null : null;
+              const flightLabel = f ? `${f.carrier} ${numPart || f.flightNumber}` : (fallbackCarrierForLeg ? `${fallbackCarrierForLeg} ${leg.flightNumber}` : leg.flightNumber);
               const effectiveAircraftType = f
                 ? (f.aircraft_type ?? (f.carrier?.toUpperCase() === "WN" ? "B737" : "—"))
-                : null;
-              if (f && delayInfo) {
+                : "—";
+              if (delayInfo) {
                 return (
                   <div
                     key={i}
@@ -221,17 +274,17 @@ export async function PortalNextDuty({
                       {leg.deadhead && (
                         <span className="inline-flex rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-200">DH</span>
                       )}
-                      <AirlineLogo carrier={f.carrier} size={24} />
+                      <AirlineLogo carrier={f?.carrier ?? fallbackCarrierForLeg ?? ""} size={24} />
                       <span className="text-slate-300 font-medium font-mono tabular-nums">{flightLabel}</span>
                       <span className="text-slate-600">•</span>
-                      <span>Flight time {fmtHM(f.durationMinutes)}</span>
+                      <span>Flight time {fmtHM(f?.durationMinutes ?? legDurationMinutes(leg.depTime, leg.arrTime))}</span>
                       {effectiveAircraftType && (
                         <>
                           <span className="text-slate-600">•</span>
                           <span className="tabular-nums">{effectiveAircraftType}</span>
                         </>
                       )}
-                      {f.dep_gate && (
+                      {f?.dep_gate && (
                         <>
                           <span className="text-slate-600">•</span>
                           <span className="tabular-nums">Gate {f.dep_gate}</span>

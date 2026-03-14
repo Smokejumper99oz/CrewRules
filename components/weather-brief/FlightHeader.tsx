@@ -113,12 +113,28 @@ export function FlightHeader({ flight }: Props) {
       <div className="mt-4 flex flex-wrap gap-6 text-sm">
         <div>
           <span className="text-slate-500">Departure (local)</span>
-          <span className="ml-2 font-mono text-slate-200">{depDisplay}</span>
+          <span className="ml-2 font-mono text-slate-200">
+            {delayInfo?.cancelled ? (
+              <span className="text-red-400">Cancelled</span>
+            ) : delayInfo?.dep ? (
+              <><span className="line-through text-slate-400/90">Sched. {delayInfo.dep.scheduled}</span> <span className="text-amber-400">NOW {delayInfo.dep.actual}</span></>
+            ) : (
+              depDisplay
+            )}
+          </span>
         </div>
         {flight.arrivalTime != null && (
           <div>
             <span className="text-slate-500">Arrival (local)</span>
-            <span className="ml-2 font-mono text-slate-200">{arrDisplay}</span>
+            <span className="ml-2 font-mono text-slate-200">
+              {delayInfo?.cancelled ? (
+                <span className="text-red-400">Cancelled</span>
+              ) : delayInfo?.arr ? (
+                <><span className="line-through text-slate-400/90">Sched. {delayInfo.arr.scheduled}</span> <span className="text-amber-400">NOW {delayInfo.arr.actual}</span></>
+              ) : (
+                arrDisplay
+              )}
+            </span>
           </div>
         )}
         {flight.tripNumber && (
