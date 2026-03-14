@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
-import { submitSignUp, verifyOtp } from "./actions";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { submitSignUp } from "./actions";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -20,13 +20,25 @@ function isValidFrontierEmail(email: string): boolean {
 
 export default function SignUpPage() {
   const [state, formAction, isPending] = useActionState(submitSignUp, null);
-  const [verifyState, verifyFormAction, isVerifyPending] = useActionState(verifyOtp, null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const submittedRef = useRef(false);
 
-  const showCodeEntry = state?.success && state?.email;
+  const showSignUpSuccess = state?.success && state?.email;
   const showWaitlistSuccess = state?.waitlist;
 
+  useEffect(() => {
+    if (state?.error) {
+      submittedRef.current = false;
+      setSubmitted(false);
+    }
+  }, [state?.error]);
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (submittedRef.current) {
+      e.preventDefault();
+      return;
+    }
     const form = e.currentTarget;
     const emailInput = form.elements.namedItem("email") as HTMLInputElement;
     const email = emailInput?.value ?? "";
@@ -35,11 +47,9 @@ export default function SignUpPage() {
       e.preventDefault();
       return;
     }
-    if (isValidFrontierEmail(email)) {
-      setEmailError(null);
-      return;
-    }
     setEmailError(null);
+    submittedRef.current = true;
+    setSubmitted(true);
   }
 
   return (
@@ -100,53 +110,25 @@ export default function SignUpPage() {
             {(state?.error || emailError) && (
               <p className="text-sm text-red-400">{state?.error ?? emailError}</p>
             )}
-            {state?.success && (
+            {showSignUpSuccess && (
               <p className="text-sm text-emerald-400">
-                Check your Frontier email for a verification code to continue.
+                Check your Frontier email and click the confirmation link to finish signing up.
               </p>
             )}
             {showWaitlistSuccess && (
               <p className="text-sm text-emerald-400">{WAITLIST_SUCCESS_MESSAGE}</p>
             )}
 
-            {!showCodeEntry && !showWaitlistSuccess && (
+            {!showSignUpSuccess && !showWaitlistSuccess && (
               <button
                 type="submit"
-                disabled={isPending}
+                disabled={isPending || submitted}
                 className="block w-full rounded-xl bg-[#75C043] px-4 py-3 font-semibold text-slate-950 hover:opacity-95 transition text-center disabled:opacity-50"
               >
-                {isPending ? "Creating…" : "Create account"}
+                {isPending || submitted ? "Creating…" : "Create account"}
               </button>
             )}
           </form>
-
-          {showCodeEntry && (
-            <form action={verifyFormAction} className="mt-4 space-y-4">
-              <input type="hidden" name="email" value={state.email} />
-              <div>
-                <label className="text-sm text-slate-200">Verification code</label>
-                <input
-                  name="token"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="Enter 6-digit code"
-                  disabled={isVerifyPending}
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
-                />
-              </div>
-              {verifyState?.error && (
-                <p className="text-sm text-red-400">{verifyState.error}</p>
-              )}
-              <button
-                type="submit"
-                disabled={isVerifyPending}
-                className="block w-full rounded-xl bg-[#75C043] px-4 py-3 font-semibold text-slate-950 hover:opacity-95 transition text-center disabled:opacity-50"
-              >
-                {isVerifyPending ? "Verifying…" : "Verify code"}
-              </button>
-            </form>
-          )}
 
           <div className="mt-6 flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
             <Link href="/" className="text-slate-300 hover:text-white">

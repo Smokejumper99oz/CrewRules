@@ -78,12 +78,10 @@ export async function submitSignUp(_prev: SignUpState, formData: FormData): Prom
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithOtp({
+  const { error } = await supabase.auth.signUp({
     email,
-    options: {
-      shouldCreateUser: true,
-      // Email template (Magic Link) can be configured in Supabase Dashboard to show {{ .Token }} for OTP instead of {{ .ConfirmationURL }}
-    },
+    password,
+    options: { data: { full_name: fullName } },
   });
 
   if (error) {

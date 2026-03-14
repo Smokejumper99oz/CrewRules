@@ -46,14 +46,32 @@ export async function submitAccessRequest(
   const trimmedEmail = email.trim();
   const requestedPortal = role === "pilot" ? "pilot" : "fa";
 
-  if (isLiveForEmailAndRole(trimmedEmail, role)) {
-    const signupRoute = getSignupRouteForEmail(trimmedEmail);
-    return { success: true, airlineLive: true, signupRoute: signupRoute ?? undefined };
-  }
-
   try {
     const supabase = await createClient();
     const inferredAirline = inferAirlineFromEmail(trimmedEmail);
+
+    if (isLiveForEmailAndRole(trimmedEmail, role)) {
+      const { error } = await supabase.from("waitlist").upsert(
+        {
+          email: trimmedEmail,
+          full_name: fullName,
+          requested_portal: requestedPortal,
+          airline: airline?.trim() || inferredAirline,
+          source: "request_access",
+          status: "pending",
+          employee_number: employeeNumber?.trim() || null,
+        },
+        { onConflict: "email" }
+      );
+      if (error) {
+        console.error("[Request Access] waitlist upsert (live) error:", error);
+        return {
+          error: `${error.message}${error.code ? ` (code: ${error.code})` : ""}`,
+        };
+      }
+      const signupRoute = getSignupRouteForEmail(trimmedEmail);
+      return { success: true, airlineLive: true, signupRoute: signupRoute ?? undefined };
+    }
     const { error } = await supabase.from("waitlist").upsert(
       {
         email: trimmedEmail,
