@@ -173,7 +173,7 @@ export async function PortalNextDuty({
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-slate-400">
-                        {formatDayLabel(`${(activeTrip?.displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd"))}T12:00:00.000Z`, displaySettings.baseTimezone)}
+                        {formatDayLabel(`${(leg.departureDate ?? activeTrip?.displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd"))}T12:00:00.000Z`, displaySettings.baseTimezone)}
                       </span>
                       <span
                         className={[
@@ -243,7 +243,7 @@ export async function PortalNextDuty({
               }
 
               // Fallback when API has no data (e.g. tomorrow's flights): show schedule-derived info to match Commute Assist style
-              const displayDate = activeTrip?.displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
+              const legDisplayDate = leg.departureDate ?? activeTrip?.displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
               const fallbackCarrier = tenant ? TENANT_CARRIER[tenant] ?? null : null;
               const fallbackFlightLabel = fallbackCarrier ? `${fallbackCarrier} ${leg.flightNumber}` : leg.flightNumber;
               const durMin = leg.depTime && leg.arrTime ? legDurationMinutes(leg.depTime, leg.arrTime) : 0;
@@ -252,7 +252,7 @@ export async function PortalNextDuty({
                 <div key={i} className="pl-3 pr-3 py-2.5">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-slate-400">
-                      {formatDayLabel(`${displayDate}T12:00:00.000Z`, displaySettings.baseTimezone)}
+                      {formatDayLabel(`${legDisplayDate}T12:00:00.000Z`, displaySettings.baseTimezone)}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
                       Scheduled

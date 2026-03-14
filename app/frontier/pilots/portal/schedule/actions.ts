@@ -888,15 +888,15 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
         console.log("[getMonthStats] pay calc:", {
           year,
           rate,
-          paidMinutes,
-          paidHours: paidMinutes / 60,
+          rawCreditMinutes,
+          creditHours: rawCreditMinutes / 60,
         });
 
-        // Pay estimate derived from paidMinutes only (single source of truth)
-        const paidHours = paidMinutes / 60;
-        const estimatedMonthlyPay = paidHours * rate;
-        const pay20thHours = Math.min(35, paidHours);
-        const pay5thHours = Math.max(0, paidHours - 35);
+        // Pay estimate derived from raw credit (trip + vacation + reserve), not premium-adjusted paid
+        const creditHours = rawCreditMinutes / 60;
+        const estimatedMonthlyPay = creditHours * rate;
+        const pay20thHours = Math.min(35, creditHours);
+        const pay5thHours = Math.max(0, creditHours - 35);
 
         stats.payProjection = {
           pay20thHours,

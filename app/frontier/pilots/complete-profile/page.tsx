@@ -37,6 +37,15 @@ export default async function CompleteProfilePage() {
     redirect(PORTAL_PATH);
   }
 
+  const { data: waitlistRow } = await supabase
+    .from("waitlist")
+    .select("employee_number")
+    .eq("email", email)
+    .maybeSingle();
+
+  const preFillEmployeeNumber =
+    waitlistRow?.employee_number?.trim() || null;
+
   return (
     <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
       <div className="max-w-xl w-full text-center">
@@ -44,7 +53,7 @@ export default async function CompleteProfilePage() {
         <p className="mt-4 text-slate-300">
           Your CrewRules profile for this portal has not been set up yet. Click below to create it.
         </p>
-        <CompleteProfileForm />
+        <CompleteProfileForm preFillEmployeeNumber={preFillEmployeeNumber} />
         <div className="mt-10 flex flex-wrap justify-center gap-4">
           <Link
             href={`/${TENANT}/${PORTAL}/request-access`}

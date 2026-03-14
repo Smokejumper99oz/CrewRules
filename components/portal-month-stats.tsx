@@ -21,15 +21,6 @@ const formatUSD = (n: number) =>
     maximumFractionDigits: 2,
   }).format(n);
 
-function formatCreditDelta(minutes: number | undefined | null): string {
-  const m = minutes ?? 0;
-  const abs = Math.abs(m);
-  const formatted = formatMinutesToHhMm(abs);
-  if (m > 0) return `+${formatted}`;
-  if (m < 0) return `-${formatted}`;
-  return "0:00";
-}
-
 type Props = {
   tenant: string;
   portal: string;
@@ -159,7 +150,7 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
             <div className="space-y-2">
               <div>
                 <p className="truncate tabular-nums text-2xl font-normal text-amber-300/80">
-                  {formatMinutesToHhMm(stats.creditMinutes ?? 0)}
+                  {formatMinutesToHhMm(stats.rawCreditMinutes ?? 0)}
                 </p>
                 <p className="text-xs text-slate-300">Credit</p>
               </div>
@@ -168,12 +159,6 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
                   {formatMinutesToHhMm(Math.round((stats.totalBlock ?? 0) * 60))}
                 </p>
                 <p className="text-xs text-slate-300">Block</p>
-              </div>
-              <div className="border-t border-white/5 pt-2">
-                <p className="truncate tabular-nums text-xs font-normal text-amber-300/80">
-                  {formatCreditDelta(stats.creditDeltaMinutes)}
-                </p>
-                <p className="text-xs text-slate-300">Award change</p>
               </div>
             </div>
           </div>

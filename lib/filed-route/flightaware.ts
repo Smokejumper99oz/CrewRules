@@ -293,14 +293,15 @@ async function tryAeroDataBoxFallback(
 }
 
 /**
- * Fetch filed route and live status. Tries FlightAware first, then AeroDataBox if no match.
+ * Fetch filed route and live status. Tries FlightAware first, then AeroDataBox when status is null.
  */
 export async function fetchFiledRouteWithFallback(
   lookup: RouteLookup
 ): Promise<{ route: string | null; status: FlightLiveStatus | null }> {
   const faResult = await fetchFiledRouteFromFlightAware(lookup);
-  if (faResult.route ?? faResult.status) return faResult;
-
-  const adbStatus = await tryAeroDataBoxFallback(lookup);
-  return { route: null, status: adbStatus };
+  const adbStatus = faResult.status === null ? await tryAeroDataBoxFallback(lookup) : null;
+  return {
+    route: faResult.route ?? null,
+    status: adbStatus ?? faResult.status ?? null,
+  };
 }

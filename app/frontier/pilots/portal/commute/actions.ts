@@ -358,7 +358,7 @@ export async function getCommuteFlights(input: {
     return {
       ok: true as const,
       source: "cache" as const,
-      flights: cached.data,
+      flights: cached.data as CommuteFlight[],
       fetchedAt: cached.fetched_at ?? null,
       notice: undefined,
       originTz,

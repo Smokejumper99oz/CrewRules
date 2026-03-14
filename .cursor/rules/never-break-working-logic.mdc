@@ -1,0 +1,21 @@
+---
+description: Never change working logic or break existing behavior
+alwaysApply: true
+---
+
+# Never Break Working Logic
+
+**NEVER** change the logic of something that already works. Do not refactor, "improve," or "fix" behavior that the user has been relying on.
+
+## Rules
+
+1. **Preserve existing behavior** — If code works, leave it alone unless the user explicitly asks to change it.
+2. **Scope changes narrowly** — When fixing a bug or adding a feature, change only what is necessary. Do not touch unrelated logic.
+3. **Do not assume** — Do not change date logic, validation rules, API behavior, or business logic "because it seems better." The user may have spent days getting it right.
+4. **Ask before refactoring** — If you think something should be refactored, ask first. Do not do it unasked.
+
+## When in doubt
+
+- Make the smallest possible change to achieve the stated goal.
+- Do not "clean up" or "improve" code that was not part of the request.
+- If the user says something broke after your change, revert immediately.

@@ -68,7 +68,8 @@ export function computeLegDates<T extends { day?: string; depTime?: string; arrT
       (d) => getWeekdayAbbrev(d, timezone).toLowerCase() === legDayNorm
     );
     const usedCount = usedCountByWeekday.get(legDayNorm) ?? 0;
-    const departureDate = datesForWeekday[usedCount] ?? null;
+    const idx = Math.min(usedCount, Math.max(0, datesForWeekday.length - 1));
+    const departureDate = datesForWeekday[idx] ?? null;
     if (departureDate) usedCountByWeekday.set(legDayNorm, usedCount + 1);
     if (!departureDate) return { leg, departureDate: null, arrivalDate: null };
     const arrivalDate = isOvernightLeg(leg) ? addDay(departureDate) : departureDate;

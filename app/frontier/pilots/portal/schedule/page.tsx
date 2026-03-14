@@ -20,6 +20,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { ScheduleStatusChip, formatLastImport } from "@/components/schedule-status-chip";
 import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, eventOverlapsDay, addDay } from "@/lib/schedule-time";
 import { getBidPeriodForTimestamp, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
+import { computeLegDates, getTripDateStrings } from "@/lib/leg-dates";
 
 const EVENT_STYLES: Record<string, string> = {
   trip: "bg-emerald-500/20 border-emerald-500/40 text-emerald-200",
@@ -84,27 +85,6 @@ const isSameDay = (d1: Date, d2: Date) =>
   d1.getMonth() === d2.getMonth() &&
   d1.getDate() === d2.getDate();
 
-const DAY_ABBREVS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-
-/** Parse HH:MM or HHMM to minutes. Returns null if invalid. */
-function timeToMinutes(t: string | undefined): number | null {
-  if (!t?.trim()) return null;
-  const s = t.trim().replace(":", "");
-  if (!/^\d{3,4}$/.test(s)) return null;
-  const h = parseInt(s.slice(0, -2) || "0", 10);
-  const m = parseInt(s.slice(-2), 10);
-  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
-  return h * 60 + m;
-}
-
-/** True if leg is overnight (arrives next calendar day). */
-function isOvernightLeg(leg: { depTime?: string; arrTime?: string }): boolean {
-  const dep = timeToMinutes(leg.depTime);
-  const arr = timeToMinutes(leg.arrTime);
-  if (dep == null || arr == null) return false;
-  return arr < dep;
-}
-
 type ScheduleEventLeg = {
   day?: string;
   flightNumber?: string;
@@ -115,54 +95,6 @@ type ScheduleEventLeg = {
   blockMinutes?: number;
   raw?: string;
 };
-
-/** Get weekday abbreviation (Mo, Tu, etc.) for a YYYY-MM-DD date in the given timezone. */
-function getWeekdayAbbrev(dateStr: string, timezone: string): string {
-  const d = new Date(dateStr + "T12:00:00.000Z");
-  const dayIdx = parseInt(formatInTimeZone(d, timezone, "i"), 10) % 7; // ISO 1=Mon -> 0=Sun
-  return DAY_ABBREVS[dayIdx];
-}
-
-/** Get all YYYY-MM-DD dates from event start to end (inclusive) in the given timezone. */
-function getTripDateStrings(startTime: string, endTime: string, timezone: string): string[] {
-  const start = new Date(startTime);
-  const end = new Date(endTime);
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
-  const dates: string[] = [];
-  let cur = formatInTimeZone(start, timezone, "yyyy-MM-dd");
-  const endStr = formatInTimeZone(end, timezone, "yyyy-MM-dd");
-  while (cur <= endStr) {
-    dates.push(cur);
-    cur = addDay(cur);
-  }
-  return dates;
-}
-
-/**
- * Derive departure and arrival dates for each leg relative to the trip.
- * If arrTime < depTime, treat as overnight and arrival is next calendar day.
- * Uses leg order to handle multiple legs on the same weekday (e.g. two Sunday legs).
- */
-function computeLegDates(
-  legs: ScheduleEventLeg[],
-  tripDateStrs: string[],
-  timezone: string
-): { leg: ScheduleEventLeg; departureDate: string | null; arrivalDate: string | null }[] {
-  const usedCountByWeekday = new Map<string, number>();
-  return legs.map((leg) => {
-    if (!leg.day) return { leg, departureDate: null, arrivalDate: null };
-    const legDayNorm = leg.day.slice(0, 2).toLowerCase();
-    const datesForWeekday = tripDateStrs.filter(
-      (d) => getWeekdayAbbrev(d, timezone).toLowerCase() === legDayNorm
-    );
-    const usedCount = usedCountByWeekday.get(legDayNorm) ?? 0;
-    const departureDate = datesForWeekday[usedCount] ?? null;
-    if (departureDate) usedCountByWeekday.set(legDayNorm, usedCount + 1);
-    if (!departureDate) return { leg, departureDate: null, arrivalDate: null };
-    const arrivalDate = isOvernightLeg(leg) ? addDay(departureDate) : departureDate;
-    return { leg, departureDate, arrivalDate };
-  });
-}
 
 function toYyyyMmDd(d: Date): string {
   const y = d.getFullYear();

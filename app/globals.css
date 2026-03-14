@@ -200,3 +200,11 @@
 .crew-splash-loading-text {
   animation: crew-splash-loading-text-pulse 1.5s ease-in-out infinite;
 }
+
+/* Family View phone frame: flatten canvas top so status bar + canvas form one block */
+@media (min-width: 1536px) {
+  [data-family-view-frame] [data-family-view-canvas] {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+}

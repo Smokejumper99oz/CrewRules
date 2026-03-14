@@ -103,6 +103,8 @@ export type FamilyViewTripSummary = {
   reportTimeDisplay: ReportTimeDisplay | null;
   expectedHomeTime: string | null;
   overnightCities: string[];
+  /** Actual overnight count when single overnight city. From leg layovers, not tripDates.length - 1. */
+  overnightNightsCount: number;
   commuteInfo: CommuteInfo | null;
 };
 
@@ -117,7 +119,7 @@ export function formatStatusForDisplay(status: FamilyViewStatus): string {
     "Day Off": "Day Off",
     "Vacation": "Time Off",
     "On Call": "On Call",
-    "Likely Commuting": "Likely Traveling to Work",
+    "Likely Commuting": "Commute Options",
     "At Work": "Working",
     "Overnight Away": "Away Overnight",
     "Expected Home": "Coming Home",
@@ -231,19 +233,56 @@ function reportTimeToMinutes(reportTime: string | undefined | null): number | nu
 }
 
 
-/** Get overnight cities from trip legs (destinations except the last leg's destination). */
-function getOvernightCitiesFromLegs(legs: ScheduleEventLeg[], tripDateStrs: string[], timezone: string): string[] {
-  if (legs.length < 2) return [];
+export type OvernightCitiesAndNights = {
+  overnightCities: string[];
+  /** Nights per city (key = city display name). Used when single overnight city. */
+  nightsByCity: Record<string, number>;
+};
+
+/**
+ * Get overnight cities and actual overnight counts from trip legs.
+ * An overnight = layover where we arrive on date X and next leg departs on date Y with Y > X.
+ */
+function getOvernightCitiesAndNightsFromLegs(
+  legs: ScheduleEventLeg[],
+  tripDateStrs: string[],
+  timezone: string
+): OvernightCitiesAndNights {
+  const overnightCities: string[] = [];
+  const nightsByCity: Record<string, number> = {};
+
+  if (legs.length < 2) return { overnightCities, nightsByCity };
+
   const legDates = computeLegDates(legs, tripDateStrs, timezone);
-  const cities: string[] = [];
+
   for (let i = 0; i < legs.length - 1; i++) {
-    const { leg, arrivalDate } = legDates[i] ?? {};
-    if (leg?.destination && arrivalDate) {
-      const city = leg.destination.trim().toUpperCase();
-      if (city && !cities.includes(city)) cities.push(city);
+    const curr = legDates[i];
+    const next = legDates[i + 1];
+    if (!curr?.leg?.destination || !curr.arrivalDate || !next?.departureDate) continue;
+
+    const destIata = curr.leg.destination.trim().toUpperCase();
+    const nextOrigin = (next.leg as { origin?: string }).origin?.trim().toUpperCase();
+    if (!destIata || destIata !== nextOrigin) continue;
+
+    const arrDate = curr.arrivalDate;
+    const depDate = next.departureDate;
+    if (arrDate >= depDate) continue;
+
+    let nights = 0;
+    let cur = arrDate;
+    while (cur < depDate) {
+      nights++;
+      cur = addDay(cur);
+    }
+
+    const cityName = iataToCityName(destIata);
+    if (nights > 0) {
+      nightsByCity[cityName] = (nightsByCity[cityName] ?? 0) + nights;
+      if (!overnightCities.includes(cityName)) overnightCities.push(cityName);
     }
   }
-  return cities;
+
+  return { overnightCities, nightsByCity };
 }
 
 /** Filter events to non-muted only. (Caller already filters by source.) */
@@ -429,11 +468,22 @@ export function getNextTripSummary(
   const expectedHomeTime = formatExpectedHomeForDisplay(next.end_time, baseTimezone, settings);
   const baseIata = (profile?.base_airport ?? "").trim().toUpperCase();
   const homeIata = (profile?.home_airport ?? "").trim().toUpperCase();
-  const overnightCities = settings.showOvernightCities && next.legs?.length
-    ? getOvernightCitiesFromLegs(next.legs, tripDates, baseTimezone)
-        .filter((iata) => iata !== baseIata && iata !== homeIata)
-        .map(iataToCityName)
-    : [];
+
+  let overnightCities: string[] = [];
+  let overnightNightsCount = 0;
+  if (settings.showOvernightCities && next.legs?.length) {
+    const { overnightCities: rawCities, nightsByCity } = getOvernightCitiesAndNightsFromLegs(
+      next.legs,
+      tripDates,
+      baseTimezone
+    );
+    overnightCities = rawCities.filter(
+      (cityName) =>
+        cityName !== iataToCityName(baseIata) && cityName !== iataToCityName(homeIata)
+    );
+    overnightNightsCount =
+      overnightCities.length === 1 ? (nightsByCity[overnightCities[0]] ?? 0) : 0;
+  }
 
   const commuteInfo =
     settings.showCommuteEstimates ? getCommuteInfoForTrip(next, profile, baseTimezone) : null;
@@ -471,6 +521,7 @@ export function getNextTripSummary(
     reportTimeDisplay,
     expectedHomeTime: expectedHomeTime || null,
     overnightCities,
+    overnightNightsCount,
     commuteInfo,
   };
 }

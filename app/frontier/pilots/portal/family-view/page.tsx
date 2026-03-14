@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { FamilyViewPhoneFrame } from "@/components/family-view-phone-frame";
+import { FamilyViewTodayCommuteFlights } from "@/components/family-view-today-commute-flights";
+import { getCommuteFlights } from "@/app/frontier/pilots/portal/commute/actions";
+import type { CommuteFlight } from "@/lib/aviationstack";
 import {
   CalendarDays,
   PlaneTakeoff,
@@ -9,7 +12,7 @@ import {
   Home,
   User,
 } from "lucide-react";
-import { getProfile } from "@/lib/profile";
+import { getProfile, getDisplayName } from "@/lib/profile";
 import { getScheduleEvents, getScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
 import {
   getTodayStatus,
@@ -20,8 +23,8 @@ import {
   formatReportTimeForDisplay,
   formatStatusForDisplay,
 } from "@/lib/family-view/translate-schedule";
-import { addDays, differenceInCalendarDays, parseISO } from "date-fns";
-import { getTripDateStrings, todayStr } from "@/lib/leg-dates";
+import { addDays } from "date-fns";
+import { getDaysAwayFromHome } from "@/lib/family-view/days-away-from-home";
 
 const iconClass = "size-4 shrink-0 text-[#7A7A7A]";
 const nextTripIconClass = "size-4 shrink-0 text-[#7A7A7A]";
@@ -49,19 +52,70 @@ export default async function FamilyViewPage() {
 
   const isEnabled = profile?.family_view_enabled ?? false;
 
-  const tripDates = nextTrip
-    ? getTripDateStrings(nextTrip.event.start_time, nextTrip.event.end_time, baseTimezone)
-    : [];
-  const daysAway =
-    nextTrip && tripDates.length > 0
-      ? differenceInCalendarDays(parseISO(tripDates[0]), parseISO(todayStr(baseTimezone)))
-      : 0;
-  const nightsCount = tripDates.length - 1;
+  const daysAway = nextTrip
+    ? await getDaysAwayFromHome({
+        trip: nextTrip.event,
+        profile,
+        baseTimezone,
+        settings,
+        getCommuteFlights: async (p) => {
+          const res = await getCommuteFlights(p);
+          return res.ok ? { ok: true as const, flights: res.flights, originTz: res.originTz, destTz: res.destTz } : { ok: false as const };
+        },
+      })
+    : 0;
+  const nightsCount = nextTrip?.overnightNightsCount ?? 0;
+
+  const firstName = profile?.full_name?.trim().split(/\s+/)[0] ?? getDisplayName(profile).split(/\s+/)[0];
+  const commuteTitle = firstName ? `${firstName}'s Commute Options` : "Commute Options";
+
+  let commuteFlightsData: {
+    flights: { flight: CommuteFlight; label: "Likely your flight" | "Backup option" }[];
+    originTz: string;
+    destTz: string;
+  } | null = null;
+  if (
+    todayStatus.status === "Likely Commuting" &&
+    nextTrip?.commuteInfo &&
+    profile?.home_airport &&
+    (profile?.base_airport || nextTrip.event.legs?.[0]?.origin)
+  ) {
+    const origin = (profile.home_airport ?? "").trim().toUpperCase();
+    const destination = (
+      nextTrip.event.legs?.[0]?.origin ?? profile.base_airport ?? ""
+    )
+      .trim()
+      .toUpperCase();
+    const date = nextTrip.commuteInfo.commuteDateStr;
+    if (origin.length === 3 && destination.length === 3) {
+      const res = await getCommuteFlights({ origin, destination, date });
+      if (res.ok && res.flights && res.flights.length > 0) {
+        const f9 = res.flights.filter(
+          (f) => (f.carrier ?? "").trim().toUpperCase() === "F9"
+        );
+        const others = res.flights.filter(
+          (f) => (f.carrier ?? "").trim().toUpperCase() !== "F9"
+        );
+        const ranked = [...f9, ...others].slice(0, 2);
+        const labeled = ranked.map((flight, i) => ({
+          flight,
+          label: (i === 0 && (flight.carrier ?? "").trim().toUpperCase() === "F9"
+            ? "Likely your flight"
+            : "Backup option") as "Likely your flight" | "Backup option",
+        }));
+        commuteFlightsData = {
+          flights: labeled,
+          originTz: res.originTz ?? "America/Denver",
+          destTz: res.destTz ?? "America/Denver",
+        };
+      }
+    }
+  }
 
   return (
     <FamilyViewPhoneFrame>
     <div className="max-w-full lg:max-w-[1200px] xl:max-w-[1320px] lg:mx-auto">
-    <div className="rounded-[28px] lg:rounded-2xl bg-[#F7F6F2] p-5 sm:p-8 lg:p-8 xl:p-10 shadow-sm">
+    <div className="rounded-[28px] lg:rounded-2xl bg-[#F7F6F2] p-5 sm:p-8 lg:p-8 xl:p-10 shadow-sm" data-family-view-canvas>
       <div className="space-y-8">
       {/* Disabled state when Family View is off */}
       {!isEnabled && (
@@ -77,31 +131,42 @@ export default async function FamilyViewPage() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6 rounded-xl bg-[#F4F1EA] p-4">
-        <h1 className="text-xl font-medium tracking-tight">
+      {/* Header - extends to top/sides to fill like mockup */}
+      <div className="-mx-5 -mt-5 flex items-center justify-between rounded-t-[28px] bg-[#F4F1EA] px-5 pt-2 pb-4 sm:-mx-8 sm:-mt-8 sm:px-8 sm:pt-2 lg:-mx-8 lg:-mt-8 lg:rounded-t-2xl lg:px-8 lg:pt-2 xl:-mx-10 xl:-mt-10 xl:px-10 xl:pt-2 mb-6">
+        <h1 className="text-3xl font-medium tracking-tight">
           <span className="text-[#2F4F46]">Crew</span><span className="text-[#7FB069]">Rules</span><sup className="text-[#2F4F46]">™</sup>{" "}
           <span className="text-[#2F2F2F]">Family View</span>
         </h1>
-        <div className="flex items-center gap-2 rounded-full border border-[#DDD6CC] bg-[#EDE9E2] px-4 py-2 text-sm font-medium text-[#2F2F2F]">
-          <User className="size-4 shrink-0 text-[#7A7A7A]" aria-hidden />
+        <div className="flex items-center gap-2.5 rounded-full bg-[#EDE9E2] px-5 py-2.5 text-base font-medium text-[#2F4F46] shadow-sm">
+          <User className="size-5 shrink-0 text-[#2F4F46]" fill="currentColor" strokeWidth={0} aria-hidden />
           <span>Profile</span>
         </div>
       </div>
-
-      <div className="h-6 rounded-xl border border-[#E8E3DA] bg-[#F4F1EA] mb-6" aria-hidden />
 
       {/* Section 1: Today */}
       <section className="rounded-2xl border border-[#E8E3DA] bg-[#F4F1EA]/50 p-4 sm:p-5 shadow-sm">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-[#6F6F6F] mb-3">
           Today
         </h2>
-        <div className="rounded-xl border border-[#E8E3DA] bg-white px-4 py-3">
-          <span className="text-lg font-medium text-[#2F2F2F]">{formatStatusForDisplay(todayStatus.status)}</span>
-          {todayStatus.detail && (
-            <span className="ml-2 text-[#6F6F6F] text-sm">{todayStatus.detail}</span>
-          )}
-        </div>
+        {commuteFlightsData ? (
+          <>
+            <p className="text-lg font-medium text-[#2F2F2F] mb-3">
+              {commuteTitle}
+            </p>
+            <FamilyViewTodayCommuteFlights
+              flights={commuteFlightsData.flights}
+              originTz={commuteFlightsData.originTz}
+              destTz={commuteFlightsData.destTz}
+            />
+          </>
+        ) : (
+          <div className="rounded-xl border border-[#E8E3DA] bg-white px-4 py-3">
+            <span className="text-lg font-medium text-[#2F2F2F]">{formatStatusForDisplay(todayStatus.status)}</span>
+            {todayStatus.detail && (
+              <span className="ml-2 text-[#6F6F6F] text-sm">{todayStatus.detail}</span>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Work Trip hero card */}
@@ -119,13 +184,13 @@ export default async function FamilyViewPage() {
               <CalendarDays className="size-5 shrink-0 text-[#9AAE92]" aria-hidden />
               {daysAway} days away
             </p>
-            {nextTrip.overnightCities.length === 1 && nightsCount > 0 && (
+            {Array.isArray(nextTrip.overnightCities) && nextTrip.overnightCities.length === 1 && nightsCount > 0 && (
               <p className="flex items-center gap-4 py-4">
                 <Moon className="size-5 shrink-0 text-[#9AAE92]" aria-hidden />
                 {nightsCount} nights in {nextTrip.overnightCities[0]}
               </p>
             )}
-            {nextTrip.overnightCities.length > 1 && (
+            {Array.isArray(nextTrip.overnightCities) && nextTrip.overnightCities.length > 1 && (
               <p className="flex items-center gap-4 py-4">
                 <Moon className="size-5 shrink-0 text-[#9AAE92]" aria-hidden />
                 Overnights in {nextTrip.overnightCities.join(", ")}
@@ -185,7 +250,7 @@ export default async function FamilyViewPage() {
                   )}
                 </div>
               )}
-              {nextTrip.overnightCities.length > 0 && (
+              {Array.isArray(nextTrip.overnightCities) && nextTrip.overnightCities.length > 0 && (
                 <p className="flex items-center gap-2 text-[#6F6F6F] text-sm">
                   <Moon className={nextTripIconClass} aria-hidden />
                   <span className="break-words">

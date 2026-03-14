@@ -3,10 +3,32 @@
  * Works for the full trip span (layover mornings, between duty periods, etc.).
  */
 
-import { fromZonedTime } from "date-fns-tz";
+import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { createClient } from "@/lib/supabase/server";
-import { getTripDateStrings, getLegsForDate, isDateFullyComplete, todayStr } from "@/lib/leg-dates";
+import { getTripDateStrings, getLegsForDate, isDateFullyComplete, todayStr, computeLegDates } from "@/lib/leg-dates";
 import { extractPairingKey } from "@/lib/schedule-time";
+
+/** Same arrival-passed logic as getNextLegForDate. True when arrival time has passed. */
+function hasArrivalPassed(
+  arrTime: string | undefined,
+  arrivalDate: string | null,
+  timezone: string
+): boolean {
+  if (!arrivalDate) return false;
+  const arrMin = (() => {
+    const t = (arrTime ?? "").trim().replace(":", "");
+    if (!/^\d{3,4}$/.test(t)) return null;
+    const h = parseInt(t.slice(0, -2) || "0", 10);
+    const m = parseInt(t.slice(-2), 10);
+    if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+    return h * 60 + m;
+  })();
+  if (arrMin == null) return false;
+  const nowDate = todayStr(timezone);
+  const [h, m] = [formatInTimeZone(new Date(), timezone, "HH"), formatInTimeZone(new Date(), timezone, "mm")].map(Number);
+  const nowMin = h * 60 + m;
+  return nowDate > arrivalDate || (nowDate === arrivalDate && nowMin >= arrMin);
+}
 
 /** Add one day to YYYY-MM-DD (matches schedule-time.addDay). */
 function addDay(dateStr: string): string {
@@ -26,6 +48,8 @@ export type ActiveTripTodayLeg = {
   depTime: string;
   arrTime: string;
   deadhead?: boolean;
+  /** Departure date (YYYY-MM-DD) for per-leg day label. Fixes overnight legs showing wrong date. */
+  departureDate?: string | null;
 };
 
 export type ActiveTrip = {
@@ -128,14 +152,23 @@ export async function getActiveTrip(userId: string): Promise<ActiveTrip | null> 
     }
   }
 
-  const todayLegs: ActiveTripTodayLeg[] = legsToShow.map((leg) => ({
-    flightNumber: leg.flightNumber ?? "",
-    origin: leg.origin ?? "",
-    destination: leg.destination ?? "",
-    depTime: leg.depTime ?? "",
-    arrTime: leg.arrTime ?? "",
-    ...(leg.deadhead === true || (leg.blockMinutes === 0 && leg.deadhead !== false) ? { deadhead: true } : {}),
-  }));
+  const legDates = computeLegDates(legs, tripDates, timezone);
+  const legsFiltered = legsToShow.filter((leg) => {
+    const ld = legDates.find((x) => x.leg.origin === leg.origin && x.leg.destination === leg.destination);
+    return ld?.arrivalDate == null || !hasArrivalPassed(leg.arrTime, ld.arrivalDate, timezone);
+  });
+  const todayLegs: ActiveTripTodayLeg[] = legsFiltered.map((leg) => {
+    const ld = legDates.find((x) => x.leg.origin === leg.origin && x.leg.destination === leg.destination);
+    return {
+      flightNumber: leg.flightNumber ?? "",
+      origin: leg.origin ?? "",
+      destination: leg.destination ?? "",
+      depTime: leg.depTime ?? "",
+      arrTime: leg.arrTime ?? "",
+      ...(leg.deadhead === true || (leg.blockMinutes === 0 && leg.deadhead !== false) ? { deadhead: true } : {}),
+      departureDate: ld?.departureDate ?? null,
+    };
+  });
 
   const tripStartDate = tripDates[0] ?? today;
 

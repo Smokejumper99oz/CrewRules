@@ -1,11 +1,21 @@
 /**
  * Get the signed-in user's next scheduled flight.
  * Reads from existing schedule_events without modifying any schedule code.
+ * Uses same leg-selection logic as schedule/actions.ts: active trip first,
+ * then first leg not yet completed (arrival passed = completed), else next pairing.
  */
 
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/profile";
-import { getTripDateStrings, computeLegDates } from "@/lib/leg-dates";
+import {
+  getTripDateStrings,
+  computeLegDates,
+  getNextLegForDate,
+  isDateFullyComplete,
+  getLegsForDate,
+  todayStr,
+} from "@/lib/leg-dates";
+import { addDay } from "@/lib/schedule-time";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getTenantSourceTimezone } from "@/lib/tenant-config";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
@@ -40,53 +50,28 @@ function extractTripNumber(title: string | null): string | null {
   return m ? m[1].toUpperCase() : null;
 }
 
-export async function getNextFlight(): Promise<NextFlightResult> {
-  const profile = await getProfile();
-  if (!profile) return { status: "reserve" };
-
-  const supabase = await createClient();
-  const nowIso = new Date().toISOString();
-
-  const timezone =
-    profile.base_timezone?.trim() ??
-    (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : getTenantSourceTimezone(profile.tenant ?? "frontier"));
-
-  const { data: event, error } = await supabase
-    .from("schedule_events")
-    .select("id, start_time, end_time, title, event_type, report_time, legs, filed_route")
-    .eq("user_id", profile.id)
-    .eq("source", FLICA_SOURCE)
-    .eq("event_type", "trip")
-    .gte("start_time", nowIso)
-    .order("start_time", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (error || !event) return { status: "reserve" };
-
-  const ev = event as ScheduleEventRow;
-  const legs = ev.legs ?? [];
-  const tripDates = getTripDateStrings(ev.start_time, ev.end_time, timezone);
-
-  const firstLeg = legs.find((l) => !l.deadhead && l.origin && l.destination);
-  if (!firstLeg?.origin || !firstLeg?.destination) return { status: "reserve" };
-
-  const legDates = computeLegDates(legs, tripDates, timezone);
-  const firstLegIdx = legs.findIndex((l) => l === firstLeg);
-  const firstLegDates = firstLegIdx >= 0 ? legDates[firstLegIdx] : legDates.find(
-    (ld) => ld.leg.origin === firstLeg.origin && ld.leg.destination === firstLeg.destination
+/** Build NextFlightResult from event + selected leg. Reused for active trip and fallback. */
+function buildNextFlight(
+  ev: ScheduleEventRow,
+  selectedLeg: { flightNumber?: string; origin: string; destination: string; depTime?: string; arrTime?: string; blockMinutes?: number },
+  legDates: { leg: typeof selectedLeg; departureDate: string | null; arrivalDate: string | null }[],
+  tripDates: string[],
+  timezone: string
+): NextFlightResult {
+  const legDatesEntry = legDates.find(
+    (ld) => ld.leg.origin === selectedLeg.origin && ld.leg.destination === selectedLeg.destination
   );
-  const depDateStr = firstLegDates?.departureDate ?? tripDates[0] ?? formatInTimeZone(new Date(ev.start_time), timezone, "yyyy-MM-dd");
-  const arrDateStr = firstLegDates?.arrivalDate ?? depDateStr;
+  const depDateStr = legDatesEntry?.departureDate ?? tripDates[0] ?? formatInTimeZone(new Date(ev.start_time), timezone, "yyyy-MM-dd");
+  const arrDateStr = legDatesEntry?.arrivalDate ?? depDateStr;
 
-  const arrTime = firstLeg.arrTime ?? null;
-  const depTimeRaw = (firstLeg.depTime ?? "00:00").replace(":", "").padStart(4, "0");
+  const arrTime = selectedLeg.arrTime ?? null;
+  const depTimeRaw = (selectedLeg.depTime ?? "00:00").replace(":", "").padStart(4, "0");
   const depTimeNorm = depTimeRaw.length >= 4 ? `${depTimeRaw.slice(0, 2)}:${depTimeRaw.slice(2, 4)}` : "00:00";
   const arrTimeRaw = arrTime ? arrTime.replace(":", "").padStart(4, "0") : "";
   const arrTimeNorm = arrTimeRaw.length >= 4 ? `${arrTimeRaw.slice(0, 2)}:${arrTimeRaw.slice(2, 4)}` : arrTime;
 
-  const depAirportTz = getTimezoneFromAirport(firstLeg.origin);
-  const arrAirportTz = getTimezoneFromAirport(firstLeg.destination);
+  const depAirportTz = getTimezoneFromAirport(selectedLeg.origin);
+  const arrAirportTz = getTimezoneFromAirport(selectedLeg.destination);
   const depUtc = fromZonedTime(`${depDateStr} ${depTimeNorm}`, depAirportTz);
   const depLocal = formatInTimeZone(depUtc, depAirportTz, "HH:mm");
   const depIsoFull = depUtc.toISOString();
@@ -97,19 +82,6 @@ export async function getNextFlight(): Promise<NextFlightResult> {
       : null;
   const arrIsoFull = arrUtcDate?.toISOString() ?? null;
   const arrUtcFormatted = arrUtcDate ? formatInTimeZone(arrUtcDate, "UTC", "HH:mm") : null;
-
-  console.log("[getNextFlight] TAF target times:", {
-    departureAirport: firstLeg.origin,
-    arrivalAirport: firstLeg.destination,
-    depDateStr,
-    arrDateStr,
-    depTimeNorm,
-    arrTimeNorm,
-    depAirportTz,
-    arrAirportTz,
-    departureIso: depIsoFull,
-    arrivalIso: arrIsoFull,
-  });
 
   let reportTime: string | null = null;
   if (ev.report_time) {
@@ -122,10 +94,10 @@ export async function getNextFlight(): Promise<NextFlightResult> {
   return {
     status: "flight",
     eventId: ev.id,
-    flightNumber: firstLeg.flightNumber ?? null,
+    flightNumber: selectedLeg.flightNumber ?? null,
     filedRoute: ev.filed_route ?? null,
-    departureAirport: firstLeg.origin,
-    arrivalAirport: firstLeg.destination,
+    departureAirport: selectedLeg.origin,
+    arrivalAirport: selectedLeg.destination,
     departureTime: depLocal,
     arrivalTime: arrTime,
     departureTimeUtc: depUtcFormatted,
@@ -133,8 +105,82 @@ export async function getNextFlight(): Promise<NextFlightResult> {
     reportTime: reportTime ?? undefined,
     aircraft: null,
     tripNumber: extractTripNumber(ev.title),
-    blockMinutes: firstLeg.blockMinutes ?? null,
+    blockMinutes: selectedLeg.blockMinutes ?? null,
     departureIso: depIsoFull,
     arrivalIso: arrIsoFull,
   };
+}
+
+export async function getNextFlight(): Promise<NextFlightResult> {
+  const profile = await getProfile();
+  if (!profile) return { status: "reserve" };
+
+  const supabase = await createClient();
+  const nowIso = new Date().toISOString();
+
+  const timezone =
+    profile.base_timezone?.trim() ??
+    (profile.base_airport ? getTimezoneFromAirport(profile.base_airport) : getTenantSourceTimezone(profile.tenant ?? "frontier"));
+
+  const today = todayStr(timezone);
+  const tomorrow = addDay(today);
+
+  // 1. Active trip: start_time <= now < end_time (same as schedule/actions.ts)
+  const { data: activeEvent, error: activeError } = await supabase
+    .from("schedule_events")
+    .select("id, start_time, end_time, title, event_type, report_time, legs, filed_route")
+    .eq("user_id", profile.id)
+    .eq("source", FLICA_SOURCE)
+    .eq("event_type", "trip")
+    .lte("start_time", nowIso)
+    .gt("end_time", nowIso)
+    .order("start_time", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (!activeError && activeEvent) {
+    const ev = activeEvent as ScheduleEventRow;
+    const legs = ev.legs ?? [];
+    const tripDates = getTripDateStrings(ev.start_time, ev.end_time, timezone);
+    const legDates = computeLegDates(legs, tripDates, timezone);
+
+    if (legs.length > 0 && tripDates.length > 0) {
+      // First leg that has NOT completed yet (completed = arrival has passed)
+      let selectedLeg: (typeof legs)[0] | null = getNextLegForDate(legs, today, tripDates, timezone);
+
+      if (!selectedLeg && isDateFullyComplete(legs, today, tripDates, timezone)) {
+        // No remaining leg today; choose first leg for tomorrow within same trip
+        const legsForTomorrow = getLegsForDate(legs, tomorrow, tripDates, timezone);
+        selectedLeg = legsForTomorrow.find((l) => !l.deadhead && l.origin && l.destination) ?? legsForTomorrow[0] ?? null;
+      }
+
+      if (selectedLeg && selectedLeg.origin && selectedLeg.destination && !selectedLeg.deadhead) {
+        return buildNextFlight(ev, selectedLeg, legDates, tripDates, timezone);
+      }
+    }
+  }
+
+  // 2. No active trip: fall back to first leg of next future trip
+  const { data: futureEvent, error: futureError } = await supabase
+    .from("schedule_events")
+    .select("id, start_time, end_time, title, event_type, report_time, legs, filed_route")
+    .eq("user_id", profile.id)
+    .eq("source", FLICA_SOURCE)
+    .eq("event_type", "trip")
+    .gte("start_time", nowIso)
+    .order("start_time", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (futureError || !futureEvent) return { status: "reserve" };
+
+  const ev = futureEvent as ScheduleEventRow;
+  const legs = ev.legs ?? [];
+  const tripDates = getTripDateStrings(ev.start_time, ev.end_time, timezone);
+  const legDates = computeLegDates(legs, tripDates, timezone);
+
+  const firstLeg = legs.find((l) => !l.deadhead && l.origin && l.destination);
+  if (!firstLeg?.origin || !firstLeg?.destination) return { status: "reserve" };
+
+  return buildNextFlight(ev, firstLeg, legDates, tripDates, timezone);
 }

@@ -11,7 +11,10 @@ const LOGIN_PATH = `/${TENANT}/${PORTAL}/login`;
 
 export type CreateProfileState = { error?: string } | null;
 
-export async function createProfile(_prev: CreateProfileState): Promise<CreateProfileState> {
+export async function createProfile(
+  _prev: CreateProfileState,
+  formData: FormData
+): Promise<CreateProfileState> {
   const supabase = await createActionClient();
   const {
     data: { user },
@@ -26,17 +29,33 @@ export async function createProfile(_prev: CreateProfileState): Promise<CreatePr
     redirect(`${LOGIN_PATH}?error=company_email_required`);
   }
 
+  const { data: existingProfile } = await supabase
+    .from("profiles")
+    .select("employee_number")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const employeeNumber =
+    !existingProfile?.employee_number?.trim()
+      ? ((formData.get("employee_number") as string)?.trim() || null)
+      : null;
+
+  const upsertPayload: Record<string, unknown> = {
+    id: user.id,
+    email: user.email ?? null,
+    tenant: TENANT,
+    portal: PORTAL,
+    role: "pilot",
+    plan: "free",
+    display_timezone_mode: "base",
+    time_format: "24h",
+  };
+  if (employeeNumber !== null) {
+    upsertPayload.employee_number = employeeNumber;
+  }
+
   const { error } = await supabase.from("profiles").upsert(
-    {
-      id: user.id,
-      email: user.email ?? null,
-      tenant: TENANT,
-      portal: PORTAL,
-      role: "pilot",
-      plan: "free",
-      display_timezone_mode: "base",
-      time_format: "24h",
-    },
+    upsertPayload,
     { onConflict: "id" }
   );
 

@@ -62,6 +62,7 @@ export async function submitAccessRequest(
         airline: airline?.trim() || inferredAirline,
         source: "request_access",
         status: "pending",
+        employee_number: employeeNumber?.trim() || null,
       },
       { onConflict: "email", ignoreDuplicates: true }
     );
