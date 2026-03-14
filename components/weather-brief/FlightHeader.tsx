@@ -1,5 +1,7 @@
 import type { NextFlight } from "@/lib/weather-brief/types";
 import { AirlineLogo } from "@/components/airline-logo";
+import { getTimezoneFromAirport } from "@/lib/airport-timezone";
+import { computeDelayInfo, getDelayStatusLabel, parseIsoTs } from "@/lib/flight-delay";
 
 type Props = {
   flight: NextFlight;
@@ -24,20 +26,61 @@ export function FlightHeader({ flight }: Props) {
       })()
     : null;
 
+  const depTz = getTimezoneFromAirport(flight.departureAirport);
+  const arrTz = getTimezoneFromAirport(flight.arrivalAirport);
+
+  const ls = flight.liveStatus;
+  const delayInfo =
+    ls && flight.departureIso && flight.arrivalIso
+      ? computeDelayInfo(
+          {
+            depUtc: flight.departureIso,
+            arrUtc: flight.arrivalIso ?? "",
+            originTz: depTz,
+            destTz: arrTz,
+            dep_scheduled_raw: ls.dep_scheduled_raw ?? undefined,
+            dep_estimated_raw: ls.dep_estimated_raw ?? undefined,
+            dep_actual_raw: ls.dep_actual_raw ?? undefined,
+            arr_scheduled_raw: ls.arr_scheduled_raw ?? undefined,
+            arr_estimated_raw: ls.arr_estimated_raw ?? undefined,
+            arr_actual_raw: ls.arr_actual_raw ?? undefined,
+            status: ls.cancelled ? "cancelled" : undefined,
+          },
+          depTz,
+          arrTz,
+          parseIsoTs
+        )
+      : null;
+
   const depDisplay =
-    flight.departureTime && flight.departureTimeUtc
-      ? `${flight.departureTime} (${flight.departureTimeUtc}Z)`
-      : flight.departureTime || "—";
+    delayInfo?.cancelled || !delayInfo
+      ? flight.departureTime && flight.departureTimeUtc
+        ? `${flight.departureTime} (${flight.departureTimeUtc}Z)`
+        : flight.departureTime || "—"
+      : delayInfo.dep
+        ? `Sched. ${delayInfo.dep.scheduled} → ${delayInfo.dep.actual}`
+        : flight.departureTime && flight.departureTimeUtc
+          ? `${flight.departureTime} (${flight.departureTimeUtc}Z)`
+          : flight.departureTime || "—";
+
   const arrDisplay =
-    flight.arrivalTime && flight.arrivalTimeUtc
-      ? `${flight.arrivalTime} (${flight.arrivalTimeUtc}Z)`
-      : flight.arrivalTime || "—";
+    delayInfo?.cancelled || !delayInfo
+      ? flight.arrivalTime && flight.arrivalTimeUtc
+        ? `${flight.arrivalTime} (${flight.arrivalTimeUtc}Z)`
+        : flight.arrivalTime || "—"
+      : delayInfo?.arr
+        ? `Sched. ${delayInfo.arr.scheduled} → ${delayInfo.arr.actual}`
+        : flight.arrivalTime && flight.arrivalTimeUtc
+          ? `${flight.arrivalTime} (${flight.arrivalTimeUtc}Z)`
+          : flight.arrivalTime || "—";
 
   const flightTimeMinutes =
     flight.blockMinutes ??
     (flight.departureIso && flight.arrivalIso
       ? Math.round((new Date(flight.arrivalIso).getTime() - new Date(flight.departureIso).getTime()) / 60000)
       : null);
+
+  const statusLabel = ls && delayInfo ? getDelayStatusLabel(delayInfo) : null;
 
   return (
     <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/60 to-slate-950/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] md:p-6">
@@ -53,6 +96,19 @@ export function FlightHeader({ flight }: Props) {
         <div className="font-mono text-xl font-bold text-white">
           {dep} → {arr}
         </div>
+        {statusLabel && (
+          <span
+            className={
+              statusLabel === "Cancelled"
+                ? "rounded px-2 py-0.5 text-xs font-medium text-red-400 ring-1 ring-red-400/40"
+                : statusLabel === "Delayed"
+                  ? "rounded px-2 py-0.5 text-xs font-medium text-amber-400 ring-1 ring-amber-400/40"
+                  : "rounded px-2 py-0.5 text-xs font-medium text-emerald-400 ring-1 ring-emerald-400/40"
+            }
+          >
+            {statusLabel}
+          </span>
+        )}
       </div>
       <div className="mt-4 flex flex-wrap gap-6 text-sm">
         <div>

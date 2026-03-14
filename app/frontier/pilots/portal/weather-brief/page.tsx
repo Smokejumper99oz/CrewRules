@@ -57,11 +57,13 @@ export default async function WeatherBriefPage() {
         }
       : null;
 
-  // 1. Prefer schedule_events.filed_route; 2. getFiledRoute checks flight_route_cache then API (time-window gated)
-  const filedRoute =
-    nextFlight.status === "flight"
-      ? nextFlight.filedRoute ?? (routeLookup ? await getFiledRoute(routeLookup) : null)
+  // Always resolve Filed Route per leg using getFiledRoute(routeLookup). Trip-level schedule_events.filed_route can be wrong for multi-leg trips.
+  const filedResult =
+    nextFlight.status === "flight" && routeLookup
+      ? await getFiledRoute(routeLookup)
       : null;
+  const filedRoute = filedResult?.route ?? null;
+  const liveStatus = filedResult?.status ?? null;
 
   if (
     nextFlight.status === "flight" &&
@@ -71,6 +73,11 @@ export default async function WeatherBriefPage() {
   ) {
     await cacheFiledRoute(nextFlight.eventId, filedRoute);
   }
+
+  const flightWithLiveStatus =
+    nextFlight.status === "flight"
+      ? { ...nextFlight, liveStatus }
+      : nextFlight;
 
   const depTz = getTimezoneFromAirport(departureAirport);
   const arrTz = getTimezoneFromAirport(arrivalAirport);
@@ -95,11 +102,20 @@ export default async function WeatherBriefPage() {
     watchItems
   );
 
+  console.log("[weather-brief-debug] nextFlight before FlightHeader:", {
+    flightNumber: flightWithLiveStatus.status === "flight" ? flightWithLiveStatus.flightNumber : null,
+    origin: flightWithLiveStatus.status === "flight" ? flightWithLiveStatus.departureAirport : null,
+    destination: flightWithLiveStatus.status === "flight" ? flightWithLiveStatus.arrivalAirport : null,
+    departureIso: flightWithLiveStatus.status === "flight" ? flightWithLiveStatus.departureIso : null,
+    arrivalIso: flightWithLiveStatus.status === "flight" ? flightWithLiveStatus.arrivalIso : null,
+    liveStatus: flightWithLiveStatus.status === "flight" ? flightWithLiveStatus.liveStatus : null,
+  });
+
   return (
     <div className="space-y-6 md:space-y-8">
       <WeatherBriefNotice departureIso={departureIso ?? null} />
       <WeatherRefreshTrigger departureIso={departureIso ?? null} />
-      <FlightHeader flight={nextFlight} />
+      <FlightHeader flight={flightWithLiveStatus} />
       {nextFlight.status === "flight" && (
         <FiledRouteCard flight={nextFlight} routeText={filedRoute} />
       )}

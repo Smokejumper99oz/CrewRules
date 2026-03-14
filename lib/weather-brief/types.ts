@@ -2,6 +2,19 @@
  * Weather Brief types for pilot-focused flight weather.
  */
 
+export type FlightLiveStatus = {
+  dep_scheduled_raw?: string | null;
+  dep_estimated_raw?: string | null;
+  dep_actual_raw?: string | null;
+  arr_scheduled_raw?: string | null;
+  arr_estimated_raw?: string | null;
+  arr_actual_raw?: string | null;
+  status?: string | null;
+  cancelled?: boolean;
+  departure_delay?: number | null;
+  arrival_delay?: number | null;
+};
+
 export type NextFlight = {
   status: "flight";
   eventId: string;
@@ -24,6 +37,8 @@ export type NextFlight = {
   departureIso?: string;
   /** ISO timestamp for arrival (for TAF window selection) */
   arrivalIso?: string | null;
+  /** Live status from FlightAware (optional). FLICA times remain baseline. */
+  liveStatus?: FlightLiveStatus | null;
 };
 
 export type ReserveState = {

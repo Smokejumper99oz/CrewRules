@@ -1,5 +1,8 @@
 import type { RouteLookup } from "@/lib/weather-brief/get-filed-route";
+import type { FlightLiveStatus } from "@/lib/weather-brief/types";
 import { TENANT_CARRIER } from "@/lib/tenant-config";
+import { fetchFlightsFromAerodataBox } from "@/lib/aerodatabox";
+import { parseAviationstackTs } from "@/lib/aviationstack";
 
 export function buildIdent(lookup: RouteLookup): string {
   const raw = (lookup.flightNumber ?? "").trim().toUpperCase();
@@ -44,21 +47,22 @@ async function fetchFlightsForIdent(
 
 export async function fetchFiledRouteFromFlightAware(
   lookup: RouteLookup
-): Promise<string | null> {
+): Promise<{ route: string | null; status: FlightLiveStatus | null }> {
   const apiKey = process.env.FLIGHTAWARE_API_KEY;
 
-  if (!apiKey || !lookup.flightNumber) return null;
+  if (!apiKey || !lookup.flightNumber) return { route: null, status: null };
 
   try {
     let ident = buildIdent(lookup);
-    if (!ident) return null;
+    if (!ident) return { route: null, status: null };
 
     console.log("[flightaware] primary ident:", ident);
 
     let result = await fetchFlightsForIdent(ident, apiKey);
-    if (!result) return null;
+    if (!result) return { route: null, status: null };
 
     let { data, flights } = result;
+    let fallbackIdentUsed: string | null = null;
 
     if (!flights.length) {
       const fallback = getFallbackIdent(ident);
@@ -69,6 +73,7 @@ export async function fetchFiledRouteFromFlightAware(
           data = fallbackResult.data;
           flights = fallbackResult.flights;
           ident = fallback;
+          fallbackIdentUsed = fallback;
           console.log("[flightaware] fallback ident produced flights:", fallback);
         }
       }
@@ -76,7 +81,7 @@ export async function fetchFiledRouteFromFlightAware(
 
     if (!flights.length) {
       console.log("[flightaware] no flights returned for:", ident);
-      return null;
+      return { route: null, status: null };
     }
 
     console.log("[flightaware] response preview:", {
@@ -93,6 +98,32 @@ export async function fetchFiledRouteFromFlightAware(
             planned_route: (flights[0] as Record<string, unknown>)?.planned_route,
           }
         : null,
+    });
+
+    console.log("[weather-brief-debug] flightaware candidates:", {
+      ident,
+      fallbackIdentUsed,
+      flightsLength: flights.length,
+      candidates: flights.map((f: unknown) => {
+        const ff = f as Record<string, unknown>;
+        const orig = ff?.origin as Record<string, unknown> | undefined;
+        const dest = ff?.destination as Record<string, unknown> | undefined;
+        return {
+          ident: ff?.ident,
+          "origin.code_iata": orig?.code_iata,
+          "origin.code": orig?.code,
+          "destination.code_iata": dest?.code_iata,
+          "destination.code": dest?.code,
+          scheduled_out: ff?.scheduled_out,
+          estimated_out: ff?.estimated_out,
+          actual_out: ff?.actual_out,
+          scheduled_in: ff?.scheduled_in,
+          estimated_in: ff?.estimated_in,
+          actual_in: ff?.actual_in,
+          status: ff?.status,
+          cancelled: ff?.cancelled,
+        };
+      }),
     });
 
     const targetDepartureIso = lookup.departureIso ?? null;
@@ -117,6 +148,24 @@ export async function fetchFiledRouteFromFlightAware(
 
     const matched = rawMatched as Record<string, unknown>;
 
+    console.log("[weather-brief-debug] FlightAware matched flight:", {
+      ident,
+      fallbackIdentUsed,
+      "lookup.origin": lookup.origin,
+      "lookup.destination": lookup.destination,
+      "matched.ident": matched?.ident,
+      "matched.scheduled_out": matched?.scheduled_out,
+      "matched.estimated_out": matched?.estimated_out,
+      "matched.actual_out": matched?.actual_out,
+      "matched.scheduled_in": matched?.scheduled_in,
+      "matched.estimated_in": matched?.estimated_in,
+      "matched.actual_in": matched?.actual_in,
+      "matched.departure_delay": matched?.departure_delay,
+      "matched.arrival_delay": matched?.arrival_delay,
+      "matched.status": matched?.status,
+      "matched.cancelled": matched?.cancelled,
+    });
+
     const route =
       matched?.route ||
       matched?.filed_route ||
@@ -139,7 +188,24 @@ export async function fetchFiledRouteFromFlightAware(
       route,
     });
 
-    if (typeof route === "string" && route.trim()) return route.trim();
+    const routeStr = typeof route === "string" && route.trim() ? route.trim() : null;
+
+    const status: FlightLiveStatus | null = matched
+      ? {
+          dep_scheduled_raw: (matched.scheduled_out as string) ?? null,
+          dep_estimated_raw: (matched.estimated_out as string) ?? null,
+          dep_actual_raw: (matched.actual_out as string) ?? null,
+          arr_scheduled_raw: (matched.scheduled_in as string) ?? null,
+          arr_estimated_raw: (matched.estimated_in as string) ?? null,
+          arr_actual_raw: (matched.actual_in as string) ?? null,
+          status: (matched.status as string) ?? null,
+          cancelled: (matched.cancelled as boolean) ?? false,
+          departure_delay: (matched.departure_delay as number) ?? null,
+          arrival_delay: (matched.arrival_delay as number) ?? null,
+        }
+      : null;
+
+    if (routeStr) return { route: routeStr, status };
 
     console.log("[flightaware] route not yet available for flight:", {
       ident,
@@ -148,9 +214,93 @@ export async function fetchFiledRouteFromFlightAware(
       targetDepartureIso,
       matchedDeparture: matchedDep,
     });
-    return null;
+    return { route: null, status };
   } catch (error) {
     console.log("[flightaware] lookup error:", error);
+    return { route: null, status: null };
+  }
+}
+
+/** Convert local timestamp to ISO UTC for FlightLiveStatus. Returns null if invalid. */
+function localToIso(local: string | undefined, tz: string): string | null {
+  if (!local?.trim()) return null;
+  try {
+    const d = parseAviationstackTs(local, tz);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  } catch {
     return null;
   }
+}
+
+/** Extract numeric flight number for matching (e.g. "F9 4462" or "FFT4462" -> "4462"). */
+function extractNumericFlightNumber(s: string): string {
+  const m = s.match(/\d{3,5}/);
+  return m ? m[0] : s.replace(/\D/g, "") || "";
+}
+
+/** Try AeroDataBox fallback when FlightAware returns no match. Returns status only (no route). */
+async function tryAeroDataBoxFallback(
+  lookup: RouteLookup
+): Promise<FlightLiveStatus | null> {
+  const { flightNumber, origin, destination, departureIso } = lookup;
+  if (!flightNumber || !origin || !destination || !departureIso) return null;
+  if (!process.env.RAPIDAPI_KEY) return null;
+
+  const dateStr = departureIso.slice(0, 10);
+  const targetDepMs = new Date(departureIso).getTime();
+  const WINDOW_MS = 4 * 60 * 60 * 1000; // ±4h for matching
+
+  try {
+    const { flights } = await fetchFlightsFromAerodataBox(origin, destination, dateStr);
+    const lookupNumeric = extractNumericFlightNumber(flightNumber.trim());
+
+    const matched = flights.find((f) => {
+      if (f.origin?.toUpperCase() !== origin.toUpperCase()) return false;
+      if (f.destination?.toUpperCase() !== destination.toUpperCase()) return false;
+      const fNumeric = extractNumericFlightNumber(f.flightNumber ?? "");
+      if (fNumeric !== lookupNumeric) return false;
+      const depRaw = f.dep_scheduled_raw ?? f.departureTime;
+      if (!depRaw || !f.origin_tz) return false;
+      try {
+        const depMs = parseAviationstackTs(depRaw, f.origin_tz).getTime();
+        return Math.abs(depMs - targetDepMs) <= WINDOW_MS;
+      } catch {
+        return false;
+      }
+    });
+
+    if (!matched) return null;
+
+    const depTz = matched.origin_tz ?? "UTC";
+    const arrTz = matched.dest_tz ?? "UTC";
+
+    return {
+      dep_scheduled_raw: localToIso(matched.dep_scheduled_raw ?? matched.departureTime, depTz),
+      dep_estimated_raw: localToIso(matched.dep_estimated_raw, depTz),
+      dep_actual_raw: localToIso(matched.dep_actual_raw, depTz),
+      arr_scheduled_raw: localToIso(matched.arr_scheduled_raw ?? matched.arrivalTime, arrTz),
+      arr_estimated_raw: localToIso(matched.arr_estimated_raw, arrTz),
+      arr_actual_raw: localToIso(matched.arr_actual_raw, arrTz),
+      status: matched.status ?? null,
+      cancelled: matched.status?.toLowerCase() === "cancelled",
+      departure_delay: matched.dep_delay_min != null ? matched.dep_delay_min * 60 : null,
+      arrival_delay: matched.arr_delay_min != null ? matched.arr_delay_min * 60 : null,
+    };
+  } catch (error) {
+    console.log("[flightaware] AeroDataBox fallback error:", error);
+    return null;
+  }
+}
+
+/**
+ * Fetch filed route and live status. Tries FlightAware first, then AeroDataBox if no match.
+ */
+export async function fetchFiledRouteWithFallback(
+  lookup: RouteLookup
+): Promise<{ route: string | null; status: FlightLiveStatus | null }> {
+  const faResult = await fetchFiledRouteFromFlightAware(lookup);
+  if (faResult.route ?? faResult.status) return faResult;
+
+  const adbStatus = await tryAeroDataBoxFallback(lookup);
+  return { route: null, status: adbStatus };
 }
