@@ -7,12 +7,19 @@ import { formatLegLine } from "@/lib/trips/detect-trip-changes";
 import type { TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { resolveLegIdentity } from "@/lib/trips/resolve-leg-identity";
 import { formatDayLabel, addDay } from "@/lib/schedule-time";
+import { getLegsForDate, computeLegDates, getTripDateStrings } from "@/lib/leg-dates";
 import { computeDelayInfo, getDelayStatusLabel, parseIsoTs } from "@/lib/flight-delay";
 import { AirlineLogo } from "@/components/airline-logo";
 import { ScheduleStatusChip } from "@/components/schedule-status-chip";
 import { ScheduleEventCard } from "@/components/schedule-event-card";
 import { OnDutyTimer } from "@/components/on-duty-timer";
+import { Far117FdpBanner } from "@/components/far-117-fdp-banner";
 import { PortalNextDutyCommuteSection } from "@/components/portal-next-duty-commute-section";
+import { getFar117MaxFdpMinutes } from "@/lib/far-117/fdp-max";
+import {
+  computeProjectedFdpElapsedMinutes,
+  computeFdpRemainingMinutes,
+} from "@/lib/far-117/fdp-remaining";
 import { getFiledRoute } from "@/lib/weather-brief/get-filed-route";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 
@@ -34,6 +41,19 @@ function legDurationMinutes(depTime: string, arrTime: string): number {
   return Math.max(0, arr - dep);
 }
 
+/** Prefer live duration when live delayed times are shown so duration matches displayed dep/arr. */
+function computeLiveDurationMinutes(depIso?: string | null, arrIso?: string | null): number | null {
+  if (!depIso?.trim() || !arrIso?.trim()) return null;
+  try {
+    const depMs = new Date(depIso.trim()).getTime();
+    const arrMs = new Date(arrIso.trim()).getTime();
+    if (Number.isNaN(depMs) || Number.isNaN(arrMs)) return null;
+    return Math.max(0, Math.round((arrMs - depMs) / 60000));
+  } catch {
+    return null;
+  }
+}
+
 /** Default carrier for tenant when API has no data (e.g. Frontier = F9). */
 const TENANT_CARRIER: Record<string, string> = { frontier: "F9" };
 
@@ -52,6 +72,31 @@ const DUTY_LABELS: Record<string, string> = {
   later_today: "Later today",
   next_duty: "Next Duty",
 };
+
+/** Normalize report_time (HH:MM or HHMM) to HH:MM for FAR 117 lookup. */
+function normalizeReportTimeToHHMM(rt: string | null | undefined): string | null {
+  if (!rt?.trim()) return null;
+  const t = rt.trim();
+  if (/^\d{1,2}:\d{2}$/.test(t)) return t;
+  const s = t.replace(":", "");
+  if (!/^\d{3,4}$/.test(s)) return null;
+  return s.length === 4 ? `${s.slice(0, 2)}:${s.slice(2)}` : `0${s.slice(0, 1)}:${s.slice(1)}`;
+}
+
+/** Build report datetime ISO from report_time + duty date in timezone. */
+function buildReportTimeIso(
+  reportTime: string,
+  dutyDateStr: string,
+  timezone: string
+): string | null {
+  const norm = normalizeReportTimeToHHMM(reportTime);
+  if (!norm) return null;
+  try {
+    return fromZonedTime(`${dutyDateStr}T${norm}:00`, timezone).toISOString();
+  } catch {
+    return null;
+  }
+}
 
 export async function PortalNextDuty({
   tenant,
@@ -142,6 +187,192 @@ export async function PortalNextDuty({
     status: resolvedFirstLeg?.status ?? null,
   });
 
+  const far117Result =
+    hasSchedule && event && isOnDuty
+      ? (() => {
+          const baseTimezone = displaySettings.baseTimezone;
+          const reportTimeLocal = reportTimeOverride ?? event.report_time ?? null;
+          if (!reportTimeLocal) return null;
+          const reportTimeNorm = normalizeReportTimeToHHMM(reportTimeLocal);
+          if (!reportTimeNorm) return null;
+
+          const tripDates = getTripDateStrings(event.start_time, event.end_time, baseTimezone);
+          const legDates = computeLegDates(event.legs ?? [], tripDates, baseTimezone);
+          const now = new Date();
+          const nowFallback = formatInTimeZone(now, baseTimezone, "yyyy-MM-dd");
+
+          let dutyDate: string;
+          const displayedLeg = legsToShow?.[0];
+          if (displayedLeg) {
+            const ld = legDates.find(
+              (x) => x.leg.origin === displayedLeg.origin && x.leg.destination === displayedLeg.destination
+            );
+            dutyDate =
+              ld?.departureDate && tripDates.includes(ld.departureDate)
+                ? ld.departureDate
+                : displayDateStr ?? nowFallback;
+          } else {
+            dutyDate = displayDateStr ?? nowFallback;
+          }
+
+          const nextDutyDate = addDay(dutyDate);
+          const reportTimeIso = buildReportTimeIso(reportTimeLocal, dutyDate, baseTimezone);
+          if (!reportTimeIso) return null;
+
+          const legsForDutyDate = getLegsForDate(event.legs ?? [], dutyDate, tripDates, baseTimezone);
+          const legsForNextDutyDate = getLegsForDate(event.legs ?? [], nextDutyDate, tripDates, baseTimezone);
+
+          const overnightCrossing = legsForDutyDate.some((leg) => {
+            const ld = legDates.find(
+              (x) => x.leg.origin === leg.origin && x.leg.destination === leg.destination
+            );
+            return ld?.arrivalDate === nextDutyDate;
+          });
+
+          const MAX_GAP_MINUTES = 6 * 60;
+          let overnightAnchorLeg: (typeof legsForDutyDate)[0] | null = null;
+          let continuationLegs: typeof legsForNextDutyDate = [];
+
+          if (overnightCrossing && legsForNextDutyDate.length > 0) {
+            const overnightCandidates = legsForDutyDate
+              .map((leg) => {
+                const ld = legDates.find(
+                  (x) => x.leg.origin === leg.origin && x.leg.destination === leg.destination
+                );
+                return ld?.arrivalDate === nextDutyDate ? { leg, ld } : null;
+              })
+              .filter((x): x is { leg: (typeof legsForDutyDate)[0]; ld: { arrivalDate: string } } => x != null);
+            overnightAnchorLeg =
+              overnightCandidates.length > 0
+                ? overnightCandidates
+                    .sort((a, b) => {
+                      const aTime = (a.leg.arrTime ?? "").replace(":", "").padStart(4, "0");
+                      const bTime = (b.leg.arrTime ?? "").replace(":", "").padStart(4, "0");
+                      return (bTime || "0000").localeCompare(aTime || "0000");
+                    })[0].leg
+                : null;
+
+            if (overnightAnchorLeg) {
+              const anchorLd = legDates.find(
+                (x) =>
+                  x.leg.origin === overnightAnchorLeg!.origin &&
+                  x.leg.destination === overnightAnchorLeg!.destination
+              );
+              const anchorArrRaw = (overnightAnchorLeg.arrTime ?? "00:00").replace(":", "").padStart(4, "0");
+              const anchorArrNorm = `${anchorArrRaw.slice(0, 2)}:${anchorArrRaw.slice(-2)}`;
+              let lastArrIso = fromZonedTime(
+                `${anchorLd?.arrivalDate ?? nextDutyDate}T${anchorArrNorm}:00`,
+                baseTimezone
+              ).getTime();
+
+              const nextDayWithDates = legsForNextDutyDate
+                .map((leg) => {
+                  const ld = legDates.find(
+                    (x) => x.leg.origin === leg.origin && x.leg.destination === leg.destination
+                  );
+                  return ld ? { leg, departureDate: ld.departureDate, arrivalDate: ld.arrivalDate } : null;
+                })
+                .filter((x): x is { leg: (typeof legsForNextDutyDate)[0]; departureDate: string; arrivalDate: string | null } => x != null)
+                .sort((a, b) => {
+                  if (a.departureDate !== b.departureDate) return a.departureDate.localeCompare(b.departureDate);
+                  const aTime = (a.leg.depTime ?? "").replace(":", "").padStart(4, "0");
+                  const bTime = (b.leg.depTime ?? "").replace(":", "").padStart(4, "0");
+                  return (aTime || "0000").localeCompare(bTime || "0000");
+                });
+
+              for (const { leg, departureDate, arrivalDate } of nextDayWithDates) {
+                const depRaw = (leg.depTime ?? "00:00").replace(":", "").padStart(4, "0");
+                const depNorm = `${depRaw.slice(0, 2)}:${depRaw.slice(-2)}`;
+                const depIso = fromZonedTime(`${departureDate}T${depNorm}:00`, baseTimezone).getTime();
+                const gapMinutes = (depIso - lastArrIso) / 60_000;
+                if (gapMinutes > MAX_GAP_MINUTES) break;
+                continuationLegs.push(leg);
+                if (arrivalDate) {
+                  const arrRaw = (leg.arrTime ?? "00:00").replace(":", "").padStart(4, "0");
+                  const arrNorm = `${arrRaw.slice(0, 2)}:${arrRaw.slice(-2)}`;
+                  lastArrIso = fromZonedTime(`${arrivalDate}T${arrNorm}:00`, baseTimezone).getTime();
+                }
+              }
+            }
+          }
+
+          const reportTimeMs = new Date(reportTimeIso).getTime();
+          const filteredLegsForDutyDate = legsForDutyDate.filter((leg) => {
+            const ld = legDates.find((x) => x.leg === leg);
+            if (!ld?.departureDate) return false;
+            const depRaw = (leg.depTime ?? "00:00").replace(":", "").padStart(4, "0");
+            const depNorm = `${depRaw.slice(0, 2)}:${depRaw.slice(-2)}`;
+            const depIso = fromZonedTime(`${ld.departureDate}T${depNorm}:00`, baseTimezone).getTime();
+            return depIso >= reportTimeMs;
+          });
+
+          const seenKeys = new Set<string>();
+          const dutyPeriodLegs = [...filteredLegsForDutyDate, ...continuationLegs].filter((leg) => {
+            const key = `${leg.origin}-${leg.destination}-${leg.depTime ?? ""}-${leg.arrTime ?? ""}`;
+            if (seenKeys.has(key)) return false;
+            seenKeys.add(key);
+            return true;
+          });
+
+          const segmentCount = dutyPeriodLegs.filter((l) => !l.deadhead).length;
+          const maxFdp = getFar117MaxFdpMinutes(reportTimeNorm, segmentCount);
+          if (maxFdp == null) return null;
+
+          let projectedDutyEndIso: string | null = null;
+          if (dutyPeriodLegs.length > 0) {
+            const dutyPeriodWithArrIso = dutyPeriodLegs
+              .map((leg) => {
+                const ld = legDates.find((x) => x.leg === leg);
+                if (!ld?.arrivalDate) return null;
+                const arrRaw = (leg.arrTime ?? "00:00").replace(":", "").padStart(4, "0");
+                const arrNorm = `${arrRaw.slice(0, 2)}:${arrRaw.slice(-2)}`;
+                const arrIso = fromZonedTime(
+                  `${ld.arrivalDate}T${arrNorm}:00`,
+                  baseTimezone
+                ).toISOString();
+                return { leg, arrIso };
+              })
+              .filter((x): x is { leg: (typeof dutyPeriodLegs)[0]; arrIso: string } => x != null);
+            if (dutyPeriodWithArrIso.length > 0) {
+              const sorted = dutyPeriodWithArrIso.sort((a, b) =>
+                a.arrIso.localeCompare(b.arrIso)
+              );
+              projectedDutyEndIso = sorted[sorted.length - 1].arrIso;
+            }
+          }
+
+          if (projectedDutyEndIso == null) {
+            if (tripDates.length === 1) projectedDutyEndIso = event.end_time;
+            else return null;
+          }
+
+          const scheduledProjectedDutyEndIso = projectedDutyEndIso;
+          let currentLegArrivalDelayMinutes = 0;
+          const arrSched = firstLegLiveStatus?.arr_scheduled_raw;
+          const arrNow = firstLegLiveStatus?.arr_actual_raw ?? firstLegLiveStatus?.arr_estimated_raw;
+          if (arrSched && arrNow) {
+            const schedMs = new Date(arrSched).getTime();
+            const nowMs = new Date(arrNow).getTime();
+            if (!Number.isNaN(schedMs) && !Number.isNaN(nowMs)) {
+              const delayMin = Math.round((nowMs - schedMs) / 60000);
+              currentLegArrivalDelayMinutes = delayMin > 0 ? delayMin : 0;
+            }
+          }
+
+          if (currentLegArrivalDelayMinutes > 0) {
+            projectedDutyEndIso = new Date(
+              new Date(scheduledProjectedDutyEndIso).getTime() + currentLegArrivalDelayMinutes * 60_000
+            ).toISOString();
+          }
+
+          const elapsed = computeProjectedFdpElapsedMinutes(reportTimeIso, projectedDutyEndIso);
+          if (elapsed == null) return null;
+          const remaining = computeFdpRemainingMinutes(maxFdp, elapsed);
+
+          return { remainingMinutes: remaining, maxFdpMinutes: maxFdp };
+        })()
+      : null;
+
   return (
     <div
       className={`rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-6 transition-all duration-200 hover:-translate-y-0.5 ${
@@ -173,6 +404,15 @@ export async function PortalNextDuty({
           showProBadge={isCurrentTripMode}
         />
       </div>
+
+      {far117Result && activeTrip && (
+        <div className="mt-4">
+          <Far117FdpBanner
+            remainingMinutes={far117Result.remainingMinutes}
+            maxFdpMinutes={far117Result.maxFdpMinutes}
+          />
+        </div>
+      )}
 
       {activeTrip && (
         <div className="mt-4 rounded-lg border border-slate-700/60 bg-slate-900/40 overflow-hidden">
@@ -277,7 +517,8 @@ export async function PortalNextDuty({
                       <AirlineLogo carrier={f?.carrier ?? fallbackCarrierForLeg ?? ""} size={24} />
                       <span className="text-slate-300 font-medium font-mono tabular-nums">{flightLabel}</span>
                       <span className="text-slate-600">•</span>
-                      <span>Flight time {fmtHM(f?.durationMinutes ?? legDurationMinutes(leg.depTime, leg.arrTime))}</span>
+                      {/* Prefer live duration when live delayed times are shown so duration matches displayed dep/arr */}
+                      <span>Flight time {fmtHM(computeLiveDurationMinutes(firstLegLiveStatus?.dep_actual_raw ?? firstLegLiveStatus?.dep_estimated_raw ?? null, firstLegLiveStatus?.arr_actual_raw ?? firstLegLiveStatus?.arr_estimated_raw ?? null) ?? f?.durationMinutes ?? legDurationMinutes(leg.depTime, leg.arrTime))}</span>
                       {effectiveAircraftType && (
                         <>
                           <span className="text-slate-600">•</span>
@@ -401,6 +642,12 @@ export async function PortalNextDuty({
               legsToShow={legsToShow}
               displayDateStr={displayDateStr}
               reportTimeOverride={reportTimeOverride}
+            />
+          )}
+          {far117Result && !activeTrip && (
+            <Far117FdpBanner
+              remainingMinutes={far117Result.remainingMinutes}
+              maxFdpMinutes={far117Result.maxFdpMinutes}
             />
           )}
           {isOnDuty && (
