@@ -65,16 +65,18 @@ export default function SignUpPage() {
           </h1>
 
           <p className="mt-3 text-slate-300">
-            Create your CrewRules™ portal account. You must use your company email.
+            Create your CrewRules™ portal account.
+            <br />
+            You must use your company email.
           </p>
 
           <form action={formAction} onSubmit={handleSubmit} className="mt-8 space-y-4">
             <div>
-              <label className="text-sm text-slate-200">Full name</label>
+              <label className="text-sm text-slate-200">Full Name</label>
               <input
                 name="full_name"
                 type="text"
-                placeholder="Your full name"
+                placeholder="John Smith"
                 required
                 disabled={isPending}
                 className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"

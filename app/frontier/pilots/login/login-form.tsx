@@ -104,7 +104,7 @@ export function LoginForm() {
               <input
                 name="email"
                 type="email"
-                placeholder="name@company.com"
+                placeholder="name@flyfrontier.com"
                 required
                 disabled={isPending}
                 className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
