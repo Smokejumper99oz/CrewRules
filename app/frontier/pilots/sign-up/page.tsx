@@ -61,7 +61,8 @@ export default function SignUpPage() {
           </div>
 
           <h1 className="mt-3 text-3xl font-bold tracking-tight">
-            Create account
+            Crew<span className="text-[#75C043]">Rules</span>
+            <span className="align-super text-sm">™</span> Create account
           </h1>
 
           <p className="mt-3 text-slate-300">

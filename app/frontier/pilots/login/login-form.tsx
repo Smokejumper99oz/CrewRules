@@ -157,7 +157,7 @@ export function LoginForm() {
               </Link>
               <span className="text-slate-500">•</span>
               <Link
-                href={`/${TENANT}/${PORTAL}/request-access`}
+                href="/request-access"
                 className="text-slate-300 hover:text-white"
               >
                 Request Access

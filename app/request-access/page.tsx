@@ -8,42 +8,20 @@ export default function RequestAccessPage() {
   const [state, formAction, isPending] = useActionState(submitAccessRequest, null);
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
-      <div className="max-w-xl w-full">
-        <h1 className="text-4xl font-bold text-center">Request Access</h1>
-        <p className="mt-4 text-slate-300 text-center">
-          Crew<span className="text-[#75C043]">Rules</span>™ is launching airline by airline. Request access with your company email and we&apos;ll let you know whether your airline is live or add you to the waitlist.
+    <main className="min-h-screen bg-slate-950 text-white">
+      <div className="mx-auto max-w-lg w-full px-6 py-16">
+        <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-8 shadow-lg shadow-black/30">
+          <h1 className="text-3xl font-bold text-center tracking-tight">
+          Crew<span className="text-[#75C043]">Rules</span>
+          <span className="align-super text-sm">™</span> Request Access
+        </h1>
+        <p className="mt-4 text-slate-300 text-left">
+          Crew<span className="text-[#75C043]">Rules</span>™ is launching one airline at a time.
+          <br />
+          Request access using your company email. If your airline isn&apos;t live yet, we&apos;ll place you on the waitlist and notify you when it launches.
         </p>
 
-        <div className="mt-8 rounded-2xl border border-emerald-500/30 bg-gradient-to-b from-[#75C043]/10 to-white/[0.03] p-6">
-          <div className="text-xs uppercase tracking-widest text-slate-400">
-            FRONTIER AIRLINES
-          </div>
-          <h2 className="mt-3 text-xl font-bold tracking-tight">
-            Pilot Access — Now Live
-          </h2>
-          <p className="mt-2 text-sm text-slate-300">
-            CrewRules™ is now available for Frontier Airline pilots.
-            <br />
-            Create your account or log in to get started.
-          </p>
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-            <Link
-              href="/frontier/pilots/sign-up"
-              className="inline-flex justify-center rounded-xl bg-[#75C043] px-6 py-3 font-semibold text-slate-950 hover:brightness-110 transition"
-            >
-              Create Account
-            </Link>
-            <Link
-              href="/frontier/pilots/login"
-              className="text-sm text-slate-300 hover:text-white underline underline-offset-4"
-            >
-              Already have an account? Log in
-            </Link>
-          </div>
-        </div>
-
-        <form action={formAction} className="mt-10 space-y-4">
+        <form action={formAction} className="mt-8 space-y-4">
           <label className="block">
             <span className="text-sm text-slate-300">Full Name</span>
             <input
@@ -168,13 +146,14 @@ export default function RequestAccessPage() {
           </button>
         </form>
 
-        <div className="mt-10 text-center">
-          <Link
-            href="/"
-            className="text-slate-300 hover:text-white underline underline-offset-4"
-          >
-            Back to Home
-          </Link>
+          <div className="mt-10 text-center">
+            <Link
+              href="/"
+              className="text-slate-300 hover:text-white underline underline-offset-4"
+            >
+              Back to Home
+            </Link>
+          </div>
         </div>
       </div>
     </main>

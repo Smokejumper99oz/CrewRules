@@ -57,7 +57,7 @@ export default async function CompleteProfilePage() {
         <CompleteProfileForm preFillEmployeeNumber={preFillEmployeeNumber} />
         <div className="mt-10 flex flex-wrap justify-center gap-4">
           <Link
-            href={`/${TENANT}/${PORTAL}/request-access`}
+            href="/request-access"
             className="inline-block rounded-xl border border-white/20 px-6 py-3 font-medium text-slate-200 hover:bg-white/5 transition"
           >
             Request Access
