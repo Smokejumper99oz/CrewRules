@@ -241,7 +241,7 @@ export async function PortalNextDuty({
                 );
                 return ld?.arrivalDate === nextDutyDate ? { leg, ld } : null;
               })
-              .filter((x): x is { leg: (typeof legsForDutyDate)[0]; ld: { arrivalDate: string } } => x != null);
+              .filter((x): x is { leg: (typeof legsForDutyDate)[0]; ld: { leg: (typeof legsForDutyDate)[0]; departureDate: string | null; arrivalDate: string | null } } => x != null);
             overnightAnchorLeg =
               overnightCandidates.length > 0
                 ? overnightCandidates
