@@ -149,10 +149,6 @@ export function LoginForm() {
                 Back to Home
               </Link>
               <span className="text-slate-500">•</span>
-              <Link href="/login" className="text-slate-300 hover:text-white">
-                Choose different role
-              </Link>
-              <span className="text-slate-500">•</span>
               <Link
                 href={`/${TENANT}/${PORTAL}/sign-up`}
                 className="text-slate-300 hover:text-white"

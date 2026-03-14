@@ -42,6 +42,8 @@ function inferAirlineFromEmail(email: string): string {
 export async function submitSignUp(_prev: SignUpState, formData: FormData): Promise<SignUpState> {
   const fullName = (formData.get("full_name") as string)?.trim();
   const email = (formData.get("email") as string)?.trim();
+  const employeeNumberRaw = formData.get("employee_number") as string | null;
+  const employeeNumber = employeeNumberRaw != null ? String(employeeNumberRaw).trim() : "";
   const password = formData.get("password") as string;
 
   if (!fullName || !email || !password) {
@@ -53,6 +55,10 @@ export async function submitSignUp(_prev: SignUpState, formData: FormData): Prom
   }
 
   const isFrontier = isValidFrontierEmail(email);
+
+  if (isFrontier && !employeeNumber) {
+    return { error: "Employee Number is required" };
+  }
 
   if (!isFrontier) {
     const supabase = await createClient();
@@ -81,7 +87,12 @@ export async function submitSignUp(_prev: SignUpState, formData: FormData): Prom
   const { error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName } },
+    options: {
+      data: {
+        full_name: fullName,
+        employee_number: employeeNumber,
+      },
+    },
   });
 
   if (error) {

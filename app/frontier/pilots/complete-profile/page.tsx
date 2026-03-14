@@ -43,8 +43,9 @@ export default async function CompleteProfilePage() {
     .eq("email", email)
     .maybeSingle();
 
+  const metadataEmployeeNumber = (user.user_metadata?.employee_number as string)?.trim() || null;
   const preFillEmployeeNumber =
-    waitlistRow?.employee_number?.trim() || null;
+    waitlistRow?.employee_number?.trim() || metadataEmployeeNumber || null;
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">

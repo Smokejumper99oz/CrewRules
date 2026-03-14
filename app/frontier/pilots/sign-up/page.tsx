@@ -94,6 +94,18 @@ export default function SignUpPage() {
             </div>
 
             <div>
+              <label className="text-sm text-slate-200">Employee Number</label>
+              <input
+                name="employee_number"
+                type="text"
+                placeholder="Your Employee Number"
+                required
+                disabled={isPending}
+                className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
+              />
+            </div>
+
+            <div>
               <label className="text-sm text-slate-200">Password</label>
               <input
                 name="password"

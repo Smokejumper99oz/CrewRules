@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 
 function getSupabaseEnvCheck(): string | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -10,7 +10,7 @@ function getSupabaseEnvCheck(): string | null {
   return null;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const email = (formData.get("email") as string)?.trim();
@@ -25,14 +25,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: envError }, { status: 500 });
     }
 
-    const supabase = await createClient();
+    const successResponse = NextResponse.json({ ok: true });
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              successResponse.cookies.set(name, value, options)
+            );
+          },
+        },
+      }
+    );
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
 
-    return NextResponse.json({ ok: true });
+    return successResponse;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : "";

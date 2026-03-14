@@ -15,6 +15,34 @@ export default function RequestAccessPage() {
           Crew<span className="text-[#75C043]">Rules</span>™ is launching airline by airline. Request access with your company email and we&apos;ll let you know whether your airline is live or add you to the waitlist.
         </p>
 
+        <div className="mt-8 rounded-2xl border border-emerald-500/30 bg-gradient-to-b from-[#75C043]/10 to-white/[0.03] p-6">
+          <div className="text-xs uppercase tracking-widest text-slate-400">
+            FRONTIER AIRLINES
+          </div>
+          <h2 className="mt-3 text-xl font-bold tracking-tight">
+            Pilot Access — Now Live
+          </h2>
+          <p className="mt-2 text-sm text-slate-300">
+            CrewRules™ is now available for Frontier Airline pilots.
+            <br />
+            Create your account or log in to get started.
+          </p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            <Link
+              href="/frontier/pilots/sign-up"
+              className="inline-flex justify-center rounded-xl bg-[#75C043] px-6 py-3 font-semibold text-slate-950 hover:brightness-110 transition"
+            >
+              Create Account
+            </Link>
+            <Link
+              href="/frontier/pilots/login"
+              className="text-sm text-slate-300 hover:text-white underline underline-offset-4"
+            >
+              Already have an account? Log in
+            </Link>
+          </div>
+        </div>
+
         <form action={formAction} className="mt-10 space-y-4">
           <label className="block">
             <span className="text-sm text-slate-300">Full Name</span>

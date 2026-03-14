@@ -35,7 +35,7 @@ export default function HomePage() {
 
           <div className="flex items-center gap-3">
             <Link
-              href="/login"
+              href="/frontier/pilots/login"
               className="hidden rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10 md:inline-flex"
             >
               Login
@@ -89,7 +89,7 @@ export default function HomePage() {
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
-                href="/login"
+                href="/frontier/pilots/login"
                 className="inline-flex items-center justify-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-100"
               >
                 Login
@@ -100,12 +100,6 @@ export default function HomePage() {
               >
                 Request Access
               </Link>
-              <a
-                href="#features"
-                className="inline-flex items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold text-slate-300 hover:text-white"
-              >
-                Explore Features →
-              </a>
             </div>
 
             <div className="mt-8 grid grid-cols-2 gap-4 text-sm text-slate-300">
@@ -517,7 +511,7 @@ export default function HomePage() {
               <a className="hover:text-white" href="#how">How it Works</a>
               <a className="hover:text-white" href="#levels">Levels</a>
               <Link className="hover:text-white" href="/contact">Contact</Link>
-              <Link className="hover:text-white" href="/login">Login</Link>
+              <Link className="hover:text-white" href="/frontier/pilots/login">Login</Link>
             </div>
           </div>
 
