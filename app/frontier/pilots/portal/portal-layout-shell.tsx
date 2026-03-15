@@ -9,6 +9,7 @@ import { PageTitle } from "@/components/page-title";
 import { DesktopIdleLogout } from "@/components/desktop-idle-logout";
 import { PortalDebugLine } from "@/components/portal-debug-line";
 import { PortalFadeIn } from "@/components/portal-fade-in";
+import { PortalTrialUpgradeBanner } from "@/components/portal-trial-upgrade-banner";
 
 const NAV_GROUPS = [
   {
@@ -41,6 +42,10 @@ const NAV_GROUPS = [
   },
 ] as const;
 
+type TrialBannerStatus =
+  | { status: "expiring_soon"; daysRemaining: number }
+  | { status: "expiring_urgent"; daysRemaining: number };
+
 type Props = {
   children: ReactNode;
   base: string;
@@ -51,6 +56,7 @@ type Props = {
   displayName: string;
   roleLabel: string;
   signOut: () => Promise<void>;
+  trialBannerStatus: TrialBannerStatus | null;
 };
 
 export function PortalLayoutShell({
@@ -63,6 +69,7 @@ export function PortalLayoutShell({
   displayName,
   roleLabel,
   signOut,
+  trialBannerStatus,
 }: Props) {
   const [tabletNavOpen, setTabletNavOpen] = useState(false);
 
@@ -164,6 +171,12 @@ export function PortalLayoutShell({
 
             <div className="min-h-0 flex-1 overflow-y-auto">
               <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 pb-[env(safe-area-inset-bottom)]">
+                {trialBannerStatus && (
+                  <PortalTrialUpgradeBanner
+                    status={trialBannerStatus.status}
+                    daysRemaining={trialBannerStatus.daysRemaining}
+                  />
+                )}
                 {children}
               </div>
             </div>

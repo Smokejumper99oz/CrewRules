@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { getTenantPortalConfig } from "@/lib/tenant-config";
 import { gateUserForPortal } from "@/lib/portal-gate";
-import { isAdmin, getDisplayName } from "@/lib/profile";
+import { isAdmin, getDisplayName, getProTrialBannerStatus } from "@/lib/profile";
 import { signOut } from "./actions";
 import { PortalLayoutShell } from "./portal-layout-shell";
 
@@ -14,6 +14,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
 
   const { user, profile } = await gateUserForPortal(TENANT, PORTAL);
   const admin = await isAdmin(TENANT, PORTAL);
+  const trialBannerStatus = getProTrialBannerStatus(profile);
   const base = `/${TENANT}/${PORTAL}/portal`;
   const displayName = getDisplayName(profile ?? null);
   const roleLabel =
@@ -35,6 +36,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       displayName={displayName}
       roleLabel={roleLabel}
       signOut={signOut}
+      trialBannerStatus={trialBannerStatus}
     >
       {children}
     </PortalLayoutShell>

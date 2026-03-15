@@ -43,13 +43,30 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
 
-    return successResponse;
+    // Super admin lands on /super-admin; others on portal
+    const userId = signInData?.user?.id;
+    let redirectTo = "/frontier/pilots/portal";
+    if (userId) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle();
+      const emailLower = email.toLowerCase().trim();
+      const isAllowlisted = ["svenfolmer92@gmail.com"].some((e) => e.toLowerCase() === emailLower);
+      const isSuperAdmin = profile?.role === "super_admin" || isAllowlisted;
+      if (isSuperAdmin) redirectTo = "/super-admin";
+    }
+
+    const final = NextResponse.json({ ok: true, redirect: redirectTo });
+    successResponse.cookies.getAll().forEach((c) => final.cookies.set(c.name, c.value, c));
+    return final;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : "";

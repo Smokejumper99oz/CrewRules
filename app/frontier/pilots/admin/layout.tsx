@@ -75,6 +75,14 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             </div>
 
             <div className="mt-6 border-t border-white/5 pt-4">
+              {isSuperAdmin && (
+                <Link
+                  href="/super-admin"
+                  className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-amber-400/90 hover:bg-white/5 hover:text-amber-400 transition"
+                >
+                  Super Admin Dashboard →
+                </Link>
+              )}
               <Link
                 href={`/${TENANT}/${PORTAL}/portal`}
                 className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-slate-400 hover:bg-white/5 hover:text-white transition"

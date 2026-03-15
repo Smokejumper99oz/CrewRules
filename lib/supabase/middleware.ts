@@ -5,7 +5,9 @@ export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const isPortalRoute = request.nextUrl.pathname.startsWith("/frontier/pilots/portal");
+  const isPortalRoot = request.nextUrl.pathname === "/frontier/pilots/portal";
   const isAdminRoute = request.nextUrl.pathname.startsWith("/frontier/pilots/admin");
+  const isSuperAdminRoute = request.nextUrl.pathname.startsWith("/super-admin");
   const isAuthRoute =
     request.nextUrl.pathname === "/frontier/pilots/login" ||
     request.nextUrl.pathname === "/frontier/pilots/complete-profile" ||
@@ -21,6 +23,7 @@ export async function updateSession(request: NextRequest) {
 
   let user: { id: string } | null = null;
   let isAdmin = false;
+  let isSuperAdmin = false;
   let supabase: ReturnType<typeof createServerClient> | null = null;
 
   try {
@@ -45,14 +48,17 @@ export async function updateSession(request: NextRequest) {
     const { data } = await supabase.auth.getUser();
     user = data?.user ?? null;
 
-    if (user && isAdminRoute) {
+    if (user && (isAdminRoute || isSuperAdminRoute || redirectLoggedInToPortal || isPortalRoot)) {
       const { data: profile } = await supabase
         .from("profiles")
         .select("role, tenant, portal")
         .eq("id", user.id)
         .single();
+      const email = (user.email ?? "").toLowerCase().trim();
+      const isAllowlisted = ["svenfolmer92@gmail.com"].some((e) => e.toLowerCase() === email);
+      isSuperAdmin = profile?.role === "super_admin" || isAllowlisted;
       isAdmin =
-        profile?.role === "super_admin" ||
+        isSuperAdmin ||
         (profile?.role === "tenant_admin" && profile?.tenant === "frontier" && profile?.portal === "pilots");
     }
   } catch {
@@ -60,10 +66,16 @@ export async function updateSession(request: NextRequest) {
     // Treat as no user so login/sign-up pages still load
   }
 
-  if ((isPortalRoute || isAdminRoute) && !user) {
+  if ((isPortalRoute || isAdminRoute || isSuperAdminRoute) && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/frontier/pilots/login";
     url.searchParams.set("error", "not_signed_in");
+    return NextResponse.redirect(url);
+  }
+
+  if (isSuperAdminRoute && user && !isSuperAdmin) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/frontier/pilots/portal";
     return NextResponse.redirect(url);
   }
 
@@ -73,9 +85,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (isPortalRoot && user && isSuperAdmin) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/super-admin";
+    return NextResponse.redirect(url);
+  }
+
   if (redirectLoggedInToPortal && user) {
     const url = request.nextUrl.clone();
-    url.pathname = "/frontier/pilots/portal";
+    url.pathname = isSuperAdmin ? "/super-admin" : "/frontier/pilots/portal";
     return NextResponse.redirect(url);
   }
 

@@ -3,7 +3,7 @@
  * Works for the full trip span (layover mornings, between duty periods, etc.).
  */
 
-import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone } from "date-fns-tz";
 import { createClient } from "@/lib/supabase/server";
 import { getTripDateStrings, getLegsForDate, isDateFullyComplete, todayStr, computeLegDates } from "@/lib/leg-dates";
 import { extractPairingKey } from "@/lib/schedule-time";
@@ -105,26 +105,25 @@ export async function getActiveTrip(userId: string): Promise<ActiveTrip | null> 
       : getTenantSourceTimezone((profile as { tenant?: string }).tenant ?? "frontier"));
 
   const today = todayStr(timezone);
+  const nowIso = new Date().toISOString();
 
-  // 2. Compute today's UTC bounds for overlap query
-  const dayStartUtc = fromZonedTime(`${today}T00:00:00.000`, timezone).toISOString();
-  const dayEndUtc = fromZonedTime(`${today}T23:59:59.999`, timezone).toISOString();
-
-  // 3. Fetch trip events that span today
-  const { data: events, error } = await supabase
+  // 2. Fetch active trip: start <= now < end (same rule as getNextDuty/getNextFlight)
+  const { data: activeEvent, error } = await supabase
     .from("schedule_events")
     .select("id, start_time, end_time, title, legs")
     .eq("user_id", userId)
     .eq("source", FLICA_SOURCE)
     .eq("event_type", "trip")
-    .lte("start_time", dayEndUtc)
-    .gte("end_time", dayStartUtc)
+    .or("is_muted.eq.false,is_muted.is.null")
+    .lte("start_time", nowIso)
+    .gt("end_time", nowIso)
     .order("start_time", { ascending: true })
-    .limit(5);
+    .limit(1)
+    .maybeSingle();
 
-  if (error || !events?.length) return null;
+  if (error || !activeEvent) return null;
 
-  const ev = events[0] as ScheduleEventRow;
+  const ev = activeEvent as ScheduleEventRow;
   const tripDates = getTripDateStrings(ev.start_time, ev.end_time, timezone);
   if (tripDates.length === 0) return null;
 

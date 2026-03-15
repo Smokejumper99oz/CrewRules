@@ -55,13 +55,13 @@ export function PortalUserMenu({
         aria-haspopup="true"
         aria-label="User menu"
       >
-        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5 p-1 shadow-[0_0_25px_rgba(117,192,67,0.15)]">
+        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5 p-[0.2rem] shadow-[0_0_25px_rgba(117,192,67,0.15)]">
           <Image
             src="/icons/f9-icon.png"
-            alt=""
-            fill
+            alt="Frontier Airlines"
+            width={28}
+            height={28}
             className="rounded-lg object-contain"
-            sizes="36px"
           />
         </div>
         <div className="hidden min-w-0 space-y-0.5 sm:block">

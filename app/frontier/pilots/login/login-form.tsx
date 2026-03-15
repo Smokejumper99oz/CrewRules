@@ -49,7 +49,7 @@ export function LoginForm() {
         method: "POST",
         body: formData,
       });
-      let data: { ok?: boolean; error?: string } = {};
+      let data: { ok?: boolean; error?: string; redirect?: string } = {};
       try {
         const text = await res.text();
         data = text ? JSON.parse(text) : {};
@@ -59,7 +59,7 @@ export function LoginForm() {
       }
 
       if (data.ok) {
-        window.location.href = "/frontier/pilots/portal";
+        window.location.href = data.redirect ?? "/frontier/pilots/portal";
         return;
       }
 

@@ -29,6 +29,15 @@ export type Profile = {
   subscription_tier?: "free" | "pro" | "enterprise";
   pro_trial_started_at?: string | null;
   pro_trial_expires_at?: string | null;
+  pro_trial_converted_at?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  stripe_price_id?: string | null;
+  subscription_status?: string | null;
+  current_period_end?: string | null;
+  cancel_at_period_end?: boolean;
+  billing_interval?: string | null;
+  billing_source?: string | null;
   show_pay_projection?: boolean;
   family_view_enabled?: boolean;
   family_view_show_exact_times?: boolean;
@@ -173,6 +182,34 @@ export function getProBadgeVariant(profile: Profile | null): "gold" | "emerald" 
   if (daysRemaining > 7) return "gold";
   if (daysRemaining > 1) return "amber";
   return "red";
+}
+
+/**
+ * Pro trial upgrade banner status. Returns null when no banner should show.
+ * expiring_urgent: 1–3 days left. expiring_soon: 4–7 days left.
+ * Does not show for paid Pro/Enterprise, expired trials, no trial, or >7 days left.
+ */
+export function getProTrialBannerStatus(
+  profile: { subscription_tier?: string | null; pro_trial_started_at?: string | null; pro_trial_expires_at?: string | null } | null
+): { status: "expiring_soon"; daysRemaining: number } | { status: "expiring_urgent"; daysRemaining: number } | null {
+  if (!profile) return null;
+  const tier = profile.subscription_tier ?? "free";
+  if (tier === "pro" || tier === "enterprise") return null;
+  const startedAt = profile.pro_trial_started_at;
+  const expiresAt = profile.pro_trial_expires_at;
+  if (!startedAt || !expiresAt) return null;
+  const expiresMs = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiresMs)) return null;
+  const nowMs = Date.now();
+  if (expiresMs <= nowMs) return null;
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const daysRemaining = Math.ceil((expiresMs - nowMs) / msPerDay);
+  if (daysRemaining > 7) return null;
+  const in3DaysMs = nowMs + 3 * msPerDay;
+  if (expiresMs <= in3DaysMs) {
+    return { status: "expiring_urgent", daysRemaining };
+  }
+  return { status: "expiring_soon", daysRemaining };
 }
 
 export async function getProfile(): Promise<Profile | null> {

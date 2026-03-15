@@ -41,6 +41,11 @@ type Props = {
     commute_nonstop_only?: boolean;
     subscription_tier?: "free" | "pro" | "enterprise";
     pro_trial_expires_at?: string | null;
+    stripe_customer_id?: string | null;
+    billing_source?: string | null;
+    billing_interval?: string | null;
+    current_period_end?: string | null;
+    cancel_at_period_end?: boolean;
     show_pay_projection?: boolean;
     family_view_enabled?: boolean;
     family_view_show_exact_times?: boolean;
@@ -112,6 +117,12 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [trialStarting, setTrialStarting] = useState(false);
   const [trialMessage, setTrialMessage] = useState<string | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+
+  const canManageSubscription =
+    Boolean(profile?.stripe_customer_id) &&
+    ((profile?.subscription_tier ?? "free") === "pro" || profile?.billing_source === "stripe");
   const [baseAirport, setBaseAirport] = useState(profile.base_airport ?? "");
   const storedTimezone = profile.base_timezone ?? DEFAULT_TIMEZONE;
   const derivedFromBase = getTimezoneFromAirport(profile.base_airport ?? "DEN");
@@ -405,6 +416,47 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               </form>
             )}
           </div>
+          {canManageSubscription && (
+            <div className="pt-3 border-t border-white/5">
+              <span className="text-xs font-medium text-slate-500">Subscription</span>
+              {(profile?.billing_interval || profile?.current_period_end || profile?.cancel_at_period_end) && (
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {profile?.billing_interval && (
+                    <span className="capitalize">{profile.billing_interval}</span>
+                  )}
+                  {profile?.current_period_end && (
+                    <span>
+                      {profile?.billing_interval && " · "}
+                      {profile?.cancel_at_period_end
+                        ? `Access until ${new Date(profile.current_period_end).toLocaleDateString()}`
+                        : `Renews ${new Date(profile.current_period_end).toLocaleDateString()}`}
+                    </span>
+                  )}
+                  {profile?.cancel_at_period_end && (
+                    <span className="text-amber-400/90"> · Cancels at period end</span>
+                  )}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={async () => {
+                  setPortalLoading(true);
+                  try {
+                    const res = await fetch("/api/stripe/portal", { method: "POST" });
+                    const data = await res.json();
+                    if (data.url) window.location.href = data.url;
+                    else setPortalLoading(false);
+                  } catch {
+                    setPortalLoading(false);
+                  }
+                }}
+                disabled={portalLoading}
+                className="mt-2 text-sm text-[#75C043] hover:text-[#75C043]/80 font-medium disabled:opacity-50"
+              >
+                {portalLoading ? "Opening…" : "Manage subscription"}
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -551,6 +603,54 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             >
               {trialStarting ? "Starting…" : "Start 14-Day PRO Trial"}
             </button>
+            {profile?.subscription_tier !== "enterprise" && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setCheckoutLoading("monthly");
+                    try {
+                      const res = await fetch("/api/stripe/checkout", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ interval: "monthly" }),
+                      });
+                      const data = await res.json();
+                      if (data.url) window.location.href = data.url;
+                      else setCheckoutLoading(null);
+                    } catch {
+                      setCheckoutLoading(null);
+                    }
+                  }}
+                  disabled={!!checkoutLoading}
+                  className="rounded-lg border border-amber-500/60 bg-amber-500/20 px-3 py-2 text-sm font-medium text-amber-200 hover:bg-amber-500/30 transition disabled:opacity-50"
+                >
+                  {checkoutLoading === "monthly" ? "Redirecting…" : "Pro Monthly"}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setCheckoutLoading("annual");
+                    try {
+                      const res = await fetch("/api/stripe/checkout", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ interval: "annual" }),
+                      });
+                      const data = await res.json();
+                      if (data.url) window.location.href = data.url;
+                      else setCheckoutLoading(null);
+                    } catch {
+                      setCheckoutLoading(null);
+                    }
+                  }}
+                  disabled={!!checkoutLoading}
+                  className="rounded-lg border border-amber-500/60 bg-amber-500/20 px-3 py-2 text-sm font-medium text-amber-200 hover:bg-amber-500/30 transition disabled:opacity-50"
+                >
+                  {checkoutLoading === "annual" ? "Redirecting…" : "Pro Annual"}
+                </button>
+              </div>
+            )}
             {trialMessage && (
               <p className="mt-2 text-sm text-amber-200/90">{trialMessage}</p>
             )}

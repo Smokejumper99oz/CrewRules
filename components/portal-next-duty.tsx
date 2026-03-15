@@ -132,8 +132,8 @@ export async function PortalNextDuty({
     ? tripChangeSummaries.find((s) => s.pairing === activeTrip.pairing)
     : null;
 
-  const firstLeg = activeTrip?.todayLegs?.[0];
-  const displayDateForResolve = activeTrip?.displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
+  const firstLeg = (legsToShow && legsToShow.length > 0 ? legsToShow[0] : activeTrip?.todayLegs?.[0]) ?? null;
+  const displayDateForResolve = (legsToShow && legsToShow.length > 0 ? displayDateStr : activeTrip?.displayDateStr) ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
   const [resolvedFirstLeg, filedResult] = await Promise.all([
     firstLeg && firstLeg.origin && firstLeg.destination
       ? resolveLegIdentity({
@@ -417,8 +417,8 @@ export async function PortalNextDuty({
       {activeTrip && (
         <div className="mt-4 rounded-lg border border-slate-700/60 bg-slate-900/40 overflow-hidden">
           <div className="border-l-4 border-l-emerald-500">
-          {activeTrip.todayLegs.length > 0 ? (
-            activeTrip.todayLegs.map((leg, i) => {
+          {legsToShow && legsToShow.length > 0 ? (
+            legsToShow.map((leg, i) => {
               const resolved = i === 0 ? resolvedFirstLeg : null;
               const f = resolved?.flight;
               const depTz = f?.originTz ?? getTimezoneFromAirport(leg.origin);
@@ -466,7 +466,7 @@ export async function PortalNextDuty({
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-slate-400">
-                        {formatDayLabel(`${(leg.departureDate ?? activeTrip?.displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd"))}T12:00:00.000Z`, displaySettings.baseTimezone)}
+                        {formatDayLabel(`${(leg.departureDate ?? displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd"))}T12:00:00.000Z`, displaySettings.baseTimezone)}
                       </span>
                       <span
                         className={[
@@ -537,7 +537,7 @@ export async function PortalNextDuty({
               }
 
               // Fallback when API has no data (e.g. tomorrow's flights): show schedule-derived info to match Commute Assist style
-              const legDisplayDate = leg.departureDate ?? activeTrip?.displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
+              const legDisplayDate = leg.departureDate ?? displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
               const fallbackCarrier = tenant ? TENANT_CARRIER[tenant] ?? null : null;
               const fallbackFlightLabel = fallbackCarrier ? `${fallbackCarrier} ${leg.flightNumber}` : leg.flightNumber;
               const durMin = leg.depTime && leg.arrTime ? legDurationMinutes(leg.depTime, leg.arrTime) : 0;
