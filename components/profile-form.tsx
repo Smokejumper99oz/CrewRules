@@ -620,7 +620,14 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               {trialStarting ? "Starting…" : "Start 14-Day PRO Trial"}
             </button>
             {profile?.subscription_tier !== "enterprise" && (
-              <div className="mt-3 flex flex-wrap gap-2">
+              <>
+                {foundingPilotCount > 0 && (
+                  <div className="mt-3 flex flex-col gap-0.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+                    <span className="text-xs font-medium text-amber-400/90">Founding Pilot Program</span>
+                    <span className="text-xs text-amber-400/80">{foundingPilotCount} / 100 spots claimed</span>
+                  </div>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={async () => {
