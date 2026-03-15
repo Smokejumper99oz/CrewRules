@@ -1,3 +1,4 @@
+import { createClient } from "@/lib/supabase/server";
 import { getProfile, isProActive, getPlanBadgeLabel, getPlanBadgeVariant } from "@/lib/profile";
 import { ProfileForm } from "@/components/profile-form";
 import { InboundEmailDisplay } from "@/components/inbound-email-display";
@@ -10,6 +11,13 @@ type Props = {
 
 export default async function ProfilePage({ searchParams }: Props) {
   const profile = await getProfile();
+
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("profiles")
+    .select("*", { count: "exact", head: true })
+    .eq("is_founding_pilot", true);
+  const foundingPilotCount = count ?? 0;
   const planBadgeLabel = getPlanBadgeLabel(profile);
   const planBadgeVariant = getPlanBadgeVariant(profile);
   const params = await searchParams;
@@ -45,7 +53,7 @@ export default async function ProfilePage({ searchParams }: Props) {
       )}
       {profile ? (
         <>
-          <ProfileForm profile={profile} proActive={isProActive(profile)} proBadgeLabel={planBadgeLabel} proBadgeVariant={planBadgeVariant} />
+          <ProfileForm profile={profile} proActive={isProActive(profile)} proBadgeLabel={planBadgeLabel} proBadgeVariant={planBadgeVariant} foundingPilotCount={foundingPilotCount} />
           {inboundEmail && <InboundEmailDisplay email={inboundEmail} />}
         </>
       ) : (

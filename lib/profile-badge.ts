@@ -2,6 +2,7 @@
 type ProfileForBadge = {
   subscription_tier?: "free" | "pro" | "enterprise";
   pro_trial_expires_at?: string | null;
+  is_founding_pilot?: boolean;
 } | null;
 
 /** Plan badge label for display: Free, Pro, Enterprise, or Pro Trial — X days. Used by profile card and Commute Assist. */

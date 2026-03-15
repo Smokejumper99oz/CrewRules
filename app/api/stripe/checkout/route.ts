@@ -16,9 +16,9 @@ export async function POST(req: Request) {
     const body = await req.json();
     const interval = body?.interval as string | undefined;
 
-    if (interval !== "monthly" && interval !== "annual") {
+    if (interval !== "monthly" && interval !== "annual" && interval !== "founding_pilot_monthly") {
       return NextResponse.json(
-        { error: "Invalid interval. Use monthly or annual." },
+        { error: "Invalid interval. Use monthly, annual, or founding_pilot_monthly." },
         { status: 400 }
       );
     }
@@ -31,6 +31,19 @@ export async function POST(req: Request) {
 
     if (profileError || !profile) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    }
+
+    if (interval === "founding_pilot_monthly") {
+      const { count } = await supabase
+        .from("profiles")
+        .select("*", { count: "exact", head: true })
+        .eq("is_founding_pilot", true);
+      if ((count ?? 0) >= 100) {
+        return NextResponse.json(
+          { error: "Founding Pilot program is full." },
+          { status: 400 }
+        );
+      }
     }
 
     const { url } = await createCheckoutSession(profile, interval);

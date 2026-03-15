@@ -5,9 +5,10 @@ import {
   STRIPE_SECRET_KEY,
   STRIPE_PRO_MONTHLY_PRICE_ID,
   STRIPE_PRO_ANNUAL_PRICE_ID,
+  STRIPE_FOUNDING_PILOT_MONTHLY_PRICE_ID,
 } from "./config";
 
-export type BillingInterval = "monthly" | "annual";
+export type BillingInterval = "monthly" | "annual" | "founding_pilot_monthly";
 
 type ProfileForCheckout = {
   id: string;
@@ -26,6 +27,7 @@ function getBaseUrl(): string {
 function getPriceId(interval: BillingInterval): string {
   if (interval === "monthly") return STRIPE_PRO_MONTHLY_PRICE_ID;
   if (interval === "annual") return STRIPE_PRO_ANNUAL_PRICE_ID;
+  if (interval === "founding_pilot_monthly") return STRIPE_FOUNDING_PILOT_MONTHLY_PRICE_ID;
   throw new Error(`Invalid billing interval: ${interval}`);
 }
 
@@ -43,9 +45,11 @@ export async function createCheckoutSession(
 
   const priceId = getPriceId(interval);
   if (!priceId) {
-    throw new Error(
-      `Stripe price not configured for ${interval}. Set STRIPE_PRO_${interval.toUpperCase()}_PRICE_ID.`
-    );
+    const envKey =
+      interval === "founding_pilot_monthly"
+        ? "STRIPE_FOUNDING_PILOT_MONTHLY_PRICE_ID"
+        : `STRIPE_PRO_${interval.toUpperCase()}_PRICE_ID`;
+    throw new Error(`Stripe price not configured for ${interval}. Set ${envKey}.`);
   }
 
   const stripe = new Stripe(STRIPE_SECRET_KEY);

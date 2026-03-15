@@ -38,6 +38,8 @@ export type Profile = {
   cancel_at_period_end?: boolean;
   billing_interval?: string | null;
   billing_source?: string | null;
+  is_founding_pilot?: boolean;
+  founding_pilot_started_at?: string | null;
   show_pay_projection?: boolean;
   family_view_enabled?: boolean;
   family_view_show_exact_times?: boolean;

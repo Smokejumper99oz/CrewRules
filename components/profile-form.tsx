@@ -51,10 +51,13 @@ type Props = {
     family_view_show_exact_times?: boolean;
     family_view_show_overnight_cities?: boolean;
     family_view_show_commute_estimates?: boolean;
+    is_founding_pilot?: boolean;
+    founding_pilot_started_at?: string | null;
   };
   proActive: boolean;
   proBadgeLabel: string;
   proBadgeVariant: "slate" | "gold" | "emerald" | "amber" | "red";
+  foundingPilotCount?: number;
 };
 
 /** Frontier Airlines crew bases (IATA codes). */
@@ -111,7 +114,7 @@ function getTimezoneAbbreviation(iana: string): string {
 
 const COMMUTE_BUFFER_OPTIONS = [30, 60, 90, 120, 180] as const;
 
-export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant }: Props) {
+export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant, foundingPilotCount = 0 }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -182,7 +185,20 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             Manage your profile, commute settings, display preferences, and PRO features.
           </p>
         </div>
-        <ProBadge label={proBadgeLabel} variant={proBadgeVariant} />
+        <div className="flex flex-wrap items-center gap-2">
+          <ProBadge label={proBadgeLabel} variant={proBadgeVariant} />
+          {profile?.is_founding_pilot && (
+            <div className="inline-flex flex-col items-center rounded-full border border-amber-400/60 bg-slate-900/70 px-3 py-1.5 text-center shadow-amber-500/10 shadow-sm">
+              <span className="text-sm font-semibold tracking-wide text-amber-400">Founding Pilot</span>
+              <span className="text-xs text-amber-400/90">Lifetime Beta Member</span>
+              {profile?.founding_pilot_started_at && (
+                <span className="mt-0.5 text-[10px] text-amber-400/70">
+                  Since {new Date(profile.founding_pilot_started_at).getFullYear()}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       <form onSubmit={handleSubmit} className="mt-6 space-y-8">
       {/* Personal Information */}
@@ -649,7 +665,30 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 >
                   {checkoutLoading === "annual" ? "Redirecting…" : "Pro Annual"}
                 </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setCheckoutLoading("founding_pilot_monthly");
+                    try {
+                      const res = await fetch("/api/stripe/checkout", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ interval: "founding_pilot_monthly" }),
+                      });
+                      const data = await res.json();
+                      if (data.url) window.location.href = data.url;
+                      else setCheckoutLoading(null);
+                    } catch {
+                      setCheckoutLoading(null);
+                    }
+                  }}
+                  disabled={!!checkoutLoading}
+                  className="rounded-lg border border-amber-500/60 bg-amber-500/20 px-3 py-2 text-sm font-medium text-amber-200 hover:bg-amber-500/30 transition disabled:opacity-50"
+                >
+                  {checkoutLoading === "founding_pilot_monthly" ? "Redirecting…" : "Founding Pilot Monthly"}
+                </button>
               </div>
+              </>
             )}
             {trialMessage && (
               <p className="mt-2 text-sm text-amber-200/90">{trialMessage}</p>
