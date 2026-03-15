@@ -54,6 +54,7 @@ export default async function WeatherBriefPage() {
           destination: nextFlight.arrivalAirport,
           departureIso: nextFlight.departureIso,
           tenant: profile?.tenant ?? "frontier",
+          user_id: profile?.id,
         }
       : null;
 

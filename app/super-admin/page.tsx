@@ -9,6 +9,7 @@ import {
   getProTrialUsers,
   getStripeBillingMetrics,
   getChurnRenewalMetrics,
+  getFlightAwareUsageMetrics,
 } from "@/lib/super-admin/actions";
 import { SuperAdminHeader } from "@/components/super-admin/super-admin-header";
 import { SuperAdminAtAGlance } from "@/components/super-admin/super-admin-at-a-glance";
@@ -26,7 +27,7 @@ export const dynamic = "force-dynamic";
 export default async function SuperAdminPage() {
   await gateSuperAdmin();
 
-  const [kpis, tenants, productUsage, recentActivity, trialMetrics, trialUsers, stripeBilling, churnRenewal] =
+  const [kpis, tenants, productUsage, recentActivity, trialMetrics, trialUsers, stripeBilling, churnRenewal, flightAwareMetrics] =
     await Promise.all([
       getSuperAdminKpis(),
       getTenantOverview(),
@@ -36,6 +37,7 @@ export default async function SuperAdminPage() {
       getProTrialUsers(),
       getStripeBillingMetrics(),
       getChurnRenewalMetrics(),
+      getFlightAwareUsageMetrics(),
     ]);
 
   const lastRefresh = format(new Date(), "PPpp");
@@ -67,6 +69,7 @@ export default async function SuperAdminPage() {
           tenants={tenants}
           stripeBilling={stripeBilling}
           churnRenewal={churnRenewal}
+          flightAwareMetrics={flightAwareMetrics}
         />
       </section>
 

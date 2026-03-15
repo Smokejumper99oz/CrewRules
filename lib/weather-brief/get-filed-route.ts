@@ -8,6 +8,7 @@ export type RouteLookup = {
   destination: string;
   departureIso?: string;
   tenant?: string;
+  user_id?: string;
 };
 
 /** Do not refresh cache if last_checked was within this period */

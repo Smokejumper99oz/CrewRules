@@ -164,6 +164,7 @@ export async function PortalNextDuty({
         destination: firstLeg.destination,
         departureIso: depUtc.toISOString(),
         tenant: profile?.tenant ?? "frontier",
+        user_id: profile?.id,
       };
       const filedResult = await getFiledRoute(routeLookup);
       return { filedResult, departureIso: depUtc.toISOString(), arrivalIso: arrUtc.toISOString() };

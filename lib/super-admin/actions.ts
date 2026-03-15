@@ -8,6 +8,7 @@ import { TENANT_CONFIG } from "@/lib/tenant-config";
 import {
   STRIPE_PRO_MONTHLY_PRICE_USD,
   STRIPE_PRO_ANNUAL_PRICE_USD,
+  FLIGHTAWARE_COST_PER_REQUEST_USD,
 } from "./pricing-config";
 
 /** Run gate first; only call these actions from super-admin layout/page. */
@@ -437,6 +438,29 @@ export async function getChurnRenewalMetrics(): Promise<ChurnRenewalMetrics> {
     renewalsDueIn30Days,
     pastDueCount,
   };
+}
+
+export type FlightAwareUsageMetrics = {
+  totalCalls: number;
+  estimatedCost: number;
+};
+
+export async function getFlightAwareUsageMetrics(): Promise<FlightAwareUsageMetrics> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+
+  const { data: rows, error } = await admin
+    .from("flightaware_usage")
+    .select("request_count");
+
+  if (error) {
+    return { totalCalls: 0, estimatedCost: 0 };
+  }
+
+  const totalCalls = (rows ?? []).reduce((sum, r) => sum + (r.request_count ?? 1), 0);
+  const estimatedCost = totalCalls * FLIGHTAWARE_COST_PER_REQUEST_USD;
+
+  return { totalCalls, estimatedCost };
 }
 
 export type TenantOverviewRow = {

@@ -4,12 +4,13 @@ import type {
   TenantOverviewRow,
   StripeBillingMetrics,
   ChurnRenewalMetrics,
+  FlightAwareUsageMetrics,
 } from "@/lib/super-admin/actions";
 import {
   PRO_MONTHLY_PRICE_USD,
   ENTERPRISE_MONTHLY_PRICE_USD,
 } from "@/lib/super-admin/pricing-config";
-import { DollarSign, Plane, Database, Brain, Mail, Server, TrendingUp } from "lucide-react";
+import { DollarSign, Database, Brain, Mail, Server, TrendingUp } from "lucide-react";
 import { PlaceholderCard } from "./placeholder-card";
 
 function formatUsd(value: number): string {
@@ -21,12 +22,22 @@ function formatUsd(value: number): string {
   }).format(value);
 }
 
+function formatUsdCost(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 type SuperAdminCostMonetizationProps = {
   kpis: SuperAdminKpiData;
   trialMetrics: ProTrialMetrics;
   tenants: TenantOverviewRow[];
   stripeBilling: StripeBillingMetrics;
   churnRenewal: ChurnRenewalMetrics;
+  flightAwareMetrics: FlightAwareUsageMetrics;
 };
 
 const cardBase = "rounded-xl border border-slate-700/50 bg-slate-800/50 px-4 py-3";
@@ -37,6 +48,7 @@ export function SuperAdminCostMonetization({
   tenants,
   churnRenewal,
   stripeBilling,
+  flightAwareMetrics,
 }: SuperAdminCostMonetizationProps) {
   const enterpriseTenants = tenants.filter((t) => t.enterpriseCount > 0).length;
 
@@ -51,114 +63,128 @@ export function SuperAdminCostMonetization({
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Revenue block */}
-        <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-4 space-y-3">
+        <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-4 space-y-4">
           <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Revenue</div>
-          <div className="flex flex-wrap gap-2">
-            <div className={cardBase}>
-              <div className="text-slate-500 text-xs mb-0.5">Pro users</div>
-              <div className="text-xl font-semibold text-slate-200">{kpis.proCount}</div>
+
+          {/* Live MRR hero */}
+          <div
+            className="rounded-xl border-2 border-emerald-600/50 bg-emerald-950/30 p-5 flex flex-col gap-1"
+            title="Stripe-paid Pro subscriptions only."
+          >
+            <div className="flex items-center gap-2 text-emerald-300/90 text-xs uppercase tracking-wider">
+              <DollarSign className="size-4" />
+              Live MRR
             </div>
-            <div className={cardBase}>
-              <div className="text-slate-500 text-xs mb-0.5">Enterprise users</div>
-              <div className="text-xl font-semibold text-slate-200">{kpis.enterpriseCount}</div>
-            </div>
-            <div className={cardBase}>
-              <div className="text-slate-500 text-xs mb-0.5">Enterprise tenants</div>
-              <div className="text-xl font-semibold text-slate-200">{enterpriseTenants}</div>
-            </div>
-            <div className={cardBase}>
-              <div className="text-slate-500 text-xs mb-0.5">Active trials</div>
-              <div className="text-xl font-semibold text-slate-200">{trialMetrics.proTrialActive}</div>
-            </div>
-            <div className={`${cardBase} border-[#75C043]/30`}>
-              <div className="text-slate-500 text-xs mb-0.5">Converted</div>
-              <div className="text-xl font-semibold text-[#75C043]">{trialMetrics.convertedFromTrial}</div>
-            </div>
+            <div className="text-3xl font-bold text-emerald-200">{formatUsd(stripeBilling.liveMRR)}</div>
+            <div className="text-sm text-slate-400">ARR {formatUsd(stripeBilling.liveARR)}</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">Stripe-paid Pro only</div>
           </div>
 
-          {/* Live Stripe */}
-          <div className="pt-3 border-t border-slate-700/50">
-            <div className="text-xs font-medium text-emerald-400/90 uppercase tracking-wider mb-2">
-              Live Stripe
+          {/* Live Stripe breakdown */}
+          <div className="flex flex-wrap gap-2">
+            <div className={`${cardBase} border-emerald-600/20 py-2 px-3`}>
+              <div className="text-slate-500 text-[10px] mb-0.5">Paid Pro</div>
+              <div className="text-lg font-semibold text-emerald-300/90">{stripeBilling.paidProCount}</div>
             </div>
-            <div className="flex flex-wrap gap-2 mb-2">
-              <div className={`${cardBase} border-emerald-600/30`}>
-                <div className="text-slate-500 text-xs mb-0.5">Paid Pro users</div>
-                <div className="text-xl font-semibold text-emerald-300">{stripeBilling.paidProCount}</div>
-              </div>
-              <div className={cardBase}>
-                <div className="text-slate-500 text-xs mb-0.5">Monthly</div>
-                <div className="text-xl font-semibold text-slate-200">{stripeBilling.monthlyCount}</div>
-              </div>
-              <div className={cardBase}>
-                <div className="text-slate-500 text-xs mb-0.5">Annual</div>
-                <div className="text-xl font-semibold text-slate-200">{stripeBilling.annualCount}</div>
-              </div>
-              <div className={cardBase}>
-                <div className="text-slate-500 text-xs mb-0.5">Cancel at period end</div>
-                <div className="text-xl font-semibold text-slate-200">{stripeBilling.cancelAtPeriodEndCount}</div>
-              </div>
+            <div className={`${cardBase} py-2 px-3`}>
+              <div className="text-slate-500 text-[10px] mb-0.5">Monthly</div>
+              <div className="text-lg font-semibold text-slate-200">{stripeBilling.monthlyCount}</div>
             </div>
-            <div
-              className={`${cardBase} border-emerald-600/40 flex flex-col gap-0.5 bg-emerald-950/20`}
-              title="Stripe-paid Pro subscriptions only."
-            >
-              <div className="flex items-center gap-2 text-emerald-300/90 text-xs">
-                <DollarSign className="size-3.5" />
-                Live MRR
-              </div>
-              <div className="text-xl font-semibold text-emerald-200">{formatUsd(stripeBilling.liveMRR)}</div>
-              <div className="text-xs text-slate-400">ARR: {formatUsd(stripeBilling.liveARR)}</div>
-              <div className="text-[10px] text-slate-500 mt-0.5">
-                Stripe-paid Pro only · active/trialing
-              </div>
+            <div className={`${cardBase} py-2 px-3`}>
+              <div className="text-slate-500 text-[10px] mb-0.5">Annual</div>
+              <div className="text-lg font-semibold text-slate-200">{stripeBilling.annualCount}</div>
             </div>
           </div>
 
           {/* Churn & Renewal Watch */}
-          <div className="pt-3 border-t border-slate-700/50">
-            <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+          <div className="pt-3 border-t border-slate-700/50 space-y-2">
+            <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">
               Churn & Renewal Watch
             </div>
             <div className="flex flex-wrap gap-2">
-              <div className={cardBase}>
-                <div className="text-slate-500 text-xs mb-0.5">Cancel at period end</div>
-                <div className="text-xl font-semibold text-slate-200">{churnRenewal.cancelAtPeriodEndCount}</div>
+              <div
+                className={`${cardBase} py-2 px-3 ${
+                  churnRenewal.cancelAtPeriodEndCount > 0 ? "border-amber-600/40 bg-amber-950/20" : ""
+                }`}
+              >
+                <div className="text-slate-500 text-[10px] mb-0.5">Cancel at period end</div>
+                <div
+                  className={`text-lg font-semibold ${
+                    churnRenewal.cancelAtPeriodEndCount > 0 ? "text-amber-400" : "text-slate-200"
+                  }`}
+                >
+                  {churnRenewal.cancelAtPeriodEndCount}
+                </div>
               </div>
-              <div className={cardBase}>
-                <div className="text-slate-500 text-xs mb-0.5">Renewals in 7 days</div>
-                <div className="text-xl font-semibold text-slate-200">{churnRenewal.renewalsDueIn7Days}</div>
+              <div
+                className={`${cardBase} py-2 px-3 ${
+                  churnRenewal.pastDueCount > 0 ? "border-amber-600/40 bg-amber-950/20" : ""
+                }`}
+              >
+                <div className="text-slate-500 text-[10px] mb-0.5">Past due</div>
+                <div
+                  className={`text-lg font-semibold ${
+                    churnRenewal.pastDueCount > 0 ? "text-amber-400" : "text-slate-200"
+                  }`}
+                >
+                  {churnRenewal.pastDueCount}
+                </div>
               </div>
-              <div className={cardBase}>
-                <div className="text-slate-500 text-xs mb-0.5">Renewals in 30 days</div>
-                <div className="text-xl font-semibold text-slate-200">{churnRenewal.renewalsDueIn30Days}</div>
+              <div className={`${cardBase} py-2 px-3`}>
+                <div className="text-slate-500 text-[10px] mb-0.5">Renewals 7d</div>
+                <div className="text-lg font-semibold text-slate-200">{churnRenewal.renewalsDueIn7Days}</div>
               </div>
-              <div className={cardBase}>
-                <div className="text-slate-500 text-xs mb-0.5">Past due</div>
-                <div className="text-xl font-semibold text-slate-200">{churnRenewal.pastDueCount}</div>
+              <div className={`${cardBase} py-2 px-3`}>
+                <div className="text-slate-500 text-[10px] mb-0.5">Renewals 30d</div>
+                <div className="text-lg font-semibold text-slate-200">{churnRenewal.renewalsDueIn30Days}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tier overview */}
+          <div className="pt-3 border-t border-slate-700/50">
+            <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+              Tier overview
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div className={`${cardBase} py-2 px-3 opacity-90`}>
+                <div className="text-slate-500 text-[10px] mb-0.5">Pro users</div>
+                <div className="text-base font-medium text-slate-300">{kpis.proCount}</div>
+              </div>
+              <div className={`${cardBase} py-2 px-3 opacity-90`}>
+                <div className="text-slate-500 text-[10px] mb-0.5">Enterprise users</div>
+                <div className="text-base font-medium text-slate-300">{kpis.enterpriseCount}</div>
+              </div>
+              <div className={`${cardBase} py-2 px-3 opacity-90`}>
+                <div className="text-slate-500 text-[10px] mb-0.5">Enterprise tenants</div>
+                <div className="text-base font-medium text-slate-300">{enterpriseTenants}</div>
+              </div>
+              <div className={`${cardBase} py-2 px-3 opacity-90`}>
+                <div className="text-slate-500 text-[10px] mb-0.5">Active trials</div>
+                <div className="text-base font-medium text-slate-300">{trialMetrics.proTrialActive}</div>
+              </div>
+              <div className={`${cardBase} py-2 px-3 opacity-90 border-[#75C043]/20`}>
+                <div className="text-slate-500 text-[10px] mb-0.5">Converted</div>
+                <div className="text-base font-medium text-[#75C043]/90">{trialMetrics.convertedFromTrial}</div>
               </div>
             </div>
           </div>
 
           {/* Estimated (pre-billing) */}
           <div className="pt-3 border-t border-slate-700/50">
-            <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+            <div className="text-[10px] font-medium text-slate-600 uppercase tracking-wider mb-1.5">
               Pre-billing estimate
             </div>
             <div
-              className={`${cardBase} border-amber-600/30 flex flex-col gap-0.5`}
-              title="Pre-billing estimate. Based on current user counts × configured prices."
+              className="rounded-lg border border-slate-700/40 bg-slate-900/40 px-3 py-2 flex flex-col gap-0.5"
+              title="Based on tier counts × configured prices."
             >
-              <div className="flex items-center gap-2 text-slate-400 text-xs">
-                <DollarSign className="size-3.5" />
+              <div className="flex items-center gap-2 text-slate-500 text-xs">
+                <DollarSign className="size-3" />
                 Estimated MRR
               </div>
-              <div className="text-xl font-semibold text-amber-400">{formatUsd(estimatedMRR)}</div>
-              <div className="text-xs text-slate-500">
-                ARR: {formatUsd(estimatedARR)}
-              </div>
-              <div className="text-[10px] text-slate-600 mt-0.5">
-                Based on tier counts × configured prices
+              <div className="text-sm font-medium text-slate-500">
+                {formatUsd(estimatedMRR)} <span className="text-slate-600">· ARR {formatUsd(estimatedARR)}</span>
               </div>
             </div>
           </div>
@@ -168,12 +194,11 @@ export function SuperAdminCostMonetization({
         <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-4 space-y-3">
           <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Cost</div>
           <div className="flex flex-wrap gap-2">
-            <PlaceholderCard
-              title="FlightAware"
-              subtitle="Not yet wired"
-              icon={<Plane className="size-3.5" />}
-              variant="chip"
-            />
+            <div className={`${cardBase} py-2 px-3`}>
+              <div className="text-slate-500 text-[10px] mb-0.5">FlightAware</div>
+              <div className="text-lg font-semibold text-slate-200">{flightAwareMetrics.totalCalls}</div>
+              <div className="text-xs text-slate-500">{formatUsdCost(flightAwareMetrics.estimatedCost)}</div>
+            </div>
             <PlaceholderCard
               title="AeroDataBox"
               subtitle="Not yet wired"

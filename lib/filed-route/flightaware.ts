@@ -3,6 +3,7 @@ import type { FlightLiveStatus } from "@/lib/weather-brief/types";
 import { TENANT_CARRIER } from "@/lib/tenant-config";
 import { fetchFlightsFromAerodataBox } from "@/lib/aerodatabox";
 import { parseAviationstackTs } from "@/lib/aviationstack";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export function buildIdent(lookup: RouteLookup): string {
   const raw = (lookup.flightNumber ?? "").trim().toUpperCase();
@@ -45,6 +46,24 @@ async function fetchFlightsForIdent(
   return { data, flights };
 }
 
+/** Log FlightAware usage for Super Admin cost reporting. Never throws. */
+function logFlightAwareUsage(lookup: RouteLookup, ident: string): void {
+  void (async () => {
+    try {
+      const admin = createAdminClient();
+      const { error } = await admin.from("flightaware_usage").insert({
+        user_id: lookup.user_id ?? null,
+        tenant: lookup.tenant ?? null,
+        ident,
+        request_count: 1,
+      });
+      if (error) console.error("[flightaware] usage log failed:", error.message);
+    } catch (err) {
+      console.error("[flightaware] usage log failed:", err);
+    }
+  })();
+}
+
 export async function fetchFiledRouteFromFlightAware(
   lookup: RouteLookup
 ): Promise<{ route: string | null; status: FlightLiveStatus | null }> {
@@ -59,6 +78,7 @@ export async function fetchFiledRouteFromFlightAware(
     console.log("[flightaware] primary ident:", ident);
 
     let result = await fetchFlightsForIdent(ident, apiKey);
+    logFlightAwareUsage(lookup, ident);
     if (!result) return { route: null, status: null };
 
     let { data, flights } = result;
@@ -69,6 +89,7 @@ export async function fetchFiledRouteFromFlightAware(
       if (fallback) {
         console.log("[flightaware] primary returned zero flights, trying fallback ident:", fallback);
         const fallbackResult = await fetchFlightsForIdent(fallback, apiKey);
+        logFlightAwareUsage(lookup, fallback);
         if (fallbackResult && fallbackResult.flights.length > 0) {
           data = fallbackResult.data;
           flights = fallbackResult.flights;
