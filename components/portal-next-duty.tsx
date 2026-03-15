@@ -135,7 +135,7 @@ export async function PortalNextDuty({
   const firstLeg = (legsToShow && legsToShow.length > 0 ? legsToShow[0] : activeTrip?.todayLegs?.[0]) ?? null;
   const displayDateForResolve = (legsToShow && legsToShow.length > 0 ? displayDateStr : activeTrip?.displayDateStr) ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
   const [resolvedFirstLeg, filedResult] = await Promise.all([
-    firstLeg && firstLeg.origin && firstLeg.destination
+    firstLeg && firstLeg.flightNumber && firstLeg.origin && firstLeg.destination
       ? resolveLegIdentity({
           flightNumber: firstLeg.flightNumber,
           origin: firstLeg.origin,
@@ -146,7 +146,7 @@ export async function PortalNextDuty({
       : null,
     (async () => {
       if (!firstLeg?.flightNumber || !firstLeg.origin || !firstLeg.destination) return { filedResult: null, departureIso: null, arrivalIso: null };
-      const depDateStr = firstLeg.departureDate ?? displayDateForResolve;
+      const depDateStr = ("departureDate" in firstLeg && firstLeg.departureDate) ? firstLeg.departureDate : displayDateForResolve;
       const depTimeRaw = (firstLeg.depTime ?? "00:00").replace(":", "").padStart(4, "0");
       const depTimeNorm = depTimeRaw.length >= 4 ? `${depTimeRaw.slice(0, 2)}:${depTimeRaw.slice(2, 4)}` : "00:00";
       const depTzLeg = getTimezoneFromAirport(firstLeg.origin);
@@ -466,7 +466,7 @@ export async function PortalNextDuty({
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-slate-400">
-                        {formatDayLabel(`${(leg.departureDate ?? displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd"))}T12:00:00.000Z`, displaySettings.baseTimezone)}
+                        {formatDayLabel(`${("departureDate" in leg && leg.departureDate) ? leg.departureDate : displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd")}T12:00:00.000Z`, displaySettings.baseTimezone)}
                       </span>
                       <span
                         className={[
@@ -518,7 +518,7 @@ export async function PortalNextDuty({
                       <span className="text-slate-300 font-medium font-mono tabular-nums">{flightLabel}</span>
                       <span className="text-slate-600">•</span>
                       {/* Prefer live duration when live delayed times are shown so duration matches displayed dep/arr */}
-                      <span>Flight time {fmtHM(computeLiveDurationMinutes(firstLegLiveStatus?.dep_actual_raw ?? firstLegLiveStatus?.dep_estimated_raw ?? null, firstLegLiveStatus?.arr_actual_raw ?? firstLegLiveStatus?.arr_estimated_raw ?? null) ?? f?.durationMinutes ?? legDurationMinutes(leg.depTime, leg.arrTime))}</span>
+                      <span>Flight time {fmtHM(computeLiveDurationMinutes(firstLegLiveStatus?.dep_actual_raw ?? firstLegLiveStatus?.dep_estimated_raw ?? null, firstLegLiveStatus?.arr_actual_raw ?? firstLegLiveStatus?.arr_estimated_raw ?? null) ?? f?.durationMinutes ?? legDurationMinutes(leg.depTime ?? "00:00", leg.arrTime ?? "00:00"))}</span>
                       {effectiveAircraftType && (
                         <>
                           <span className="text-slate-600">•</span>
@@ -537,7 +537,7 @@ export async function PortalNextDuty({
               }
 
               // Fallback when API has no data (e.g. tomorrow's flights): show schedule-derived info to match Commute Assist style
-              const legDisplayDate = leg.departureDate ?? displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
+              const legDisplayDate = ("departureDate" in leg && leg.departureDate) ? leg.departureDate : displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
               const fallbackCarrier = tenant ? TENANT_CARRIER[tenant] ?? null : null;
               const fallbackFlightLabel = fallbackCarrier ? `${fallbackCarrier} ${leg.flightNumber}` : leg.flightNumber;
               const durMin = leg.depTime && leg.arrTime ? legDurationMinutes(leg.depTime, leg.arrTime) : 0;

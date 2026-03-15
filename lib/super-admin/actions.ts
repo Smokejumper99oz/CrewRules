@@ -372,6 +372,73 @@ export async function getStripeBillingMetrics(): Promise<StripeBillingMetrics> {
   };
 }
 
+export type ChurnRenewalMetrics = {
+  cancelAtPeriodEndCount: number;
+  renewalsDueIn7Days: number;
+  renewalsDueIn30Days: number;
+  pastDueCount: number;
+};
+
+export async function getChurnRenewalMetrics(): Promise<ChurnRenewalMetrics> {
+  await ensureSuperAdmin();
+  const supabase = createAdminClient();
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select(
+      "billing_source, subscription_status, subscription_tier, billing_interval, current_period_end, cancel_at_period_end"
+    );
+
+  const now = new Date();
+  const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const thirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+  let cancelAtPeriodEndCount = 0;
+  let renewalsDueIn7Days = 0;
+  let renewalsDueIn30Days = 0;
+  let pastDueCount = 0;
+
+  for (const p of profiles ?? []) {
+    const isStripePaidPro =
+      p.billing_source === "stripe" &&
+      p.subscription_tier === "pro" &&
+      (p.subscription_status === "active" || p.subscription_status === "trialing");
+
+    if (
+      p.billing_source === "stripe" &&
+      p.subscription_status === "past_due" &&
+      p.subscription_tier === "pro"
+    ) {
+      pastDueCount++;
+    }
+
+    if (!isStripePaidPro) continue;
+
+    if (p.cancel_at_period_end) {
+      cancelAtPeriodEndCount++;
+    }
+
+    if (!p.current_period_end) continue;
+
+    const periodEnd = new Date(p.current_period_end);
+
+    if (!p.cancel_at_period_end && periodEnd > now && periodEnd <= sevenDays) {
+      renewalsDueIn7Days++;
+    }
+
+    if (!p.cancel_at_period_end && periodEnd > now && periodEnd <= thirtyDays) {
+      renewalsDueIn30Days++;
+    }
+  }
+
+  return {
+    cancelAtPeriodEndCount,
+    renewalsDueIn7Days,
+    renewalsDueIn30Days,
+    pastDueCount,
+  };
+}
+
 export type TenantOverviewRow = {
   tenant: string;
   displayName: string;

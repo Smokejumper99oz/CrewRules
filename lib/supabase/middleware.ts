@@ -54,7 +54,7 @@ export async function updateSession(request: NextRequest) {
         .select("role, tenant, portal")
         .eq("id", user.id)
         .single();
-      const email = (user.email ?? "").toLowerCase().trim();
+      const email = ((user as { email?: string }).email ?? "").toLowerCase().trim();
       const isAllowlisted = ["svenfolmer92@gmail.com"].some((e) => e.toLowerCase() === email);
       isSuperAdmin = profile?.role === "super_admin" || isAllowlisted;
       isAdmin =

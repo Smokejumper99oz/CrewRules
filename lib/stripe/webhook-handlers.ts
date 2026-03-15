@@ -37,6 +37,14 @@ async function resolveProfileId(
   return null;
 }
 
+/** Get current period end from subscription (Basil API: on SubscriptionItem; legacy: on Subscription). */
+function getSubscriptionCurrentPeriodEnd(subscription: Stripe.Subscription): number | null {
+  const fromItem = subscription.items?.data?.[0] as { current_period_end?: number } | undefined;
+  if (fromItem?.current_period_end) return fromItem.current_period_end;
+  const fromSub = subscription as { current_period_end?: number };
+  return typeof fromSub.current_period_end === "number" ? fromSub.current_period_end : null;
+}
+
 async function syncSubscriptionToProfile(
   supabase: SupabaseAdmin,
   profileId: string,
@@ -48,15 +56,14 @@ async function syncSubscriptionToProfile(
   const billingInterval = priceId ? getBillingInterval(priceId) : null;
 
   const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id ?? null;
+  const periodEnd = getSubscriptionCurrentPeriodEnd(subscription);
 
   const updates: Record<string, unknown> = {
     stripe_customer_id: customerId,
     stripe_subscription_id: subscription.id,
     stripe_price_id: priceId,
     subscription_status: status,
-    current_period_end: subscription.current_period_end
-      ? new Date(subscription.current_period_end * 1000).toISOString()
-      : null,
+    current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
     cancel_at_period_end: subscription.cancel_at_period_end ?? false,
     billing_interval: billingInterval,
     updated_at: new Date().toISOString(),
@@ -145,7 +152,8 @@ export async function handleInvoicePaymentFailed(
   event: Stripe.Event
 ): Promise<void> {
   const invoice = event.data.object as Stripe.Invoice;
-  const subscriptionId = typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id ?? null;
+  const subRef = (invoice as { subscription?: string | { id?: string } }).subscription;
+  const subscriptionId = typeof subRef === "string" ? subRef : subRef?.id ?? null;
 
   if (!subscriptionId) return;
 
@@ -171,7 +179,8 @@ export async function handleInvoicePaid(
   event: Stripe.Event
 ): Promise<void> {
   const invoice = event.data.object as Stripe.Invoice;
-  const subscriptionId = typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id ?? null;
+  const subRef = (invoice as { subscription?: string | { id?: string } }).subscription;
+  const subscriptionId = typeof subRef === "string" ? subRef : subRef?.id ?? null;
 
   if (!subscriptionId) return;
 
@@ -182,13 +191,12 @@ export async function handleInvoicePaid(
   const profileId = await resolveProfileId(supabase, metadata, customerId);
   if (!profileId) return;
 
+  const periodEnd = getSubscriptionCurrentPeriodEnd(subscription);
   await supabase
     .from("profiles")
     .update({
       subscription_status: subscription.status,
-      current_period_end: subscription.current_period_end
-        ? new Date(subscription.current_period_end * 1000).toISOString()
-        : null,
+      current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", profileId);

@@ -3,6 +3,7 @@ import type {
   ProTrialMetrics,
   TenantOverviewRow,
   StripeBillingMetrics,
+  ChurnRenewalMetrics,
 } from "@/lib/super-admin/actions";
 import {
   PRO_MONTHLY_PRICE_USD,
@@ -25,6 +26,7 @@ type SuperAdminCostMonetizationProps = {
   trialMetrics: ProTrialMetrics;
   tenants: TenantOverviewRow[];
   stripeBilling: StripeBillingMetrics;
+  churnRenewal: ChurnRenewalMetrics;
 };
 
 const cardBase = "rounded-xl border border-slate-700/50 bg-slate-800/50 px-4 py-3";
@@ -33,6 +35,7 @@ export function SuperAdminCostMonetization({
   kpis,
   trialMetrics,
   tenants,
+  churnRenewal,
   stripeBilling,
 }: SuperAdminCostMonetizationProps) {
   const enterpriseTenants = tenants.filter((t) => t.enterpriseCount > 0).length;
@@ -108,6 +111,31 @@ export function SuperAdminCostMonetization({
               <div className="text-xs text-slate-400">ARR: {formatUsd(stripeBilling.liveARR)}</div>
               <div className="text-[10px] text-slate-500 mt-0.5">
                 Stripe-paid Pro only · active/trialing
+              </div>
+            </div>
+          </div>
+
+          {/* Churn & Renewal Watch */}
+          <div className="pt-3 border-t border-slate-700/50">
+            <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+              Churn & Renewal Watch
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div className={cardBase}>
+                <div className="text-slate-500 text-xs mb-0.5">Cancel at period end</div>
+                <div className="text-xl font-semibold text-slate-200">{churnRenewal.cancelAtPeriodEndCount}</div>
+              </div>
+              <div className={cardBase}>
+                <div className="text-slate-500 text-xs mb-0.5">Renewals in 7 days</div>
+                <div className="text-xl font-semibold text-slate-200">{churnRenewal.renewalsDueIn7Days}</div>
+              </div>
+              <div className={cardBase}>
+                <div className="text-slate-500 text-xs mb-0.5">Renewals in 30 days</div>
+                <div className="text-xl font-semibold text-slate-200">{churnRenewal.renewalsDueIn30Days}</div>
+              </div>
+              <div className={cardBase}>
+                <div className="text-slate-500 text-xs mb-0.5">Past due</div>
+                <div className="text-xl font-semibold text-slate-200">{churnRenewal.pastDueCount}</div>
               </div>
             </div>
           </div>
