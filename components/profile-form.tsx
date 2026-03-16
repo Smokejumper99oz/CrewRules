@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { updateProfilePreferences, startProTrial, updatePassword } from "@/app/frontier/pilots/portal/profile/actions";
 import { DatePickerInput } from "@/components/date-picker-input";
 import { ProBadge } from "@/components/pro-badge";
+import { InboundEmailDisplay } from "@/components/inbound-email-display";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -39,6 +40,9 @@ type Props = {
     commute_arrival_buffer_minutes?: number;
     commute_release_buffer_minutes?: number;
     commute_nonstop_only?: boolean;
+    commute_two_leg_enabled?: boolean | null;
+    commute_two_leg_stop_1?: string | null;
+    commute_two_leg_stop_2?: string | null;
     subscription_tier?: "free" | "pro" | "enterprise";
     pro_trial_expires_at?: string | null;
     stripe_customer_id?: string | null;
@@ -58,6 +62,7 @@ type Props = {
   proBadgeLabel: string;
   proBadgeVariant: "slate" | "gold" | "emerald" | "amber" | "red";
   foundingPilotCount?: number;
+  inboundEmail: string | null;
 };
 
 /** Frontier Airlines crew bases (IATA codes). */
@@ -114,7 +119,7 @@ function getTimezoneAbbreviation(iana: string): string {
 
 const COMMUTE_BUFFER_OPTIONS = [30, 60, 90, 120, 180] as const;
 
-export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant, foundingPilotCount = 0 }: Props) {
+export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant, foundingPilotCount = 0, inboundEmail }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -122,6 +127,16 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
   const [trialMessage, setTrialMessage] = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
+
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, [router]);
 
   const canManageSubscription =
     Boolean(profile?.stripe_customer_id) &&
@@ -134,6 +149,8 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [directFlightsExpanded, setDirectFlightsExpanded] = useState(true);
+  const [twoLegExpanded, setTwoLegExpanded] = useState(true);
 
   const displayTimezoneMode = profile.display_timezone_mode ?? "base";
   const timeFormat = profile.time_format ?? "24h";
@@ -141,6 +158,9 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
   const homeAirport = profile.home_airport ?? "";
   const alternateHomeAirport = profile.alternate_home_airport ?? "";
   const commuteArrival = profile.commute_arrival_buffer_minutes ?? 60;
+  const commuteTwoLegEnabled = profile.commute_two_leg_enabled ?? false;
+  const commuteTwoLegStop1 = profile.commute_two_leg_stop_1 ?? "";
+  const commuteTwoLegStop2 = profile.commute_two_leg_stop_2 ?? "";
   const commuteRelease = profile.commute_release_buffer_minutes ?? 30;
   const commuteNonstopOnly = profile.commute_nonstop_only ?? true;
 
@@ -182,7 +202,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Profile Settings</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Manage your profile, commute settings, display preferences, and PRO features.
+            Manage your Profile, Commute Settings, Display Preferences, and CrewRules™ Pro features.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -204,7 +224,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
       {/* Personal Information */}
       <section>
         <h2 className="text-base font-semibold text-white mb-1">Personal Information</h2>
-        <p className="text-xs text-slate-500 mb-4">Core identity and employment details.</p>
+        <p className="text-xs text-slate-500 mb-4">Pilot profile and employment details.</p>
         <div className="space-y-4">
           <div>
             <label htmlFor="full_name" className="block text-sm font-medium text-slate-300">
@@ -232,7 +252,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               className="mt-1.5 w-full max-w-sm rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30"
             />
             <p className="mt-1 text-xs text-slate-500">
-              Employee Number is used for internal portal identification
+              Employee Number is used for internal portal identification and to enable pilot matching in the CrewRules™ Mentorship Program.
             </p>
           </div>
           <div>
@@ -247,7 +267,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               className="mt-1.5 w-full max-w-[12rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 cursor-pointer"
             />
             <p className="mt-1 text-xs text-slate-500">
-              Used for calculations only. Never shared.
+              Used for internal calculations such as anniversary badges and CrewRules™ Pro pay calculations. Your information is never shared.
             </p>
           </div>
           <div>
@@ -286,7 +306,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   </option>
                 ))}
             </select>
-            <p className="mt-1 text-xs text-slate-500">3-letter IATA code. Used for reserve calculations and default commute planning. If your uploaded trip starts from another airport, Commute Assist uses that airport instead.</p>
+            <p className="mt-1 text-xs text-slate-500">3-letter IATA airport code. Used for reserve calculations and default commute planning. If a trip starts from another airport, Commute Assist automatically uses that airport instead.</p>
             <p className="mt-2 text-sm text-slate-400">
               Timezone: <span className="font-medium text-slate-200">{tzLabel}</span>
             </p>
@@ -341,15 +361,598 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
         </div>
       </section>
 
+      {/* FLICA / Schedule Import */}
+      <section>
+        <h2 className="text-base font-semibold text-white mb-1">FLICA / Schedule Import</h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Send your schedule export to your personal CrewRules™ import email to import trips into My Schedule.
+        </p>
+        {inboundEmail ? (
+          <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+            <InboundEmailDisplay email={inboundEmail} variant="schedule" />
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">Your import email will be created after your profile is saved.</p>
+        )}
+      </section>
+
+      {/* CrewRules™ Pro Features */}
+      <section>
+        <h2 className="text-base font-semibold text-white mb-1">
+          Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> <span className="text-amber-400">PRO</span> Features
+          {!proActive && <span className="ml-1.5 text-xs font-normal text-slate-500">🔒</span>}
+        </h2>
+        <p className="text-xs text-slate-500 mb-4">
+          {proActive ? "Advanced tools available with CrewRules™ PRO." : "Upgrade to unlock advanced tools."}
+        </p>
+
+        {!proActive && (
+          <>
+            <button
+              type="button"
+              onClick={async () => {
+                setTrialMessage(null);
+                setTrialStarting(true);
+                const result = await startProTrial();
+                setTrialStarting(false);
+                if (result.ok) {
+                  router.refresh();
+                } else if (result.reason === "trial_active") {
+                  setTrialMessage("Trial already active");
+                } else if (result.reason === "already_paid") {
+                  setTrialMessage("You already have PRO access");
+                }
+              }}
+              disabled={trialStarting}
+              className="rounded-xl bg-amber-500/90 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-amber-500 transition disabled:opacity-50"
+            >
+              {trialStarting ? "Starting…" : "Start 14-Day PRO Trial"}
+            </button>
+            {profile?.subscription_tier !== "enterprise" && (
+              <>
+                {foundingPilotCount > 0 && (
+                  <div className="mt-3 flex flex-col gap-0.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+                    <span className="text-xs font-medium text-amber-400/90">Founding Pilot Program</span>
+                    <span className="text-xs text-amber-400/80">{foundingPilotCount} / 100 spots claimed</span>
+                  </div>
+                )}
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setCheckoutLoading("pro_monthly");
+                      try {
+                        const res = await fetch("/api/stripe/checkout", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ interval: "pro_monthly" }),
+                        });
+                        const data = await res.json();
+                        if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
+                        setCheckoutLoading(null);
+                      } catch {
+                        setCheckoutLoading(null);
+                      }
+                    }}
+                    disabled={!!checkoutLoading}
+                    className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-center transition hover:border-amber-500/50 hover:bg-amber-500/10 disabled:opacity-50 disabled:hover:border-amber-500/40 disabled:hover:bg-amber-500/5"
+                  >
+                    <span className="text-sm font-semibold leading-tight text-amber-200">Pro Monthly</span>
+                    <span className="text-base font-bold leading-tight text-amber-400">$10 / month</span>
+                    <span className="text-xs leading-tight text-slate-400">Flexible Monthly Billing</span>
+                    {checkoutLoading === "pro_monthly" && (
+                      <span className="mt-0.5 text-xs leading-tight text-amber-400/80">Redirecting…</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setCheckoutLoading("pro_annual");
+                      try {
+                        const res = await fetch("/api/stripe/checkout", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ interval: "pro_annual" }),
+                        });
+                        const data = await res.json();
+                        if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
+                        setCheckoutLoading(null);
+                      } catch {
+                        setCheckoutLoading(null);
+                      }
+                    }}
+                    disabled={!!checkoutLoading}
+                    className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-center transition hover:border-amber-500/50 hover:bg-amber-500/10 disabled:opacity-50 disabled:hover:border-amber-500/40 disabled:hover:bg-amber-500/5"
+                  >
+                    <span className="text-sm font-semibold leading-tight text-amber-200">Pro Annual</span>
+                    <span className="text-base font-bold leading-tight text-amber-400">$99 / year</span>
+                    <span className="text-xs leading-tight text-slate-400">Save $21 Vs Monthly</span>
+                    {checkoutLoading === "pro_annual" && (
+                      <span className="mt-0.5 text-xs leading-tight text-amber-400/80">Redirecting…</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setCheckoutLoading("founding_pilot_annual");
+                      try {
+                        const res = await fetch("/api/stripe/checkout", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ interval: "founding_pilot_annual" }),
+                        });
+                        const data = await res.json();
+                        if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
+                        setCheckoutLoading(null);
+                      } catch {
+                        setCheckoutLoading(null);
+                      }
+                    }}
+                    disabled={!!checkoutLoading}
+                    className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-400/50 bg-amber-500/10 px-4 py-3 text-center shadow-amber-500/5 transition hover:border-amber-400/60 hover:bg-amber-500/15 disabled:opacity-50 disabled:hover:border-amber-400/50 disabled:hover:bg-amber-500/10"
+                  >
+                    <span className="text-sm font-semibold leading-tight text-amber-200">Founding Pilot</span>
+                    <span className="text-base font-bold leading-tight text-amber-400">$59 / year</span>
+                    <span className="text-xs leading-tight text-slate-400">Lifetime Price Lock</span>
+                    {checkoutLoading === "founding_pilot_annual" && (
+                      <span className="mt-0.5 text-xs leading-tight text-amber-400/80">Redirecting…</span>
+                    )}
+                  </button>
+                </div>
+                <ul className="mt-3 space-y-1.5 text-xs leading-relaxed text-slate-400">
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-slate-500">•</span>
+                    <span>Upgrade to CrewRules™ Pro to support continued development and unlock Pro features. Early members help us build better tools for pilots and flight attendants.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-slate-500">•</span>
+                    <span>CrewRules™ merchandise is on the way — including our new cap and lanyard.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-slate-500">•</span>
+                    <span>Pro supporters will receive early access when they arrive.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-slate-500">•</span>
+                    <span>Beta testers help shape CrewRules™ by testing new features early and helping us improve the tools pilots rely on.</span>
+                  </li>
+                </ul>
+              </>
+            )}
+            {trialMessage && (
+              <p className="mt-2 text-sm text-amber-200/90">{trialMessage}</p>
+            )}
+            <div className="mt-6 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4 opacity-60">
+              <p className="mb-2 text-sm font-medium text-slate-300">CrewRules™ Pro includes</p>
+              <ul className="space-y-2 text-sm text-slate-400">
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0 text-slate-500">•</span>
+                  <span>Commute Assist™ — Smart commute planning based on your schedule.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0 text-slate-500">•</span>
+                  <span>Pay Projections — Forecast trip and monthly credit, block, and pay</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0 text-slate-500">•</span>
+                  <span>Advanced Weather Brief™ — Operational weather analysis for your next scheduled flight.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0 text-slate-500">•</span>
+                  <span>CrewRules™ Family View™ — Share schedule insights with your family and friends.</span>
+                </li>
+              </ul>
+            </div>
+          </>
+        )}
+
+        {/* CrewRules™ Commute Assist™ */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <h3 className="text-sm font-semibold text-slate-200">
+              Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Commute Assist<span className="align-super text-[10px]">™</span>
+            </h3>
+            {!proActive && <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 shrink-0">Pro</span>}
+          </div>
+          <p className="text-xs text-slate-500 mb-4">
+            {proActive ? "Tools to help plan safer and more reliable commutes." : "Available with CrewRules™ Pro. Start your 14-day trial to unlock this feature."}
+          </p>
+
+          {/* Direct Flights card */}
+          <div className={`rounded-xl border border-white/10 bg-slate-950/40 ${!proActive ? "opacity-80" : ""}`}>
+            <button
+              type="button"
+              onClick={() => setDirectFlightsExpanded(!directFlightsExpanded)}
+              className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-medium text-slate-200 hover:bg-white/5 transition-colors rounded-t-xl"
+            >
+              <span>Direct Flights</span>
+              <span className="text-slate-500 shrink-0" aria-hidden>{directFlightsExpanded ? "−" : "+"}</span>
+            </button>
+            <div className={directFlightsExpanded ? "space-y-4 px-4 pb-4" : "hidden"}>
+              <div>
+                <label htmlFor="home_airport" className="block text-sm font-medium text-slate-300">
+                  Home Airport
+                </label>
+                <input
+                  id="home_airport"
+                  name="home_airport"
+                  type="text"
+                  defaultValue={homeAirport}
+                  maxLength={3}
+                  placeholder="e.g. MCO"
+                  disabled={!proActive}
+                  readOnly={!proActive}
+                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
+                  style={{ textTransform: "uppercase" }}
+                  onInput={(e) => {
+                    e.currentTarget.value = e.currentTarget.value.toUpperCase();
+                  }}
+                />
+                <p className="mt-1 text-xs text-slate-500">3-letter IATA code. This is where your commute normally begins.</p>
+              </div>
+              <div className="mt-4">
+                <label htmlFor="alternate_home_airport" className="block text-sm font-medium text-slate-300">
+                  Alternate Airport <span className="text-slate-500 font-normal">(Optional)</span>
+                </label>
+                <input
+                  id="alternate_home_airport"
+                  name="alternate_home_airport"
+                  type="text"
+                  defaultValue={alternateHomeAirport}
+                  maxLength={3}
+                  placeholder="e.g. MCO"
+                  disabled={!proActive}
+                  readOnly={!proActive}
+                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
+                  style={{ textTransform: "uppercase" }}
+                  onInput={(e) => {
+                    e.currentTarget.value = e.currentTarget.value.toUpperCase();
+                  }}
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Recommended backup airport to expand your commute options when flights from your home airport are limited.
+                </p>
+              </div>
+              <div className="mt-4">
+                <label
+                  htmlFor="commute_arrival_buffer_minutes"
+                  className="block text-sm font-medium text-slate-300"
+                >
+                  Arrival Buffer Before Duty
+                </label>
+                <select
+                  id="commute_arrival_buffer_minutes"
+                  name="commute_arrival_buffer_minutes"
+                  defaultValue={commuteArrival}
+                  disabled={!proActive}
+                  className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {COMMUTE_BUFFER_OPTIONS.map((m) => (
+                    <option key={m} value={m}>
+                      {m} minutes
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  Minimum time you want to arrive before your report time. Used for commute safety calculations.
+                </p>
+              </div>
+              <input type="hidden" name="commute_release_buffer_minutes" value="0" />
+              <input type="hidden" name="commute_nonstop_only" value="1" />
+            </div>
+          </div>
+
+          {/* 2 Leg Options card */}
+          <div className={`mt-4 rounded-xl border border-white/10 bg-slate-950/40 ${!proActive ? "opacity-80" : ""}`}>
+            <button
+              type="button"
+              onClick={() => setTwoLegExpanded(!twoLegExpanded)}
+              className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-medium text-slate-200 hover:bg-white/5 transition-colors rounded-t-xl"
+            >
+              <span className="flex items-center gap-2">
+                <span>2 Leg Options</span>
+                <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-slate-600/80 text-slate-300 shrink-0">In Development</span>
+              </span>
+              <span className="text-slate-500 shrink-0" aria-hidden>{twoLegExpanded ? "−" : "+"}</span>
+            </button>
+            <div className={twoLegExpanded ? "space-y-4 px-4 pb-4" : "hidden"}>
+              <div className="flex items-center gap-3">
+                <input
+                  id="commute_two_leg_enabled"
+                  name="commute_two_leg_enabled"
+                  type="checkbox"
+                  value="1"
+                  defaultChecked={commuteTwoLegEnabled}
+                  disabled={!proActive}
+                  className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed"
+                />
+                {proActive && <input type="hidden" name="commute_two_leg_enabled" value="0" />}
+                <label htmlFor="commute_two_leg_enabled" className="text-sm font-medium text-slate-300">
+                  Enable 2-Leg Search
+                </label>
+              </div>
+              <p className="text-xs text-slate-500">
+                Used when no direct flight exists. Example: SAV → ATL → SJU or SAV → MCO → SJU.
+              </p>
+              <div>
+                <label htmlFor="commute_two_leg_stop_1" className="block text-sm font-medium text-slate-300">
+                  Connection Airport 1
+                </label>
+                <input
+                  id="commute_two_leg_stop_1"
+                  name="commute_two_leg_stop_1"
+                  type="text"
+                  defaultValue={commuteTwoLegStop1}
+                  maxLength={3}
+                  placeholder="e.g. ATL"
+                  disabled={!proActive}
+                  readOnly={!proActive}
+                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
+                  style={{ textTransform: "uppercase" }}
+                  onInput={(e) => {
+                    e.currentTarget.value = e.currentTarget.value.toUpperCase();
+                  }}
+                />
+              </div>
+              <div>
+                <label htmlFor="commute_two_leg_stop_2" className="block text-sm font-medium text-slate-300">
+                  Connection Airport 2
+                </label>
+                <input
+                  id="commute_two_leg_stop_2"
+                  name="commute_two_leg_stop_2"
+                  type="text"
+                  defaultValue={commuteTwoLegStop2}
+                  maxLength={3}
+                  placeholder="e.g. MCO"
+                  disabled={!proActive}
+                  readOnly={!proActive}
+                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
+                  style={{ textTransform: "uppercase" }}
+                  onInput={(e) => {
+                    e.currentTarget.value = e.currentTarget.value.toUpperCase();
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {!proActive && (
+            <div className="hidden" aria-hidden>
+              <input type="hidden" name="home_airport" value={homeAirport} />
+              <input type="hidden" name="alternate_home_airport" value={alternateHomeAirport} />
+              <input type="hidden" name="commute_arrival_buffer_minutes" value={commuteArrival} />
+              <input type="hidden" name="commute_two_leg_enabled" value={commuteTwoLegEnabled ? "1" : "0"} />
+              <input type="hidden" name="commute_two_leg_stop_1" value={commuteTwoLegStop1} />
+              <input type="hidden" name="commute_two_leg_stop_2" value={commuteTwoLegStop2} />
+            </div>
+          )}
+        </div>
+
+        {/* CrewRules™ Pay Projections™ */}
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <h3 className="text-sm font-semibold text-slate-200">
+              Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Pay Projections<span className="align-super text-[10px]">™</span>
+            </h3>
+            {!proActive && <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 shrink-0">Pro</span>}
+          </div>
+          <p className="text-xs text-slate-500 mb-4">
+            {proActive ? "Estimate trip and monthly credit, block, and pay." : "Available with CrewRules™ Pro. Start your 14-day trial to unlock this feature."}
+          </p>
+          <div className={`space-y-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4 ${!proActive ? "opacity-80" : ""}`}>
+            <div className="flex items-center gap-3">
+              {proActive ? (
+                <input type="hidden" name="show_pay_projection" value="0" />
+              ) : (
+                <input type="hidden" name="show_pay_projection" value={profile?.show_pay_projection ? "1" : "0"} />
+              )}
+              <input
+                id="show_pay_projection"
+                name={proActive ? "show_pay_projection" : undefined}
+                type="checkbox"
+                defaultChecked={Boolean(profile?.show_pay_projection ?? false)}
+                value="1"
+                disabled={!proActive}
+                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed"
+              />
+              <label htmlFor="show_pay_projection" className="text-sm text-slate-300">
+                Enable Pay Projections
+              </label>
+            </div>
+            <p className="text-xs text-slate-500">
+              Display estimated monthly pay and credit calculations. Available with CrewRules™ PRO.
+            </p>
+          </div>
+        </div>
+
+        {/* CrewRules™ Family View™ */}
+        <div id="family-view-sharing" className="mt-8">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <h3 className="text-sm font-semibold text-slate-200">
+              Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Family View<span className="align-super text-[10px]">™</span>
+            </h3>
+            {!proActive && <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 shrink-0">Pro</span>}
+          </div>
+          <p className="text-xs text-slate-500 mb-4">
+            {proActive ? "Share schedule visibility with family or trusted viewers." : "Available with CrewRules™ Pro. Start your 14-day trial to unlock this feature."}
+          </p>
+          <div className={`space-y-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4 ${!proActive ? "opacity-80" : ""}`}>
+            <div className="flex items-center gap-3">
+              {proActive ? (
+                <input type="hidden" name="family_view_enabled" value="0" />
+              ) : (
+                <input type="hidden" name="family_view_enabled" value={profile?.family_view_enabled ? "1" : "0"} />
+              )}
+              <input
+                id="family_view_enabled"
+                name={proActive ? "family_view_enabled" : undefined}
+                type="checkbox"
+                defaultChecked={Boolean(profile?.family_view_enabled ?? false)}
+                value="1"
+                disabled={!proActive}
+                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed"
+              />
+              <label htmlFor="family_view_enabled" className="text-sm text-slate-300">
+                Enable Family View
+              </label>
+            </div>
+            <div className="flex items-center gap-3">
+              {proActive ? (
+                <input type="hidden" name="family_view_show_exact_times" value="0" />
+              ) : (
+                <input type="hidden" name="family_view_show_exact_times" value={profile?.family_view_show_exact_times ? "1" : "0"} />
+              )}
+              <input
+                id="family_view_show_exact_times"
+                name={proActive ? "family_view_show_exact_times" : undefined}
+                type="checkbox"
+                defaultChecked={Boolean(profile?.family_view_show_exact_times ?? true)}
+                value="1"
+                disabled={!proActive}
+                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed"
+              />
+              <label htmlFor="family_view_show_exact_times" className="text-sm text-slate-300">
+                Show Exact Times
+              </label>
+            </div>
+            <div className="flex items-center gap-3">
+              {proActive ? (
+                <input type="hidden" name="family_view_show_overnight_cities" value="0" />
+              ) : (
+                <input type="hidden" name="family_view_show_overnight_cities" value={profile?.family_view_show_overnight_cities ? "1" : "0"} />
+              )}
+              <input
+                id="family_view_show_overnight_cities"
+                name={proActive ? "family_view_show_overnight_cities" : undefined}
+                type="checkbox"
+                defaultChecked={Boolean(profile?.family_view_show_overnight_cities ?? true)}
+                value="1"
+                disabled={!proActive}
+                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed"
+              />
+              <label htmlFor="family_view_show_overnight_cities" className="text-sm text-slate-300">
+                Show Overnight Cities
+              </label>
+            </div>
+            <div className="flex items-center gap-3">
+              {proActive ? (
+                <input type="hidden" name="family_view_show_commute_estimates" value="0" />
+              ) : (
+                <input type="hidden" name="family_view_show_commute_estimates" value={profile?.family_view_show_commute_estimates ? "1" : "0"} />
+              )}
+              <input
+                id="family_view_show_commute_estimates"
+                name={proActive ? "family_view_show_commute_estimates" : undefined}
+                type="checkbox"
+                defaultChecked={Boolean(profile?.family_view_show_commute_estimates ?? true)}
+                value="1"
+                disabled={!proActive}
+                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed"
+              />
+              <label htmlFor="family_view_show_commute_estimates" className="text-sm text-slate-300">
+                Show Commute Estimates
+              </label>
+            </div>
+            <div className="pt-2 border-t border-white/10">
+              <p className="text-sm text-slate-400">Included viewers: 0 / 2</p>
+            </div>
+            <div>
+              <button
+                type="button"
+                disabled
+                className="rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed"
+              >
+                Invite Family Member
+              </button>
+              <p className="mt-1 text-xs text-slate-500">Coming next</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Advanced AI */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <h3 className="text-sm font-semibold text-slate-200">Advanced AI</h3>
+            {!proActive && <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 shrink-0">Pro</span>}
+          </div>
+          <p className="text-xs text-slate-500 mb-4">
+            {proActive ? "AI-powered search and insights across your documents and schedule." : "Available with CrewRules™ Pro. Start your 14-day trial to unlock this feature."}
+          </p>
+          <div className={`rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4 ${!proActive ? "opacity-80" : ""}`}>
+            <p className="text-sm text-slate-400">
+              {proActive ? "AI features are available in the Ask and Library sections." : "Unlock Pro to access AI search and document insights."}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Schedule Display */}
+      <section>
+        <h2 className="text-base font-semibold text-white mb-1">Schedule Display</h2>
+        <p className="text-xs text-slate-500 mb-4">Controls how your schedule is shown.</p>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="display_timezone_mode" className="block text-sm font-medium text-slate-300">
+              Schedule Time Reference
+            </label>
+            <select
+              id="display_timezone_mode"
+              name="display_timezone_mode"
+              defaultValue={displayTimezoneMode === "toggle" ? "both" : displayTimezoneMode}
+              className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
+            >
+              <option value="base">Base Time (Recommended)</option>
+              <option value="device">Device local time</option>
+              <option value="both">Show both (Base + Device)</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Choose which timezone is used when displaying schedule times.
+            </p>
+          </div>
+          <div>
+            <label htmlFor="time_format" className="block text-sm font-medium text-slate-300">
+              Time Format
+            </label>
+            <select
+              id="time_format"
+              name="time_format"
+              defaultValue={timeFormat}
+              className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
+            >
+              <option value="24h">24-hour (Default)</option>
+              <option value="12h">12-hour (AM/PM)</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Choose how times are displayed in the schedule.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              id="show_timezone_label"
+              name="show_timezone_label"
+              type="checkbox"
+              defaultChecked={showTimezoneLabel}
+              value="1"
+              className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
+            />
+            <input type="hidden" name="show_timezone_label" value="0" />
+            <label htmlFor="show_timezone_label" className="text-sm text-slate-300">
+              Show timezone label next to times <span className="text-slate-500">(e.g., 2230 SJU)</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
       {/* Account */}
       <section>
         <h2 className="text-base font-semibold text-white mb-1">Account</h2>
-        <p className="text-xs text-slate-500 mb-4">Account management.</p>
+        <p className="text-xs text-slate-500 mb-4">Manage your CrewRules™ Pro subscription and account settings.</p>
         <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 space-y-3">
           <div>
             <span className="text-xs font-medium text-slate-500">Email</span>
             <p className="text-sm text-white">{profile.email ?? "—"}</p>
-            <p className="mt-1 text-xs text-slate-500">Managed via your account provider.</p>
+            <p className="mt-1 text-xs text-slate-500">Email is managed by CrewRules™ based on your airline access and cannot be edited.</p>
           </div>
           <div className="pt-3 border-t border-white/5">
             <button
@@ -473,382 +1076,6 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               </button>
             </div>
           )}
-        </div>
-      </section>
-
-      {/* CrewRules™ Pro Features */}
-      <section>
-        {proActive ? (
-          <>
-        <h2 className="text-base font-semibold text-white mb-1">
-          Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> <span className="text-amber-400">PRO</span> Features
-        </h2>
-        <p className="text-xs text-slate-500 mb-4">
-          Advanced tools available with CrewRules™ PRO.
-        </p>
-
-        {/* CrewRules™ Commute Assist™ */}
-        <div className="mb-8">
-          <h3 className="text-sm font-semibold text-slate-200 mb-1">
-            Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Commute Assist<span className="align-super text-[10px]">™</span>
-          </h3>
-          <p className="text-xs text-slate-500 mb-4">Tools to help plan safer and more reliable commutes.</p>
-          <div className="space-y-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-            <div>
-              <label htmlFor="home_airport" className="block text-sm font-medium text-slate-300">
-                Home Airport
-              </label>
-              <input
-                id="home_airport"
-                name="home_airport"
-                type="text"
-                defaultValue={homeAirport}
-                maxLength={3}
-                placeholder="e.g. MCO"
-                className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase"
-                style={{ textTransform: "uppercase" }}
-                onInput={(e) => {
-                  e.currentTarget.value = e.currentTarget.value.toUpperCase();
-                }}
-              />
-              <p className="mt-1 text-xs text-slate-500">3-letter IATA code. This is where your commute normally begins.</p>
-            </div>
-            <div className="mt-4">
-              <label htmlFor="alternate_home_airport" className="block text-sm font-medium text-slate-300">
-                Alternate Airport <span className="text-slate-500 font-normal">(Optional)</span>
-              </label>
-              <input
-                id="alternate_home_airport"
-                name="alternate_home_airport"
-                type="text"
-                defaultValue={alternateHomeAirport}
-                maxLength={3}
-                placeholder="e.g. MCO"
-                className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase"
-                style={{ textTransform: "uppercase" }}
-                onInput={(e) => {
-                  e.currentTarget.value = e.currentTarget.value.toUpperCase();
-                }}
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                Recommended backup airport to expand your commute options when flights from your home airport are limited.
-              </p>
-            </div>
-            <div className="mt-4">
-              <label
-                htmlFor="commute_arrival_buffer_minutes"
-                className="block text-sm font-medium text-slate-300"
-              >
-                Arrival Buffer Before Duty
-              </label>
-              <select
-                id="commute_arrival_buffer_minutes"
-                name="commute_arrival_buffer_minutes"
-                defaultValue={commuteArrival}
-                className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
-              >
-                {COMMUTE_BUFFER_OPTIONS.map((m) => (
-                  <option key={m} value={m}>
-                    {m} minutes
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-slate-500">
-                Minimum time you want to arrive before your report time. Used for commute safety calculations.
-              </p>
-            </div>
-            <input type="hidden" name="commute_release_buffer_minutes" value="0" />
-            <input type="hidden" name="commute_nonstop_only" value="1" />
-          </div>
-        </div>
-
-        {/* Pay & Earnings */}
-        <div>
-          <h3 className="text-sm font-semibold text-slate-200 mb-1">Pay & Earnings</h3>
-          <p className="text-xs text-slate-500 mb-4">Financial visibility tools.</p>
-          <div className="space-y-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-            <div className="flex items-center gap-3">
-              <input type="hidden" name="show_pay_projection" value="0" />
-              <input
-                id="show_pay_projection"
-                name="show_pay_projection"
-                type="checkbox"
-                defaultChecked={Boolean(profile?.show_pay_projection ?? false)}
-                value="1"
-                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
-              />
-              <label htmlFor="show_pay_projection" className="text-sm text-slate-300">
-                Enable Pay Projections
-              </label>
-            </div>
-            <p className="text-xs text-slate-500">
-              Display estimated monthly pay and credit calculations. Available with CrewRules™ PRO.
-            </p>
-          </div>
-        </div>
-          </>
-        ) : (
-          <>
-            <input type="hidden" name="home_airport" value={homeAirport} />
-            <input type="hidden" name="alternate_home_airport" value={alternateHomeAirport} />
-            <input type="hidden" name="commute_arrival_buffer_minutes" value={commuteArrival} />
-            <input type="hidden" name="commute_release_buffer_minutes" value={commuteRelease} />
-            <input type="hidden" name="commute_nonstop_only" value={commuteNonstopOnly ? "1" : "0"} />
-            <input type="hidden" name="show_pay_projection" value={profile?.show_pay_projection ? "1" : "0"} />
-            <h2 className="text-base font-semibold text-white mb-1">
-              Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> <span className="text-amber-400">PRO</span> Features 🔒
-            </h2>
-            <p className="text-xs text-slate-500 mb-4">Upgrade to unlock advanced tools.</p>
-            <button
-              type="button"
-              onClick={async () => {
-                setTrialMessage(null);
-                setTrialStarting(true);
-                const result = await startProTrial();
-                setTrialStarting(false);
-                if (result.ok) {
-                  router.refresh();
-                } else if (result.reason === "trial_active") {
-                  setTrialMessage("Trial already active");
-                } else if (result.reason === "already_paid") {
-                  setTrialMessage("You already have PRO access");
-                }
-              }}
-              disabled={trialStarting}
-              className="rounded-xl bg-amber-500/90 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-amber-500 transition disabled:opacity-50"
-            >
-              {trialStarting ? "Starting…" : "Start 14-Day PRO Trial"}
-            </button>
-            {profile?.subscription_tier !== "enterprise" && (
-              <>
-                {foundingPilotCount > 0 && (
-                  <div className="mt-3 flex flex-col gap-0.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-                    <span className="text-xs font-medium text-amber-400/90">Founding Pilot Program</span>
-                    <span className="text-xs text-amber-400/80">{foundingPilotCount} / 100 spots claimed</span>
-                  </div>
-                )}
-                <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setCheckoutLoading("monthly");
-                    try {
-                      const res = await fetch("/api/stripe/checkout", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ interval: "monthly" }),
-                      });
-                      const data = await res.json();
-                      if (data.url) window.location.href = data.url;
-                      else setCheckoutLoading(null);
-                    } catch {
-                      setCheckoutLoading(null);
-                    }
-                  }}
-                  disabled={!!checkoutLoading}
-                  className="rounded-lg border border-amber-500/60 bg-amber-500/20 px-3 py-2 text-sm font-medium text-amber-200 hover:bg-amber-500/30 transition disabled:opacity-50"
-                >
-                  {checkoutLoading === "monthly" ? "Redirecting…" : "Pro Monthly"}
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setCheckoutLoading("annual");
-                    try {
-                      const res = await fetch("/api/stripe/checkout", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ interval: "annual" }),
-                      });
-                      const data = await res.json();
-                      if (data.url) window.location.href = data.url;
-                      else setCheckoutLoading(null);
-                    } catch {
-                      setCheckoutLoading(null);
-                    }
-                  }}
-                  disabled={!!checkoutLoading}
-                  className="rounded-lg border border-amber-500/60 bg-amber-500/20 px-3 py-2 text-sm font-medium text-amber-200 hover:bg-amber-500/30 transition disabled:opacity-50"
-                >
-                  {checkoutLoading === "annual" ? "Redirecting…" : "Pro Annual"}
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setCheckoutLoading("founding_pilot_monthly");
-                    try {
-                      const res = await fetch("/api/stripe/checkout", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ interval: "founding_pilot_monthly" }),
-                      });
-                      const data = await res.json();
-                      if (data.url) window.location.href = data.url;
-                      else setCheckoutLoading(null);
-                    } catch {
-                      setCheckoutLoading(null);
-                    }
-                  }}
-                  disabled={!!checkoutLoading}
-                  className="rounded-lg border border-amber-500/60 bg-amber-500/20 px-3 py-2 text-sm font-medium text-amber-200 hover:bg-amber-500/30 transition disabled:opacity-50"
-                >
-                  {checkoutLoading === "founding_pilot_monthly" ? "Redirecting…" : "Founding Pilot Monthly"}
-                </button>
-              </div>
-              </>
-            )}
-            {trialMessage && (
-              <p className="mt-2 text-sm text-amber-200/90">{trialMessage}</p>
-            )}
-            <div className="mt-6 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4 opacity-60">
-              <ul className="space-y-2 text-sm text-slate-400">
-                <li className="flex items-center gap-2">
-                  <span className="text-slate-500">•</span>
-                  CrewRules™ Commute Assist™
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-slate-500">•</span>
-                  Pay Projections
-                </li>
-              </ul>
-            </div>
-          </>
-        )}
-      </section>
-
-      {/* Schedule Display */}
-      <section>
-        <h2 className="text-base font-semibold text-white mb-1">Schedule Display</h2>
-        <p className="text-xs text-slate-500 mb-4">Controls how your schedule is shown.</p>
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="display_timezone_mode" className="block text-sm font-medium text-slate-300">
-              Schedule Time Reference
-            </label>
-            <select
-              id="display_timezone_mode"
-              name="display_timezone_mode"
-              defaultValue={displayTimezoneMode === "toggle" ? "both" : displayTimezoneMode}
-              className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
-            >
-              <option value="base">Base Time (Recommended)</option>
-              <option value="device">Device local time</option>
-              <option value="both">Show both (Base + Device)</option>
-            </select>
-            <p className="mt-1 text-xs text-slate-500">
-              Choose which timezone is used when displaying schedule times.
-            </p>
-          </div>
-          <div>
-            <label htmlFor="time_format" className="block text-sm font-medium text-slate-300">
-              Time Format
-            </label>
-            <select
-              id="time_format"
-              name="time_format"
-              defaultValue={timeFormat}
-              className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
-            >
-              <option value="24h">24-hour (Default)</option>
-              <option value="12h">12-hour (AM/PM)</option>
-            </select>
-            <p className="mt-1 text-xs text-slate-500">
-              Choose how times are displayed in the schedule.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <input
-              id="show_timezone_label"
-              name="show_timezone_label"
-              type="checkbox"
-              defaultChecked={showTimezoneLabel}
-              value="1"
-              className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
-            />
-            <input type="hidden" name="show_timezone_label" value="0" />
-            <label htmlFor="show_timezone_label" className="text-sm text-slate-300">
-              Show timezone label next to times <span className="text-slate-500">(e.g., 2230 SJU)</span>
-            </label>
-          </div>
-        </div>
-      </section>
-
-      {/* Family View Sharing */}
-      <section id="family-view-sharing">
-        <h2 className="text-base font-semibold text-white mb-1">Family View Sharing</h2>
-        <p className="text-xs text-slate-500 mb-4">
-          Control what your spouse, family, or trusted viewer will be able to see in Family View.
-        </p>
-        <div className="space-y-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-          <div className="flex items-center gap-3">
-            <input
-              id="family_view_enabled"
-              name="family_view_enabled"
-              type="checkbox"
-              defaultChecked={Boolean(profile?.family_view_enabled ?? false)}
-              value="1"
-              className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
-            />
-            <input type="hidden" name="family_view_enabled" value="0" />
-            <label htmlFor="family_view_enabled" className="text-sm text-slate-300">
-              Enable Family View
-            </label>
-          </div>
-          <div className="flex items-center gap-3">
-            <input
-              id="family_view_show_exact_times"
-              name="family_view_show_exact_times"
-              type="checkbox"
-              defaultChecked={Boolean(profile?.family_view_show_exact_times ?? true)}
-              value="1"
-              className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
-            />
-            <input type="hidden" name="family_view_show_exact_times" value="0" />
-            <label htmlFor="family_view_show_exact_times" className="text-sm text-slate-300">
-              Show Exact Times
-            </label>
-          </div>
-          <div className="flex items-center gap-3">
-            <input
-              id="family_view_show_overnight_cities"
-              name="family_view_show_overnight_cities"
-              type="checkbox"
-              defaultChecked={Boolean(profile?.family_view_show_overnight_cities ?? true)}
-              value="1"
-              className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
-            />
-            <input type="hidden" name="family_view_show_overnight_cities" value="0" />
-            <label htmlFor="family_view_show_overnight_cities" className="text-sm text-slate-300">
-              Show Overnight Cities
-            </label>
-          </div>
-          <div className="flex items-center gap-3">
-            <input
-              id="family_view_show_commute_estimates"
-              name="family_view_show_commute_estimates"
-              type="checkbox"
-              defaultChecked={Boolean(profile?.family_view_show_commute_estimates ?? true)}
-              value="1"
-              className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50"
-            />
-            <input type="hidden" name="family_view_show_commute_estimates" value="0" />
-            <label htmlFor="family_view_show_commute_estimates" className="text-sm text-slate-300">
-              Show Commute Estimates
-            </label>
-          </div>
-          <div className="pt-2 border-t border-white/10">
-            <p className="text-sm text-slate-400">Included viewers: 0 / 2</p>
-          </div>
-          <div>
-            <button
-              type="button"
-              disabled
-              className="rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed"
-            >
-              Invite Family Member
-            </button>
-            <p className="mt-1 text-xs text-slate-500">Coming next</p>
-          </div>
         </div>
       </section>
 

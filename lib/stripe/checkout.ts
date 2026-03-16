@@ -5,10 +5,10 @@ import {
   STRIPE_SECRET_KEY,
   STRIPE_PRO_MONTHLY_PRICE_ID,
   STRIPE_PRO_ANNUAL_PRICE_ID,
-  STRIPE_FOUNDING_PILOT_MONTHLY_PRICE_ID,
+  STRIPE_FOUNDING_PILOT_ANNUAL_PRICE_ID,
 } from "./config";
 
-export type BillingInterval = "monthly" | "annual" | "founding_pilot_monthly";
+export type BillingInterval = "pro_monthly" | "pro_annual" | "founding_pilot_annual";
 
 type ProfileForCheckout = {
   id: string;
@@ -25,9 +25,9 @@ function getBaseUrl(): string {
 }
 
 function getPriceId(interval: BillingInterval): string {
-  if (interval === "monthly") return STRIPE_PRO_MONTHLY_PRICE_ID;
-  if (interval === "annual") return STRIPE_PRO_ANNUAL_PRICE_ID;
-  if (interval === "founding_pilot_monthly") return STRIPE_FOUNDING_PILOT_MONTHLY_PRICE_ID;
+  if (interval === "pro_monthly") return STRIPE_PRO_MONTHLY_PRICE_ID;
+  if (interval === "pro_annual") return STRIPE_PRO_ANNUAL_PRICE_ID;
+  if (interval === "founding_pilot_annual") return STRIPE_FOUNDING_PILOT_ANNUAL_PRICE_ID;
   throw new Error(`Invalid billing interval: ${interval}`);
 }
 
@@ -46,17 +46,19 @@ export async function createCheckoutSession(
   const priceId = getPriceId(interval);
   if (!priceId) {
     const envKey =
-      interval === "founding_pilot_monthly"
-        ? "STRIPE_FOUNDING_PILOT_MONTHLY_PRICE_ID"
-        : `STRIPE_PRO_${interval.toUpperCase()}_PRICE_ID`;
-    throw new Error(`Stripe price not configured for ${interval}. Set ${envKey}.`);
+      interval === "pro_monthly"
+        ? "STRIPE_PRO_MONTHLY_PRICE_ID"
+        : interval === "pro_annual"
+          ? "STRIPE_PRO_ANNUAL_PRICE_ID"
+          : "STRIPE_FOUNDING_PILOT_ANNUAL_PRICE_ID";
+    throw new Error(`Stripe price not configured. Set ${envKey}.`);
   }
 
   const stripe = new Stripe(STRIPE_SECRET_KEY);
   const baseUrl = getBaseUrl();
   const profilePath = "/frontier/pilots/portal/profile";
-  const successUrl = `${baseUrl}${profilePath}?upgrade=success`;
-  const cancelUrl = `${baseUrl}${profilePath}?upgrade=canceled`;
+  const successUrl = `${baseUrl}${profilePath}?checkout=success`;
+  const cancelUrl = `${baseUrl}${profilePath}?checkout=cancel`;
 
   let customerId: string | undefined;
 

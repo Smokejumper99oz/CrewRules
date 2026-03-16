@@ -16,8 +16,7 @@ import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getPayScale } from "@/lib/tenant-settings";
 import { payYearFromDOH } from "@/lib/pay-utils";
 import { type TripChangeSummary } from "@/lib/trips/detect-trip-changes";
-import { getOrCreateInboundAlias } from "@/lib/email/get-or-create-inbound-alias";
-import { getInboundAddress } from "@/lib/email/get-inbound-address";
+import { getInboundEmailForDisplay } from "@/lib/email/get-inbound-email-for-display";
 import { importIcsFromText } from "@/lib/schedule/import-ics-from-text";
 
 const FLICA_SOURCE = "flica_import";
@@ -51,14 +50,12 @@ export async function getIsAdmin(): Promise<boolean> {
   return isAdmin("frontier", "pilots");
 }
 
-/** Get schedule import email (alias@import.crewrules.com) for Pro users. Returns null for legacy u_ aliases. */
+/** Get schedule import email (alias@import.crewrules.com). Returns null for legacy u_ aliases. Not Pro-only. */
 export async function getScheduleImportEmail(): Promise<string | null> {
   const profile = await getProfile();
-  if (!profile || !isProActive(profile)) return null;
+  if (!profile) return null;
   try {
-    const alias = await getOrCreateInboundAlias(profile.id);
-    if (alias.startsWith("u_")) return null;
-    return getInboundAddress(alias);
+    return await getInboundEmailForDisplay(profile.id);
   } catch {
     return null;
   }

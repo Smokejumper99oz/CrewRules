@@ -26,6 +26,9 @@ export type Profile = {
   commute_arrival_buffer_minutes?: number;
   commute_release_buffer_minutes?: number;
   commute_nonstop_only?: boolean;
+  commute_two_leg_enabled?: boolean | null;
+  commute_two_leg_stop_1?: string | null;
+  commute_two_leg_stop_2?: string | null;
   subscription_tier?: "free" | "pro" | "enterprise";
   pro_trial_started_at?: string | null;
   pro_trial_expires_at?: string | null;

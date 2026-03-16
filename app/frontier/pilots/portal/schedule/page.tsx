@@ -461,6 +461,12 @@ export default function SchedulePage() {
         </ul>
       </div>
 
+      {importEmail && (
+        <div className="px-4 sm:px-6">
+          <InboundEmailDisplay email={importEmail} variant="schedule" />
+        </div>
+      )}
+
       {tripChangeSummaries && tripChangeSummaries.length > 0 && (
         <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 space-y-3">
           <h3 className="text-sm font-semibold text-slate-200">Trip updated</h3>
@@ -636,13 +642,6 @@ export default function SchedulePage() {
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Import section - below schedule card (email, copy) */}
-      {importEmail && (
-        <div className="px-4 sm:px-6 pt-6 border-t border-white/5">
-          <InboundEmailDisplay email={importEmail} variant="schedule" />
         </div>
       )}
 

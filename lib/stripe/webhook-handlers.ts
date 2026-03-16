@@ -1,10 +1,9 @@
 import Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  STRIPE_SECRET_KEY,
   STRIPE_PRO_MONTHLY_PRICE_ID,
   STRIPE_PRO_ANNUAL_PRICE_ID,
-  STRIPE_FOUNDING_PILOT_MONTHLY_PRICE_ID,
+  STRIPE_FOUNDING_PILOT_ANNUAL_PRICE_ID,
 } from "./config";
 
 type SupabaseAdmin = ReturnType<typeof createAdminClient>;
@@ -12,8 +11,12 @@ type SupabaseAdmin = ReturnType<typeof createAdminClient>;
 function getBillingInterval(priceId: string): "monthly" | "annual" | null {
   if (priceId === STRIPE_PRO_MONTHLY_PRICE_ID) return "monthly";
   if (priceId === STRIPE_PRO_ANNUAL_PRICE_ID) return "annual";
-  if (priceId === STRIPE_FOUNDING_PILOT_MONTHLY_PRICE_ID) return "monthly";
+  if (priceId === STRIPE_FOUNDING_PILOT_ANNUAL_PRICE_ID) return "annual";
   return null;
+}
+
+function isFoundingPilotPrice(priceId: string): boolean {
+  return priceId === STRIPE_FOUNDING_PILOT_ANNUAL_PRICE_ID;
 }
 
 /**
@@ -76,8 +79,7 @@ async function syncSubscriptionToProfile(
     updates.billing_source = "stripe";
   }
 
-  const isFoundingPilot = priceId === STRIPE_FOUNDING_PILOT_MONTHLY_PRICE_ID;
-  if (isActive && isFoundingPilot) {
+  if (isActive && priceId && isFoundingPilotPrice(priceId)) {
     updates.is_founding_pilot = true;
     const { data: existing } = await supabase
       .from("profiles")

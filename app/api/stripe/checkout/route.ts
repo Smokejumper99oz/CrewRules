@@ -16,9 +16,9 @@ export async function POST(req: Request) {
     const body = await req.json();
     const interval = body?.interval as string | undefined;
 
-    if (interval !== "monthly" && interval !== "annual" && interval !== "founding_pilot_monthly") {
+    if (interval !== "pro_monthly" && interval !== "pro_annual" && interval !== "founding_pilot_annual") {
       return NextResponse.json(
-        { error: "Invalid interval. Use monthly, annual, or founding_pilot_monthly." },
+        { error: "Invalid interval. Use pro_monthly, pro_annual, or founding_pilot_annual." },
         { status: 400 }
       );
     }
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
-    if (interval === "founding_pilot_monthly") {
+    if (interval === "founding_pilot_annual") {
       const { count } = await supabase
         .from("profiles")
         .select("*", { count: "exact", head: true })

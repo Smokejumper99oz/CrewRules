@@ -85,27 +85,29 @@ export default function RequestAccessPage() {
           {state?.error && (
             <div className="space-y-2">
               <p className="text-sm text-red-400">{state.error}</p>
-              <p className="text-xs text-slate-500">
-                Debug: Try{" "}
-                <a
-                  href="/api/supabase-health"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#75C043] hover:underline"
-                >
-                  /api/supabase-health
-                </a>{" "}
-                and{" "}
-                <a
-                  href="/api/supabase-health?raw=1"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#75C043] hover:underline"
-                >
-                  /api/supabase-health?raw=1
-                </a>{" "}
-                (raw fetch). Check the terminal for logs.
-              </p>
+              {process.env.NODE_ENV === "development" && (
+                <p className="text-xs text-slate-500">
+                  Debug: Try{" "}
+                  <a
+                    href="/api/supabase-health"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#75C043] hover:underline"
+                  >
+                    /api/supabase-health
+                  </a>{" "}
+                  and{" "}
+                  <a
+                    href="/api/supabase-health?raw=1"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#75C043] hover:underline"
+                  >
+                    /api/supabase-health?raw=1
+                  </a>{" "}
+                  (raw fetch). Check the terminal for logs.
+                </p>
+              )}
             </div>
           )}
           {state?.success && state?.airlineLive && (

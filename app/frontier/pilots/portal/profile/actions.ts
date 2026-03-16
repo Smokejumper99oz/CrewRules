@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createActionClient } from "@/lib/supabase/server-action";
 import { getProfile } from "@/lib/profile";
 import { revalidatePath } from "next/cache";
+import { ensureInboundAliasIfMissing } from "@/lib/email/ensure-inbound-alias-if-missing";
 
 // IANA format: Region/City or Region/Country/City (e.g. America/Puerto_Rico, America/Argentina/Buenos_Aires)
 const VALID_TZ = /^[A-Za-z0-9_+-]+(\/[A-Za-z0-9_+-]+)+$/;
@@ -47,6 +48,9 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   const commuteReleaseRaw = (formData.get("commute_release_buffer_minutes") as string)?.trim();
   const commuteRelease = commuteReleaseRaw ? parseInt(commuteReleaseRaw, 10) : 90;
   const commuteNonstopOnly = formData.get("commute_nonstop_only") === "1";
+  const commuteTwoLegEnabled = formData.get("commute_two_leg_enabled") === "1";
+  const commuteTwoLegStop1 = (formData.get("commute_two_leg_stop_1") as string)?.trim().toUpperCase() || null;
+  const commuteTwoLegStop2 = (formData.get("commute_two_leg_stop_2") as string)?.trim().toUpperCase() || null;
   const showPayProjection = formData.get("show_pay_projection") === "1";
   const familyViewEnabled = formData.get("family_view_enabled") === "1";
   const familyViewShowExactTimes = formData.get("family_view_show_exact_times") === "1";
@@ -112,6 +116,9 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
       commute_arrival_buffer_minutes: commuteArrival,
       commute_release_buffer_minutes: commuteRelease,
       commute_nonstop_only: commuteNonstopOnly,
+      commute_two_leg_enabled: commuteTwoLegEnabled,
+      commute_two_leg_stop_1: commuteTwoLegStop1,
+      commute_two_leg_stop_2: commuteTwoLegStop2,
       show_pay_projection: showPayProjection,
       family_view_enabled: familyViewEnabled,
       family_view_show_exact_times: familyViewShowExactTimes,
@@ -122,6 +129,13 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
     .eq("id", profile.id);
 
   if (error) return { error: error.message };
+
+  try {
+    await ensureInboundAliasIfMissing(profile.id);
+  } catch (err) {
+    console.warn("[Profile] ensureInboundAliasIfMissing failed:", err);
+  }
+
   revalidatePath("/frontier/pilots/portal");
   revalidatePath("/frontier/pilots/portal/profile");
   revalidatePath("/frontier/pilots/portal/schedule");

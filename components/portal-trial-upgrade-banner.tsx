@@ -34,7 +34,7 @@ export function PortalTrialUpgradeBanner({ status, daysRemaining }: BannerProps)
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ interval: "monthly" }),
+        body: JSON.stringify({ interval: "founding_pilot_annual" }),
       });
       const data = await res.json();
       if (data.url) {
