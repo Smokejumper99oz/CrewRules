@@ -20,6 +20,7 @@ type Props = {
   displayDateStr?: string | null;
   isInPairing?: boolean;
   dutyStartAirportOverride?: string | null;
+  dutyEndAirportOverride?: string | null;
   reportTimeOverride?: string | null;
   dutyStartTime?: string | null;
 };
@@ -35,6 +36,7 @@ export function PortalNextDutyCommuteSection({
   displayDateStr,
   isInPairing,
   dutyStartAirportOverride,
+  dutyEndAirportOverride,
   reportTimeOverride,
   dutyStartTime,
 }: Props) {
@@ -118,6 +120,7 @@ export function PortalNextDutyCommuteSection({
             displayDateStr={displayDateStr}
             isInPairing={isInPairing}
             dutyStartAirportOverride={dutyStartAirportOverride}
+            dutyEndAirportOverride={dutyEndAirportOverride}
             reportTimeOverride={reportTimeOverride}
           />
           </>

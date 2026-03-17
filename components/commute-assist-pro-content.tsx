@@ -173,6 +173,8 @@ type Props = {
   isInPairing?: boolean;
   /** When set (e.g. from legsToShow[0].origin), use as duty start airport for to_base. */
   dutyStartAirportOverride?: string | null;
+  /** When set (e.g. from legsToShow[last].destination), use as duty end airport for to_home. */
+  dutyEndAirportOverride?: string | null;
   /** When set (e.g. 05:15 when out of base = first leg dep - 45 min), use for arrive-by. */
   reportTimeOverride?: string | null;
 };
@@ -555,7 +557,7 @@ function CommuteFlightRow({
   );
 }
 
-export function CommuteAssistProContent({ event, label, profile, displaySettings, tenant, portal, displayDateStr, isInPairing, dutyStartAirportOverride, reportTimeOverride }: Props) {
+export function CommuteAssistProContent({ event, label, profile, displaySettings, tenant, portal, displayDateStr, isInPairing, dutyStartAirportOverride, dutyEndAirportOverride, reportTimeOverride }: Props) {
   const [commuteError, setCommuteError] = useState<string | null>(null);
   const [commuteGroups, setCommuteGroups] = useState<Record<"home" | "alternate", CommuteFlightOption[]>>({
     home: [],
@@ -633,7 +635,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
       : new Date().toISOString().slice(0, 10);
 
   const dutyStartAirport = dutyStartAirportOverride?.trim() || parseDutyStartAirport(event.route);
-  const dutyEndAirport = baseAirport ?? null;
+  const dutyEndAirport = (dutyEndAirportOverride?.trim() || baseAirport) ?? null;
   const dutyEndTime = event.end_time ? new Date(event.end_time) : null;
   const dutyEndDateBase = dutyEndTime && !Number.isNaN(dutyEndTime.getTime())
     ? formatInTimeZone(dutyEndTime, baseTz, "yyyy-MM-dd")

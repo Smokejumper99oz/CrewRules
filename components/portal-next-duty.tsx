@@ -667,6 +667,7 @@ export async function PortalNextDuty({
             displayDateStr={displayDateStr}
             isInPairing={isInPairing}
             dutyStartAirportOverride={legsToShow?.[0]?.origin}
+            dutyEndAirportOverride={legsToShow?.[legsToShow.length - 1]?.destination}
             reportTimeOverride={reportTimeOverride}
             dutyStartTime={reportTimeOverride ?? event?.start_time ?? null}
           />
