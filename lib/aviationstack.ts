@@ -87,7 +87,7 @@ function sleep(ms: number): Promise<void> {
  */
 async function aviationstackFetch(url: string, options?: RequestInit): Promise<Response> {
   const prev = aviationstackQueueTail;
-  const myPromise = prev.finally(async () => {
+  const runRequest = async (): Promise<Response> => {
     const now = Date.now();
     if (now < nextAviationstackAllowedAt) {
       await sleep(nextAviationstackAllowedAt - now);
@@ -105,7 +105,8 @@ async function aviationstackFetch(url: string, options?: RequestInit): Promise<R
       clearTimeout(timeoutId);
       throw e;
     }
-  });
+  };
+  const myPromise = prev.then(runRequest, runRequest);
   aviationstackQueueTail = myPromise;
   return myPromise as Promise<Response>;
 }
@@ -309,6 +310,12 @@ async function fetchFlightsSameDay(
       headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist)" },
     });
 
+    if (res == null || typeof res.ok !== "boolean") {
+      return {
+        flights: [],
+        notice: "Flight data temporarily unavailable. Please try again later.",
+      };
+    }
     if (!res.ok) {
       const body = await res.text();
       if (res.status === 429) {
@@ -456,6 +463,12 @@ async function fetchFlightsFuture(
     headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist)" },
   });
 
+  if (res == null || typeof res.ok !== "boolean") {
+    return {
+      flights: [],
+      notice: "Flight data temporarily unavailable. Please try again later.",
+    };
+  }
   if (!res.ok) {
     const body = await res.text();
 
@@ -585,6 +598,12 @@ async function fetchFlightsHistorical(
     headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist)" },
   });
 
+  if (res == null || typeof res.ok !== "boolean") {
+    return {
+      flights: [],
+      notice: "Flight data temporarily unavailable. Please try again later.",
+    };
+  }
   if (!res.ok) {
     const body = await res.text();
     if (res.status === 429) {
