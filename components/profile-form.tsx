@@ -524,9 +524,12 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             </h3>
             {!proActive && <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 shrink-0">Pro</span>}
           </div>
-          <p className="text-xs text-slate-500 mb-4">
-            {proActive ? "Tools to help plan safer and more reliable commutes." : "Available with CrewRules™ Pro. Start your 14-day trial to unlock this feature."}
-          </p>
+          {proActive && <p className="text-xs text-slate-500 mb-4">Tools to help plan safer and more reliable commutes.</p>}
+          {!proActive && (
+            <p className="text-xs text-amber-400 mt-2 mb-4">
+              🔒 Available with CrewRules™ Pro — start your free 14-day trial to unlock this feature.
+            </p>
+          )}
 
           {/* Direct Flights card */}
           <div className={`rounded-xl border border-white/10 bg-slate-950/40 ${!proActive ? "opacity-80" : ""}`}>
@@ -552,13 +555,16 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   placeholder="e.g. MCO"
                   disabled={!proActive}
                   readOnly={!proActive}
-                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
+                  className={`mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
                   style={{ textTransform: "uppercase" }}
                   onInput={(e) => {
                     e.currentTarget.value = e.currentTarget.value.toUpperCase();
                   }}
                 />
                 <p className="mt-1 text-xs text-slate-500">3-letter IATA code. This is where your commute normally begins.</p>
+                {!proActive && (
+                  <button type="button" className="text-xs text-[#75C043] hover:underline mt-1 inline-block">Start your free 14-day trial</button>
+                )}
               </div>
               <div className="mt-4">
                 <label htmlFor="alternate_home_airport" className="block text-sm font-medium text-slate-300">
@@ -573,7 +579,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   placeholder="e.g. MCO"
                   disabled={!proActive}
                   readOnly={!proActive}
-                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
+                  className={`mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
                   style={{ textTransform: "uppercase" }}
                   onInput={(e) => {
                     e.currentTarget.value = e.currentTarget.value.toUpperCase();
@@ -595,7 +601,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   name="commute_arrival_buffer_minutes"
                   defaultValue={commuteArrival}
                   disabled={!proActive}
-                  className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200 disabled:opacity-70 disabled:cursor-not-allowed"
+                  className={`profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200 disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
                 >
                   {COMMUTE_BUFFER_OPTIONS.map((m) => (
                     <option key={m} value={m}>
@@ -634,7 +640,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   value="1"
                   defaultChecked={commuteTwoLegEnabled}
                   disabled={!proActive}
-                  className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed"
+                  className={`h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
                 />
                 {proActive && <input type="hidden" name="commute_two_leg_enabled" value="0" />}
                 <label htmlFor="commute_two_leg_enabled" className="text-sm font-medium text-slate-300">
@@ -657,7 +663,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   placeholder="e.g. ATL"
                   disabled={!proActive}
                   readOnly={!proActive}
-                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
+                  className={`mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
                   style={{ textTransform: "uppercase" }}
                   onInput={(e) => {
                     e.currentTarget.value = e.currentTarget.value.toUpperCase();
@@ -677,7 +683,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   placeholder="e.g. MCO"
                   disabled={!proActive}
                   readOnly={!proActive}
-                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
+                  className={`mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
                   style={{ textTransform: "uppercase" }}
                   onInput={(e) => {
                     e.currentTarget.value = e.currentTarget.value.toUpperCase();
@@ -707,9 +713,12 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             </h3>
             {!proActive && <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 shrink-0">Pro</span>}
           </div>
-          <p className="text-xs text-slate-500 mb-4">
-            {proActive ? "Estimate trip and monthly credit, block, and pay." : "Available with CrewRules™ Pro. Start your 14-day trial to unlock this feature."}
-          </p>
+          {proActive && <p className="text-xs text-slate-500 mb-4">Estimate trip and monthly credit, block, and pay.</p>}
+          {!proActive && (
+            <p className="text-xs text-amber-400 mt-2 mb-4">
+              🔒 Available with CrewRules™ Pro — start your free 14-day trial to unlock this feature.
+            </p>
+          )}
           <div className={`space-y-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4 ${!proActive ? "opacity-80" : ""}`}>
             <div className="flex items-center gap-3">
               {proActive ? (
@@ -724,7 +733,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 defaultChecked={Boolean(profile?.show_pay_projection ?? false)}
                 value="1"
                 disabled={!proActive}
-                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed"
+                className={`h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
               />
               <label htmlFor="show_pay_projection" className="text-sm text-slate-300">
                 Enable Pay Projections
@@ -744,9 +753,12 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             </h3>
             {!proActive && <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 shrink-0">Pro</span>}
           </div>
-          <p className="text-xs text-slate-500 mb-4">
-            {proActive ? "Share schedule visibility with family or trusted viewers." : "Available with CrewRules™ Pro. Start your 14-day trial to unlock this feature."}
-          </p>
+          {proActive && <p className="text-xs text-slate-500 mb-4">Share schedule visibility with family or trusted viewers.</p>}
+          {!proActive && (
+            <p className="text-xs text-amber-400 mt-2 mb-4">
+              🔒 Available with CrewRules™ Pro — start your free 14-day trial to unlock this feature.
+            </p>
+          )}
           <div className={`space-y-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4 ${!proActive ? "opacity-80" : ""}`}>
             <div className="flex items-center gap-3">
               {proActive ? (
@@ -761,7 +773,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 defaultChecked={Boolean(profile?.family_view_enabled ?? false)}
                 value="1"
                 disabled={!proActive}
-                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed"
+                className={`h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
               />
               <label htmlFor="family_view_enabled" className="text-sm text-slate-300">
                 Enable Family View
@@ -780,7 +792,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 defaultChecked={Boolean(profile?.family_view_show_exact_times ?? true)}
                 value="1"
                 disabled={!proActive}
-                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed"
+                className={`h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
               />
               <label htmlFor="family_view_show_exact_times" className="text-sm text-slate-300">
                 Show Exact Times
@@ -799,7 +811,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 defaultChecked={Boolean(profile?.family_view_show_overnight_cities ?? true)}
                 value="1"
                 disabled={!proActive}
-                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed"
+                className={`h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
               />
               <label htmlFor="family_view_show_overnight_cities" className="text-sm text-slate-300">
                 Show Overnight Cities
@@ -818,7 +830,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 defaultChecked={Boolean(profile?.family_view_show_commute_estimates ?? true)}
                 value="1"
                 disabled={!proActive}
-                className="h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed"
+                className={`h-4 w-4 rounded border-white/20 bg-slate-900/60 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
               />
               <label htmlFor="family_view_show_commute_estimates" className="text-sm text-slate-300">
                 Show Commute Estimates
@@ -846,9 +858,12 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             <h3 className="text-sm font-semibold text-slate-200">Advanced AI</h3>
             {!proActive && <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 shrink-0">Pro</span>}
           </div>
-          <p className="text-xs text-slate-500 mb-4">
-            {proActive ? "AI-powered search and insights across your documents and schedule." : "Available with CrewRules™ Pro. Start your 14-day trial to unlock this feature."}
-          </p>
+          {proActive && <p className="text-xs text-slate-500 mb-4">AI-powered search and insights across your documents and schedule.</p>}
+          {!proActive && (
+            <p className="text-xs text-amber-400 mt-2 mb-4">
+              🔒 Available with CrewRules™ Pro — start your free 14-day trial to unlock this feature.
+            </p>
+          )}
           <div className={`rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4 ${!proActive ? "opacity-80" : ""}`}>
             <p className="text-sm text-slate-400">
               {proActive ? "AI features are available in the Ask and Library sections." : "Unlock Pro to access AI search and document insights."}

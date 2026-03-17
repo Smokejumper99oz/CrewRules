@@ -1260,6 +1260,11 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           {notice}
         </div>
       )}
+      {(twoLegRoutes.length > 0 || twoLegOptions.length > 0) && (
+        <p className="text-xs text-slate-500">
+          2-Leg Debug • Routes: {twoLegRoutes.length} • Options: {twoLegOptions.length}
+        </p>
+      )}
       {showInfo ? (
         <>
           <p className="text-xs text-slate-400">
