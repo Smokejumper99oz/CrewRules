@@ -97,6 +97,69 @@ function sortFlights(
   });
 }
 
+/** Convert raw commute flights to CommuteFlightOption[] for 2-leg legs. No report cutoff or state. */
+function convertRawFlightsToLegOptions(
+  flights: CommuteFlight[],
+  originTzVal: string,
+  destTzVal: string,
+  idPrefix: string
+): CommuteFlightOption[] {
+  const stripOffset = (s: string) => s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
+  const options: CommuteFlightOption[] = [];
+  for (let i = 0; i < flights.length; i++) {
+    const f = flights[i];
+    const depTz = f.origin_tz ?? originTzVal;
+    const arrTz = f.dest_tz ?? destTzVal;
+    const depRaw = f.departureTime ?? "";
+    const arrRaw = f.arrivalTime ?? "";
+    const depClean = stripOffset(depRaw);
+    const arrClean = stripOffset(arrRaw);
+    if (!depClean || !arrClean) continue;
+    let depUtc: string;
+    let arrUtc: string;
+    const depIsUtc = depRaw.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(depRaw);
+    const arrIsUtc = arrRaw.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(arrRaw);
+    try {
+      if (depIsUtc && arrIsUtc) {
+        depUtc = new Date(depRaw).toISOString();
+        arrUtc = new Date(arrRaw).toISOString();
+      } else {
+        depUtc = fromZonedTime(depClean, depTz).toISOString();
+        arrUtc = fromZonedTime(arrClean, arrTz).toISOString();
+      }
+    } catch {
+      continue;
+    }
+    if (new Date(arrUtc).getTime() <= new Date(depUtc).getTime()) continue;
+    const opt: CommuteFlightOption = {
+      id: `${idPrefix}-${f.flightNumber}-${f.departureTime}-${i}`,
+      carrier: f.carrier,
+      flight: stripCarrierFromFlight(f.flightNumber, f.carrier),
+      depUtc,
+      arrUtc,
+      nonstop: true,
+      risk: "recommended",
+      reason: `Leg • ${fmtHM(f.durationMinutes)}`,
+      originTz: depTz,
+      destTz: arrTz,
+      dep_scheduled_raw: f.dep_scheduled_raw,
+      dep_estimated_raw: f.dep_estimated_raw,
+      dep_actual_raw: f.dep_actual_raw,
+      dep_delay_min: f.dep_delay_min,
+      arr_scheduled_raw: f.arr_scheduled_raw,
+      arr_estimated_raw: f.arr_estimated_raw,
+      arr_actual_raw: f.arr_actual_raw,
+      arr_delay_min: f.arr_delay_min,
+      status: f.status,
+      dep_gate: f.dep_gate,
+      arr_gate: f.arr_gate,
+      aircraft_type: f.aircraft_type,
+    };
+    options.push(opt);
+  }
+  return options;
+}
+
 type Props = {
   event: { start_time: string; end_time?: string; report_time?: string | null; route?: string | null };
   label?: "on_duty" | "later_today" | "next_duty";
@@ -112,6 +175,19 @@ type Props = {
   dutyStartAirportOverride?: string | null;
   /** When set (e.g. 05:15 when out of base = first leg dep - 45 min), use for arrive-by. */
   reportTimeOverride?: string | null;
+};
+
+/** 2-leg commute option: origin → stop → destination. */
+type TwoLegOption = {
+  routeKey: string;
+  label: "home" | "alternate";
+  origin: string;
+  stop: string;
+  destination: string;
+  leg1: CommuteFlightOption;
+  leg2: CommuteFlightOption;
+  depUtc: string;
+  arrUtc: string;
 };
 
 const PAGE_SIZE = 5;
@@ -502,6 +578,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const [sortBy, setSortBy] = useState<"arrAsc" | "arrDesc" | "durAsc" | "durDesc">("arrAsc");
   const [originTz, setOriginTz] = useState<string>("UTC");
   const [destTz, setDestTz] = useState<string>("UTC");
+  const [twoLegOptions, setTwoLegOptions] = useState<TwoLegOption[]>([]);
 
   const baseTz = displaySettings.baseTimezone;
   const arrivalBuffer = profile?.commute_arrival_buffer_minutes ?? 60;
@@ -509,6 +586,9 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const homeAirport = profile?.home_airport?.trim();
   const alternateHomeAirport = profile?.alternate_home_airport?.trim();
   const baseAirport = profile?.base_airport?.trim();
+  const commuteTwoLegEnabled = profile?.commute_two_leg_enabled ?? false;
+  const commuteTwoLegStop1 = profile?.commute_two_leg_stop_1?.trim() ?? "";
+  const commuteTwoLegStop2 = profile?.commute_two_leg_stop_2?.trim() ?? "";
   const hasValidHome = !!homeAirport && homeAirport.length === 3;
   const hasValidBase = !!baseAirport && baseAirport.length === 3;
   const canUseCommute = hasValidHome && hasValidBase;
@@ -593,6 +673,51 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     dutyEndAirport,
     toBaseCommuteSearchDate,
     dutyEndDateBase,
+  ]);
+
+  /** 2-leg routes for future search: [{ origin, stop, destination, label, commuteDate }]. Not yet wired to fetch. */
+  const twoLegRoutes = useMemo(() => {
+    if (!commuteTwoLegEnabled) return [];
+    const stops = [commuteTwoLegStop1, commuteTwoLegStop2]
+      .map((s) => s?.trim().toUpperCase())
+      .filter((s) => s && s.length === 3);
+    const uniqueStops = [...new Set(stops)];
+    if (uniqueStops.length === 0) return [];
+
+    const commuteDate =
+      direction === "to_base"
+        ? toBaseCommuteSearchDate
+        : dutyEndDateBase ?? new Date().toISOString().slice(0, 10);
+
+    if (direction === "to_base") {
+      const dest = (dutyStartAirport ?? baseAirport)?.toUpperCase() ?? "";
+      if (!dest || dest.length !== 3) return [];
+      const result: { origin: string; stop: string; destination: string; label: "home" | "alternate"; commuteDate: string }[] = [];
+      const home = homeAirport?.trim().toUpperCase();
+      const alternate = alternateHomeAirport?.trim().toUpperCase();
+      for (const stop of uniqueStops) {
+        if (home && home.length === 3) {
+          result.push({ origin: home, stop, destination: dest, label: "home", commuteDate });
+        }
+        if (alternate && alternate.length === 3) {
+          result.push({ origin: alternate, stop, destination: dest, label: "alternate", commuteDate });
+        }
+      }
+      return result;
+    }
+    return [];
+  }, [
+    direction,
+    toBaseCommuteSearchDate,
+    dutyEndDateBase,
+    homeAirport,
+    alternateHomeAirport,
+    dutyStartAirport,
+    dutyEndAirport,
+    baseAirport,
+    commuteTwoLegEnabled,
+    commuteTwoLegStop1,
+    commuteTwoLegStop2,
   ]);
 
   const noCommuteNeeded =
@@ -827,6 +952,116 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     ]
   );
 
+  const loadTwoLegFlights = useCallback(
+    async (opts?: { forceRefresh?: boolean }) => {
+      if (twoLegRoutes.length === 0) {
+        setTwoLegOptions([]);
+        return;
+      }
+      const MIN_CONNECTION_MINUTES = 30;
+      const forceRefresh = opts?.forceRefresh ?? false;
+      const allOptions: TwoLegOption[] = [];
+      for (const route of twoLegRoutes) {
+        const leg1CacheKey = getCommuteCacheKey(route.origin, route.stop, route.commuteDate, direction);
+        let leg1Flights: CommuteFlight[] | null = null;
+        let leg1OriginTz = "UTC";
+        let leg1DestTz = "UTC";
+        if (!forceRefresh) {
+          const cached = getCommuteCache(leg1CacheKey);
+          if (cached) {
+            leg1Flights = cached.flights;
+            leg1OriginTz = cached.originTz;
+            leg1DestTz = cached.destTz;
+          }
+        }
+        if (!leg1Flights) {
+          const res1 = await getCommuteFlights({
+            origin: route.origin,
+            destination: route.stop,
+            date: route.commuteDate,
+            forceRefresh,
+          });
+          if (!res1.ok) continue;
+          leg1Flights = res1.flights;
+          leg1OriginTz = res1.originTz;
+          leg1DestTz = res1.destTz;
+          setCommuteCache(leg1CacheKey, {
+            flights: res1.flights,
+            originTz: res1.originTz,
+            destTz: res1.destTz,
+            fetchedAt: res1.fetchedAt ?? null,
+            notice: res1.notice ?? null,
+          });
+        }
+        const leg1Options = convertRawFlightsToLegOptions(leg1Flights, leg1OriginTz, leg1DestTz, `2leg-${route.label}-${route.stop}-leg1`);
+
+        const leg2CacheKey = getCommuteCacheKey(route.stop, route.destination, route.commuteDate, direction);
+        let leg2Flights: CommuteFlight[] | null = null;
+        let leg2OriginTz = "UTC";
+        let leg2DestTz = "UTC";
+        if (!forceRefresh) {
+          const cached = getCommuteCache(leg2CacheKey);
+          if (cached) {
+            leg2Flights = cached.flights;
+            leg2OriginTz = cached.originTz;
+            leg2DestTz = cached.destTz;
+          }
+        }
+        if (!leg2Flights) {
+          const res2 = await getCommuteFlights({
+            origin: route.stop,
+            destination: route.destination,
+            date: route.commuteDate,
+            forceRefresh,
+          });
+          if (!res2.ok) continue;
+          leg2Flights = res2.flights;
+          leg2OriginTz = res2.originTz;
+          leg2DestTz = res2.destTz;
+          setCommuteCache(leg2CacheKey, {
+            flights: res2.flights,
+            originTz: res2.originTz,
+            destTz: res2.destTz,
+            fetchedAt: res2.fetchedAt ?? null,
+            notice: res2.notice ?? null,
+          });
+        }
+        const leg2Options = convertRawFlightsToLegOptions(leg2Flights, leg2OriginTz, leg2DestTz, `2leg-${route.label}-${route.stop}-leg2`);
+
+        const minLeg2DepMs = MIN_CONNECTION_MINUTES * 60 * 1000;
+        for (const leg1 of leg1Options) {
+          const minLeg2DepIso = new Date(new Date(leg1.arrUtc).getTime() + minLeg2DepMs).toISOString();
+          for (const leg2 of leg2Options) {
+            if (leg2.depUtc >= minLeg2DepIso) {
+              allOptions.push({
+                routeKey: `${route.label}-${route.stop}`,
+                label: route.label,
+                origin: route.origin,
+                stop: route.stop,
+                destination: route.destination,
+                leg1,
+                leg2,
+                depUtc: leg1.depUtc,
+                arrUtc: leg2.arrUtc,
+              });
+            }
+          }
+        }
+      }
+      console.log("[Commute Assist] loadTwoLegFlights debug", {
+        twoLegRoutesCount: twoLegRoutes.length,
+        allOptionsCount: allOptions.length,
+        sample: allOptions.slice(0, 2).map((o) => ({
+          routeKey: o.routeKey,
+          depUtc: o.depUtc,
+          arrUtc: o.arrUtc,
+        })),
+      });
+      setTwoLegOptions(allOptions);
+    },
+    [twoLegRoutes, direction, event.start_time, event.end_time, baseTz]
+  );
+
   useEffect(() => {
     if (canUseCommute && !noCommuteNeeded) {
       loadFlights().catch((err) => {
@@ -836,6 +1071,14 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadFlights omitted to avoid infinite loop; we re-run when routes change
   }, [routes, direction, canUseCommute, noCommuteNeeded]);
+
+  useEffect(() => {
+    if (canUseCommute && !noCommuteNeeded && commuteMeta && twoLegRoutes.length > 0) {
+      loadTwoLegFlights().catch((err) => {
+        console.error("Commute Assist loadTwoLegFlights failed", err);
+      });
+    }
+  }, [commuteMeta, canUseCommute, noCommuteNeeded, twoLegRoutes, loadTwoLegFlights]);
 
   // Tick every 60s when we have lastFetchedAt, so "Updated just now" transitions to timestamp
   useEffect(() => {

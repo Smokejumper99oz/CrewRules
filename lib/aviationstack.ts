@@ -65,6 +65,51 @@ function calculateDurationMinutes(
 
 const devCache = new Map<string, { expiresAt: number; data: FetchFlightsResult }>();
 
+/** In-flight request deduplication: identical AviationStack calls reuse the same promise. */
+const inflightAviationRequests = new Map<string, Promise<FetchFlightsResult>>();
+
+/** Minimum ms between outbound AviationStack requests. Serialized via queue. */
+const MIN_MS_BETWEEN_AVIATIONSTACK_REQUESTS = 250;
+
+/** Queue tail: each request chains after the previous so only one runs at a time. */
+let aviationstackQueueTail: Promise<unknown> = Promise.resolve();
+
+/** Next timestamp when an AviationStack request is allowed to start. */
+let nextAviationstackAllowedAt = 0;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * AviationStack-only throttled fetch. Serializes requests and enforces minimum delay.
+ * Uses AbortController timeout (20s) so the queue cannot hang forever.
+ */
+async function aviationstackFetch(url: string, options?: RequestInit): Promise<Response> {
+  const prev = aviationstackQueueTail;
+  const myPromise = prev.finally(async () => {
+    const now = Date.now();
+    if (now < nextAviationstackAllowedAt) {
+      await sleep(nextAviationstackAllowedAt - now);
+    }
+    nextAviationstackAllowedAt = Date.now() + MIN_MS_BETWEEN_AVIATIONSTACK_REQUESTS;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20_000);
+    const mergedOptions: RequestInit = { ...options, signal: controller.signal };
+    try {
+      const res = await fetch(url, mergedOptions);
+      clearTimeout(timeoutId);
+      return res;
+    } catch (e) {
+      clearTimeout(timeoutId);
+      throw e;
+    }
+  });
+  aviationstackQueueTail = myPromise;
+  return myPromise as Promise<Response>;
+}
+
 /** Extract aircraft type from AviationStack aircraft object. Prefers icao (B737), then iata, modelCode, modelText. */
 function extractAircraftType(f: {
   aircraft?: { iata?: string; icao?: string; modelCode?: string; modelText?: string };
@@ -237,6 +282,14 @@ async function fetchFlightsSameDay(
   originTz: string,
   destTz: string
 ): Promise<FetchFlightsResult> {
+  const o = origin.toUpperCase();
+  const d = destination.toUpperCase();
+  const key = `sameDay:${o}:${d}:${date}`;
+  if (inflightAviationRequests.has(key)) {
+    return inflightAviationRequests.get(key)!;
+  }
+
+  const requestPromise = (async (): Promise<FetchFlightsResult> => {
   const limit = 100;
   const allData: any[] = [];
 
@@ -250,7 +303,7 @@ async function fetchFlightsSameDay(
     url.searchParams.set("limit", String(limit));
     url.searchParams.set("offset", String(offset));
 
-    const res = await fetch(url.toString(), {
+    const res = await aviationstackFetch(url.toString(), {
       method: "GET",
       cache: "no-store",
       headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist)" },
@@ -258,6 +311,12 @@ async function fetchFlightsSameDay(
 
     if (!res.ok) {
       const body = await res.text();
+      if (res.status === 429) {
+        return {
+          flights: [],
+          notice: "Flight data temporarily unavailable (API rate limit). Please try again later.",
+        };
+      }
       throw new Error(`AviationStack flights (same-day) failed: ${res.status} - ${body.slice(0, 200)}`);
     }
 
@@ -361,6 +420,12 @@ async function fetchFlightsSameDay(
     );
 
   return { flights: flightsA };
+  })();
+
+  inflightAviationRequests.set(key, requestPromise);
+  return requestPromise.finally(() => {
+    inflightAviationRequests.delete(key);
+  });
 }
 
 async function fetchFlightsFuture(
@@ -371,13 +436,21 @@ async function fetchFlightsFuture(
   originTz: string,
   destTz: string
 ): Promise<FetchFlightsResult> {
+  const o = origin.toUpperCase();
+  const d = destination.toUpperCase();
+  const key = `future:${o}:${d}:${date}`;
+  if (inflightAviationRequests.has(key)) {
+    return inflightAviationRequests.get(key)!;
+  }
+
+  const requestPromise = (async (): Promise<FetchFlightsResult> => {
   const url = new URL("https://api.aviationstack.com/v1/flightsFuture");
   url.searchParams.set("access_key", apiKey);
   url.searchParams.set("iataCode", origin);
   url.searchParams.set("type", "departure");
   url.searchParams.set("date", date);
 
-  const res = await fetch(url.toString(), {
+  const res = await aviationstackFetch(url.toString(), {
     method: "GET",
     cache: "no-store",
     headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist)" },
@@ -385,6 +458,14 @@ async function fetchFlightsFuture(
 
   if (!res.ok) {
     const body = await res.text();
+
+    // Gracefully handle rate limit (429) — return empty instead of throwing
+    if (res.status === 429) {
+      return {
+        flights: [],
+        notice: "Flight data temporarily unavailable (API rate limit). Please try again later.",
+      };
+    }
 
     // Gracefully handle Aviationstack future-date validation:
     // {"error":{"code":"validation_error","message":"Request failed with validation error","context":{"date":[{"key":"invalid_future_date","message":"The date must be above 2026-03-10"}]}}}
@@ -460,6 +541,12 @@ async function fetchFlightsFuture(
     .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());
 
   return { flights };
+  })();
+
+  inflightAviationRequests.set(key, requestPromise);
+  return requestPromise.finally(() => {
+    inflightAviationRequests.delete(key);
+  });
 }
 
 function parseTimeToMinutes(t: string): number {
@@ -478,13 +565,21 @@ async function fetchFlightsHistorical(
   originTz: string,
   destTz: string
 ): Promise<FetchFlightsResult> {
+  const o = origin.toUpperCase();
+  const d = destination.toUpperCase();
+  const key = `historical:${o}:${d}:${date}`;
+  if (inflightAviationRequests.has(key)) {
+    return inflightAviationRequests.get(key)!;
+  }
+
+  const requestPromise = (async (): Promise<FetchFlightsResult> => {
   const url = new URL("https://api.aviationstack.com/v1/flights");
   url.searchParams.set("access_key", apiKey);
   url.searchParams.set("flight_date", date);
   url.searchParams.set("dep_iata", origin);
   url.searchParams.set("arr_iata", destination);
 
-  const res = await fetch(url.toString(), {
+  const res = await aviationstackFetch(url.toString(), {
     method: "GET",
     cache: "no-store",
     headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist)" },
@@ -492,6 +587,12 @@ async function fetchFlightsHistorical(
 
   if (!res.ok) {
     const body = await res.text();
+    if (res.status === 429) {
+      return {
+        flights: [],
+        notice: "Flight data temporarily unavailable (API rate limit). Please try again later.",
+      };
+    }
     throw new Error(`AviationStack flights failed: ${res.status} - ${body.slice(0, 200)}`);
   }
 
@@ -531,4 +632,10 @@ async function fetchFlightsHistorical(
     .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());
 
   return { flights: filtered };
+  })();
+
+  inflightAviationRequests.set(key, requestPromise);
+  return requestPromise.finally(() => {
+    inflightAviationRequests.delete(key);
+  });
 }

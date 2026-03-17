@@ -52,6 +52,25 @@ export default async function FamilyViewPage() {
 
   const isEnabled = profile?.family_view_enabled ?? false;
 
+  const commuteFlightsCache = new Map<
+    string,
+    Awaited<ReturnType<typeof getCommuteFlights>>
+  >();
+  const commuteCacheKey = (o: string, d: string, date: string) =>
+    `${o.toUpperCase()}:${d.toUpperCase()}:${date}`;
+  const cachedGetCommuteFlights = async (p: {
+    origin: string;
+    destination: string;
+    date: string;
+  }) => {
+    const key = commuteCacheKey(p.origin, p.destination, p.date);
+    const cached = commuteFlightsCache.get(key);
+    if (cached !== undefined) return cached;
+    const res = await getCommuteFlights(p);
+    commuteFlightsCache.set(key, res);
+    return res;
+  };
+
   const daysAway = nextTrip
     ? await getDaysAwayFromHome({
         trip: nextTrip.event,
@@ -59,7 +78,7 @@ export default async function FamilyViewPage() {
         baseTimezone,
         settings,
         getCommuteFlights: async (p) => {
-          const res = await getCommuteFlights(p);
+          const res = await cachedGetCommuteFlights(p);
           return res.ok ? { ok: true as const, flights: res.flights, originTz: res.originTz, destTz: res.destTz } : { ok: false as const };
         },
       })
@@ -88,7 +107,7 @@ export default async function FamilyViewPage() {
       .toUpperCase();
     const date = nextTrip.commuteInfo.commuteDateStr;
     if (origin.length === 3 && destination.length === 3) {
-      const res = await getCommuteFlights({ origin, destination, date });
+      const res = await cachedGetCommuteFlights({ origin, destination, date });
       if (res.ok && res.flights && res.flights.length > 0) {
         const f9 = res.flights.filter(
           (f) => (f.carrier ?? "").trim().toUpperCase() === "F9"

@@ -72,7 +72,7 @@ export function PortalSidebarContent({
                   >
                     <span>{item.label}</span>
                     {item.badge === "BETA" && (
-                      <span className="shrink-0 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-xs font-semibold px-2 py-0.5 rounded-full">
+                      <span className="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/40">
                         BETA
                       </span>
                     )}

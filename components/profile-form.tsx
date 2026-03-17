@@ -365,7 +365,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
       <section>
         <h2 className="text-base font-semibold text-white mb-1 flex items-center gap-2">
           FLICA / Schedule Import
-          <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-xs font-semibold px-2 py-0.5 rounded-full">
+          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/40">
             BETA
           </span>
         </h2>
@@ -587,7 +587,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   placeholder="e.g. MCO"
                   disabled={!proActive}
                   readOnly={!proActive}
-                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
                   style={{ textTransform: "uppercase" }}
                   onInput={(e) => {
                     e.currentTarget.value = e.currentTarget.value.toUpperCase();
@@ -608,7 +608,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   placeholder="e.g. MCO"
                   disabled={!proActive}
                   readOnly={!proActive}
-                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
                   style={{ textTransform: "uppercase" }}
                   onInput={(e) => {
                     e.currentTarget.value = e.currentTarget.value.toUpperCase();
@@ -692,7 +692,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   placeholder="e.g. ATL"
                   disabled={!proActive}
                   readOnly={!proActive}
-                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
                   style={{ textTransform: "uppercase" }}
                   onInput={(e) => {
                     e.currentTarget.value = e.currentTarget.value.toUpperCase();
@@ -712,7 +712,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   placeholder="e.g. MCO"
                   disabled={!proActive}
                   readOnly={!proActive}
-                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed"
                   style={{ textTransform: "uppercase" }}
                   onInput={(e) => {
                     e.currentTarget.value = e.currentTarget.value.toUpperCase();

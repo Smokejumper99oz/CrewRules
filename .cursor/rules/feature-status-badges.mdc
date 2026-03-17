@@ -1,0 +1,62 @@
+---
+description: Feature status badge styles (BETA, IN DEVELOPMENT) — never use amber/gold
+globs: "**/*.tsx"
+alwaysApply: false
+---
+
+# CrewRules™ Feature Status Badges — UI Standard
+
+Feature status badges communicate maturity of tools and features. Use consistently across the platform.
+
+## Mandatory Requirements
+
+- **Always use the exact approved class strings** for feature status badges unless explicitly told otherwise. Do not substitute, shorten, or alter the Tailwind classes.
+- **Never use amber/gold for feature status badges.** That color is reserved exclusively for CrewRules™ PRO features.
+
+## Badge Types
+
+### BETA
+Feature works but is still being tested and improved. Use for: functional features still evolving, features where feedback is being gathered (e.g. Commute Assist 2-Leg, Weather Brief, Mentorship platform).
+
+```tsx
+<span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/40">
+  BETA
+</span>
+```
+
+### IN DEVELOPMENT
+Feature UI may exist but functionality is not active yet. Use for: upcoming features not yet connected to backend logic, early UI previews (e.g. Family View™).
+
+```tsx
+<span className="bg-cyan-500/20 text-cyan-200 border border-cyan-400/40 text-xs font-semibold px-2 py-0.5 rounded-full">
+  IN DEVELOPMENT
+</span>
+```
+
+## Standard JSX Usage
+
+Use these exact snippets when adding feature badges.
+
+BETA example:
+
+```tsx
+<span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/40">
+  BETA
+</span>
+```
+
+IN DEVELOPMENT example:
+
+```tsx
+<span className="bg-cyan-500/20 text-cyan-200 border border-cyan-400/40 text-xs font-semibold px-2 py-0.5 rounded-full">
+  IN DEVELOPMENT
+</span>
+```
+
+Place feature badges to the right of the section title in the same flex row using gap-2 or gap-3.
+
+## Rules
+
+- Keep badge text short: `BETA`, `IN DEVELOPMENT`
+- All feature badges use pill style (`rounded-full`)
+- Use the same badge styles everywhere for consistency
