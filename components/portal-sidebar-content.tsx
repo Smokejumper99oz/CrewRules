@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { SignOutButton } from "@/components/sign-out-button";
 
-type NavItem = { label: string; href: string };
+type NavItem = { label: string; href: string; badge?: "BETA" | "IN DEVELOPMENT" };
 type NavGroup = { title: string; items: readonly NavItem[] };
 
 type PortalSidebarContentProps = {
@@ -22,21 +22,21 @@ const variantStyles = {
   desktop: {
     heading: "text-slate-500",
     marker: "marker:text-slate-500",
-    link: "block rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition touch-target touch-pad",
+    link: "flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition touch-target touch-pad",
     adminLink: "touch-target touch-pad mb-2 block rounded-xl px-3 py-2 text-sm",
     signOutButton: "touch-target touch-pad flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-white hover:bg-white/5 transition touch-manipulation disabled:opacity-50",
   },
   tablet: {
     heading: "text-slate-500",
     marker: "marker:text-slate-500",
-    link: "touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition",
+    link: "touch-target touch-pad flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition",
     adminLink: "touch-target touch-pad mb-2 block rounded-xl px-3 py-2 text-sm",
     signOutButton: "touch-target touch-pad flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-white hover:bg-white/5 transition touch-manipulation disabled:opacity-50",
   },
   drawer: {
     heading: "text-slate-300/90",
     marker: "marker:text-slate-400",
-    link: "block rounded-xl px-3 py-3 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition touch-manipulation min-h-[44px] flex items-center",
+    link: "flex items-center justify-between gap-2 rounded-xl px-3 py-3 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition touch-manipulation min-h-[44px]",
     adminLink: "mb-2 flex min-h-[44px] items-center rounded-xl px-3 py-3 text-sm",
     signOutButton: "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-white hover:bg-white/5 transition touch-manipulation disabled:opacity-50",
   },
@@ -70,7 +70,17 @@ export function PortalSidebarContent({
                     onClick={onLinkClick}
                     className={s.link}
                   >
-                    {item.label}
+                    <span>{item.label}</span>
+                    {item.badge === "BETA" && (
+                      <span className="shrink-0 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-xs font-semibold px-2 py-0.5 rounded-full">
+                        BETA
+                      </span>
+                    )}
+                    {item.badge === "IN DEVELOPMENT" && (
+                      <span className="shrink-0 bg-cyan-500/20 text-cyan-200 border border-cyan-400/40 text-xs font-semibold px-2 py-0.5 rounded-full">
+                        IN DEVELOPMENT
+                      </span>
+                    )}
                   </Link>
                 </li>
               ))}

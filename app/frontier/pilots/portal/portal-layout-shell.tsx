@@ -10,15 +10,17 @@ import { DesktopIdleLogout } from "@/components/desktop-idle-logout";
 import { PortalDebugLine } from "@/components/portal-debug-line";
 import { PortalFadeIn } from "@/components/portal-fade-in";
 import { PortalTrialUpgradeBanner } from "@/components/portal-trial-upgrade-banner";
+import { PortalWelcomeModal } from "@/components/portal-welcome-modal";
+import { CURRENT_WELCOME_MODAL_VERSION } from "@/lib/welcome-modal";
 
 const NAV_GROUPS = [
   {
     title: "Core",
     items: [
       { label: "Dashboard", href: "" },
-      { label: "Weather Brief", href: "weather-brief" },
+      { label: "Weather Brief", href: "weather-brief", badge: "BETA" },
       { label: "My Schedule", href: "schedule" },
-      { label: "Family View", href: "family-view" },
+      { label: "Family View", href: "family-view", badge: "IN DEVELOPMENT" },
       { label: "Ask", href: "ask" },
       { label: "Library", href: "library" },
     ],
@@ -28,7 +30,7 @@ const NAV_GROUPS = [
     items: [
       { label: "Forum", href: "forum" },
       { label: "Notes", href: "notes" },
-      { label: "Mentoring", href: "mentoring" },
+      { label: "Mentoring", href: "mentoring", badge: "BETA" },
     ],
   },
   {
@@ -51,7 +53,7 @@ type Props = {
   base: string;
   cfg: { tenant: { displayName: string }; portal: { displayName: string } };
   user: { email?: string };
-  profile: { role: string; tenant: string; portal: string; email: string | null };
+  profile: { role: string; tenant: string; portal: string; email: string | null; welcome_modal_version_seen?: number | null };
   admin: boolean;
   displayName: string;
   roleLabel: string;
@@ -72,9 +74,22 @@ export function PortalLayoutShell({
   trialBannerStatus,
 }: Props) {
   const [tabletNavOpen, setTabletNavOpen] = useState(false);
+  const [welcomeModalDismissed, setWelcomeModalDismissed] = useState(false);
+
+  const shouldShowWelcomeModal =
+    !welcomeModalDismissed &&
+    profile &&
+    ((profile.welcome_modal_version_seen ?? null) === null ||
+      (profile.welcome_modal_version_seen ?? 0) < CURRENT_WELCOME_MODAL_VERSION);
 
   return (
     <PortalFadeIn>
+      {shouldShowWelcomeModal && (
+        <PortalWelcomeModal
+          profileBase={base}
+          onDismiss={() => setWelcomeModalDismissed(true)}
+        />
+      )}
       <DesktopIdleLogout />
       <main className="min-h-screen bg-slate-950 text-white">
         <div className="flex h-screen overflow-hidden">

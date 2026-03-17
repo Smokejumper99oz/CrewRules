@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { Whisper } from "next/font/google";
 import "./globals.css";
+
+const whisper = Whisper({ weight: "400", subsets: ["latin"], variable: "--font-whisper" });
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.crewrules.com"),
@@ -67,7 +70,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={whisper.variable} suppressHydrationWarning>
       <body className="min-h-screen bg-slate-950 text-white antialiased" suppressHydrationWarning>{children}</body>
     </html>
   );

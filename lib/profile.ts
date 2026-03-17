@@ -48,6 +48,7 @@ export type Profile = {
   family_view_show_exact_times?: boolean;
   family_view_show_overnight_cities?: boolean;
   family_view_show_commute_estimates?: boolean;
+  welcome_modal_version_seen?: number | null;
   created_at: string;
   updated_at: string;
 };

@@ -363,7 +363,12 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
 
       {/* FLICA / Schedule Import */}
       <section>
-        <h2 className="text-base font-semibold text-white mb-1">FLICA / Schedule Import</h2>
+        <h2 className="text-base font-semibold text-white mb-1 flex items-center gap-2">
+          FLICA / Schedule Import
+          <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-xs font-semibold px-2 py-0.5 rounded-full">
+            BETA
+          </span>
+        </h2>
         <p className="text-xs text-slate-500 mb-4">
           Send your schedule export to your personal CrewRules™ import email to import trips into My Schedule.
         </p>
@@ -651,7 +656,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             >
               <span className="flex items-center gap-2">
                 <span>2 Leg Options</span>
-                <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-slate-600/80 text-slate-300 shrink-0">In Development</span>
+                <span className="bg-cyan-500/20 text-cyan-200 border border-cyan-400/40 text-xs font-semibold px-2 py-0.5 rounded-full">IN DEVELOPMENT</span>
               </span>
               <span className="text-slate-500 shrink-0" aria-hidden>{twoLegExpanded ? "−" : "+"}</span>
             </button>

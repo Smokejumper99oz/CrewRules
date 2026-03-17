@@ -4,6 +4,7 @@ import { addDays } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { createActionClient } from "@/lib/supabase/server-action";
 import { getProfile } from "@/lib/profile";
+import { CURRENT_WELCOME_MODAL_VERSION } from "@/lib/welcome-modal";
 import { revalidatePath } from "next/cache";
 import { ensureInboundAliasIfMissing } from "@/lib/email/ensure-inbound-alias-if-missing";
 
@@ -213,4 +214,25 @@ export async function startProTrial(): Promise<StartProTrialResult> {
   revalidatePath("/frontier/pilots/portal/profile");
 
   return { ok: true, pro_trial_expires_at: newExpiresAt };
+}
+
+export type MarkWelcomeModalSeenResult = { success: true } | { error: string };
+
+export async function markWelcomeModalSeen(): Promise<MarkWelcomeModalSeenResult> {
+  const profile = await getProfile();
+  if (!profile) return { error: "Not signed in" };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      welcome_modal_version_seen: CURRENT_WELCOME_MODAL_VERSION,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", profile.id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/frontier/pilots/portal");
+  return { success: true };
 }
