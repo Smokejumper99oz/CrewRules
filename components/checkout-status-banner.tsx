@@ -11,6 +11,7 @@ export function CheckoutStatusBanner() {
   const [banner, setBanner] = useState<null | { status: "success" | "cancel"; message: string }>(null);
 
   useEffect(() => {
+    if (!searchParams) return;
     const checkout = searchParams.get("checkout");
     if (!checkout) return;
 
@@ -30,7 +31,8 @@ export function CheckoutStatusBanner() {
 
     const params = new URLSearchParams(searchParams.toString());
     params.delete("checkout");
-    const next = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+    const base = pathname ?? "/";
+    const next = params.toString() ? `${base}?${params.toString()}` : base;
     router.replace(next, { scroll: false });
   }, [searchParams, router, pathname]);
 

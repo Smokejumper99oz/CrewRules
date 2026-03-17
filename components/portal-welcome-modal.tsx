@@ -21,7 +21,7 @@ export function PortalWelcomeModal({ profileBase, onDismiss }: Props) {
     setError(null);
     const result = await markWelcomeModalSeen();
     setPending(false);
-    if (result.success) {
+    if ("success" in result && result.success) {
       onDismiss();
     } else {
       setError("Could not save your welcome status. Please try again.");
@@ -34,7 +34,7 @@ export function PortalWelcomeModal({ profileBase, onDismiss }: Props) {
     setError(null);
     const result = await markWelcomeModalSeen();
     setPending(false);
-    if (result.success) {
+    if ("success" in result && result.success) {
       onDismiss();
       router.push(`${profileBase}/profile`);
     } else {
@@ -48,7 +48,7 @@ export function PortalWelcomeModal({ profileBase, onDismiss }: Props) {
     setError(null);
     const result = await markWelcomeModalSeen();
     setPending(false);
-    if (result.success) {
+    if ("success" in result && result.success) {
       onDismiss();
     } else {
       setError("Could not save your welcome status. Please try again.");
