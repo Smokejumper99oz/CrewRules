@@ -24,6 +24,7 @@ import { computeLegDates, getTripDateStrings } from "@/lib/leg-dates";
 
 const EVENT_STYLES: Record<string, string> = {
   trip: "bg-emerald-500/20 border-emerald-500/40 text-emerald-200",
+  pay: "bg-emerald-500/20 border-emerald-500/40 text-emerald-200",
   reserve: "bg-blue-500/20 border-blue-500/40 text-blue-200",
   vacation: "bg-slate-500/20 border-slate-500/40 text-slate-300",
   off: "bg-slate-500/20 border-slate-500/40 text-slate-300",
@@ -31,6 +32,7 @@ const EVENT_STYLES: Record<string, string> = {
 };
 
 const MUTED_EVENT_STYLE = "bg-slate-700/20 border-slate-500/30 text-slate-300 opacity-70";
+const TRIP_DIM_STYLE = "bg-emerald-500/5 border-emerald-500/15 text-emerald-200/50";
 
 function formatTimeForDisplay(iso: string, opts: ScheduleDisplaySettings): string {
   return formatScheduleTime(iso, {
@@ -47,6 +49,15 @@ function eventStyle(type: string): string {
 
 function eventPillStyle(ev: ScheduleEvent): string {
   return ev.is_muted === true ? MUTED_EVENT_STYLE : eventStyle(ev.event_type);
+}
+
+/** Calendar tile only: dim trip when day has PAY event. */
+function getCalendarTileStyle(ev: ScheduleEvent, dayEvents: ScheduleEvent[]): string {
+  if (ev.is_muted === true) return MUTED_EVENT_STYLE;
+  if (ev.title?.trim().toUpperCase() === "PAY") return eventStyle("pay");
+  const hasPayOnDay = dayEvents.some((e) => e.title?.trim().toUpperCase() === "PAY");
+  if (ev.event_type === "trip" && hasPayOnDay) return TRIP_DIM_STYLE;
+  return eventStyle(ev.event_type);
 }
 
 function getMonthStart(year: number, month: number): Date {
@@ -209,6 +220,34 @@ function EventDetailPopover({
         ) : (event.legs == null || event.legs.length === 0) && event.route?.trim() ? (
           <p className="mt-2 text-sm text-slate-400">{event.route}</p>
         ) : null)}
+      {(event.credit_minutes != null || event.baseline_credit_minutes != null || event.block_minutes != null) && (
+        <div className="mt-2 border-t border-white/10 pt-2">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Pay & Credit</p>
+          <div className="mt-1 space-y-0.5 text-sm text-slate-400">
+            {event.credit_minutes != null && (
+              <p>Credit: {formatMinutesToHhMm(event.credit_minutes)}</p>
+            )}
+            {event.baseline_credit_minutes != null &&
+              event.baseline_credit_minutes !== event.credit_minutes && (
+                <p>Original Credit: {formatMinutesToHhMm(event.baseline_credit_minutes)}</p>
+              )}
+            {event.block_minutes != null && (
+              <p>Block: {formatMinutesToHhMm(event.block_minutes)}</p>
+            )}
+            {!event.is_muted &&
+              event.block_minutes != null &&
+              event.credit_minutes != null &&
+              event.block_minutes < event.credit_minutes && (
+                <p className="text-xs text-amber-400 mt-1">
+                  Credit protected — Trip not fully flown
+                </p>
+              )}
+            {event.is_muted === true && (
+              <p className="text-xs text-slate-500 italic mt-1">Previous schedule version</p>
+            )}
+          </div>
+        </div>
+      )}
       <span className={`mt-2 inline-block rounded px-2 py-0.5 text-xs ${eventPillStyle(event)}`}>
         {event.event_type}
       </span>
@@ -413,7 +452,10 @@ export default function SchedulePage() {
       {/* Header */}
       <div className="px-4 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold tracking-tight">My Schedule</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight">My Schedule</h1>
+            <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">BETA</span>
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -586,29 +628,33 @@ export default function SchedulePage() {
                         : "border-white/10 bg-slate-950/40"
                   }`}
                 >
-                  {day && (
-                    <>
-                      <div className="text-xs text-slate-500 mb-1">{day.getDate()}</div>
-                      <div className="space-y-0.5">
-                        {eventsForDay(eventsToShow, day, displaySettings.baseTimezone).slice(0, 3).map((ev) => (
-                          <button
-                            key={`${ev.id}-${toYyyyMmDd(day)}`}
-                            type="button"
-                            onClick={(e) => handleEventClick(ev, e.clientX, e.clientY, day)}
-                            className={`flex w-full items-center rounded border px-1.5 py-0.5 text-left text-xs ${eventPillStyle(ev)}`}
-                          >
-                            <span className="min-w-0 truncate">{ev.title || "Untitled"}</span>
-                            {ev.is_muted === true && (
-                              <span className="ml-1 shrink-0 text-[10px] px-1 rounded bg-slate-500/20 text-slate-300">Previous</span>
+                  {day &&
+                    (() => {
+                      const dayEvents = eventsForDay(eventsToShow, day, displaySettings.baseTimezone);
+                      return (
+                        <>
+                          <div className="text-xs text-slate-500 mb-1">{day.getDate()}</div>
+                          <div className="space-y-0.5">
+                            {dayEvents.slice(0, 3).map((ev) => (
+                              <button
+                                key={`${ev.id}-${toYyyyMmDd(day)}`}
+                                type="button"
+                                onClick={(e) => handleEventClick(ev, e.clientX, e.clientY, day)}
+                                className={`flex w-full items-center rounded border px-1.5 py-0.5 text-left text-xs ${getCalendarTileStyle(ev, dayEvents)}`}
+                              >
+                                <span className="min-w-0 truncate">{ev.title || "Untitled"}</span>
+                                {ev.is_muted === true && (
+                                  <span className="ml-1 shrink-0 text-[10px] px-1 rounded bg-slate-500/20 text-slate-300">Previous</span>
+                                )}
+                              </button>
+                            ))}
+                            {dayEvents.length > 3 && (
+                              <span className="text-xs text-slate-500">+{dayEvents.length - 3}</span>
                             )}
-                          </button>
-                        ))}
-                        {eventsForDay(eventsToShow, day, displaySettings.baseTimezone).length > 3 && (
-                          <span className="text-xs text-slate-500">+{eventsForDay(eventsToShow, day, displaySettings.baseTimezone).length - 3}</span>
-                        )}
-                      </div>
-                    </>
-                  )}
+                          </div>
+                        </>
+                      );
+                    })()}
                 </div>
               ))}
             </div>

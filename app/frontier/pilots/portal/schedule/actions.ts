@@ -172,6 +172,7 @@ export type ScheduleEvent = {
   report_time?: string | null;
   credit_hours?: number | null;
   credit_minutes?: number | null;
+  baseline_credit_minutes?: number | null;
   route?: string | null;
   pairing_days?: number | null;
   block_minutes?: number | null;
@@ -397,7 +398,7 @@ export async function getScheduleEvents(fromIso: string, toIso: string): Promise
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, is_muted, import_batch_id, imported_at")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, is_muted, import_batch_id, imported_at")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", toIso)
