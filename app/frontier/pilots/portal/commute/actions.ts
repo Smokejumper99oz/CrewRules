@@ -11,6 +11,9 @@ import type { CommuteFlight } from "@/lib/aviationstack";
 /** Cache version for commute_flight_cache. Bump to purge old entries (e.g. 3-flight cache). */
 const CACHE_VERSION = "v3";
 
+/** When Refresh is pressed, reuse DB cache if fetched within this window. Reduces API usage. */
+const REFRESH_CACHE_FRESHNESS_MS = 10 * 60 * 1000; // 10 minutes
+
 type ProviderResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: unknown };
@@ -173,6 +176,8 @@ export async function getCommuteFlights(input: {
   destination: string;
   date: string; // YYYY-MM-DD
   forceRefresh?: boolean;
+  /** When true, skip plan gating (for internal reuse by resolveLegIdentity). */
+  skipPlanGating?: boolean;
 }) {
   const supabase = await createActionClient();
   const admin = createAdminClient();
@@ -202,20 +207,51 @@ export async function getCommuteFlights(input: {
 
   console.log("Commute Assist getRouteTzs:", { origin, destination });
 
-  // When forceRefresh: skip cache entirely, hit API, overwrite cache, return source: "api"
+  // When forceRefresh: reuse DB cache if still fresh; otherwise hit API
   if (input.forceRefresh) {
+    const { data: cached, error: cacheErr } = await admin
+      .from("commute_flight_cache")
+      .select("data, fetched_at")
+      .eq("tenant", tenant)
+      .eq("user_id", userId)
+      .eq("commute_date", input.date)
+      .eq("origin", origin)
+      .eq("destination", destination)
+      .eq("cache_version", CACHE_VERSION)
+      .maybeSingle();
+
+    if (!cacheErr && cached?.data && cached.fetched_at) {
+      const fetchedAtMs = new Date(cached.fetched_at).getTime();
+      if (Date.now() - fetchedAtMs < REFRESH_CACHE_FRESHNESS_MS) {
+        const { originTz, destTz } = await getRouteTzs(origin, destination);
+        return {
+          ok: true as const,
+          source: "cache" as const,
+          flights: cached.data as CommuteFlight[],
+          fetchedAt: cached.fetched_at,
+          notice: undefined,
+          originTz,
+          destTz,
+          debug:
+            process.env.NODE_ENV !== "production"
+              ? { cacheHit: true, fetchedAt: cached.fetched_at }
+              : undefined,
+        };
+      }
+    }
+
     const { originTz, destTz } = await getRouteTzs(origin, destination);
 
-    // Plan gating for forceRefresh
+    // Plan gating for forceRefresh (skip when skipPlanGating, e.g. resolveLegIdentity)
     const isPaid = subscription === "pro" || subscription === "enterprise";
-    if (!isPaid && accountAgeDays >= 30) {
+    if (!input.skipPlanGating && !isPaid && accountAgeDays >= 30) {
       return {
         ok: false as const,
         reason: "demo_only" as const,
         message: "Commute Assist is demo-only after 30 days on Free. Upgrade to PRO to refresh live data.",
       };
     }
-    if (!isPaid && accountAgeDays < 30) {
+    if (!input.skipPlanGating && !isPaid && accountAgeDays < 30) {
       const msISO = monthStartISO(now);
       const { data: usage, error: usageErr } = await supabase
         .from("commute_refresh_usage_monthly")
@@ -373,10 +409,10 @@ export async function getCommuteFlights(input: {
     };
   }
 
-  // 2) Plan gating (cache miss)
+  // 2) Plan gating (cache miss) — skip when skipPlanGating, e.g. resolveLegIdentity
   const isPaid = subscription === "pro" || subscription === "enterprise";
 
-  if (!isPaid && accountAgeDays >= 30) {
+  if (!input.skipPlanGating && !isPaid && accountAgeDays >= 30) {
     return {
       ok: false as const,
       reason: "demo_only" as const,
@@ -384,7 +420,7 @@ export async function getCommuteFlights(input: {
     };
   }
 
-  if (!isPaid && accountAgeDays < 30) {
+  if (!input.skipPlanGating && !isPaid && accountAgeDays < 30) {
     const msISO = monthStartISO(now);
     const { data: usage, error: usageErr } = await supabase
       .from("commute_refresh_usage_monthly")

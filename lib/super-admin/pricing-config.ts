@@ -24,3 +24,28 @@ export const STRIPE_PRO_ANNUAL_PRICE_USD =
  */
 export const FLIGHTAWARE_COST_PER_REQUEST_USD =
   Number(process.env.FLIGHTAWARE_COST_PER_REQUEST_USD) || 0.01;
+
+/**
+ * AviationStack monthly request limit (Super Admin reporting only).
+ * From plan: Free=100, Basic=10000, Professional=50000, etc.
+ */
+export const AVIATIONSTACK_MONTHLY_LIMIT =
+  Number(process.env.AVIATIONSTACK_MONTHLY_LIMIT) || 10_000;
+
+/**
+ * AviationStack cost per request (Super Admin reporting only).
+ * Per-request pricing for estimated cost display.
+ */
+export const AVIATIONSTACK_COST_PER_REQUEST_USD =
+  Number(process.env.AVIATIONSTACK_COST_PER_REQUEST_USD) || 0.009998;
+
+/**
+ * AviationStack billing period config (aligns usage tracking with provider billing).
+ * AVIATIONSTACK_PERIOD_START_DAY: day of month when billing period starts (1–31).
+ * AVIATIONSTACK_PERIOD_LENGTH_DAYS: length of each billing period in days.
+ */
+export const AVIATIONSTACK_PERIOD_START_DAY =
+  Number(process.env.AVIATIONSTACK_PERIOD_START_DAY) || 1;
+
+export const AVIATIONSTACK_PERIOD_LENGTH_DAYS =
+  Number(process.env.AVIATIONSTACK_PERIOD_LENGTH_DAYS) || 30;

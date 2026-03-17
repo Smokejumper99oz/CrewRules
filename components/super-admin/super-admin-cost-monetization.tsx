@@ -5,6 +5,7 @@ import type {
   StripeBillingMetrics,
   ChurnRenewalMetrics,
   FlightAwareUsageMetrics,
+  AviationStackUsageMetrics,
 } from "@/lib/super-admin/actions";
 import {
   PRO_MONTHLY_PRICE_USD,
@@ -38,9 +39,17 @@ type SuperAdminCostMonetizationProps = {
   stripeBilling: StripeBillingMetrics;
   churnRenewal: ChurnRenewalMetrics;
   flightAwareMetrics: FlightAwareUsageMetrics;
+  aviationStackMetrics: AviationStackUsageMetrics;
+  totalPlatformCostUsd: number;
 };
 
 const cardBase = "rounded-xl border border-slate-700/50 bg-slate-800/50 px-4 py-3";
+
+function formatPeriodShort(start: string, end: string): string {
+  const s = new Date(start + "T12:00:00Z");
+  const e = new Date(end + "T12:00:00Z");
+  return `${s.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${e.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+}
 
 export function SuperAdminCostMonetization({
   kpis,
@@ -49,6 +58,8 @@ export function SuperAdminCostMonetization({
   churnRenewal,
   stripeBilling,
   flightAwareMetrics,
+  aviationStackMetrics,
+  totalPlatformCostUsd,
 }: SuperAdminCostMonetizationProps) {
   const enterpriseTenants = tenants.filter((t) => t.enterpriseCount > 0).length;
 
@@ -199,6 +210,16 @@ export function SuperAdminCostMonetization({
               <div className="text-lg font-semibold text-slate-200">{flightAwareMetrics.totalCalls}</div>
               <div className="text-xs text-slate-500">{formatUsdCost(flightAwareMetrics.estimatedCost)}</div>
             </div>
+            <div className={`${cardBase} py-2 px-3`} title={`Period: ${aviationStackMetrics.periodStart} – ${aviationStackMetrics.periodEnd}`}>
+              <div className="text-slate-500 text-[10px] mb-0.5">AviationStack</div>
+              <div className="text-lg font-semibold text-slate-200">
+                {aviationStackMetrics.requestsUsed.toLocaleString()} / {aviationStackMetrics.monthlyLimit.toLocaleString()}
+              </div>
+              <div className="text-xs text-slate-500">{formatUsdCost(aviationStackMetrics.totalCostUsd)}</div>
+              <div className="text-xs text-slate-500">
+                {formatPeriodShort(aviationStackMetrics.periodStart, aviationStackMetrics.periodEnd)}
+              </div>
+            </div>
             <PlaceholderCard
               title="AeroDataBox"
               subtitle="Not yet wired"
@@ -225,12 +246,10 @@ export function SuperAdminCostMonetization({
             />
           </div>
           <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-700/50">
-            <PlaceholderCard
-              title="Total platform cost"
-              subtitle="Not yet wired"
-              icon={<Server className="size-3.5" />}
-              variant="chip"
-            />
+            <div className={`${cardBase} py-2 px-3`}>
+              <div className="text-slate-500 text-[10px] mb-0.5">Total platform cost</div>
+              <div className="text-lg font-semibold text-slate-200">{formatUsdCost(totalPlatformCostUsd)}</div>
+            </div>
             <PlaceholderCard
               title="Estimated margin"
               subtitle="Not yet wired"

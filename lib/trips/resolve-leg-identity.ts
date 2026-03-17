@@ -1,9 +1,11 @@
 /**
  * Resolve current trip leg to carrier/airline/status using existing flight-data infrastructure.
  * Used by Current Trip™ card for leg enrichment.
+ * Reuses getCommuteFlights (DB-backed cache) to avoid duplicate AviationStack requests with Commute Assist.
  */
 
-import { fetchFlightsFromAviationStack, parseAviationstackTs } from "@/lib/aviationstack";
+import { parseAviationstackTs } from "@/lib/aviationstack";
+import { getCommuteFlights } from "@/app/frontier/pilots/portal/commute/actions";
 import { AIRLINE_NAMES } from "@/lib/airlines";
 
 export type ResolvedLegIdentity = {
@@ -51,7 +53,7 @@ function flightNumberMatches(legNum: string, apiFlightNumber: string): boolean {
 
 /**
  * Resolve the first leg of an active trip to carrier/airline/status.
- * Uses fetchFlightsFromAviationStack (same as Commute Assist).
+ * Uses getCommuteFlights (DB-backed cache) so Dashboard load shares cache with Commute Assist.
  * Returns null if no match or API unavailable.
  */
 export async function resolveLegIdentity(input: {
@@ -65,15 +67,15 @@ export async function resolveLegIdentity(input: {
   const destination = (input.destination ?? "").trim().toUpperCase();
   if (origin.length !== 3 || destination.length !== 3) return null;
 
-  if (!process.env.AVIATIONSTACK_API_KEY) return null;
-
   try {
-    const { flights } = await fetchFlightsFromAviationStack(
+    const res = await getCommuteFlights({
       origin,
       destination,
-      input.date,
-      { noCache: false }
-    );
+      date: input.date,
+      skipPlanGating: true,
+    });
+    if (!res.ok || !res.flights) return null;
+    const flights = res.flights;
 
     const legNum = (input.flightNumber ?? "").trim();
     const legDep = (input.depTime ?? "").replace(/:/g, "").slice(0, 4); // HHMM

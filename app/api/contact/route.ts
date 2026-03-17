@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { logSystemEvent } from "@/lib/system-events";
 
 function escapeHtml(input: unknown) {
   return String(input ?? "")
@@ -229,6 +230,12 @@ export async function POST(req: Request) {
 
     if (error) {
       console.error("[contact] resend error", error);
+      await logSystemEvent({
+        type: "system",
+        severity: "error",
+        title: "Email send failed",
+        message: String(error?.message ?? error ?? "Resend error"),
+      });
       return NextResponse.json({ error: "Email failed" }, { status: 500 });
     }
 

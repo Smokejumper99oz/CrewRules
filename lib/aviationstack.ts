@@ -4,6 +4,7 @@
  */
 
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { addDays } from "date-fns";
 import { getRouteTzs } from "@/lib/airports";
 
@@ -81,6 +82,28 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Log AviationStack usage for Super Admin cost reporting. Never throws. */
+function logAviationStackUsage(url: string): void {
+  void (async () => {
+    try {
+      let endpoint: string | null = null;
+      try {
+        endpoint = new URL(url).pathname;
+      } catch {
+        endpoint = "request";
+      }
+      const admin = createAdminClient();
+      const { error } = await admin.from("aviationstack_usage").insert({
+        endpoint: endpoint ?? "request",
+        request_count: 1,
+      });
+      if (error) console.error("[aviationstack] usage log failed:", error.message);
+    } catch (err) {
+      console.error("[aviationstack] usage log failed:", err);
+    }
+  })();
+}
+
 /**
  * AviationStack-only throttled fetch. Serializes requests and enforces minimum delay.
  * Uses AbortController timeout (20s) so the queue cannot hang forever.
@@ -100,6 +123,7 @@ async function aviationstackFetch(url: string, options?: RequestInit): Promise<R
     try {
       const res = await fetch(url, mergedOptions);
       clearTimeout(timeoutId);
+      logAviationStackUsage(url);
       return res;
     } catch (e) {
       clearTimeout(timeoutId);
@@ -321,7 +345,7 @@ async function fetchFlightsSameDay(
       if (res.status === 429) {
         return {
           flights: [],
-          notice: "Flight data temporarily unavailable (API rate limit). Please try again later.",
+          notice: "Flight data temporarily unavailable. Try again in a few minutes.",
         };
       }
       throw new Error(`AviationStack flights (same-day) failed: ${res.status} - ${body.slice(0, 200)}`);
@@ -476,7 +500,7 @@ async function fetchFlightsFuture(
     if (res.status === 429) {
       return {
         flights: [],
-        notice: "Flight data temporarily unavailable (API rate limit). Please try again later.",
+        notice: "Flight data temporarily unavailable. Try again in a few minutes.",
       };
     }
 
@@ -609,7 +633,7 @@ async function fetchFlightsHistorical(
     if (res.status === 429) {
       return {
         flights: [],
-        notice: "Flight data temporarily unavailable (API rate limit). Please try again later.",
+        notice: "Flight data temporarily unavailable. Try again in a few minutes.",
       };
     }
     throw new Error(`AviationStack flights failed: ${res.status} - ${body.slice(0, 200)}`);

@@ -6,6 +6,7 @@ import { updateProfilePreferences, startProTrial, updatePassword } from "@/app/f
 import { DatePickerInput } from "@/components/date-picker-input";
 import { ProBadge } from "@/components/pro-badge";
 import { InboundEmailDisplay } from "@/components/inbound-email-display";
+import { Lock } from "lucide-react";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -415,6 +416,12 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             </button>
             {profile?.subscription_tier !== "enterprise" && (
               <>
+                <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200/95">
+                  CrewRules™ Pro is currently in Beta. Payments are being finalized with Stripe and will be enabled soon. You can start your free 14-day trial today.
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  Early users will be the first to access paid plans once Stripe is live.
+                </p>
                 {foundingPilotCount > 0 && (
                   <div className="mt-3 flex flex-col gap-0.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
                     <span className="text-xs font-medium text-amber-400/90">Founding Pilot Program</span>
@@ -424,86 +431,44 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 <div className="mt-3 flex flex-wrap gap-3">
                   <button
                     type="button"
-                    onClick={async () => {
-                      setCheckoutLoading("pro_monthly");
-                      try {
-                        const res = await fetch("/api/stripe/checkout", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ interval: "pro_monthly" }),
-                        });
-                        const data = await res.json();
-                        if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
-                        setCheckoutLoading(null);
-                      } catch {
-                        setCheckoutLoading(null);
-                      }
-                    }}
-                    disabled={!!checkoutLoading}
-                    className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-center transition hover:border-amber-500/50 hover:bg-amber-500/10 disabled:opacity-50 disabled:hover:border-amber-500/40 disabled:hover:bg-amber-500/5"
+                    disabled
+                    className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-center opacity-50 cursor-not-allowed transition"
                   >
                     <span className="text-sm font-semibold leading-tight text-amber-200">Pro Monthly</span>
                     <span className="text-base font-bold leading-tight text-amber-400">$10 / month</span>
-                    <span className="text-xs leading-tight text-slate-400">Flexible Monthly Billing</span>
-                    {checkoutLoading === "pro_monthly" && (
-                      <span className="mt-0.5 text-xs leading-tight text-amber-400/80">Redirecting…</span>
-                    )}
+                    <span className="flex items-center justify-center gap-1 text-xs leading-tight text-slate-400">
+                      <Lock className="size-3 opacity-70" aria-hidden />
+                      Available Soon
+                    </span>
                   </button>
                   <button
                     type="button"
-                    onClick={async () => {
-                      setCheckoutLoading("pro_annual");
-                      try {
-                        const res = await fetch("/api/stripe/checkout", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ interval: "pro_annual" }),
-                        });
-                        const data = await res.json();
-                        if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
-                        setCheckoutLoading(null);
-                      } catch {
-                        setCheckoutLoading(null);
-                      }
-                    }}
-                    disabled={!!checkoutLoading}
-                    className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-center transition hover:border-amber-500/50 hover:bg-amber-500/10 disabled:opacity-50 disabled:hover:border-amber-500/40 disabled:hover:bg-amber-500/5"
+                    disabled
+                    className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-center opacity-50 cursor-not-allowed transition"
                   >
                     <span className="text-sm font-semibold leading-tight text-amber-200">Pro Annual</span>
                     <span className="text-base font-bold leading-tight text-amber-400">$99 / year</span>
-                    <span className="text-xs leading-tight text-slate-400">Save $21 Vs Monthly</span>
-                    {checkoutLoading === "pro_annual" && (
-                      <span className="mt-0.5 text-xs leading-tight text-amber-400/80">Redirecting…</span>
-                    )}
+                    <span className="flex items-center justify-center gap-1 text-xs leading-tight text-slate-400">
+                      <Lock className="size-3 opacity-70" aria-hidden />
+                      Best Value • Available Soon
+                    </span>
                   </button>
                   <button
                     type="button"
-                    onClick={async () => {
-                      setCheckoutLoading("founding_pilot_annual");
-                      try {
-                        const res = await fetch("/api/stripe/checkout", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ interval: "founding_pilot_annual" }),
-                        });
-                        const data = await res.json();
-                        if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
-                        setCheckoutLoading(null);
-                      } catch {
-                        setCheckoutLoading(null);
-                      }
-                    }}
-                    disabled={!!checkoutLoading}
-                    className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-400/50 bg-amber-500/10 px-4 py-3 text-center shadow-amber-500/5 transition hover:border-amber-400/60 hover:bg-amber-500/15 disabled:opacity-50 disabled:hover:border-amber-400/50 disabled:hover:bg-amber-500/10"
+                    disabled
+                    className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-center shadow-amber-500/5 opacity-50 cursor-not-allowed transition hover:shadow-[0_0_20px_rgba(251,191,36,0.15)]"
                   >
                     <span className="text-sm font-semibold leading-tight text-amber-200">Founding Pilot</span>
                     <span className="text-base font-bold leading-tight text-amber-400">$59 / year</span>
-                    <span className="text-xs leading-tight text-slate-400">Lifetime Price Lock</span>
-                    {checkoutLoading === "founding_pilot_annual" && (
-                      <span className="mt-0.5 text-xs leading-tight text-amber-400/80">Redirecting…</span>
-                    )}
+                    <span className="flex items-center justify-center gap-1 text-xs leading-tight text-slate-400">
+                      <Lock className="size-3 opacity-70" aria-hidden />
+                      Limited Beta Offer • Unlocking Soon
+                    </span>
                   </button>
                 </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  Early beta users will get first access when billing goes live.
+                </p>
                 <ul className="mt-3 space-y-1.5 text-xs leading-relaxed text-slate-400">
                   <li className="flex items-start gap-2">
                     <span className="mt-0.5 shrink-0 text-slate-500">•</span>

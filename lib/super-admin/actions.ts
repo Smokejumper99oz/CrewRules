@@ -9,6 +9,10 @@ import {
   STRIPE_PRO_MONTHLY_PRICE_USD,
   STRIPE_PRO_ANNUAL_PRICE_USD,
   FLIGHTAWARE_COST_PER_REQUEST_USD,
+  AVIATIONSTACK_MONTHLY_LIMIT,
+  AVIATIONSTACK_COST_PER_REQUEST_USD,
+  AVIATIONSTACK_PERIOD_START_DAY,
+  AVIATIONSTACK_PERIOD_LENGTH_DAYS,
 } from "./pricing-config";
 
 /** Run gate first; only call these actions from super-admin layout/page. */
@@ -71,6 +75,86 @@ export async function getSuperAdminKpis(): Promise<SuperAdminKpiData> {
     enterpriseCount,
     tenantCount: tenants.size,
   };
+}
+
+/** Approximate online users: distinct user_ids from auth.sessions refreshed in last N minutes. */
+export async function getOnlineUserCount(minutes = 15): Promise<number> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("get_online_users_count", { p_minutes: minutes });
+  if (error) {
+    console.error("[SuperAdmin] get_online_users_count RPC failed:", error.message);
+    return 0;
+  }
+  return typeof data === "number" ? data : 0;
+}
+
+/** Update and return today's peak online count. Falls back to onlineNow if RPC fails. */
+export async function getOnlinePeakToday(onlineNow: number): Promise<number> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("update_online_peak_today", { p_online: onlineNow });
+  if (error) {
+    console.error("[SuperAdmin] update_online_peak_today RPC failed:", error.message);
+    return onlineNow;
+  }
+  return typeof data === "number" ? data : onlineNow;
+}
+
+export type SystemEventRow = {
+  id: string;
+  type: string;
+  severity: string;
+  title: string;
+  message: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type SystemEventsResult = {
+  events: SystemEventRow[];
+  dismissedCount: number;
+};
+
+export async function getSystemEvents(): Promise<SystemEventsResult> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+
+  const [eventsRes, dismissedRes] = await Promise.all([
+    admin
+      .from("system_events")
+      .select("id, type, severity, title, message, metadata, created_at")
+      .eq("dismissed", false)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    admin.from("system_events").select("id", { count: "exact", head: true }).eq("dismissed", true),
+  ]);
+
+  if (eventsRes.error) {
+    console.error("[SuperAdmin] getSystemEvents failed:", eventsRes.error.message);
+    return { events: [], dismissedCount: 0 };
+  }
+
+  const dismissedCount = dismissedRes.count ?? 0;
+  return {
+    events: (eventsRes.data ?? []) as SystemEventRow[],
+    dismissedCount,
+  };
+}
+
+export async function dismissSystemEvent(eventId: string): Promise<{ error?: string }> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("system_events")
+    .update({ dismissed: true })
+    .eq("id", eventId);
+
+  if (error) {
+    console.error("[SuperAdmin] dismissSystemEvent failed:", error.message);
+    return { error: error.message };
+  }
+  return {};
 }
 
 export type ProTrialMetrics = {
@@ -461,6 +545,72 @@ export async function getFlightAwareUsageMetrics(): Promise<FlightAwareUsageMetr
   const estimatedCost = totalCalls * FLIGHTAWARE_COST_PER_REQUEST_USD;
 
   return { totalCalls, estimatedCost };
+}
+
+export type AviationStackUsageMetrics = {
+  requestsUsed: number;
+  monthlyLimit: number;
+  periodStart: string;
+  periodEnd: string;
+  totalCostUsd: number;
+};
+
+export async function getAviationStackUsageMetrics(): Promise<AviationStackUsageMetrics> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+
+  const now = new Date();
+  const dayOfMonth = now.getUTCDate();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+
+  // Current billing period start: if today >= start day, period started this month; else last month
+  const periodStartMonth = dayOfMonth >= AVIATIONSTACK_PERIOD_START_DAY ? month : month - 1;
+  const periodStartYear = periodStartMonth >= 0 ? year : year - 1;
+  const adjustedMonth = ((periodStartMonth % 12) + 12) % 12;
+
+  const periodStart = new Date(Date.UTC(periodStartYear, adjustedMonth, AVIATIONSTACK_PERIOD_START_DAY));
+  const periodEndDate = addDays(periodStart, AVIATIONSTACK_PERIOD_LENGTH_DAYS - 1);
+  const periodEnd = new Date(
+    Date.UTC(
+      periodEndDate.getUTCFullYear(),
+      periodEndDate.getUTCMonth(),
+      periodEndDate.getUTCDate(),
+      23,
+      59,
+      59,
+      999
+    )
+  );
+  const periodStartIso = periodStart.toISOString();
+  const periodEndIso = periodEnd.toISOString();
+
+  const { data: rows, error } = await admin
+    .from("aviationstack_usage")
+    .select("request_count")
+    .gte("requested_at", periodStartIso)
+    .lte("requested_at", periodEndIso);
+
+  if (error) {
+    return {
+      requestsUsed: 0,
+      monthlyLimit: AVIATIONSTACK_MONTHLY_LIMIT,
+      periodStart: periodStartIso.slice(0, 10),
+      periodEnd: periodEndIso.slice(0, 10),
+      totalCostUsd: 0,
+    };
+  }
+
+  const requestsUsed = (rows ?? []).reduce((sum, r) => sum + (r.request_count ?? 1), 0);
+  const totalCostUsd = requestsUsed * AVIATIONSTACK_COST_PER_REQUEST_USD;
+
+  return {
+    requestsUsed,
+    monthlyLimit: AVIATIONSTACK_MONTHLY_LIMIT,
+    periodStart: periodStartIso.slice(0, 10),
+    periodEnd: periodEndIso.slice(0, 10),
+    totalCostUsd,
+  };
 }
 
 export type TenantOverviewRow = {

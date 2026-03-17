@@ -2,6 +2,9 @@ import { format } from "date-fns";
 import { gateSuperAdmin } from "@/lib/super-admin/gate";
 import {
   getSuperAdminKpis,
+  getOnlineUserCount,
+  getOnlinePeakToday,
+  getSystemEvents,
   getTenantOverview,
   getProductUsage,
   getRecentActivity,
@@ -10,6 +13,7 @@ import {
   getStripeBillingMetrics,
   getChurnRenewalMetrics,
   getFlightAwareUsageMetrics,
+  getAviationStackUsageMetrics,
 } from "@/lib/super-admin/actions";
 import { SuperAdminHeader } from "@/components/super-admin/super-admin-header";
 import { SuperAdminAtAGlance } from "@/components/super-admin/super-admin-at-a-glance";
@@ -21,15 +25,18 @@ import { SuperAdminTenantOverview } from "@/components/super-admin/super-admin-t
 import { SuperAdminProductUsage } from "@/components/super-admin/super-admin-product-usage";
 import { SuperAdminProviders } from "@/components/super-admin/super-admin-providers";
 import { SuperAdminRecentActivity } from "@/components/super-admin/super-admin-recent-activity";
+import { SuperAdminRefreshTrigger } from "@/components/super-admin/super-admin-refresh-trigger";
 
 export const dynamic = "force-dynamic";
 
 export default async function SuperAdminPage() {
   await gateSuperAdmin();
 
-  const [kpis, tenants, productUsage, recentActivity, trialMetrics, trialUsers, stripeBilling, churnRenewal, flightAwareMetrics] =
+  const [kpis, onlineNow, systemEventsResult, tenants, productUsage, recentActivity, trialMetrics, trialUsers, stripeBilling, churnRenewal, flightAwareMetrics, aviationStackMetrics] =
     await Promise.all([
       getSuperAdminKpis(),
+      getOnlineUserCount(),
+      getSystemEvents(),
       getTenantOverview(),
       getProductUsage(),
       getRecentActivity(),
@@ -38,24 +45,33 @@ export default async function SuperAdminPage() {
       getStripeBillingMetrics(),
       getChurnRenewalMetrics(),
       getFlightAwareUsageMetrics(),
+      getAviationStackUsageMetrics(),
     ]);
 
-  const lastRefresh = format(new Date(), "PPpp");
+  const peakToday = await getOnlinePeakToday(onlineNow);
+
+  const lastRefresh = format(new Date(), "MMMM d, yyyy") + " • " + format(new Date(), "HH:mm");
+  const totalUsers = kpis.freeCount + kpis.proCount + kpis.enterpriseCount;
+
+  const totalPlatformCostUsd =
+    (flightAwareMetrics?.estimatedCost ?? 0) + (aviationStackMetrics?.totalCostUsd ?? 0);
 
   return (
-    <div className="space-y-12">
-      <SuperAdminHeader lastRefresh={lastRefresh} />
+    <>
+      <SuperAdminRefreshTrigger />
+      <div className="space-y-12">
+        <SuperAdminHeader lastRefresh={lastRefresh} totalUsers={totalUsers} usersTodayDelta={kpis.newSignupsToday} onlineNow={onlineNow} peakToday={peakToday} />
 
       <section className="space-y-2">
         <SuperAdminAtAGlance kpis={kpis} />
       </section>
 
       <section>
-        <SuperAdminNeedsAttention />
+        <SuperAdminNeedsAttention events={systemEventsResult.events} dismissedCount={systemEventsResult.dismissedCount} />
       </section>
 
       <section>
-        <SuperAdminKpiCards kpis={kpis} />
+        <SuperAdminKpiCards kpis={kpis} onlineNow={onlineNow} peakToday={peakToday} />
       </section>
 
       <section>
@@ -70,6 +86,8 @@ export default async function SuperAdminPage() {
           stripeBilling={stripeBilling}
           churnRenewal={churnRenewal}
           flightAwareMetrics={flightAwareMetrics}
+          aviationStackMetrics={aviationStackMetrics}
+          totalPlatformCostUsd={totalPlatformCostUsd}
         />
       </section>
 
@@ -89,5 +107,6 @@ export default async function SuperAdminPage() {
         <SuperAdminRecentActivity data={recentActivity} />
       </section>
     </div>
+    </>
   );
 }

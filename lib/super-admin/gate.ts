@@ -25,7 +25,7 @@ export async function gateSuperAdmin(): Promise<{ user: { id: string; email?: st
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, role, tenant, portal, email")
+    .select("id, role, tenant, portal, email, full_name")
     .eq("id", user.id)
     .maybeSingle();
 

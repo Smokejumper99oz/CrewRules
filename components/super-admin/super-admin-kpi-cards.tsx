@@ -1,15 +1,17 @@
 import type { SuperAdminKpiData } from "@/lib/super-admin/actions";
 import { CreditCard, Building2, UserPlus } from "lucide-react";
-import { SuperAdminComingSoonStrip } from "./super-admin-coming-soon-strip";
+import { SuperAdminLiveStatusStrip } from "./super-admin-live-status-strip";
 
 type SuperAdminKpiCardsProps = {
   kpis: SuperAdminKpiData;
+  onlineNow: number;
+  peakToday: number;
 };
 
 const cardBase =
   "rounded-xl border border-slate-700/50 bg-slate-800/50 p-4 transition-all duration-200";
 
-export function SuperAdminKpiCards({ kpis }: SuperAdminKpiCardsProps) {
+export function SuperAdminKpiCards({ kpis, onlineNow, peakToday }: SuperAdminKpiCardsProps) {
   const totalUsers = kpis.freeCount + kpis.proCount + kpis.enterpriseCount;
 
   return (
@@ -68,7 +70,7 @@ export function SuperAdminKpiCards({ kpis }: SuperAdminKpiCardsProps) {
           </span>
         </div>
         <div className="h-px flex-1 min-w-[80px] bg-slate-700/50" />
-        <SuperAdminComingSoonStrip />
+        <SuperAdminLiveStatusStrip totalUsers={totalUsers} usersTodayDelta={kpis.newSignupsToday} onlineNow={onlineNow} peakToday={peakToday} />
       </div>
     </div>
   );

@@ -13,13 +13,13 @@ import {
   type ScheduleDisplaySettings,
 } from "./actions";
 import { InboundEmailDisplay } from "@/components/inbound-email-display";
+import { FlicaIcsHelperModal } from "@/components/flica-ics-helper-modal";
 import { formatLegLine } from "@/lib/trips/detect-trip-changes";
 import type { TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { formatMinutesToHhMm } from "@/lib/schedule-time";
-import { formatInTimeZone } from "date-fns-tz";
 import { ScheduleStatusChip, formatLastImport } from "@/components/schedule-status-chip";
 import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, eventOverlapsDay, addDay } from "@/lib/schedule-time";
-import { getBidPeriodForTimestamp, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
+import { getBidPeriodForTimestamp, getAllBidPeriodsForYear, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
 import { computeLegDates, getTripDateStrings } from "@/lib/leg-dates";
 
 const EVENT_STYLES: Record<string, string> = {
@@ -95,6 +95,23 @@ const isSameDay = (d1: Date, d2: Date) =>
   d1.getFullYear() === d2.getFullYear() &&
   d1.getMonth() === d2.getMonth() &&
   d1.getDate() === d2.getDate();
+
+/** Temporary UI dedupe: keep first-seen per title|start_time|end_time. Remove once import-level dedupe is fixed. */
+function dedupeEventsByTitleStartEnd(events: ScheduleEvent[]): ScheduleEvent[] {
+  const seen = new Set<string>();
+  return events.filter((ev) => {
+    const key = `${ev.title ?? ""}|${ev.start_time}|${ev.end_time}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Returns YYYY-bidMonthIndex (zero-padded) for an event's start_time, or null if no bid period. */
+function getEventBidPeriodKey(ev: ScheduleEvent, tz: string): string | null {
+  const period = getBidPeriodForTimestamp(ev.start_time, tz);
+  return period ? `${period.startStr.slice(0, 4)}-${String(period.bidMonthIndex).padStart(2, "0")}` : null;
+}
 
 type ScheduleEventLeg = {
   day?: string;
@@ -276,7 +293,7 @@ export default function SchedulePage() {
     showTimezoneLabel: false,
   });
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
-  const [showPreviousSchedules, setShowPreviousSchedules] = useState(false);
+  const [showFlicaIcsGuide, setShowFlicaIcsGuide] = useState(false);
   const [selectedPopover, setSelectedPopover] = useState<SelectedPopoverState | null>(null);
   const [detailPosition, setDetailPosition] = useState<{ x: number; y: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -309,13 +326,22 @@ export default function SchedulePage() {
     setIsAdmin(admin);
     setImportEmail(email);
 
-    const monthStart = getMonthStart(calendarMonth.getFullYear(), calendarMonth.getMonth());
-    const monthEnd = getMonthEnd(calendarMonth.getFullYear(), calendarMonth.getMonth());
-    const upcomingEndDate = new Date();
-    upcomingEndDate.setDate(upcomingEndDate.getDate() + 14);
-    const fetchEnd = monthEnd > upcomingEndDate ? monthEnd : upcomingEndDate;
-    const startStr = monthStart.toISOString().slice(0, 10) + "T00:00:00.000Z";
-    const endStr = fetchEnd.toISOString().slice(0, 10) + "T23:59:59.999Z";
+    const year = calendarMonth.getFullYear();
+    const periods = getAllBidPeriodsForYear(year);
+    let startStr: string;
+    let endStr: string;
+    if (periods.length > 0) {
+      startStr = periods[0].startStr + "T00:00:00.000Z";
+      endStr = periods[periods.length - 1].endStr + "T23:59:59.999Z";
+    } else {
+      const monthStart = getMonthStart(year, calendarMonth.getMonth());
+      const monthEnd = getMonthEnd(year, calendarMonth.getMonth());
+      const upcomingEndDate = new Date();
+      upcomingEndDate.setDate(upcomingEndDate.getDate() + 14);
+      const fetchEnd = monthEnd > upcomingEndDate ? monthEnd : upcomingEndDate;
+      startStr = monthStart.toISOString().slice(0, 10) + "T00:00:00.000Z";
+      endStr = fetchEnd.toISOString().slice(0, 10) + "T23:59:59.999Z";
+    }
     const { events: evts } = await getScheduleEvents(startStr, endStr);
     setEvents(evts);
   }
@@ -392,45 +418,20 @@ export default function SchedulePage() {
     setDetailPosition(null);
   }
 
-  const latestImportedAt = events.reduce<string | null>(
-    (max, e) => (e.imported_at && (!max || e.imported_at > max) ? e.imported_at : max),
-    null
-  );
   const baseTimezone = displaySettings.baseTimezone ?? getFrontierBidPeriodTimezone();
-  const bidPeriodsByBatch = new Map<string, Set<string>>();
+  const periodKeysWithEvents = new Set<string>();
   for (const ev of events) {
-    if (!ev.imported_at) continue;
-    const period = getBidPeriodForTimestamp(ev.start_time, baseTimezone);
-    if (period) {
-      const key = `${period.startStr.slice(0, 4)}-${period.bidMonthIndex}`;
-      if (!bidPeriodsByBatch.has(ev.imported_at)) bidPeriodsByBatch.set(ev.imported_at, new Set());
-      bidPeriodsByBatch.get(ev.imported_at)!.add(key);
-    }
-    if (process.env.NODE_ENV === "development") {
-      console.log("[bid-period-check]", {
-        title: ev.title ?? null,
-        start_time: ev.start_time ?? null,
-        timezone: baseTimezone,
-        resolvedLocalDateTime: formatInTimeZone(new Date(ev.start_time), baseTimezone, "yyyy-MM-dd HH:mm"),
-        bidPeriod: period?.name ?? null,
-        bidMonthIndex: period?.bidMonthIndex ?? null,
-      });
-    }
+    const key = getEventBidPeriodKey(ev, baseTimezone);
+    if (key) periodKeysWithEvents.add(key);
   }
-  const latestBidPeriods = latestImportedAt ? bidPeriodsByBatch.get(latestImportedAt) ?? new Set() : new Set<string>();
-  const batchIds = [...new Set(events.map((e) => e.imported_at).filter(Boolean))] as string[];
-  const olderBatchesOverlapLatest =
-    !!latestImportedAt &&
-    batchIds.some(
-      (id) =>
-        id !== latestImportedAt &&
-        [...(bidPeriodsByBatch.get(id) ?? [])].some((kp) => latestBidPeriods.has(kp))
-    );
-  const shouldShowReviewScheduleBox = olderBatchesOverlapLatest;
-  const eventsToShow =
-    !shouldShowReviewScheduleBox || showPreviousSchedules
-      ? events
-      : events.filter((ev) => !latestImportedAt || ev.imported_at === latestImportedAt);
+  const sortedPeriodKeys = [...periodKeysWithEvents].sort();
+  const visiblePeriodKeys = new Set(sortedPeriodKeys.slice(-2));
+  const eventsToShow = dedupeEventsByTitleStartEnd(
+    events.filter((ev) => {
+      const key = getEventBidPeriodKey(ev, baseTimezone);
+      return !key || visiblePeriodKeys.has(key);
+    })
+  );
 
   const now = new Date();
   const upcomingStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -451,10 +452,10 @@ export default function SchedulePage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="px-4 sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold tracking-tight">My Schedule</h1>
-            <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">BETA</span>
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/40">BETA</span>
           </div>
           <input
             ref={fileInputRef}
@@ -464,8 +465,7 @@ export default function SchedulePage() {
             onChange={handleFileChange}
             disabled={importing}
           />
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
               {status != null && (
                 <ScheduleStatusChip status={status.status} lastImportedAt={status.lastImportedAt} showLastImport={false} />
               )}
@@ -488,18 +488,26 @@ export default function SchedulePage() {
                 </button>
               )}
             </div>
-            {status != null && status.lastImportedAt && status.status !== "no_schedule" && (
-              <p className="text-right text-xs text-slate-400">Last Import: {formatLastImport(status.lastImportedAt)}</p>
-            )}
-          </div>
         </div>
+        {status != null && status.lastImportedAt && status.status !== "no_schedule" && (
+          <p className="mt-2 text-right text-xs text-slate-400">Last Import: {formatLastImport(status.lastImportedAt)}</p>
+        )}
         <p className="mt-1 text-sm text-slate-400">
           Import your schedule into CrewRules™ using one of these methods:
         </p>
         <ul className="mt-1 text-sm text-slate-400 list-disc list-inside space-y-0.5">
           <li>Automatic updates — Add your CrewRules™ import email to ELP</li>
           <li>Email import — Send your schedule from FLICA to your CrewRules™ import email</li>
-          <li>Manual upload — Upload your FLICA .ics file</li>
+          <li>
+            Manual upload — Upload your FLICA .ics file{" "}
+            <button
+              type="button"
+              onClick={() => setShowFlicaIcsGuide(true)}
+              className="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2 transition align-baseline"
+            >
+              View guide
+            </button>
+          </li>
         </ul>
       </div>
 
@@ -578,16 +586,6 @@ export default function SchedulePage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">{monthLabel}</h2>
               <div className="flex flex-wrap items-center gap-2">
-                {shouldShowReviewScheduleBox && (
-                  <button
-                    type="button"
-                    onClick={() => setShowPreviousSchedules((v) => !v)}
-                    className="flex flex-col items-start leading-tight rounded-lg border px-3 py-1.5 text-sm border-amber-500/40 bg-amber-500/10 text-slate-200 hover:bg-amber-500/15"
-                  >
-                    <span>{showPreviousSchedules ? "Hide schedule changes" : "Review schedule changes"}</span>
-                    <span className="text-xs text-amber-400/90 mt-0.5">Previous schedule detected</span>
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => setCalendarMonth(new Date())}
@@ -750,6 +748,8 @@ export default function SchedulePage() {
           </div>
         </>
       )}
+
+      <FlicaIcsHelperModal open={showFlicaIcsGuide} onClose={() => setShowFlicaIcsGuide(false)} />
     </div>
   );
 }

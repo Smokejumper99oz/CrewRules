@@ -1256,7 +1256,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
         </div>
       </div>
       {notice && (
-        <div className="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+        <div className="mt-2 rounded-xl border border-slate-600/40 bg-slate-800/40 px-3 py-2 text-xs text-slate-300">
           {notice}
         </div>
       )}
@@ -1285,7 +1285,9 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
             </div>
           )}
           {!homeList.length && !alternateList.length ? (
-            <p className="text-xs text-slate-500">No commute options found in this window.</p>
+            <p className="text-xs text-slate-500">
+              {notice ? "Flight data temporarily unavailable. Use Refresh to try again." : "No commute options found in this window."}
+            </p>
           ) : (
             <div ref={cardsTopRef} className="space-y-6">
               {homeList.length > 0 && (

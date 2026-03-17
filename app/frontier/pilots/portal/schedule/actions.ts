@@ -187,6 +187,12 @@ export type ScheduleEvent = {
 
 export type NextDutyLabel = "on_duty" | "later_today" | "next_duty";
 
+/** True if title is a vacation code (e.g. V35, V15). Trim + uppercase, match /^V\d+$/. */
+function isVacationCode(title: string | null | undefined): boolean {
+  const t = (title ?? "").trim().toUpperCase();
+  return /^V\d+$/.test(t);
+}
+
 export async function getNextDuty(): Promise<{
   event: ScheduleEvent | null;
   label: NextDutyLabel | null;
@@ -244,6 +250,7 @@ export async function getNextDuty(): Promise<{
     if (onDutyError) return { event: null, label: null, hasSchedule, error: onDutyError.message };
     if (onDutyData) {
       const ev = onDutyData as ScheduleEvent;
+      if (!isVacationCode(ev.title)) {
       const legs = ev.legs ?? [];
       const tripDates = getTripDateStrings(ev.start_time, ev.end_time, baseTimezone);
 
@@ -287,6 +294,7 @@ export async function getNextDuty(): Promise<{
         }
       }
       return { event: ev, label: "on_duty", hasSchedule, isInPairing: true };
+      }
     }
 
     // 2. Upcoming events: start >= now
@@ -606,7 +614,6 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
       .select("start_time, end_time, event_type, title, credit_hours, credit_minutes, baseline_credit_minutes, pairing_days, block_minutes")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
-      .or("is_muted.eq.false,is_muted.is.null")
       .lte("start_time", endStr)
       .gte("end_time", startStr);
 
