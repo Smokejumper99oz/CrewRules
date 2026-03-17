@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { updateProfilePreferences, startProTrial, updatePassword } from "@/app/frontier/pilots/portal/profile/actions";
 import { DatePickerInput } from "@/components/date-picker-input";
@@ -153,6 +153,10 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
   const [directFlightsExpanded, setDirectFlightsExpanded] = useState(true);
   const [twoLegExpanded, setTwoLegExpanded] = useState(true);
 
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const pristineSnapshotRef = useRef<string | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+
   const displayTimezoneMode = profile.display_timezone_mode ?? "base";
   const timeFormat = profile.time_format ?? "24h";
   const showTimezoneLabel = profile.show_timezone_label ?? false;
@@ -180,6 +184,89 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
     }
   }, [baseAirport, showAdvanced]);
 
+  function getFormSnapshot(form: HTMLFormElement | null, effectiveTz: string): string | null {
+    if (!form) return null;
+    const fd = new FormData(form);
+    fd.set("base_timezone", effectiveTz);
+    const keys = [...new Set(fd.keys())].sort();
+    const parts: string[] = [];
+    for (const k of keys) {
+      const v = fd.get(k);
+      parts.push(`${k}=${String(v ?? "").trim()}`);
+    }
+    return parts.join("&");
+  }
+
+  const checkDirty = useCallback(() => {
+    const form = formRef.current;
+    if (!form) return;
+    const current = getFormSnapshot(form, effectiveTimezone);
+    const pristine = pristineSnapshotRef.current;
+    if (current === null || pristine === null) return;
+    setIsDirty((prev) => {
+      const next = current !== pristine;
+      return next !== prev ? next : prev;
+    });
+  }, [effectiveTimezone]);
+
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form || pristineSnapshotRef.current !== null) return;
+    pristineSnapshotRef.current = getFormSnapshot(form, effectiveTimezone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial snapshot only on mount
+  }, []);
+
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) return;
+    const handler = () => checkDirty();
+    form.addEventListener("input", handler);
+    form.addEventListener("change", handler);
+    return () => {
+      form.removeEventListener("input", handler);
+      form.removeEventListener("change", handler);
+    };
+  }, [checkDirty]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const handler = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement).closest("a");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || anchor.target === "_blank") return;
+
+      try {
+        const dest = new URL(href, window.location.href);
+        const currentPath = window.location.pathname.replace(/\/$/, "") || "/";
+        const destPath = dest.pathname.replace(/\/$/, "") || "/";
+        if (currentPath === destPath) return;
+
+        const ok = window.confirm("You have unsaved changes. Leave this page without saving?");
+        if (!ok) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      } catch {
+        return;
+      }
+    };
+
+    document.addEventListener("click", handler, true);
+    return () => document.removeEventListener("click", handler, true);
+  }, [isDirty]);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
@@ -193,6 +280,11 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
       setMessage({ type: "error", text: result.error });
     } else {
       setMessage({ type: "success", text: "Saved." });
+      const nextPristine = getFormSnapshot(form, effectiveTimezone);
+      if (nextPristine !== null) {
+        pristineSnapshotRef.current = nextPristine;
+      }
+      setIsDirty(false);
       router.refresh();
     }
   }
@@ -221,7 +313,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
           )}
         </div>
       </div>
-      <form onSubmit={handleSubmit} className="mt-6 space-y-8">
+      <form ref={formRef} onSubmit={handleSubmit} className="mt-6 space-y-8">
       {/* Personal Information */}
       <section>
         <h2 className="text-base font-semibold text-white mb-1">Personal Information</h2>
@@ -308,6 +400,55 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 ))}
             </select>
             <p className="mt-1 text-xs text-slate-500">3-letter IATA airport code. Used for reserve calculations and default commute planning. If a trip starts from another airport, Commute Assist automatically uses that airport instead.</p>
+          </div>
+          <div>
+            <label htmlFor="home_airport" className="block text-sm font-medium text-slate-300">
+              Home Airport
+            </label>
+            <input
+              id="home_airport"
+              name="home_airport"
+              type="text"
+              defaultValue={homeAirport}
+              maxLength={3}
+              placeholder="e.g. MCO"
+              disabled={!proActive}
+              readOnly={!proActive}
+              className={`mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
+              style={{ textTransform: "uppercase" }}
+              onInput={(e) => {
+                e.currentTarget.value = e.currentTarget.value.toUpperCase();
+              }}
+            />
+            <p className="mt-1 text-xs text-slate-500">3-letter IATA code. This is where your commute normally begins.</p>
+            {!proActive && (
+              <button type="button" className="text-xs text-[#75C043] hover:underline mt-1 inline-block">Start your free 14-day trial</button>
+            )}
+          </div>
+          <div>
+            <label htmlFor="alternate_home_airport" className="block text-sm font-medium text-slate-300">
+              Alternate Home Airport <span className="text-slate-500 font-normal">(Optional)</span>
+            </label>
+            <input
+              id="alternate_home_airport"
+              name="alternate_home_airport"
+              type="text"
+              defaultValue={alternateHomeAirport}
+              maxLength={3}
+              placeholder="e.g. MCO"
+              disabled={!proActive}
+              readOnly={!proActive}
+              className={`mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
+              style={{ textTransform: "uppercase" }}
+              onInput={(e) => {
+                e.currentTarget.value = e.currentTarget.value.toUpperCase();
+              }}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Backup home airport used when flights from your primary home airport are limited.
+            </p>
+          </div>
+          <div>
             <p className="mt-2 text-sm text-slate-400">
               Timezone: <span className="font-medium text-slate-200">{tzLabel}</span>
             </p>
@@ -543,53 +684,6 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             </button>
             <div className={directFlightsExpanded ? "space-y-4 px-4 pb-4" : "hidden"}>
               <div>
-                <label htmlFor="home_airport" className="block text-sm font-medium text-slate-300">
-                  Home Airport
-                </label>
-                <input
-                  id="home_airport"
-                  name="home_airport"
-                  type="text"
-                  defaultValue={homeAirport}
-                  maxLength={3}
-                  placeholder="e.g. MCO"
-                  disabled={!proActive}
-                  readOnly={!proActive}
-                  className={`mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
-                  style={{ textTransform: "uppercase" }}
-                  onInput={(e) => {
-                    e.currentTarget.value = e.currentTarget.value.toUpperCase();
-                  }}
-                />
-                <p className="mt-1 text-xs text-slate-500">3-letter IATA code. This is where your commute normally begins.</p>
-                {!proActive && (
-                  <button type="button" className="text-xs text-[#75C043] hover:underline mt-1 inline-block">Start your free 14-day trial</button>
-                )}
-              </div>
-              <div className="mt-4">
-                <label htmlFor="alternate_home_airport" className="block text-sm font-medium text-slate-300">
-                  Alternate Airport <span className="text-slate-500 font-normal">(Optional)</span>
-                </label>
-                <input
-                  id="alternate_home_airport"
-                  name="alternate_home_airport"
-                  type="text"
-                  defaultValue={alternateHomeAirport}
-                  maxLength={3}
-                  placeholder="e.g. MCO"
-                  disabled={!proActive}
-                  readOnly={!proActive}
-                  className={`mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
-                  style={{ textTransform: "uppercase" }}
-                  onInput={(e) => {
-                    e.currentTarget.value = e.currentTarget.value.toUpperCase();
-                  }}
-                />
-                <p className="mt-1 text-xs text-slate-500">
-                  Recommended backup airport to expand your commute options when flights from your home airport are limited.
-                </p>
-              </div>
-              <div className="mt-4">
                 <label
                   htmlFor="commute_arrival_buffer_minutes"
                   className="block text-sm font-medium text-slate-300"

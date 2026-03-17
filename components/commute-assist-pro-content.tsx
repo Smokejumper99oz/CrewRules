@@ -705,7 +705,20 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
       }
       return result;
     }
-    return [];
+    const orig = (dutyEndAirport ?? baseAirport ?? "").toUpperCase();
+    if (!orig || orig.length !== 3) return [];
+    const result: { origin: string; stop: string; destination: string; label: "home" | "alternate"; commuteDate: string }[] = [];
+    const home = homeAirport?.trim().toUpperCase();
+    const alternate = alternateHomeAirport?.trim().toUpperCase();
+    for (const stop of uniqueStops) {
+      if (home && home.length === 3 && stop !== home && stop !== orig) {
+        result.push({ origin: orig, stop, destination: home, label: "home", commuteDate });
+      }
+      if (alternate && alternate.length === 3 && stop !== alternate && stop !== orig) {
+        result.push({ origin: orig, stop, destination: alternate, label: "alternate", commuteDate });
+      }
+    }
+    return result;
   }, [
     direction,
     toBaseCommuteSearchDate,
@@ -1153,7 +1166,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   if (noCommuteNeeded) {
     return (
       <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200/90">
-        No commute needed — duty starts at your home airport.
+        No flight commute needed — Next Duty Report starts at your home airport.
       </div>
     );
   }

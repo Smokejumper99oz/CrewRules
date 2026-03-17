@@ -98,10 +98,12 @@ export function ScheduleEventCard({ event, displaySettings, position, compact, l
       <div className={`flex flex-col gap-0.5 rounded-xl border px-3 py-2 ${borderStyle} bg-slate-950/40`}>
         <span className="text-xs font-medium text-slate-500">{dateLabel}</span>
         <span className="font-medium text-white">{headerLine}</span>
-        {showRoute && <span className="text-xs text-slate-500">{event.route}</span>}
+        {showRoute && <span className="text-xs text-slate-500">{event.route}   {dutyRange}</span>}
         {showReportCredit && (
           <>
-            <span className="text-xs text-slate-400">{timeLine}</span>
+            <span className="text-xs text-slate-400">
+              {event.event_type === "reserve" ? timeLine : `Report: ${reportPart}`}
+            </span>
             <span className="text-xs text-slate-400">Credit {creditDisplay}</span>
           </>
         )}
@@ -115,23 +117,23 @@ export function ScheduleEventCard({ event, displaySettings, position, compact, l
       <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{dateLabel}</span>
       <span className="text-lg font-medium text-white">{headerLine}</span>
       {showRoute && (
-        <div className="text-sm text-slate-500 space-y-0.5">
+        <div className="text-sm space-y-0.5">
           {hasLegs ? (
             effectiveLegs!.map((l, i) => (
-              <div key={i} className="font-mono text-xs">
-                {formatLeg(l)}
+              <div key={i} className="font-medium text-slate-200 whitespace-nowrap">
+                {l.origin} → {l.destination}   {l.depTime ?? "—"} – {l.arrTime ?? "—"}
               </div>
             ))
           ) : (
-            <span>{event.route}</span>
+            <span className="text-slate-500 whitespace-nowrap">{event.route}   {dutyRange}</span>
           )}
         </div>
       )}
       {showReportCredit && (
-        <>
-          <span className="text-sm text-slate-400">{timeLine}</span>
-          <span className="text-sm text-slate-400">Credit {creditDisplay}</span>
-        </>
+        <span className="text-sm text-slate-400">Report: {reportPart}</span>
+      )}
+      {showReportCredit && (
+        <span className="text-sm text-slate-400">Credit {creditDisplay}</span>
       )}
       {!showReportCredit && <span className="text-sm text-slate-400">{dutyRange}</span>}
     </div>
