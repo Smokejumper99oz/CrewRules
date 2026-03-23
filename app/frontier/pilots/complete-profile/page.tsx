@@ -25,15 +25,22 @@ export default async function CompleteProfilePage() {
     redirect(`${LOGIN_PATH}?error=company_email_required`);
   }
 
-  const { data: existing } = await supabase
+  const { data: profile } = await supabase
     .from("profiles")
-    .select("id")
+    .select("base_airport, position, date_of_hire, home_airport")
     .eq("id", user.id)
     .eq("tenant", TENANT)
     .eq("portal", PORTAL)
     .maybeSingle();
 
-  if (existing) {
+  const hasRequiredOnboarding =
+    profile &&
+    !!String(profile.base_airport ?? "").trim() &&
+    !!String(profile.position ?? "").trim() &&
+    (profile.date_of_hire != null && profile.date_of_hire !== "") &&
+    !!String(profile.home_airport ?? "").trim();
+
+  if (hasRequiredOnboarding) {
     redirect(PORTAL_PATH);
   }
 
