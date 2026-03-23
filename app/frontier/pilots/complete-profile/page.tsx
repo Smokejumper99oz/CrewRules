@@ -37,24 +37,14 @@ export default async function CompleteProfilePage() {
     redirect(PORTAL_PATH);
   }
 
-  const { data: waitlistRow } = await supabase
-    .from("waitlist")
-    .select("employee_number")
-    .eq("email", email)
-    .maybeSingle();
-
-  const metadataEmployeeNumber = (user.user_metadata?.employee_number as string)?.trim() || null;
-  const preFillEmployeeNumber =
-    waitlistRow?.employee_number?.trim() || metadataEmployeeNumber || null;
-
   return (
     <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
       <div className="max-w-xl w-full text-center">
-        <h1 className="text-3xl font-bold">Complete your profile</h1>
-        <p className="mt-4 text-slate-300">
-          Your CrewRules profile for this portal has not been set up yet. Click below to create it.
+        <h1 className="text-3xl font-bold">Complete Your Crew Profile</h1>
+        <p className="mt-4 text-slate-300 max-w-md mx-auto">
+          This setup powers Commute Assist, pay projection, report times, and other personalized CrewRules features.
         </p>
-        <CompleteProfileForm preFillEmployeeNumber={preFillEmployeeNumber} />
+        <CompleteProfileForm />
         <div className="mt-10 flex flex-wrap justify-center gap-4">
           <Link
             href="/request-access"

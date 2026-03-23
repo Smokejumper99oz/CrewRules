@@ -69,7 +69,7 @@ export async function gateUserForPortal(
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, role, tenant, portal, email, subscription_tier, pro_trial_started_at, pro_trial_expires_at, is_founding_pilot, welcome_modal_version_seen")
+    .select("id, role, tenant, portal, email, subscription_tier, pro_trial_started_at, pro_trial_expires_at, is_founding_pilot, welcome_modal_version_seen, base_airport, position, date_of_hire, home_airport")
     .eq("id", user.id)
     .eq("tenant", tenant)
     .eq("portal", portal)
@@ -84,6 +84,16 @@ export async function gateUserForPortal(
   const allowed = PORTAL_ALLOWED_ROLES[portal] ?? PORTAL_ALLOWED_ROLES.pilots;
   if (!allowed.includes(p.role)) {
     redirect(`${loginPath}?error=role_not_allowed`);
+  }
+
+  const hasRequiredOnboarding =
+    !!String(p.base_airport ?? "").trim() &&
+    !!String(p.position ?? "").trim() &&
+    (p.date_of_hire != null && p.date_of_hire !== "") &&
+    !!String(p.home_airport ?? "").trim();
+
+  if (!hasRequiredOnboarding) {
+    redirect(completeProfilePath);
   }
 
   return {
