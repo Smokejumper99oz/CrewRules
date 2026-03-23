@@ -255,13 +255,20 @@ export default function SignUpPage() {
             )}
 
             {!showSignUpSuccess && !showWaitlistSuccess && (
-              <button
-                type="submit"
-                disabled={isPending || submitted}
-                className="block w-full rounded-xl bg-[#75C043] px-4 py-3 font-semibold text-slate-950 hover:opacity-95 transition text-center disabled:opacity-50"
-              >
-                {isPending || submitted ? "Creating…" : "Create account"}
-              </button>
+              <>
+                <div className="mt-3 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
+                  <span className="font-bold">Note:</span> You may see a security warning on the confirmation email.
+                  <br />
+                  This is normal — just confirm your email to continue.
+                </div>
+                <button
+                  type="submit"
+                  disabled={isPending || submitted}
+                  className="block w-full rounded-xl bg-[#75C043] px-4 py-3 font-semibold text-slate-950 hover:opacity-95 transition text-center disabled:opacity-50"
+                >
+                {isPending || submitted ? "Creating…" : "Create Account"}
+                </button>
+              </>
             )}
           </form>
 
