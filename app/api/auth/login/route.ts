@@ -46,7 +46,11 @@ export async function POST(request: NextRequest) {
     const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      const message =
+        error.message === "Invalid login credentials"
+          ? "Invalid login credentials. Use Forgot User ID or Password if you already signed up, or Create account if you're new to CrewRules."
+          : error.message;
+      return NextResponse.json({ error: message }, { status: 401 });
     }
 
     // Super admin lands on /super-admin; others on portal
