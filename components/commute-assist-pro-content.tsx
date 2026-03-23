@@ -405,7 +405,7 @@ function TwoLegCompactLeg({
   const arrDisplay = os?.arr
     ? { scheduled: os.arr.scheduled, actual: os.arr.actual !== os.arr.scheduled ? os.arr.actual : undefined }
     : { scheduled: arrSched, actual: undefined as string | undefined };
-  const statusLabel = getStatusLabelForDisplay(os, legacyDi);
+  const statusLabel = getStatusLabelForDisplay(os ?? null, legacyDi);
   const statusBadgeClass = os
     ? getStatusBadgeClass(os.label)
     : legacyDi!.cancelled
@@ -536,7 +536,7 @@ function CommuteFlightCard({
   const arrDisplay = os?.arr
     ? { scheduled: os.arr.scheduled, actual: os.arr.actual !== os.arr.scheduled ? os.arr.actual : undefined }
     : { scheduled: arrSched, actual: undefined as string | undefined };
-  const statusLabel = getStatusLabelForDisplay(os, legacyDi);
+  const statusLabel = getStatusLabelForDisplay(os ?? null, legacyDi);
   const statusBadgeClass = os
     ? getStatusBadgeClass(os.label)
     : legacyDi!.cancelled
@@ -657,7 +657,7 @@ function CommuteFlightRow({
   const arrDisplay = os?.arr
     ? { scheduled: os.arr.scheduled, actual: os.arr.actual !== os.arr.scheduled ? os.arr.actual : undefined }
     : { scheduled: arrSched, actual: undefined as string | undefined };
-  const statusLabel = getStatusLabelForDisplay(os, legacyDi);
+  const statusLabel = getStatusLabelForDisplay(os ?? null, legacyDi);
   const statusBadgeClass = os
     ? getStatusBadgeClass(os.label)
     : legacyDi!.cancelled
