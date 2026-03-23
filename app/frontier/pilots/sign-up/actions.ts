@@ -94,7 +94,7 @@ export async function submitSignUp(_prev: SignUpState, formData: FormData): Prom
     email,
     password,
     options: {
-      emailRedirectTo: `${origin}/auth/callback`,
+      emailRedirectTo: `${origin}/auth/confirm`,
       data: {
         full_name: fullName,
         employee_number: employeeNumber,

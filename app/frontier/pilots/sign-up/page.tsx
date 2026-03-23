@@ -195,7 +195,7 @@ export default function SignUpPage() {
             )}
             {showSignUpSuccess && (
               <p className="text-sm text-emerald-400">
-                Check your Frontier email and click the confirmation link to finish signing up.
+                Check your Frontier Airlines email and click the confirmation link to finish signing up.
               </p>
             )}
             {showWaitlistSuccess && (
