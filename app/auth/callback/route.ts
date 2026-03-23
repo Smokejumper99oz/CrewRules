@@ -7,7 +7,16 @@ export async function GET(request: Request) {
   const type = searchParams.get("type");
   const next = searchParams.get("next") ?? "/frontier/pilots/login";
 
-  if (!token_hash || type !== "recovery") {
+  if (!token_hash || !type) {
+    return NextResponse.redirect(
+      new URL("/frontier/pilots/login?error=invalid_link", request.url)
+    );
+  }
+
+  const isRecovery = type === "recovery";
+  const isEmailConfirmation = type === "email";
+
+  if (!isRecovery && !isEmailConfirmation) {
     return NextResponse.redirect(
       new URL("/frontier/pilots/login?error=invalid_link", request.url)
     );
@@ -16,7 +25,7 @@ export async function GET(request: Request) {
   const supabase = await createClient();
   const { error } = await supabase.auth.verifyOtp({
     token_hash,
-    type: "recovery",
+    type: isRecovery ? "recovery" : "email",
   });
 
   if (error) {
@@ -26,6 +35,12 @@ export async function GET(request: Request) {
         `/frontier/pilots/login?error=${encodeURIComponent(error.message)}`,
         request.url
       )
+    );
+  }
+
+  if (isEmailConfirmation) {
+    return NextResponse.redirect(
+      new URL("/frontier/pilots/login?confirmed=1", request.url)
     );
   }
 

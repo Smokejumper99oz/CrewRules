@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { submitSignUp } from "./actions";
 
 const TENANT = "frontier";
@@ -18,11 +19,23 @@ function isValidFrontierEmail(email: string): boolean {
   return normalized.endsWith("@flyfrontier.com");
 }
 
+const INPUT_CLASS =
+  "mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40";
+
 export default function SignUpPage() {
   const [state, formAction, isPending] = useActionState(submitSignUp, null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [matchError, setMatchError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const submittedRef = useRef(false);
+
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [employeeNumber, setEmployeeNumber] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const showSignUpSuccess = state?.success && state?.email;
   const showWaitlistSuccess = state?.waitlist;
@@ -41,13 +54,21 @@ export default function SignUpPage() {
     }
     const form = e.currentTarget;
     const emailInput = form.elements.namedItem("email") as HTMLInputElement;
-    const email = emailInput?.value ?? "";
+    const emailVal = emailInput?.value ?? "";
 
-    if (!email?.trim()) {
+    if (!emailVal?.trim()) {
       e.preventDefault();
       return;
     }
+
+    if (password !== confirmPassword) {
+      e.preventDefault();
+      setMatchError("Passwords do not match");
+      return;
+    }
+
     setEmailError(null);
+    setMatchError(null);
     submittedRef.current = true;
     setSubmitted(true);
   }
@@ -78,9 +99,11 @@ export default function SignUpPage() {
                 name="full_name"
                 type="text"
                 placeholder="John Smith"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
                 required
                 disabled={isPending}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
+                className={INPUT_CLASS}
               />
             </div>
 
@@ -90,9 +113,11 @@ export default function SignUpPage() {
                 name="email"
                 type="email"
                 placeholder="name@flyfrontier.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isPending}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
+                className={INPUT_CLASS}
               />
             </div>
 
@@ -102,28 +127,71 @@ export default function SignUpPage() {
                 name="employee_number"
                 type="text"
                 placeholder="Your Employee Number"
+                value={employeeNumber}
+                onChange={(e) => setEmployeeNumber(e.target.value)}
                 required
                 disabled={isPending}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
+                className={INPUT_CLASS}
               />
             </div>
 
             <div>
               <label className="text-sm text-slate-200">Password</label>
-              <input
-                name="password"
-                type="password"
-                placeholder="••••••••"
-                required
-                minLength={6}
-                disabled={isPending}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
-              />
+              <div className="relative">
+                <input
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setMatchError(null);
+                  }}
+                  required
+                  minLength={6}
+                  disabled={isPending}
+                  className={`${INPUT_CLASS} pr-12`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 outline-none focus:text-slate-200"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               <p className="mt-1 text-xs text-slate-500">At least 6 characters</p>
             </div>
 
-            {(state?.error || emailError) && (
-              <p className="text-sm text-red-400">{state?.error ?? emailError}</p>
+            <div>
+              <label className="text-sm text-slate-200">Confirm Password</label>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setMatchError(null);
+                  }}
+                  required
+                  disabled={isPending}
+                  className={`${INPUT_CLASS} pr-12`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((s) => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 outline-none focus:text-slate-200"
+                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            {(state?.error || emailError || matchError) && (
+              <p className="text-sm text-red-400">{matchError ?? state?.error ?? emailError}</p>
             )}
             {showSignUpSuccess && (
               <p className="text-sm text-emerald-400">

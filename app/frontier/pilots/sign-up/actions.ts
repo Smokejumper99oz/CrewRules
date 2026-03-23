@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -83,11 +84,17 @@ export async function submitSignUp(_prev: SignUpState, formData: FormData): Prom
     return { waitlist: true };
   }
 
+  const headersList = await headers();
+  const host = headersList.get("host") ?? "localhost:3000";
+  const protocol = headersList.get("x-forwarded-proto") ?? "http";
+  const origin = `${protocol}://${host}`;
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
+      emailRedirectTo: `${origin}/auth/callback`,
       data: {
         full_name: fullName,
         employee_number: employeeNumber,
