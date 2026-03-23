@@ -10,11 +10,28 @@ function getSupabaseEnvCheck(): string | null {
   return null;
 }
 
+/**
+ * Detect iPhone/iPad from User-Agent for session persistence.
+ * Covers iPadOS 13+ desktop-class Safari: UA reports "Macintosh" but sec-ch-ua-mobile=?1 indicates mobile.
+ * Safari does not send sec-ch-ua-mobile; Chrome/Edge on iPad do. Kept minimal to avoid brittleness.
+ */
+function isIOSUserAgent(request: NextRequest): boolean {
+  const ua = request.headers.get("user-agent") ?? "";
+  const mobileHint = request.headers.get("sec-ch-ua-mobile");
+  return (
+    /iPad|iPhone|iPod/.test(ua) ||
+    (/Macintosh/.test(ua) && mobileHint === "?1")
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const email = (formData.get("email") as string)?.trim();
     const password = formData.get("password") as string;
+    const remember = formData.get("remember") === "on";
+    const fromIOS = isIOSUserAgent(request);
+    const useSessionOnlyCookies = !remember && !fromIOS;
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
@@ -26,6 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     const successResponse = NextResponse.json({ ok: true });
+    const cookiesForFinal: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -35,9 +53,15 @@ export async function POST(request: NextRequest) {
             return request.cookies.getAll();
           },
           setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              successResponse.cookies.set(name, value, options)
-            );
+            cookiesToSet.forEach(({ name, value, options }) => {
+              const opts = { ...(options ?? {}) };
+              if (useSessionOnlyCookies) {
+                delete opts.maxAge;
+                delete opts.expires;
+              }
+              successResponse.cookies.set(name, value, opts);
+              cookiesForFinal.push({ name, value, options: opts });
+            });
           },
         },
       }
@@ -69,7 +93,13 @@ export async function POST(request: NextRequest) {
     }
 
     const final = NextResponse.json({ ok: true, redirect: redirectTo });
-    successResponse.cookies.getAll().forEach((c) => final.cookies.set(c.name, c.value, c));
+    cookiesForFinal.forEach(({ name, value, options }) => final.cookies.set(name, value, options));
+
+    if (useSessionOnlyCookies) {
+      final.cookies.set("crewrules-remember", "0", { path: "/" });
+    } else {
+      final.cookies.set("crewrules-remember", "1", { path: "/", maxAge: 60 * 60 * 24 * 400 });
+    }
     return final;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

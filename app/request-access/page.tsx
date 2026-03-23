@@ -110,34 +110,6 @@ export default function RequestAccessPage() {
               )}
             </div>
           )}
-          {state?.success && state?.airlineLive && (
-            <div className="space-y-3 pt-2">
-              <p className="text-sm font-medium text-emerald-400">
-                Your airline is already live on CrewRules™. Please create your account to get started.
-              </p>
-              {state?.signupRoute && (
-                <Link
-                  href={state.signupRoute}
-                  className="inline-flex w-full justify-center rounded-xl bg-[#75C043] px-6 py-3 font-semibold text-slate-950 hover:brightness-110 transition"
-                >
-                  Create Account
-                </Link>
-              )}
-            </div>
-          )}
-          {state?.success && !state?.airlineLive && (
-            <div className="space-y-2 pt-2">
-              <p className="text-sm font-medium text-emerald-400">
-                You&apos;ve been added to the CrewRules™ waitlist.
-              </p>
-              <p className="text-sm text-slate-300">
-                Crew<span className="text-[#75C043]">Rules</span>™ is not live for your airline yet. We&apos;re expanding in phases and will reach out when access becomes available.
-              </p>
-              <p className="text-xs text-slate-500">
-                Launch timing may vary by airline and rollout priority.
-              </p>
-            </div>
-          )}
 
           <button
             type="submit"

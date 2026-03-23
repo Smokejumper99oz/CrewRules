@@ -4,9 +4,24 @@
  * Add entries here as new airlines launch.
  * role: "pilot" | "fa" — only listed roles are live for that domain.
  */
-const LIVE_AIRLINES: { domain: string; signupRoute: string; liveRoles: readonly string[] }[] = [
-  { domain: "flyfrontier.com", signupRoute: "/frontier/pilots/sign-up", liveRoles: ["pilot"] },
+const LIVE_AIRLINES: {
+  domain: string;
+  signupRoute: string;
+  liveRoles: readonly string[];
+  displayName: string;
+}[] = [
+  {
+    domain: "flyfrontier.com",
+    signupRoute: "/frontier/pilots/sign-up",
+    liveRoles: ["pilot"],
+    displayName: "Frontier Airlines",
+  },
 ];
+
+/** Display names of airlines currently live for signup (for login page copy). */
+export function getLiveAirlineDisplayNames(): string[] {
+  return LIVE_AIRLINES.map((a) => a.displayName);
+}
 
 /** Domain -> config lookup */
 const DOMAIN_TO_CONFIG = new Map(

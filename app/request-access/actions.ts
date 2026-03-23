@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
   isLiveForEmailAndRole,
@@ -52,14 +53,22 @@ export async function submitAccessRequest(
 
     if (isLiveForEmailAndRole(trimmedEmail, role)) {
       const signupRoute = getSignupRouteForEmail(trimmedEmail);
-      return { success: true, airlineLive: true, signupRoute: signupRoute ?? undefined };
+      const displayAirline = airline?.trim() || inferredAirline;
+      const params = new URLSearchParams({
+        airline: displayAirline,
+        live: "1",
+        ...(signupRoute && { signupRoute }),
+      });
+      redirect(`/request-access/success?${params.toString()}`);
     }
+
+    const displayAirline = airline?.trim() || inferredAirline;
     const { error } = await supabase.from("waitlist").upsert(
       {
         email: trimmedEmail,
         full_name: fullName,
         requested_portal: requestedPortal,
-        airline: airline?.trim() || inferredAirline,
+        airline: displayAirline,
         source: "request_access",
         status: "pending",
         employee_number: employeeNumber?.trim() || null,
@@ -74,7 +83,7 @@ export async function submitAccessRequest(
       };
     }
 
-    return { success: true, airlineLive: false };
+    redirect(`/request-access/success?airline=${encodeURIComponent(displayAirline)}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : "";
