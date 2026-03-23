@@ -73,27 +73,37 @@ export default function SignUpPage() {
     setSubmitted(true);
   }
 
+  function handleClose() {
+    window.close();
+    setTimeout(() => {
+      if (!window.closed) {
+        window.location.href = "/frontier/pilots/login";
+      }
+    }, 150);
+  }
+
   if (showSignUpSuccess) {
     return (
-      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md">
-          <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] hover:border-emerald-400/20 px-6 py-6 shadow-lg shadow-black/30">
-            <div className="mx-auto max-w-[380px] text-left">
-              <div className="text-xs font-semibold uppercase tracking-widest text-emerald-400">
-                Email Sent
+      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-4 py-12 sm:px-6">
+        <div className="w-full max-w-lg">
+          <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] hover:border-emerald-400/20 px-6 py-6 sm:px-8 sm:py-8 shadow-lg shadow-black/30">
+            <div className="text-left">
+              <div className="text-xs uppercase tracking-widest text-slate-400">
+                Frontier Airline Pilots
               </div>
 
-              <h1 className="mt-1.5 text-2xl font-bold tracking-tight">
-                Crew<span className="text-[#75C043]">Rules</span>
-                <span className="align-super text-xs">™</span>
+              <h1 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">
+                Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-xs">™</span>
               </h1>
 
-              <h2 className="mt-4 text-lg font-bold text-white leading-snug">
-                Check your Frontier Airlines email to confirm your account
+              <h2 className="mt-4 text-base font-bold text-white leading-snug sm:text-lg">
+                <span className="text-emerald-400 font-semibold uppercase tracking-widest">EMAIL SENT</span>
+                {" - "}
+                Check your Frontier Airlines email.
               </h2>
 
               <p className="mt-2 text-sm text-slate-300 leading-relaxed">
-                Click your confirmation link to finish account creation and check your spam folder if you do not see the email.
+                Click the confirmation link to finish signing up and check your SPAM folder, if you do not see the email.
               </p>
 
               <p className="mt-2 text-xs text-slate-500">
@@ -103,15 +113,15 @@ export default function SignUpPage() {
               <div className="mt-4 flex justify-center">
                 <button
                   type="button"
-                  onClick={() => window.close()}
-                  className="rounded-xl bg-[#75C043] px-5 py-3 font-semibold text-slate-950 hover:bg-amber-500 transition disabled:opacity-50"
+                  onClick={handleClose}
+                  className="rounded-xl bg-[#75C043] px-5 py-3 font-semibold text-slate-950 hover:opacity-95 transition disabled:opacity-50"
                 >
-                  Next
+                  Close Window
                 </button>
               </div>
 
               <p className="mt-2 text-xs text-slate-500 text-center">
-                After confirming your email, return here and sign in.
+                If this window does not close automatically, you can close it manually.
               </p>
             </div>
           </div>
