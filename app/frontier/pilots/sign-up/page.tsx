@@ -73,6 +73,53 @@ export default function SignUpPage() {
     setSubmitted(true);
   }
 
+  if (showSignUpSuccess) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-md">
+          <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] hover:border-emerald-400/20 px-6 py-6 shadow-lg shadow-black/30">
+            <div className="mx-auto max-w-[380px] text-left">
+              <div className="text-xs font-semibold uppercase tracking-widest text-emerald-400">
+                Email Sent
+              </div>
+
+              <h1 className="mt-1.5 text-2xl font-bold tracking-tight">
+                Crew<span className="text-[#75C043]">Rules</span>
+                <span className="align-super text-xs">™</span>
+              </h1>
+
+              <h2 className="mt-4 text-lg font-bold text-white leading-snug">
+                Check your Frontier Airlines email to confirm your account
+              </h2>
+
+              <p className="mt-2 text-sm text-slate-300 leading-relaxed">
+                Click your confirmation link to finish account creation and check your spam folder if you do not see the email.
+              </p>
+
+              <p className="mt-2 text-xs text-slate-500">
+                You can close this window now.
+              </p>
+
+              <div className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => window.close()}
+                  className="rounded-xl bg-[#75C043] px-5 py-3 font-semibold text-slate-950 hover:bg-amber-500 transition disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+
+              <p className="mt-2 text-xs text-slate-500 text-center">
+                After confirming your email, return here and sign in.
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="mx-auto max-w-lg px-6 py-16">
@@ -192,11 +239,6 @@ export default function SignUpPage() {
 
             {(state?.error || emailError || matchError) && (
               <p className="text-sm text-red-400">{matchError ?? state?.error ?? emailError}</p>
-            )}
-            {showSignUpSuccess && (
-              <p className="text-sm text-emerald-400">
-                Check your Frontier Airlines email and click the confirmation link to finish signing up.
-              </p>
             )}
             {showWaitlistSuccess && (
               <p className="text-sm text-emerald-400">{WAITLIST_SUCCESS_MESSAGE}</p>
