@@ -16,14 +16,16 @@ begin
   if r not in ('super_admin', 'tenant_admin', 'pilot', 'flight_attendant') then
     r := 'pilot';
   end if;
-  insert into public.profiles (id, email, tenant, portal, role, plan)
+  insert into public.profiles (id, email, tenant, portal, role, full_name, employee_number, subscription_tier)
   values (
     new.id,
     coalesce(new.email, ''),
     t,
     p,
     r,
-    coalesce(nullif(trim(new.raw_user_meta_data->>'plan'), ''), 'free')
+    nullif(trim(new.raw_user_meta_data->>'full_name'), ''),
+    nullif(trim(new.raw_user_meta_data->>'employee_number'), ''),
+    'free'
   )
   on conflict (id) do nothing;
   return new;

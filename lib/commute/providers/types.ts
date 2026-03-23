@@ -1,3 +1,5 @@
+import type { OperationalStatus } from "@/lib/commute/operational-status-types";
+
 export type CommuteRisk = "recommended" | "risky" | "not_recommended";
 
 export type CommuteSearchParams = {
@@ -39,4 +41,6 @@ export type CommuteFlightOption = {
   dep_gate?: string | null;
   arr_gate?: string | null;
   aircraft_type?: string | null;
-};
+  /** Canonical operational status (from data layer). */
+  operationalStatus?: OperationalStatus;
+}

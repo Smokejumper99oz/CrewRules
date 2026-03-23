@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { subMinutes, subDays, addDays } from "date-fns";
 import type { CommuteFlightOption } from "@/lib/commute/providers/types";
-import { parseAviationstackTs } from "@/lib/aviationstack";
 import { getCommuteFlights } from "@/app/frontier/pilots/portal/commute/actions";
 import type { CommuteFlight } from "@/lib/aviationstack";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
@@ -12,6 +11,10 @@ import type { Profile } from "@/lib/profile";
 import { AirlineLogo } from "@/components/airline-logo";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { computeDelayInfo, getDelayStatusLabel, type DelayInfo } from "@/lib/flight-delay";
+import {
+  operationalStatusToDisplayLabel,
+  type OperationalStatus,
+} from "@/lib/commute/operational-status-types";
 
 function fmtHM(totalMinutes: number) {
   const h = Math.floor(totalMinutes / 60);
@@ -73,6 +76,13 @@ function formatLastUpdate(iso: string | null, baseTz: string): string | null {
   return `Last update: ${formatInTimeZone(d, baseTz, "HH:mm")} (LOCAL)`;
 }
 
+/** Return YYYY-MM-DD for the day before the given date string. */
+function subtractDay(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const prev = new Date(Date.UTC(y, m - 1, d - 1));
+  return prev.toISOString().slice(0, 10);
+}
+
 function parseDutyStartAirport(route?: string | null): string | null {
   if (!route) return null;
   const m = route.toUpperCase().match(/([A-Z]{3})\s*(?:→|->|-)/);
@@ -97,65 +107,97 @@ function sortFlights(
   });
 }
 
-/** Convert raw commute flights to CommuteFlightOption[] for 2-leg legs. No report cutoff or state. */
+/** Shared conversion: CommuteFlight → CommuteFlightOption. Used by direct and 2-leg paths. */
+function commuteFlightToOption(
+  f: CommuteFlight,
+  originTzVal: string,
+  destTzVal: string,
+  id: string,
+  overrides?: { risk?: "recommended" | "risky" | "not_recommended"; reason?: string }
+): CommuteFlightOption | null {
+  const stripOffset = (s: string) => s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
+  const depTz = f.origin_tz ?? originTzVal;
+  const arrTz = f.dest_tz ?? destTzVal;
+  const depRaw = f.departureTime ?? "";
+  const arrRaw = f.arrivalTime ?? "";
+  const depClean = stripOffset(depRaw);
+  const arrClean = stripOffset(arrRaw);
+  if (!depClean || !arrClean) return null;
+  let depUtc: string;
+  let arrUtc: string;
+  const depIsUtc = depRaw.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(depRaw);
+  const arrIsUtc = arrRaw.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(arrRaw);
+  try {
+    if (depIsUtc && arrIsUtc) {
+      depUtc = new Date(depRaw).toISOString();
+      arrUtc = new Date(arrRaw).toISOString();
+    } else {
+      depUtc = fromZonedTime(depClean, depTz).toISOString();
+      arrUtc = fromZonedTime(arrClean, arrTz).toISOString();
+    }
+  } catch {
+    return null;
+  }
+  // Never show arrival before departure. Fix arr = dep + duration instead of dropping.
+  let depUtcDate = new Date(depUtc);
+  let arrUtcDate = new Date(arrUtc);
+  if (arrUtcDate.getTime() <= depUtcDate.getTime()) {
+    const durMin = f.durationMinutes ?? 60;
+    const fallbackDur = durMin >= 30 ? durMin : 60;
+    arrUtc = new Date(depUtcDate.getTime() + fallbackDur * 60_000).toISOString();
+    arrUtcDate = new Date(arrUtc);
+  }
+  // Debug: DL 1946 ATL-SJU commuteFlightToOption output (remove after root cause found)
+  const isDl1946AtlSju =
+    (f.origin === "ATL" || f.origin === "atl") &&
+    (f.destination === "SJU" || f.destination === "sju") &&
+    (f.carrier === "DL" || f.carrier === "dl") &&
+    /1946/.test(f.flightNumber ?? "");
+  if (isDl1946AtlSju && typeof window !== "undefined") {
+    const durMin = Math.round((new Date(arrUtc).getTime() - new Date(depUtc).getTime()) / 60000);
+    console.log("[Commute Assist] DL 1946 ATL→SJU commuteFlightToOption", {
+      input: { departureTime: f.departureTime, arrivalTime: f.arrivalTime },
+      output: { depUtc, arrUtc, durationMinutes: durMin },
+    });
+  }
+  return {
+    id,
+    carrier: f.carrier,
+    flight: stripCarrierFromFlight(f.flightNumber, f.carrier),
+    depUtc,
+    arrUtc,
+    nonstop: true,
+    risk: overrides?.risk ?? "recommended",
+    reason: overrides?.reason ?? `Leg • ${fmtHM(f.durationMinutes)}`,
+    originTz: depTz,
+    destTz: arrTz,
+    dep_scheduled_raw: f.dep_scheduled_raw,
+    dep_estimated_raw: f.dep_estimated_raw,
+    dep_actual_raw: f.dep_actual_raw,
+    dep_delay_min: f.dep_delay_min,
+    arr_scheduled_raw: f.arr_scheduled_raw,
+    arr_estimated_raw: f.arr_estimated_raw,
+    arr_actual_raw: f.arr_actual_raw,
+    arr_delay_min: f.arr_delay_min,
+    status: f.status,
+    dep_gate: f.dep_gate,
+    arr_gate: f.arr_gate,
+    aircraft_type: f.aircraft_type,
+    operationalStatus: f.operationalStatus,
+  };
+}
+
+/** Convert raw commute flights to CommuteFlightOption[] for 2-leg legs. Uses shared converter. */
 function convertRawFlightsToLegOptions(
   flights: CommuteFlight[],
   originTzVal: string,
   destTzVal: string,
   idPrefix: string
 ): CommuteFlightOption[] {
-  const stripOffset = (s: string) => s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
   const options: CommuteFlightOption[] = [];
   for (let i = 0; i < flights.length; i++) {
-    const f = flights[i];
-    const depTz = f.origin_tz ?? originTzVal;
-    const arrTz = f.dest_tz ?? destTzVal;
-    const depRaw = f.departureTime ?? "";
-    const arrRaw = f.arrivalTime ?? "";
-    const depClean = stripOffset(depRaw);
-    const arrClean = stripOffset(arrRaw);
-    if (!depClean || !arrClean) continue;
-    let depUtc: string;
-    let arrUtc: string;
-    const depIsUtc = depRaw.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(depRaw);
-    const arrIsUtc = arrRaw.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(arrRaw);
-    try {
-      if (depIsUtc && arrIsUtc) {
-        depUtc = new Date(depRaw).toISOString();
-        arrUtc = new Date(arrRaw).toISOString();
-      } else {
-        depUtc = fromZonedTime(depClean, depTz).toISOString();
-        arrUtc = fromZonedTime(arrClean, arrTz).toISOString();
-      }
-    } catch {
-      continue;
-    }
-    if (new Date(arrUtc).getTime() <= new Date(depUtc).getTime()) continue;
-    const opt: CommuteFlightOption = {
-      id: `${idPrefix}-${f.flightNumber}-${f.departureTime}-${i}`,
-      carrier: f.carrier,
-      flight: stripCarrierFromFlight(f.flightNumber, f.carrier),
-      depUtc,
-      arrUtc,
-      nonstop: true,
-      risk: "recommended",
-      reason: `Leg • ${fmtHM(f.durationMinutes)}`,
-      originTz: depTz,
-      destTz: arrTz,
-      dep_scheduled_raw: f.dep_scheduled_raw,
-      dep_estimated_raw: f.dep_estimated_raw,
-      dep_actual_raw: f.dep_actual_raw,
-      dep_delay_min: f.dep_delay_min,
-      arr_scheduled_raw: f.arr_scheduled_raw,
-      arr_estimated_raw: f.arr_estimated_raw,
-      arr_actual_raw: f.arr_actual_raw,
-      arr_delay_min: f.arr_delay_min,
-      status: f.status,
-      dep_gate: f.dep_gate,
-      arr_gate: f.arr_gate,
-      aircraft_type: f.aircraft_type,
-    };
-    options.push(opt);
+    const opt = commuteFlightToOption(flights[i], originTzVal, destTzVal, `${idPrefix}-${flights[i].flightNumber}-${flights[i].departureTime}-${i}`);
+    if (opt) options.push(opt);
   }
   return options;
 }
@@ -192,11 +234,56 @@ type TwoLegOption = {
   arrUtc: string;
 };
 
+/** Max connection time (minutes) for 2-leg Cards display. Connections longer than this are suppressed. */
+const TWO_LEG_MAX_CONNECTION_MINUTES = 240;
+/** Max onward options to show per first leg (prefer shortest connection). */
+const TWO_LEG_MAX_ONWARD_PER_LEG1 = 2;
+
+/** Temporary: sanity check for 2-leg. Suppress broken itineraries until feature is rebuilt. */
+function isTwoLegOptionSane(opt: TwoLegOption): boolean {
+  const leg1Dep = new Date(opt.leg1.depUtc).getTime();
+  const leg1Arr = new Date(opt.leg1.arrUtc).getTime();
+  const leg2Dep = new Date(opt.leg2.depUtc).getTime();
+  const leg2Arr = new Date(opt.leg2.arrUtc).getTime();
+  if (leg1Arr <= leg1Dep) return false; // leg1: arrival before departure
+  if (leg2Arr <= leg2Dep) return false; // leg2: arrival before departure
+  if (leg2Dep < leg1Arr) return false;  // leg2 dep before leg1 arr (negative connection)
+  const connectMin = durationMinutesUtc(opt.leg1.arrUtc, opt.leg2.depUtc);
+  if (connectMin <= 0) return false;   // connection must be positive
+  return true;
+}
+
+/** Filter 2-leg options for display: sanity check, cap connection time, keep best 1–2 onward per first leg. */
+function filterTwoLegOptionsForDisplay(options: TwoLegOption[]): TwoLegOption[] {
+  const sane = options.filter(isTwoLegOptionSane);
+  const byLeg1 = new Map<string, TwoLegOption[]>();
+  for (const opt of sane) {
+    const connectMin = durationMinutesUtc(opt.leg1.arrUtc, opt.leg2.depUtc);
+    if (connectMin > TWO_LEG_MAX_CONNECTION_MINUTES) continue;
+    const key = opt.leg1.id;
+    if (!byLeg1.has(key)) byLeg1.set(key, []);
+    byLeg1.get(key)!.push(opt);
+  }
+  const result: TwoLegOption[] = [];
+  for (const opts of byLeg1.values()) {
+    opts.sort((a, b) => {
+      const ca = durationMinutesUtc(a.leg1.arrUtc, a.leg2.depUtc);
+      const cb = durationMinutesUtc(b.leg1.arrUtc, b.leg2.depUtc);
+      return ca - cb;
+    });
+    result.push(...opts.slice(0, TWO_LEG_MAX_ONWARD_PER_LEG1));
+  }
+  return result.sort((a, b) => new Date(a.depUtc).getTime() - new Date(b.depUtc).getTime());
+}
+
 const PAGE_SIZE = 5;
 
 /** Client cache TTL: 15 minutes. Avoids API calls when navigating back to Dashboard. */
 const COMMUTE_CACHE_TTL_MS = 15 * 60 * 1000;
 const COMMUTE_CACHE_PREFIX = "crewrules_commute_";
+
+/** Bump when Commute Assist logic changes (times, status derivation). Invalidates stale sessionStorage. */
+const COMMUTE_CLIENT_CACHE_VERSION = 2;
 
 function getCommuteCacheKey(origin: string, destination: string, date: string, direction: string): string {
   return `${COMMUTE_CACHE_PREFIX}${origin}_${destination}_${date}_${direction}`;
@@ -207,8 +294,10 @@ function getCommuteCache(key: string): { flights: CommuteFlight[]; originTz: str
   try {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
-    const { flights, originTz, destTz, fetchedAt, notice, cachedAt } = JSON.parse(raw);
-    if (Date.now() - cachedAt > COMMUTE_CACHE_TTL_MS) return null;
+    const parsed = JSON.parse(raw);
+    const { flights, originTz, destTz, fetchedAt, notice, cachedAt, version } = parsed;
+    if (version !== COMMUTE_CLIENT_CACHE_VERSION) return null;
+    if (Date.now() - (cachedAt ?? 0) > COMMUTE_CACHE_TTL_MS) return null;
     return { flights, originTz, destTz, fetchedAt, notice };
   } catch {
     return null;
@@ -218,7 +307,19 @@ function getCommuteCache(key: string): { flights: CommuteFlight[]; originTz: str
 function setCommuteCache(key: string, data: { flights: CommuteFlight[]; originTz: string; destTz: string; fetchedAt: string | null; notice: string | null }) {
   if (typeof window === "undefined") return;
   try {
-    sessionStorage.setItem(key, JSON.stringify({ ...data, cachedAt: Date.now() }));
+    sessionStorage.setItem(
+      key,
+      JSON.stringify({ ...data, cachedAt: Date.now(), version: COMMUTE_CLIENT_CACHE_VERSION })
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function clearCommuteCache(key: string) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(key);
   } catch {
     // ignore
   }
@@ -239,6 +340,130 @@ const riskBorderStyles = {
   risky: "border-l-4 border-l-amber-500",
   not_recommended: "border-l-4 border-l-red-500",
 };
+
+function getStatusBadgeClass(label: OperationalStatus["label"]): string {
+  const base = "px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide uppercase ";
+  switch (label) {
+    case "cancelled":
+      return base + "bg-red-500/20 text-red-400 border border-red-500/40";
+    case "delayed":
+      return base + "bg-amber-500/20 text-amber-400 border border-amber-500/40";
+    case "on_time":
+      return base + "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30";
+    case "unknown":
+      return base + "bg-slate-500/20 text-slate-300 border border-slate-500/40";
+    default:
+      return base + "bg-slate-500/20 text-slate-300 border border-slate-500/40";
+  }
+}
+
+/** Badge text for Commute Assist. Matches direct flights: "Delayed" (no +Xm); scheduled vs actual shown in TimeBlock. */
+function getStatusLabelForDisplay(os: OperationalStatus | null, legacyDi: DelayInfo | null): string {
+  if (os) return operationalStatusToDisplayLabel(os.label);
+  return getDelayStatusLabel(legacyDi!);
+}
+
+/** Compact leg summary for 2-leg horizontal row. Uses operationalStatus when available, else legacy computeDelayInfo. */
+function TwoLegCompactLeg({
+  opt,
+  origin,
+  destination,
+  originTz,
+  destTz,
+  isLastFlight,
+}: {
+  opt: CommuteFlightOption;
+  origin: string;
+  destination: string;
+  originTz: string;
+  destTz: string;
+  isLastFlight?: boolean;
+}) {
+  const depUtc = opt.depUtc;
+  const arrUtc = opt.arrUtc;
+  if (new Date(arrUtc).getTime() <= new Date(depUtc).getTime()) return null;
+
+  const depTz = resolveDisplayTz(opt.originTz, originTz, origin);
+  const arrTz = resolveDisplayTz(opt.destTz, destTz, destination);
+  const depSched = formatInTimeZone(new Date(depUtc), depTz, "HH:mm");
+  const arrSched = formatInTimeZone(new Date(arrUtc), arrTz, "HH:mm");
+  const durMin = durationMinutesUtc(depUtc, arrUtc);
+  const durStr = fmtHM(durMin);
+  const dep = new Date(depUtc);
+  const arr = new Date(arrUtc);
+  const dateStr = formatInTimeZone(dep, depTz, "EEE • MMM d");
+  const depDateStr = formatInTimeZone(dep, depTz, "yyyy-MM-dd");
+  const arrDateStr = formatInTimeZone(arr, arrTz, "yyyy-MM-dd");
+  const arrivesNextDay = arrDateStr > depDateStr;
+  const flightLabel = formatFlightLabel(opt.carrier, opt.flight);
+
+  const os = opt.operationalStatus;
+  const legacyDi = !os ? computeDelayInfo(opt, depTz, arrTz) : null;
+  const depDisplay = os?.dep
+    ? { scheduled: os.dep.scheduled, actual: os.dep.actual !== os.dep.scheduled ? os.dep.actual : undefined }
+    : { scheduled: depSched, actual: undefined as string | undefined };
+  const arrDisplay = os?.arr
+    ? { scheduled: os.arr.scheduled, actual: os.arr.actual !== os.arr.scheduled ? os.arr.actual : undefined }
+    : { scheduled: arrSched, actual: undefined as string | undefined };
+  const statusLabel = getStatusLabelForDisplay(os, legacyDi);
+  const statusBadgeClass = os
+    ? getStatusBadgeClass(os.label)
+    : legacyDi!.cancelled
+      ? getStatusBadgeClass("cancelled")
+      : legacyDi!.dep || legacyDi!.arr
+        ? getStatusBadgeClass("delayed")
+        : getStatusBadgeClass("on_time");
+  const isCancelled = os ? os.label === "cancelled" : legacyDi!.cancelled;
+  const isDelayed = os ? os.label === "delayed" : !!(legacyDi!.dep || legacyDi!.arr);
+
+  return (
+    <div className={`flex-1 basis-0 min-w-0 rounded-lg border border-slate-700/60 bg-slate-900/40 pl-2.5 pr-2.5 py-2 ${riskBorderStyles[opt.risk]}`}>
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs font-semibold text-slate-400">{dateStr}</span>
+        <span className={statusBadgeClass}>
+          {statusLabel}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-2 mt-0.5">
+        <div className="flex flex-col items-start">
+          <TimeBlock scheduled={depDisplay.scheduled} actual={depDisplay.actual} isDelayed={isDelayed} isCancelled={isCancelled} className="text-xl" />
+          {isLastFlight && (
+            <span className="text-xs font-semibold text-amber-400/90 mt-0.5">Last Flight</span>
+          )}
+        </div>
+        <span className="text-[11px] tabular-nums font-medium text-slate-300 bg-slate-800/50 border border-slate-700/40 px-1.5 py-0.5 rounded">
+          {origin} → {destination}
+        </span>
+        <div className="flex flex-col items-end">
+          <TimeBlock scheduled={arrDisplay.scheduled} actual={arrDisplay.actual} isDelayed={isDelayed} isCancelled={isCancelled} className="text-xl" />
+          {arrivesNextDay && (
+            <span className="text-xs font-semibold text-slate-300 mt-0.5">+1 day</span>
+          )}
+        </div>
+      </div>
+      <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1 flex-wrap">
+        <AirlineLogo carrier={(opt.carrier || flightLabel.match(/^([A-Z0-9]{2})/)?.[1]) ?? ""} size={20} />
+        <span className="text-slate-400 font-medium font-mono tabular-nums">{flightLabel}</span>
+        {(opt.dep_gate || opt.arr_gate) && (
+          <>
+            <span className="text-slate-600">•</span>
+            <span className="tabular-nums">
+              {[opt.dep_gate && `DEP ${opt.dep_gate}`, opt.arr_gate && `ARR ${opt.arr_gate}`].filter(Boolean).join(" • ")}
+            </span>
+          </>
+        )}
+        <span className="text-slate-600">•</span>
+        <span>Flight time {durStr}</span>
+        {opt.aircraft_type && (
+          <>
+            <span className="text-slate-600">•</span>
+            <span className="tabular-nums">{opt.aircraft_type}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function TimeBlock({
   scheduled,
@@ -282,6 +507,7 @@ function CommuteFlightCard({
   originTz,
   destTz,
   isLastFlight,
+  nested,
 }: {
   opt: CommuteFlightOption;
   baseTz: string;
@@ -290,6 +516,7 @@ function CommuteFlightCard({
   originTz: string;
   destTz: string;
   isLastFlight?: boolean;
+  nested?: boolean;
 }) {
   const depTz = resolveDisplayTz(opt.originTz, originTz, origin);
   const arrTz = resolveDisplayTz(opt.destTz, destTz, destination);
@@ -301,31 +528,40 @@ function CommuteFlightCard({
   const durMin = durationMinutesUtc(opt.depUtc, opt.arrUtc);
   const durStr = fmtHM(durMin);
   const flightLabel = formatFlightLabel(opt.carrier, opt.flight);
-  const delayInfo = computeDelayInfo(opt, depTz, arrTz);
-
-  const depDisplay = delayInfo.dep ?? { scheduled: depSched, actual: undefined };
-  const arrDisplay = delayInfo.arr ?? { scheduled: arrSched, actual: undefined };
+  const os = opt.operationalStatus;
+  const legacyDi = !os ? computeDelayInfo(opt, depTz, arrTz) : null;
+  const depDisplay = os?.dep
+    ? { scheduled: os.dep.scheduled, actual: os.dep.actual !== os.dep.scheduled ? os.dep.actual : undefined }
+    : { scheduled: depSched, actual: undefined as string | undefined };
+  const arrDisplay = os?.arr
+    ? { scheduled: os.arr.scheduled, actual: os.arr.actual !== os.arr.scheduled ? os.arr.actual : undefined }
+    : { scheduled: arrSched, actual: undefined as string | undefined };
+  const statusLabel = getStatusLabelForDisplay(os, legacyDi);
+  const statusBadgeClass = os
+    ? getStatusBadgeClass(os.label)
+    : legacyDi!.cancelled
+      ? getStatusBadgeClass("cancelled")
+      : legacyDi!.dep || legacyDi!.arr
+        ? getStatusBadgeClass("delayed")
+        : getStatusBadgeClass("on_time");
+  const isCancelled = os ? os.label === "cancelled" : legacyDi!.cancelled;
+  const isDelayed = os ? os.label === "delayed" : !!(legacyDi!.dep || legacyDi!.arr);
   const depDateStr = formatInTimeZone(dep, depTz, "yyyy-MM-dd");
   const arrDateStr = formatInTimeZone(arr, arrTz, "yyyy-MM-dd");
   const arrivesNextDay = arrDateStr > depDateStr;
 
   return (
     <div
-      className={`rounded-lg border border-slate-700/60 bg-slate-900/40 pl-3 pr-3 py-2.5 ${riskBorderStyles[opt.risk]}`}
+      className={
+        nested
+          ? `pl-3 pr-3 py-2 ${riskBorderStyles[opt.risk]}`
+          : `rounded-lg border border-slate-700/60 bg-slate-900/40 pl-3 pr-3 py-2.5 ${riskBorderStyles[opt.risk]}`
+      }
     >
       <div className="flex items-center gap-2">
         <span className="text-sm font-semibold text-slate-400">{dateStr}</span>
-        <span
-          className={[
-            "px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide uppercase",
-            delayInfo.cancelled
-              ? "bg-red-500/20 text-red-400 border border-red-500/40"
-              : (delayInfo.dep || delayInfo.arr)
-                ? "bg-amber-500/20 text-amber-400 border border-amber-500/40"
-                : "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30",
-          ].join(" ")}
-        >
-          {getDelayStatusLabel(delayInfo)}
+        <span className={statusBadgeClass}>
+          {statusLabel}
         </span>
       </div>
       <div className="flex items-baseline gap-2 mt-1">
@@ -333,8 +569,8 @@ function CommuteFlightCard({
           <TimeBlock
             scheduled={depDisplay.scheduled}
             actual={depDisplay.actual}
-            isDelayed={!!delayInfo.dep}
-            isCancelled={delayInfo.cancelled}
+            isDelayed={isDelayed}
+            isCancelled={isCancelled}
             className="text-2xl"
           />
           {isLastFlight && (
@@ -348,8 +584,8 @@ function CommuteFlightCard({
           <TimeBlock
             scheduled={arrDisplay.scheduled}
             actual={arrDisplay.actual}
-            isDelayed={!!delayInfo.arr}
-            isCancelled={delayInfo.cancelled}
+            isDelayed={isDelayed}
+            isCancelled={isCancelled}
             className="text-2xl"
           />
           {arrivesNextDay && (
@@ -360,7 +596,7 @@ function CommuteFlightCard({
       <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
         <AirlineLogo carrier={(opt.carrier || flightLabel.match(/^([A-Z0-9]{2})/)?.[1]) ?? ""} size={24} />
         <span className="text-slate-300 font-medium font-mono tabular-nums">{flightLabel}</span>
-        {delayInfo.cancelled && (
+        {isCancelled && (
           <span className="ml-1 px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-semibold text-[10px] tracking-wide uppercase">
             Cancelled
           </span>
@@ -413,10 +649,24 @@ function CommuteFlightRow({
   const durMin = durationMinutesUtc(opt.depUtc, opt.arrUtc);
   const durStr = fmtHM(durMin);
   const flightLabel = formatFlightLabel(opt.carrier, opt.flight);
-  const delayInfo = computeDelayInfo(opt, depTz, arrTz);
-
-  const depDisplay = delayInfo.dep ?? { scheduled: depSched, actual: undefined };
-  const arrDisplay = delayInfo.arr ?? { scheduled: arrSched, actual: undefined };
+  const os = opt.operationalStatus;
+  const legacyDi = !os ? computeDelayInfo(opt, depTz, arrTz) : null;
+  const depDisplay = os?.dep
+    ? { scheduled: os.dep.scheduled, actual: os.dep.actual !== os.dep.scheduled ? os.dep.actual : undefined }
+    : { scheduled: depSched, actual: undefined as string | undefined };
+  const arrDisplay = os?.arr
+    ? { scheduled: os.arr.scheduled, actual: os.arr.actual !== os.arr.scheduled ? os.arr.actual : undefined }
+    : { scheduled: arrSched, actual: undefined as string | undefined };
+  const statusLabel = getStatusLabelForDisplay(os, legacyDi);
+  const statusBadgeClass = os
+    ? getStatusBadgeClass(os.label)
+    : legacyDi!.cancelled
+      ? getStatusBadgeClass("cancelled")
+      : legacyDi!.dep || legacyDi!.arr
+        ? getStatusBadgeClass("delayed")
+        : getStatusBadgeClass("on_time");
+  const isCancelled = os ? os.label === "cancelled" : legacyDi!.cancelled;
+  const isDelayed = os ? os.label === "delayed" : !!(legacyDi!.dep || legacyDi!.arr);
   const depDateStr = formatInTimeZone(dep, depTz, "yyyy-MM-dd");
   const arrDateStr = formatInTimeZone(arr, arrTz, "yyyy-MM-dd");
   const arrivesNextDay = arrDateStr > depDateStr;
@@ -426,22 +676,13 @@ function CommuteFlightRow({
     <>
       <AirlineLogo carrier={carrierForLogo} size={20} />
       <span className="font-mono tabular-nums font-medium text-slate-300">{flightLabel}</span>
-      {delayInfo.cancelled && <><span className="text-slate-500"> </span><span className="text-red-400 font-semibold">Cancelled</span></>}
+      {isCancelled && <><span className="text-slate-500"> </span><span className="text-red-400 font-semibold">Cancelled</span></>}
     </>
   );
 
   const statusBadge = (
-    <span
-      className={[
-        "px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide uppercase",
-        delayInfo.cancelled
-          ? "bg-red-500/20 text-red-400 border border-red-500/40"
-          : (delayInfo.dep || delayInfo.arr)
-            ? "bg-amber-500/20 text-amber-400 border border-amber-500/40"
-            : "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30",
-      ].join(" ")}
-    >
-      {getDelayStatusLabel(delayInfo)}
+    <span className={statusBadgeClass}>
+      {statusLabel}
     </span>
   );
 
@@ -463,8 +704,8 @@ function CommuteFlightRow({
             <TimeBlock
               scheduled={depDisplay.scheduled}
               actual={depDisplay.actual}
-              isDelayed={!!delayInfo.dep}
-              isCancelled={delayInfo.cancelled}
+              isDelayed={isDelayed}
+              isCancelled={isCancelled}
               className="text-xl"
             />
             {isLastFlight && (
@@ -477,8 +718,8 @@ function CommuteFlightRow({
             <TimeBlock
               scheduled={arrDisplay.scheduled}
               actual={arrDisplay.actual}
-              isDelayed={!!delayInfo.arr}
-              isCancelled={delayInfo.cancelled}
+              isDelayed={isDelayed}
+              isCancelled={isCancelled}
               className="text-xl"
             />
             {arrivesNextDay && (
@@ -511,8 +752,8 @@ function CommuteFlightRow({
             <TimeBlock
               scheduled={depDisplay.scheduled}
               actual={depDisplay.actual}
-              isDelayed={!!delayInfo.dep}
-              isCancelled={delayInfo.cancelled}
+              isDelayed={isDelayed}
+              isCancelled={isCancelled}
               className="text-lg font-semibold"
             />
             {isLastFlight && (
@@ -525,8 +766,8 @@ function CommuteFlightRow({
             <TimeBlock
               scheduled={arrDisplay.scheduled}
               actual={arrDisplay.actual}
-              isDelayed={!!delayInfo.arr}
-              isCancelled={delayInfo.cancelled}
+              isDelayed={isDelayed}
+              isCancelled={isCancelled}
               className="text-lg font-semibold"
             />
             {arrivesNextDay && (
@@ -575,12 +816,18 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const [refreshing, setRefreshing] = useState(false);
   const [homePage, setHomePage] = useState(1);
   const [alternatePage, setAlternatePage] = useState(1);
+  const [twoLegPage, setTwoLegPage] = useState(1);
   const cardsTopRef = useRef<HTMLDivElement>(null);
   const [viewMode, setViewMode] = useState<"cards" | "board">("cards");
   const [sortBy, setSortBy] = useState<"arrAsc" | "arrDesc" | "durAsc" | "durDesc">("arrAsc");
   const [originTz, setOriginTz] = useState<string>("UTC");
   const [destTz, setDestTz] = useState<string>("UTC");
   const [twoLegOptions, setTwoLegOptions] = useState<TwoLegOption[]>([]);
+  /** 2-leg first-leg only: flights from home/alternate to commute airports. Key = "home-ATL", "home-CLT", etc. */
+  const [twoLegFirstLegGroups, setTwoLegFirstLegGroups] = useState<Record<string, CommuteFlightOption[]>>({});
+  /** 2-leg first-leg full: leg1 + leg2 to crew base. Used when only stop1 is set. */
+  const [twoLegFirstLegOptions, setTwoLegFirstLegOptions] = useState<TwoLegOption[]>([]);
+  const [twoLegFirstLegPage, setTwoLegFirstLegPage] = useState(1);
 
   const baseTz = displaySettings.baseTimezone;
   const arrivalBuffer = profile?.commute_arrival_buffer_minutes ?? 60;
@@ -642,7 +889,9 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     : null;
 
   /** Routes to search: [{ origin, destination, label }]. label = "home" | "alternate" */
+  /** When 2-leg enabled, skip direct routes—user knows there are none; loadTwoLegFlights handles first leg. */
   const routes = useMemo(() => {
+    if (commuteTwoLegEnabled) return [];
     const commuteDate =
       direction === "to_base"
         ? toBaseCommuteSearchDate
@@ -667,6 +916,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     }
     return result;
   }, [
+    commuteTwoLegEnabled,
     direction,
     homeAirport,
     alternateHomeAirport,
@@ -677,9 +927,47 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     dutyEndDateBase,
   ]);
 
-  /** 2-leg routes for future search: [{ origin, stop, destination, label, commuteDate }]. Not yet wired to fetch. */
+  /** 2-leg first-leg routes only: Home/Alternate → Commute Airport 1/2. Uses duty date (day of duty). Same DB as direct. */
+  const twoLegFirstLegRoutes = useMemo(() => {
+    if (!commuteTwoLegEnabled) return [];
+    const stops = [commuteTwoLegStop1, commuteTwoLegStop2]
+      .map((s) => s?.trim().toUpperCase())
+      .filter((s) => s && s.length === 3);
+    const uniqueStops = [...new Set(stops)];
+    if (uniqueStops.length === 0) return [];
+
+    const commuteDate =
+      direction === "to_base"
+        ? dutyDateBase
+        : dutyEndDateBase ?? new Date().toISOString().slice(0, 10);
+
+    const result: { origin: string; destination: string; routeKey: string; commuteDate: string }[] = [];
+    const home = homeAirport?.trim().toUpperCase();
+    const alternate = alternateHomeAirport?.trim().toUpperCase();
+    for (const stop of uniqueStops) {
+      if (home && home.length === 3) {
+        result.push({ origin: home, destination: stop, routeKey: `home-${stop}`, commuteDate });
+      }
+      if (alternate && alternate.length === 3) {
+        result.push({ origin: alternate, destination: stop, routeKey: `alternate-${stop}`, commuteDate });
+      }
+    }
+    return result;
+  }, [
+    commuteTwoLegEnabled,
+    commuteTwoLegStop1,
+    commuteTwoLegStop2,
+    homeAirport,
+    alternateHomeAirport,
+    direction,
+    dutyDateBase,
+    dutyEndDateBase,
+  ]);
+
+  /** 2-leg routes for full search: [{ origin, stop, destination, label, commuteDate }]. When 2nd commute airport is blank, return [] so we show first-leg only (Home→1st Commute Airport) via twoLegFirstLegRoutes. */
   const twoLegRoutes = useMemo(() => {
     if (!commuteTwoLegEnabled) return [];
+    if (!commuteTwoLegStop2?.trim()) return [];
     const stops = [commuteTwoLegStop1, commuteTwoLegStop2]
       .map((s) => s?.trim().toUpperCase())
       .filter((s) => s && s.length === 3);
@@ -768,7 +1056,6 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
       } else {
         reportAtIso = dutyOkLocal ? dutyStart.toISOString() : `${dutyDateBaseLocal}T12:00:00Z`;
       }
-      const stripOffset = (s: string) => s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
       const isReturn = direction === "to_home";
       const releaseEarliestDepIso =
         isReturn && event.end_time
@@ -777,37 +1064,15 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
       const options: CommuteFlightOption[] = [];
       for (let i = 0; i < flights.length; i++) {
         const f = flights[i];
-        const depTz = f.origin_tz ?? originTzVal;
-        const arrTz = f.dest_tz ?? destTzVal;
-        const depRaw = f.departureTime ?? "";
-        const arrRaw = f.arrivalTime ?? "";
-        const depClean = stripOffset(depRaw);
-        const arrClean = stripOffset(arrRaw);
-        if (!depClean || !arrClean) continue;
-        let depUtc: string;
-        let arrUtc: string;
-        const depIsUtc = depRaw.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(depRaw);
-        const arrIsUtc = arrRaw.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(arrRaw);
-        try {
-          if (depIsUtc && arrIsUtc) {
-            depUtc = new Date(depRaw).toISOString();
-            arrUtc = new Date(arrRaw).toISOString();
-          } else {
-            depUtc = fromZonedTime(depClean, depTz).toISOString();
-            arrUtc = fromZonedTime(arrClean, arrTz).toISOString();
-          }
-        } catch {
-          continue;
-        }
-        // Hide impossible provider rows (arr <= dep) without changing commute rules.
-        if (new Date(arrUtc).getTime() <= new Date(depUtc).getTime()) continue;
-        if (releaseEarliestDepIso && depUtc < releaseEarliestDepIso) continue;
+        const baseOpt = commuteFlightToOption(f, originTzVal, destTzVal, `${destinationLabel}-${f.flightNumber}-${f.departureTime}-${i}`);
+        if (!baseOpt) continue;
+        if (releaseEarliestDepIso && baseOpt.depUtc < releaseEarliestDepIso) continue;
         let risk: "recommended" | "risky" | "not_recommended" = "recommended";
         let reason = "";
         if (isReturn) {
           reason = `Return home • ${fmtHM(f.durationMinutes)}`;
         } else {
-          const bufferMin = minutesBetween(arrUtc, reportAtIso);
+          const bufferMin = minutesBetween(baseOpt.arrUtc, reportAtIso);
           if (bufferMin < arrivalBuffer) {
             risk = "not_recommended";
             reason = `Arrives after cutoff (${bufferMin}m < ${arrivalBuffer}m)`;
@@ -819,31 +1084,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           }
           reason = `${reason} • ${fmtHM(f.durationMinutes)}`;
         }
-        const opt = {
-          id: `${destinationLabel}-${f.flightNumber}-${f.departureTime}-${i}`,
-          carrier: f.carrier,
-          flight: stripCarrierFromFlight(f.flightNumber, f.carrier),
-          depUtc,
-          arrUtc,
-          nonstop: true,
-          risk,
-          reason,
-          originTz: depTz,
-          destTz: arrTz,
-          dep_scheduled_raw: f.dep_scheduled_raw,
-          dep_estimated_raw: f.dep_estimated_raw,
-          dep_actual_raw: f.dep_actual_raw,
-          dep_delay_min: f.dep_delay_min,
-          arr_scheduled_raw: f.arr_scheduled_raw,
-          arr_estimated_raw: f.arr_estimated_raw,
-          arr_actual_raw: f.arr_actual_raw,
-          arr_delay_min: f.arr_delay_min,
-          status: f.status,
-          dep_gate: f.dep_gate,
-          arr_gate: f.arr_gate,
-          aircraft_type: f.aircraft_type,
-        };
-        options.push(opt);
+        options.push({ ...baseOpt, risk, reason });
       }
       const hasLiveTiming = options.some(
         (o) => o.arr_estimated_raw || o.arr_actual_raw || o.dep_estimated_raw || o.dep_actual_raw
@@ -919,7 +1160,8 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                 first3: res.flights?.slice(0, 3).map((f: CommuteFlight) => ({ flightNumber: f.flightNumber, dep: f.departureTime, arr: f.arrivalTime })),
               });
             }
-            applyFlightsToState(res.flights, res.originTz, res.destTz, res.fetchedAt ?? null, res.notice ?? null, route.label);
+            const displayFetchedAt = opts?.forceRefresh ? new Date().toISOString() : (res.fetchedAt ?? null);
+            applyFlightsToState(res.flights, res.originTz, res.destTz, displayFetchedAt, res.notice ?? null, route.label);
             setCommuteCache(cacheKey, {
               flights: res.flights,
               originTz: res.originTz,
@@ -967,55 +1209,77 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     ]
   );
 
-  const loadTwoLegFlights = useCallback(
+  /** 2-leg first-leg only: fetch Home/Alternate → Commute Airport via same getCommuteFlights (same DB as direct). Also fetches leg2 (stop → crew base) and builds full TwoLegOption[] for leg1+leg2 display. */
+  const loadTwoLegFirstLegFlights = useCallback(
     async (opts?: { forceRefresh?: boolean }) => {
-      if (twoLegRoutes.length === 0) {
-        setTwoLegOptions([]);
+      if (twoLegFirstLegRoutes.length === 0) {
+        setTwoLegFirstLegGroups({});
+        setTwoLegFirstLegOptions([]);
         return;
       }
       const MIN_CONNECTION_MINUTES = 30;
       const forceRefresh = opts?.forceRefresh ?? false;
+      if (forceRefresh) setRefreshing(true);
+      try {
+      const groups: Record<string, CommuteFlightOption[]> = {};
       const allOptions: TwoLegOption[] = [];
-      for (const route of twoLegRoutes) {
-        const leg1CacheKey = getCommuteCacheKey(route.origin, route.stop, route.commuteDate, direction);
+      const crewBase = (direction === "to_base"
+        ? (dutyStartAirport ?? baseAirport)?.toUpperCase() ?? ""
+        : "").trim();
+      const home = homeAirport?.trim().toUpperCase();
+      const alternate = alternateHomeAirport?.trim().toUpperCase();
+
+      for (const route of twoLegFirstLegRoutes) {
+        const [labelPart] = route.routeKey.split("-");
+        const leg2Dest = direction === "to_base"
+          ? crewBase
+          : (labelPart === "home" ? home : alternate) ?? "";
+        if (!leg2Dest || leg2Dest.length !== 3) continue;
+
+        const cacheKeyLeg1 = getCommuteCacheKey(route.origin, route.destination, route.commuteDate, direction);
         let leg1Flights: CommuteFlight[] | null = null;
         let leg1OriginTz = "UTC";
         let leg1DestTz = "UTC";
         if (!forceRefresh) {
-          const cached = getCommuteCache(leg1CacheKey);
+          const cached = getCommuteCache(cacheKeyLeg1);
           if (cached) {
             leg1Flights = cached.flights;
             leg1OriginTz = cached.originTz;
             leg1DestTz = cached.destTz;
+            setOriginTz((prev) => (prev === "UTC" ? leg1OriginTz : prev));
+            setDestTz((prev) => (prev === "UTC" ? leg1DestTz : prev));
           }
         }
         if (!leg1Flights) {
-          const res1 = await getCommuteFlights({
+          const res = await getCommuteFlights({
             origin: route.origin,
-            destination: route.stop,
+            destination: route.destination,
             date: route.commuteDate,
             forceRefresh,
           });
-          if (!res1.ok) continue;
-          leg1Flights = res1.flights;
-          leg1OriginTz = res1.originTz;
-          leg1DestTz = res1.destTz;
-          setCommuteCache(leg1CacheKey, {
-            flights: res1.flights,
-            originTz: res1.originTz,
-            destTz: res1.destTz,
-            fetchedAt: res1.fetchedAt ?? null,
-            notice: res1.notice ?? null,
+          if (!res.ok) continue;
+          leg1Flights = res.flights;
+          leg1OriginTz = res.originTz;
+          leg1DestTz = res.destTz;
+          setCommuteCache(cacheKeyLeg1, {
+            flights: res.flights,
+            originTz: res.originTz,
+            destTz: res.destTz,
+            fetchedAt: res.fetchedAt ?? null,
+            notice: res.notice ?? null,
           });
         }
-        const leg1Options = convertRawFlightsToLegOptions(leg1Flights, leg1OriginTz, leg1DestTz, `2leg-${route.label}-${route.stop}-leg1`);
+        const leg1Opts = convertRawFlightsToLegOptions(leg1Flights, leg1OriginTz, leg1DestTz, `2leg-${route.routeKey}`);
+        groups[route.routeKey] = leg1Opts;
+        setOriginTz((prev) => (prev === "UTC" ? leg1OriginTz : prev));
+        setDestTz((prev) => (prev === "UTC" ? leg1DestTz : prev));
 
-        const leg2CacheKey = getCommuteCacheKey(route.stop, route.destination, route.commuteDate, direction);
+        const cacheKeyLeg2 = getCommuteCacheKey(route.destination, leg2Dest, route.commuteDate, direction);
         let leg2Flights: CommuteFlight[] | null = null;
         let leg2OriginTz = "UTC";
         let leg2DestTz = "UTC";
         if (!forceRefresh) {
-          const cached = getCommuteCache(leg2CacheKey);
+          const cached = getCommuteCache(cacheKeyLeg2);
           if (cached) {
             leg2Flights = cached.flights;
             leg2OriginTz = cached.originTz;
@@ -1024,8 +1288,8 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
         }
         if (!leg2Flights) {
           const res2 = await getCommuteFlights({
-            origin: route.stop,
-            destination: route.destination,
+            origin: route.destination,
+            destination: leg2Dest,
             date: route.commuteDate,
             forceRefresh,
           });
@@ -1033,7 +1297,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           leg2Flights = res2.flights;
           leg2OriginTz = res2.originTz;
           leg2DestTz = res2.destTz;
-          setCommuteCache(leg2CacheKey, {
+          setCommuteCache(cacheKeyLeg2, {
             flights: res2.flights,
             originTz: res2.originTz,
             destTz: res2.destTz,
@@ -1041,40 +1305,222 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
             notice: res2.notice ?? null,
           });
         }
-        const leg2Options = convertRawFlightsToLegOptions(leg2Flights, leg2OriginTz, leg2DestTz, `2leg-${route.label}-${route.stop}-leg2`);
-
+        const leg2Opts = convertRawFlightsToLegOptions(leg2Flights, leg2OriginTz, leg2DestTz, `2leg-${route.routeKey}-leg2`);
         const minLeg2DepMs = MIN_CONNECTION_MINUTES * 60 * 1000;
-        for (const leg1 of leg1Options) {
+        const label = labelPart === "home" ? "home" : "alternate";
+        for (const leg1 of leg1Opts) {
           const minLeg2DepIso = new Date(new Date(leg1.arrUtc).getTime() + minLeg2DepMs).toISOString();
-          for (const leg2 of leg2Options) {
+          for (const leg2 of leg2Opts) {
             if (leg2.depUtc >= minLeg2DepIso) {
               allOptions.push({
-                routeKey: `${route.label}-${route.stop}`,
-                label: route.label,
+                routeKey: route.routeKey,
+                label,
                 origin: route.origin,
-                stop: route.stop,
-                destination: route.destination,
+                stop: route.destination,
+                destination: leg2Dest,
                 leg1,
                 leg2,
                 depUtc: leg1.depUtc,
                 arrUtc: leg2.arrUtc,
               });
+              // Debug: DL 1946 ATL-SJU 2-leg option trace (remove after root cause found)
+              if (
+                route.destination === "ATL" &&
+                leg2Dest === "SJU" &&
+                (leg2.carrier === "DL" || leg2.carrier === "dl") &&
+                /1946/.test(leg2.flight ?? "")
+              ) {
+                const connectMin = durationMinutesUtc(leg1.arrUtc, leg2.depUtc);
+                console.log("[Commute Assist] DL 1946 ATL→SJU 2-leg option (loadTwoLegFirstLegFlights)", {
+                  leg1ArrUtc: leg1.arrUtc,
+                  leg2DepUtc: leg2.depUtc,
+                  leg2ArrUtc: leg2.arrUtc,
+                  connectMin,
+                  leg2DurationMin: durationMinutesUtc(leg2.depUtc, leg2.arrUtc),
+                });
+              }
             }
           }
         }
       }
-      console.log("[Commute Assist] loadTwoLegFlights debug", {
-        twoLegRoutesCount: twoLegRoutes.length,
-        allOptionsCount: allOptions.length,
-        sample: allOptions.slice(0, 2).map((o) => ({
-          routeKey: o.routeKey,
-          depUtc: o.depUtc,
-          arrUtc: o.arrUtc,
-        })),
-      });
-      setTwoLegOptions(allOptions);
+      setTwoLegFirstLegGroups(groups);
+      setTwoLegFirstLegOptions(allOptions);
+      setTwoLegFirstLegPage(1);
+      setLastFetchedAt(forceRefresh ? new Date().toISOString() : null);
+      } finally {
+        if (forceRefresh) setRefreshing(false);
+      }
     },
-    [twoLegRoutes, direction, event.start_time, event.end_time, baseTz]
+    [twoLegFirstLegRoutes, direction, dutyStartAirport, baseAirport, homeAirport, alternateHomeAirport]
+  );
+
+  const loadTwoLegFlights = useCallback(
+    async (opts?: { forceRefresh?: boolean }) => {
+      if (twoLegRoutes.length === 0) {
+        setTwoLegOptions([]);
+        setTwoLegPage(1);
+        return;
+      }
+      const MIN_CONNECTION_MINUTES = 30;
+      const forceRefresh = opts?.forceRefresh ?? false;
+      const allOptions: TwoLegOption[] = [];
+      const arriveByMs = arriveBy?.getTime() ?? null;
+      const tryDayPrior =
+        direction === "to_base" && arriveByMs != null && dutyDateBase;
+
+      for (const route of twoLegRoutes) {
+        const leg1Date = route.commuteDate;
+        const leg2Date = route.commuteDate;
+        let leg1Flights: CommuteFlight[] | null = null;
+        let leg1OriginTz = "UTC";
+        let leg1DestTz = "UTC";
+        let leg2Flights: CommuteFlight[] | null = null;
+        let leg2OriginTz = "UTC";
+        let leg2DestTz = "UTC";
+
+        const fetchLeg1 = async (date: string) => {
+          const cacheKey = getCommuteCacheKey(route.origin, route.stop, date, direction);
+          if (!forceRefresh) {
+            const cached = getCommuteCache(cacheKey);
+            if (cached) return { flights: cached.flights, originTz: cached.originTz, destTz: cached.destTz };
+          }
+          const res = await getCommuteFlights({ origin: route.origin, destination: route.stop, date, forceRefresh });
+          if (!res.ok) return null;
+          setCommuteCache(cacheKey, {
+            flights: res.flights,
+            originTz: res.originTz,
+            destTz: res.destTz,
+            fetchedAt: res.fetchedAt ?? null,
+            notice: res.notice ?? null,
+          });
+          return { flights: res.flights, originTz: res.originTz, destTz: res.destTz };
+        };
+
+        const fetchLeg2 = async (date: string) => {
+          const cacheKey = getCommuteCacheKey(route.stop, route.destination, date, direction);
+          if (!forceRefresh) {
+            const cached = getCommuteCache(cacheKey);
+            if (cached) return { flights: cached.flights, originTz: cached.originTz, destTz: cached.destTz };
+          }
+          const res = await getCommuteFlights({
+            origin: route.stop,
+            destination: route.destination,
+            date,
+            forceRefresh,
+          });
+          if (!res.ok) return null;
+          setCommuteCache(cacheKey, {
+            flights: res.flights,
+            originTz: res.originTz,
+            destTz: res.destTz,
+            fetchedAt: res.fetchedAt ?? null,
+            notice: res.notice ?? null,
+          });
+          return { flights: res.flights, originTz: res.originTz, destTz: res.destTz };
+        };
+
+        const buildOptions = (
+          l1: CommuteFlight[],
+          l1Tz: string,
+          l1DestTz: string,
+          l2: CommuteFlight[],
+          l2Tz: string,
+          l2DestTz: string
+        ): TwoLegOption[] => {
+          const l1Opts = convertRawFlightsToLegOptions(l1, l1Tz, l1DestTz, `2leg-${route.label}-${route.stop}-leg1`);
+          const l2Opts = convertRawFlightsToLegOptions(l2, l2Tz, l2DestTz, `2leg-${route.label}-${route.stop}-leg2`);
+          const minLeg2DepMs = MIN_CONNECTION_MINUTES * 60 * 1000;
+          const opts: TwoLegOption[] = [];
+          for (const leg1 of l1Opts) {
+            const minLeg2DepIso = new Date(new Date(leg1.arrUtc).getTime() + minLeg2DepMs).toISOString();
+            for (const leg2 of l2Opts) {
+              if (leg2.depUtc >= minLeg2DepIso) {
+                const opt = {
+                  routeKey: `${route.label}-${route.stop}`,
+                  label: route.label,
+                  origin: route.origin,
+                  stop: route.stop,
+                  destination: route.destination,
+                  leg1,
+                  leg2,
+                  depUtc: leg1.depUtc,
+                  arrUtc: leg2.arrUtc,
+                };
+                opts.push(opt);
+                // Debug: DL 1946 ATL-SJU 2-leg option trace (remove after root cause found)
+                if (
+                  route.stop === "ATL" &&
+                  route.destination === "SJU" &&
+                  (leg2.carrier === "DL" || leg2.carrier === "dl") &&
+                  /1946/.test(leg2.flight ?? "")
+                ) {
+                  const connectMin = durationMinutesUtc(leg1.arrUtc, leg2.depUtc);
+                  console.log("[Commute Assist] DL 1946 ATL→SJU 2-leg option (loadTwoLegFlights)", {
+                    leg1ArrUtc: leg1.arrUtc,
+                    leg2DepUtc: leg2.depUtc,
+                    leg2ArrUtc: leg2.arrUtc,
+                    connectMin,
+                    leg2DurationMin: durationMinutesUtc(leg2.depUtc, leg2.arrUtc),
+                  });
+                }
+              }
+            }
+          }
+          return opts;
+        };
+
+        let leg1Result = await fetchLeg1(leg1Date);
+        if (!leg1Result) continue;
+        leg1Flights = leg1Result.flights;
+        leg1OriginTz = leg1Result.originTz;
+        leg1DestTz = leg1Result.destTz;
+
+        let leg2Result = await fetchLeg2(leg2Date);
+        if (!leg2Result) continue;
+        leg2Flights = leg2Result.flights;
+        leg2OriginTz = leg2Result.originTz;
+        leg2DestTz = leg2Result.destTz;
+
+        let routeOptions = buildOptions(
+          leg1Flights,
+          leg1OriginTz,
+          leg1DestTz,
+          leg2Flights,
+          leg2OriginTz,
+          leg2DestTz
+        );
+
+        if (tryDayPrior && routeOptions.length > 0) {
+          const anyArriveByCutoff = routeOptions.some((o) => new Date(o.arrUtc).getTime() <= arriveByMs);
+          if (!anyArriveByCutoff) {
+            const dayPrior = subtractDay(dutyDateBase);
+            const leg1Prior = await fetchLeg1(dayPrior);
+            const leg2Prior = await fetchLeg2(dutyDateBase);
+            if (leg1Prior && leg2Prior) {
+              const fallbackOptions = buildOptions(
+                leg1Prior.flights,
+                leg1Prior.originTz,
+                leg1Prior.destTz,
+                leg2Prior.flights,
+                leg2Prior.originTz,
+                leg2Prior.destTz
+              );
+              const anyFallbackArriveByCutoff = fallbackOptions.some(
+                (o) => new Date(o.arrUtc).getTime() <= arriveByMs
+              );
+              if (anyFallbackArriveByCutoff || fallbackOptions.length > 0) {
+                routeOptions = fallbackOptions;
+              }
+            }
+          }
+        }
+
+        allOptions.push(...routeOptions);
+      }
+      setTwoLegOptions(allOptions);
+      setTwoLegPage(1);
+    },
+    [twoLegRoutes, direction, arriveBy?.getTime(), dutyDateBase, event.start_time, event.end_time, baseTz]
   );
 
   useEffect(() => {
@@ -1088,12 +1534,29 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   }, [routes, direction, canUseCommute, noCommuteNeeded]);
 
   useEffect(() => {
-    if (canUseCommute && !noCommuteNeeded && commuteMeta && twoLegRoutes.length > 0) {
+    if (commuteTwoLegEnabled && dutyOk && !commuteMeta) {
+      const dutyStart = new Date(event.start_time);
+      const arriveByFormatted = formatInTimeZone(subMinutes(dutyStart, arrivalBuffer), baseTz, "HH:mm");
+      setCommuteMeta({ showInfo: dutyOk, arriveByFormatted, dutyOk });
+    }
+  }, [commuteTwoLegEnabled, dutyOk, commuteMeta, event.start_time, arrivalBuffer, baseTz]);
+
+  useEffect(() => {
+    if (canUseCommute && !noCommuteNeeded && commuteTwoLegEnabled && twoLegFirstLegRoutes.length > 0) {
+      loadTwoLegFirstLegFlights().catch((err) => {
+        console.error("Commute Assist loadTwoLegFirstLegFlights failed", err);
+      });
+    }
+  }, [canUseCommute, noCommuteNeeded, commuteTwoLegEnabled, twoLegFirstLegRoutes, loadTwoLegFirstLegFlights]);
+
+  useEffect(() => {
+    const hasDutyInfo = commuteMeta || (commuteTwoLegEnabled && dutyOk);
+    if (canUseCommute && !noCommuteNeeded && hasDutyInfo && twoLegRoutes.length > 0 && commuteTwoLegEnabled) {
       loadTwoLegFlights().catch((err) => {
         console.error("Commute Assist loadTwoLegFlights failed", err);
       });
     }
-  }, [commuteMeta, canUseCommute, noCommuteNeeded, twoLegRoutes, loadTwoLegFlights]);
+  }, [commuteMeta, commuteTwoLegEnabled, dutyOk, canUseCommute, noCommuteNeeded, twoLegRoutes, loadTwoLegFlights]);
 
   // Tick every 60s when we have lastFetchedAt, so "Updated just now" transitions to timestamp
   useEffect(() => {
@@ -1125,6 +1588,34 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const alternateTotalPages = Math.max(1, Math.ceil(alternateList.length / PAGE_SIZE));
   const homePageItems = homeList.slice((homePage - 1) * PAGE_SIZE, homePage * PAGE_SIZE);
   const alternatePageItems = alternateList.slice((alternatePage - 1) * PAGE_SIZE, alternatePage * PAGE_SIZE);
+  const filteredTwoLegOptions = useMemo(
+    () => filterTwoLegOptionsForDisplay(twoLegOptions),
+    [twoLegOptions]
+  );
+  const twoLegTotalPages = Math.max(1, Math.ceil(filteredTwoLegOptions.length / PAGE_SIZE));
+  const twoLegPageItems = filteredTwoLegOptions.slice((twoLegPage - 1) * PAGE_SIZE, twoLegPage * PAGE_SIZE);
+  const twoLegLastFlightId =
+    filteredTwoLegOptions.length > 0
+      ? filteredTwoLegOptions.reduce((best, o) =>
+          new Date(o.arrUtc).getTime() > new Date(best.arrUtc).getTime() ? o : best
+        ).leg2.id
+      : null;
+
+  const filteredTwoLegFirstLegOptions = useMemo(
+    () => filterTwoLegOptionsForDisplay(twoLegFirstLegOptions),
+    [twoLegFirstLegOptions]
+  );
+  const twoLegFirstLegTotalPages = Math.max(1, Math.ceil(filteredTwoLegFirstLegOptions.length / PAGE_SIZE));
+  const twoLegFirstLegPageItems = filteredTwoLegFirstLegOptions.slice(
+    (twoLegFirstLegPage - 1) * PAGE_SIZE,
+    twoLegFirstLegPage * PAGE_SIZE
+  );
+  const twoLegFirstLegLastFlightId =
+    filteredTwoLegFirstLegOptions.length > 0
+      ? filteredTwoLegFirstLegOptions.reduce((best, o) =>
+          new Date(o.arrUtc).getTime() > new Date(best.arrUtc).getTime() ? o : best
+        ).leg2.id
+      : null;
 
   useEffect(() => {
     if (homeList.length === 0) setHomePage(1);
@@ -1136,6 +1627,16 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     else if (alternatePage > alternateTotalPages) setAlternatePage(alternateTotalPages);
   }, [alternateList.length, alternatePage, alternateTotalPages]);
 
+  useEffect(() => {
+    if (filteredTwoLegOptions.length === 0) setTwoLegPage(1);
+    else if (twoLegPage > twoLegTotalPages) setTwoLegPage(twoLegTotalPages);
+  }, [filteredTwoLegOptions.length, twoLegPage, twoLegTotalPages]);
+
+  useEffect(() => {
+    if (filteredTwoLegFirstLegOptions.length === 0) setTwoLegFirstLegPage(1);
+    else if (twoLegFirstLegPage > twoLegFirstLegTotalPages) setTwoLegFirstLegPage(twoLegFirstLegTotalPages);
+  }, [filteredTwoLegFirstLegOptions.length, twoLegFirstLegPage, twoLegFirstLegTotalPages]);
+
   const didPaginateRef = useRef(false);
   useEffect(() => {
     if (!didPaginateRef.current) {
@@ -1143,9 +1644,9 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
       return;
     }
     cardsTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [homePage, alternatePage]);
+  }, [homePage, alternatePage, twoLegPage, twoLegFirstLegPage]);
 
-  const primaryRoute = routes[0];
+  const primaryRoute = commuteTwoLegEnabled && twoLegFirstLegRoutes[0] ? twoLegFirstLegRoutes[0] : routes[0];
   const displayOrigin = primaryRoute?.origin ?? "";
   const displayDestination = primaryRoute?.destination ?? "";
 
@@ -1173,13 +1674,40 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     );
   }
 
+  const routeLabelItems =
+    twoLegRoutes.length > 0
+      ? twoLegRoutes.map((r, i) => ({
+          ...r,
+          routeText: `${r.origin} → ${r.stop} → ${r.destination}`,
+          key: `${r.label}-${r.stop}`,
+          routeLabel: `Commute ${i + 1}`,
+        }))
+      : commuteTwoLegEnabled && twoLegFirstLegRoutes.length > 0
+        ? twoLegFirstLegRoutes.map((r) => {
+            const [labelPart] = r.routeKey.split("-");
+            const label = labelPart === "home" ? "home" : "alternate";
+            return {
+              ...r,
+              label,
+              routeText: `${r.origin} → ${r.destination}`,
+              key: r.routeKey,
+              routeLabel: label === "home" ? "Home Airport" : "Alternate Option",
+            };
+          })
+        : routes.map((r) => ({
+            ...r,
+            routeText: `${r.origin} → ${r.destination}`,
+            key: r.label,
+            routeLabel: r.label === "home" ? "Commute from Home" : "Commute from Alternate",
+          }));
+
   if (commuteError) {
     return (
       <div className="mt-3 space-y-2">
         <div className="text-sm text-slate-300 space-y-0.5">
-          {routes.map((r) => (
-            <p key={r.label}>
-              {r.label === "home" ? "🏠" : "🅰️"} {r.origin} → {r.destination} • {r.label === "home" ? "Home Airport" : "Alternate Option"}
+          {routeLabelItems.map((r) => (
+            <p key={r.key} className="flex items-center gap-2">
+              {r.label === "home" ? "🏠" : "🅰️"} {r.routeLabel}: {r.routeText}
             </p>
           ))}
         </div>
@@ -1192,9 +1720,9 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     return (
       <div className="mt-3 space-y-2">
         <div className="text-sm text-slate-300 space-y-0.5">
-          {routes.map((r) => (
-            <p key={r.label}>
-              {r.label === "home" ? "🏠" : "🅰️"} {r.origin} → {r.destination} • {r.label === "home" ? "Home Airport" : "Alternate Option"}
+          {routeLabelItems.map((r) => (
+            <p key={r.key} className="flex items-center gap-2">
+              {r.label === "home" ? "🏠" : "🅰️"} {r.routeLabel}: {r.routeText}
             </p>
           ))}
         </div>
@@ -1217,9 +1745,9 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     <div className="mt-3 space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-col gap-0.5">
-          {routes.map((r) => (
-            <p key={r.label} className="text-base font-medium text-slate-300">
-              {r.label === "home" ? "🏠" : "🅰️"} {r.origin} → {r.destination} • {r.label === "home" ? "Home Airport" : "Alternate Option"}
+          {routeLabelItems.map((r) => (
+            <p key={r.key} className="flex items-center gap-2 text-base font-medium text-slate-300">
+              {r.label === "home" ? "🏠" : "🅰️"} {r.routeLabel}: {r.routeText}
             </p>
           ))}
         </div>
@@ -1257,7 +1785,29 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           )}
           <button
             type="button"
-            onClick={() => loadFlights({ forceRefresh: true }).catch((err) => { console.error("Commute Assist refresh failed", err); setCommuteError("Refresh failed."); })}
+            onClick={() => {
+              routes.forEach((r) => clearCommuteCache(getCommuteCacheKey(r.origin, r.destination, r.commuteDate, direction)));
+              twoLegFirstLegRoutes.forEach((r) => {
+                clearCommuteCache(getCommuteCacheKey(r.origin, r.destination, r.commuteDate, direction));
+                const [labelPart] = r.routeKey.split("-");
+                const leg2Dest = direction === "to_base"
+                  ? (dutyStartAirport ?? baseAirport)?.toUpperCase() ?? ""
+                  : (labelPart === "home" ? homeAirport : alternateHomeAirport)?.toUpperCase() ?? "";
+                if (leg2Dest.length === 3) {
+                  clearCommuteCache(getCommuteCacheKey(r.destination, leg2Dest, r.commuteDate, direction));
+                }
+              });
+              twoLegRoutes.forEach((r) => {
+                clearCommuteCache(getCommuteCacheKey(r.origin, r.stop, r.commuteDate, direction));
+                clearCommuteCache(getCommuteCacheKey(r.stop, r.destination, r.commuteDate, direction));
+              });
+              loadFlights({ forceRefresh: true }).catch((err) => { console.error("Commute Assist refresh failed", err); setCommuteError("Refresh failed."); });
+              if (commuteTwoLegEnabled && twoLegFirstLegRoutes.length > 0) {
+                loadTwoLegFirstLegFlights({ forceRefresh: true }).catch((err) => { console.error("Commute Assist 2-leg first-leg refresh failed", err); setCommuteError("Refresh failed."); });
+              } else if (twoLegRoutes.length > 0) {
+                loadTwoLegFlights({ forceRefresh: true }).catch((err) => { console.error("Commute Assist 2-leg refresh failed", err); setCommuteError("Refresh failed."); });
+              }
+            }}
             disabled={refreshing}
             className="touch-target touch-pad rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1 text-[11px] text-slate-200 hover:bg-slate-900/70 disabled:opacity-50"
           >
@@ -1304,15 +1854,16 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
               Timezone data missing for route. Ask an admin to add it in Airports.
             </div>
           )}
-          {!homeList.length && !alternateList.length ? (
+          {!homeList.length && !alternateList.length && !twoLegOptions.length && !(commuteTwoLegEnabled && twoLegFirstLegRoutes.length > 0) ? (
             <p className="text-xs text-slate-500">
               {notice ? "Flight data temporarily unavailable. Use Refresh to try again." : "No commute options found in this window."}
             </p>
           ) : (
-            <div ref={cardsTopRef} className="space-y-6">
+            <div ref={cardsTopRef} className="min-w-0 space-y-6">
               {homeList.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-sm font-semibold text-slate-300">
+                  <p className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                    <span aria-hidden>✈️</span>
                     {direction === "to_home" ? "Flights to Home Airport" : "Flights from Home Airport"}
                   </p>
                   <div className="space-y-2">
@@ -1376,7 +1927,8 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
               )}
               {alternateList.length > 0 && routes.length > 1 && (
                 <div className="space-y-2">
-                  <p className="text-sm font-semibold text-slate-300">
+                  <p className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                    <span aria-hidden>✈️</span>
                     {direction === "to_home" ? "Flights to Alternate Airport" : "Flights from Alternate Airport"}
                   </p>
                   <div className="space-y-2">
@@ -1439,6 +1991,223 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                   )}
                 </div>
               )}
+              {twoLegOptions.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                    <span aria-hidden>✈️</span>
+                    2-Leg Commute Options from Home
+                  </p>
+                  {twoLegRoutes.length > 0 && (
+                    <p className="text-xs text-slate-400">
+                      {twoLegRoutes[0].origin} → {twoLegRoutes[0].stop} → {twoLegRoutes[0].destination}
+                    </p>
+                  )}
+                  <div className="min-w-0 space-y-2">
+                    {twoLegPageItems.map((opt) => {
+                      const connectMin = durationMinutesUtc(opt.leg1.arrUtc, opt.leg2.depUtc);
+                      return (
+                        <div key={`${opt.routeKey}-${opt.leg1.id}-${opt.leg2.id}`} className="min-w-0 w-full rounded-lg border border-slate-700/60 bg-slate-900/40 p-2">
+                          <div className="flex flex-col sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-stretch gap-2 min-w-0">
+                            <TwoLegCompactLeg
+                              opt={opt.leg1}
+                              origin={opt.origin}
+                              destination={opt.stop}
+                              originTz={opt.leg1.originTz ?? originTz}
+                              destTz={opt.leg1.destTz ?? destTz}
+                              isLastFlight={false}
+                            />
+                            <div className="shrink-0 self-center inline-flex items-center justify-center rounded-md border border-slate-700/40 bg-slate-800/50 px-2.5 py-1.5 text-xs text-slate-400">
+                              {fmtHM(connectMin)} connect
+                            </div>
+                            <TwoLegCompactLeg
+                              opt={opt.leg2}
+                              origin={opt.stop}
+                              destination={opt.destination}
+                              originTz={opt.leg2.originTz ?? originTz}
+                              destTz={opt.leg2.destTz ?? destTz}
+                              isLastFlight={opt.leg2.id === twoLegLastFlightId}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {twoLegTotalPages > 1 && (
+                    <div className="flex justify-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setTwoLegPage((p) => Math.max(1, p - 1))}
+                        disabled={twoLegPage <= 1}
+                        className="touch-target touch-pad rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Prev
+                      </button>
+                      {Array.from({ length: twoLegTotalPages }, (_, i) => i + 1).map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setTwoLegPage(p)}
+                          className={`touch-target touch-pad rounded px-2 py-1 text-xs ${p === twoLegPage ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setTwoLegPage((p) => Math.min(twoLegTotalPages, p + 1))}
+                        disabled={twoLegPage >= twoLegTotalPages}
+                        className="touch-target touch-pad rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {(commuteTwoLegEnabled && twoLegFirstLegRoutes.length > 0) && (() => {
+                const hasFullOptions = filteredTwoLegFirstLegOptions.length > 0;
+                const routeOrder = twoLegFirstLegRoutes.map((r) => r.routeKey);
+                const hasAnyLeg1Flights = routeOrder.some((k) => (twoLegFirstLegGroups[k]?.length ?? 0) > 0);
+                if (!hasFullOptions && !hasAnyLeg1Flights) {
+                  return (
+                    <div className="space-y-2">
+                      <p className="flex items-center gap-2 text-sm font-semibold text-slate-300">
+                        {direction === "to_home" ? "🅰️" : "✈️"} Flights to Commute Airports
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        No flights found. Try Refresh or check the date.
+                      </p>
+                    </div>
+                  );
+                }
+                if (hasFullOptions) {
+                  const firstOpt = twoLegFirstLegPageItems[0];
+                  const firstRoute = twoLegFirstLegRoutes.find((r) => r.routeKey === firstOpt?.routeKey) ?? twoLegFirstLegRoutes[0];
+                  const hasHome = filteredTwoLegFirstLegOptions.some((o) => o.label === "home");
+                  const hasAlternate = filteredTwoLegFirstLegOptions.some((o) => o.label === "alternate");
+                  const sectionLabel = hasHome && hasAlternate ? "" : hasHome ? " from Home" : " from Alternate";
+                  return (
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                        <span aria-hidden>✈️</span>
+                        2-Leg Commute Options{sectionLabel}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {firstRoute.origin} → {firstRoute.destination} → {direction === "to_base" ? ((dutyStartAirport ?? baseAirport) ?? "").toUpperCase() : (firstRoute.routeKey.startsWith("home") ? homeAirport : alternateHomeAirport) ?? ""}
+                      </p>
+                      <div className="min-w-0 space-y-2">
+                        {twoLegFirstLegPageItems.map((opt) => {
+                          const connectMin = durationMinutesUtc(opt.leg1.arrUtc, opt.leg2.depUtc);
+                          return (
+                            <div key={`${opt.routeKey}-${opt.leg1.id}-${opt.leg2.id}`} className="min-w-0 w-full rounded-lg border border-slate-700/60 bg-slate-900/40 p-2">
+                              <div className="flex flex-col sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-stretch gap-2 min-w-0">
+                                <TwoLegCompactLeg
+                                  opt={opt.leg1}
+                                  origin={opt.origin}
+                                  destination={opt.stop}
+                                  originTz={opt.leg1.originTz ?? originTz}
+                                  destTz={opt.leg1.destTz ?? destTz}
+                                  isLastFlight={false}
+                                />
+                                <div className="shrink-0 self-center inline-flex items-center justify-center rounded-md border border-slate-700/40 bg-slate-800/50 px-2.5 py-1.5 text-xs text-slate-400">
+                                  {fmtHM(connectMin)} connect
+                                </div>
+                                <TwoLegCompactLeg
+                                  opt={opt.leg2}
+                                  origin={opt.stop}
+                                  destination={opt.destination}
+                                  originTz={opt.leg2.originTz ?? originTz}
+                                  destTz={opt.leg2.destTz ?? destTz}
+                                  isLastFlight={opt.leg2.id === twoLegFirstLegLastFlightId}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {twoLegFirstLegTotalPages > 1 && (
+                        <div className="flex justify-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setTwoLegFirstLegPage((p) => Math.max(1, p - 1))}
+                            disabled={twoLegFirstLegPage <= 1}
+                            className="touch-target touch-pad rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Prev
+                          </button>
+                          {Array.from({ length: twoLegFirstLegTotalPages }, (_, i) => i + 1).map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => setTwoLegFirstLegPage(p)}
+                              className={`touch-target touch-pad rounded px-2 py-1 text-xs ${p === twoLegFirstLegPage ? "bg-slate-600 text-white" : "border border-slate-600 text-slate-300 hover:bg-slate-800"}`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setTwoLegFirstLegPage((p) => Math.min(twoLegFirstLegTotalPages, p + 1))}
+                            disabled={twoLegFirstLegPage >= twoLegFirstLegTotalPages}
+                            className="touch-target touch-pad rounded border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                return (
+                  <div className="space-y-4">
+                    {routeOrder.map((routeKey) => {
+                      const opts = twoLegFirstLegGroups[routeKey] ?? [];
+                      if (opts.length === 0) return null;
+                      const route = twoLegFirstLegRoutes.find((r) => r.routeKey === routeKey)!;
+                      const [labelPart, stop] = routeKey.split("-");
+                      const sectionTitle =
+                        labelPart === "home"
+                          ? `Flights from Home to Commute Airport (${stop})`
+                          : `Flights from Alternate to Commute Airport (${stop})`;
+                      return (
+                        <div key={routeKey} className="space-y-2">
+                          <p className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                            <span aria-hidden>✈️</span>
+                            {sectionTitle}
+                          </p>
+                          <div className="space-y-2">
+                            {opts.map((opt) =>
+                              viewMode === "cards" ? (
+                                <CommuteFlightCard
+                                  key={opt.id}
+                                  opt={opt}
+                                  baseTz={baseTz}
+                                  origin={route.origin}
+                                  destination={route.destination}
+                                  originTz={opt.originTz ?? originTz}
+                                  destTz={opt.destTz ?? destTz}
+                                  isLastFlight={false}
+                                />
+                              ) : (
+                                <CommuteFlightRow
+                                  key={opt.id}
+                                  opt={opt}
+                                  baseTz={baseTz}
+                                  origin={route.origin}
+                                  destination={route.destination}
+                                  originTz={opt.originTz ?? originTz}
+                                  destTz={opt.destTz ?? destTz}
+                                  isLastFlight={false}
+                                />
+                              )
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           )}
           <div className="pt-3 border-t border-slate-700/50 space-y-2">

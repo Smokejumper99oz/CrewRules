@@ -58,7 +58,12 @@ export function ScheduleEventCard({ event, displaySettings, position, compact, l
   const showRoute = event.event_type === "trip" && (hasLegs || (event.route?.trim() ?? false));
 
   const showReportCredit = event.event_type === "trip" || event.event_type === "reserve";
-  const reportPart = reportTimeOverride ?? event.report_time ?? "—";
+  const reportPart =
+    reportTimeOverride ??
+    event.report_time ??
+    (event.event_type === "reserve"
+      ? formatScheduleTime(event.start_time, timeOpts)
+      : "—");
   const tripCredit =
     event.event_type === "trip" && (event.pairing_days != null || event.block_minutes != null)
       ? computeTripCredit(event.pairing_days, event.block_minutes)

@@ -6,10 +6,15 @@ import { getProfile } from "@/lib/profile";
 import { fetchFlightsFromAviationStack } from "@/lib/aviationstack";
 import { fetchFlightsFromAerodataBox } from "@/lib/aerodatabox";
 import { getRouteTzs } from "@/lib/airports";
+import { normalizeFlightTiming } from "@/lib/commute/normalize-flight-timing";
+import { deriveOperationalStatus } from "@/lib/commute/derive-operational-status";
 import type { CommuteFlight } from "@/lib/aviationstack";
 
 /** Cache version for commute_flight_cache. Bump to purge old entries (e.g. 3-flight cache). */
 const CACHE_VERSION = "v3";
+
+/** Derived operationalStatus logic version. Bump when deriveOperationalStatus rules change. Cache read always re-derives; this documents the current rule set. */
+const DERIVED_STATUS_VERSION = 1;
 
 /** When Refresh is pressed, reuse DB cache if fetched within this window. Reduces API usage. */
 const REFRESH_CACHE_FRESHNESS_MS = 10 * 60 * 1000; // 10 minutes
@@ -75,6 +80,8 @@ function dedupeFlights(
   const mergedCount = aviationstackFlights.length + aerodataboxFlights.length;
   const byKey = new Map<string, CommuteFlight>();
   const isTpaSju = origin === "TPA" && destination === "SJU";
+  const isAa1352SavClt = (k: string) =>
+    k.startsWith("AA-1352-") && origin?.toUpperCase() === "SAV" && destination?.toUpperCase() === "CLT";
 
   for (const adb of aerodataboxFlights) {
     const k = flightKey(adb);
@@ -87,6 +94,17 @@ function dedupeFlights(
         departureTime: adb.departureTime,
         arrivalTime: adb.arrivalTime,
       }));
+    }
+    if (isAa1352SavClt(k)) {
+      console.log("[Commute Assist] AA1352 SAV→CLT dedupe ADB entry", {
+        flightKey: k,
+        source: "ADB-only (AS may merge later)",
+        departureTime: adb.departureTime,
+        arrivalTime: adb.arrivalTime,
+        dep_scheduled_raw: adb.dep_scheduled_raw,
+        dep_estimated_raw: adb.dep_estimated_raw,
+        dep_delay_min: adb.dep_delay_min,
+      });
     }
     byKey.set(k, adb);
   }
@@ -104,10 +122,18 @@ function dedupeFlights(
     }
     const existing = byKey.get(k);
     if (existing) {
+      if (isAa1352SavClt(k)) {
+        console.log("[Commute Assist] AA1352 SAV→CLT dedupe MERGED (ADB base + AS overlay)", {
+          flightKey: k,
+          source: "merged",
+        });
+      }
       byKey.set(k, {
         ...existing,
+        dep_scheduled_raw: as.dep_scheduled_raw ?? existing.dep_scheduled_raw,
         dep_estimated_raw: as.dep_estimated_raw ?? existing.dep_estimated_raw,
         dep_actual_raw: as.dep_actual_raw ?? existing.dep_actual_raw,
+        arr_scheduled_raw: as.arr_scheduled_raw ?? existing.arr_scheduled_raw,
         arr_estimated_raw: as.arr_estimated_raw ?? existing.arr_estimated_raw,
         arr_actual_raw: as.arr_actual_raw ?? existing.arr_actual_raw,
         dep_delay_min: as.dep_delay_min ?? existing.dep_delay_min,
@@ -117,6 +143,17 @@ function dedupeFlights(
         arr_gate: as.arr_gate ?? existing.arr_gate,
       });
     } else {
+      if (isAa1352SavClt(k)) {
+        console.log("[Commute Assist] AA1352 SAV→CLT dedupe AS-only", {
+          flightKey: k,
+          source: "AS-only",
+          departureTime: as.departureTime,
+          arrivalTime: as.arrivalTime,
+          dep_scheduled_raw: as.dep_scheduled_raw,
+          dep_estimated_raw: as.dep_estimated_raw,
+          dep_delay_min: as.dep_delay_min,
+        });
+      }
       byKey.set(k, as);
     }
   }
@@ -126,6 +163,18 @@ function dedupeFlights(
     (a, b) =>
       new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime()
   );
+  const aa1352 = unique.find((f) => isAa1352SavClt(flightKey(f)));
+  if (aa1352) {
+    console.log("[Commute Assist] AA1352 SAV→CLT dedupe FINAL", {
+      flightKey: flightKey(aa1352),
+      departureTime: aa1352.departureTime,
+      arrivalTime: aa1352.arrivalTime,
+      dep_scheduled_raw: aa1352.dep_scheduled_raw,
+      dep_estimated_raw: aa1352.dep_estimated_raw,
+      dep_delay_min: aa1352.dep_delay_min,
+      note: "operationalStatus derived after normalize, see next log",
+    });
+  }
   if (isTpaSju) {
     console.log("[Commute Assist] dedupeFlights TPA→SJU after dedupe", JSON.stringify({
       mergedCount,
@@ -139,6 +188,42 @@ function dedupeFlights(
     }));
   }
   return { flights: unique, mergedCount, dedupedCount: unique.length, notice };
+}
+
+/** Carrier priority for code-share deduplication. Lower index = prefer when same physical flight. US majors first. */
+const CARRIER_PRIORITY: Record<string, number> = {
+  DL: 0, AA: 1, UA: 2, AS: 3, B6: 4, WN: 5, F9: 6, NK: 7, G4: 8, SY: 9,
+  AC: 10, WS: 11, AM: 12, BA: 13, LH: 14, AF: 15, KL: 16, EK: 17, QR: 18,
+};
+
+function carrierPriority(carrier: string): number {
+  const c = (carrier ?? "").trim().toUpperCase();
+  return CARRIER_PRIORITY[c] ?? 999;
+}
+
+/** Filter code-share duplicates: same dep/arr times + route = same flight. Keep main carrier only. */
+function filterCodeShareFlights(flights: CommuteFlight[]): CommuteFlight[] {
+  const byPhysicalKey = new Map<string, CommuteFlight[]>();
+  for (const f of flights) {
+    const dep = f.departureTime ?? "";
+    const arr = f.arrivalTime ?? "";
+    const orig = (f.origin ?? "").toUpperCase();
+    const dest = (f.destination ?? "").toUpperCase();
+    const key = `${dep}|${arr}|${orig}|${dest}`;
+    if (!byPhysicalKey.has(key)) byPhysicalKey.set(key, []);
+    byPhysicalKey.get(key)!.push(f);
+  }
+  const result: CommuteFlight[] = [];
+  for (const group of byPhysicalKey.values()) {
+    if (group.length === 1) {
+      result.push(group[0]);
+    } else {
+      const best = group.sort((a, b) => carrierPriority(a.carrier) - carrierPriority(b.carrier))[0];
+      result.push(best);
+    }
+  }
+  result.sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());
+  return result;
 }
 
 function monthStartISO(d: Date) {
@@ -207,39 +292,15 @@ export async function getCommuteFlights(input: {
 
   console.log("Commute Assist getRouteTzs:", { origin, destination });
 
-  // When forceRefresh: reuse DB cache if still fresh; otherwise hit API
+  if (origin === "SAV" && destination === "CLT") {
+    console.log("[Commute Assist] AA1352 SAV→CLT getCommuteFlights", {
+      forceRefresh: input.forceRefresh,
+      source: input.forceRefresh ? "bypassing cache (forceRefresh)" : "will check cache first",
+    });
+  }
+
+  // When forceRefresh: always hit API (no 10-min cache shortcut) for manual Refresh testing
   if (input.forceRefresh) {
-    const { data: cached, error: cacheErr } = await admin
-      .from("commute_flight_cache")
-      .select("data, fetched_at")
-      .eq("tenant", tenant)
-      .eq("user_id", userId)
-      .eq("commute_date", input.date)
-      .eq("origin", origin)
-      .eq("destination", destination)
-      .eq("cache_version", CACHE_VERSION)
-      .maybeSingle();
-
-    if (!cacheErr && cached?.data && cached.fetched_at) {
-      const fetchedAtMs = new Date(cached.fetched_at).getTime();
-      if (Date.now() - fetchedAtMs < REFRESH_CACHE_FRESHNESS_MS) {
-        const { originTz, destTz } = await getRouteTzs(origin, destination);
-        return {
-          ok: true as const,
-          source: "cache" as const,
-          flights: cached.data as CommuteFlight[],
-          fetchedAt: cached.fetched_at,
-          notice: undefined,
-          originTz,
-          destTz,
-          debug:
-            process.env.NODE_ENV !== "production"
-              ? { cacheHit: true, fetchedAt: cached.fetched_at }
-              : undefined,
-        };
-      }
-    }
-
     const { originTz, destTz } = await getRouteTzs(origin, destination);
 
     // Plan gating for forceRefresh (skip when skipPlanGating, e.g. resolveLegIdentity)
@@ -303,6 +364,34 @@ export async function getCommuteFlights(input: {
           (adbRes as { ok: false; error: unknown }).error
         );
 
+      // Debug: DL 1946 ATL-SJU raw from providers (before dedupe)
+      if (origin === "ATL" && destination === "SJU" && process.env.NODE_ENV !== "production") {
+        const asDl1946 = aviationstackFlights.filter(
+          (f) => (f.carrier === "DL" || f.carrier === "dl") && /1946/.test(f.flightNumber ?? "")
+        );
+        const adbDl1946 = aerodataboxFlights.filter(
+          (f) => (f.carrier === "DL" || f.carrier === "dl") && /1946/.test(f.flightNumber ?? "")
+        );
+        if (asDl1946.length > 0 || adbDl1946.length > 0) {
+          console.log("[Commute Assist] DL 1946 ATL→SJU RAW from providers (before dedupe)", {
+            aviationstack: asDl1946.map((f) => ({
+              departureTime: f.departureTime,
+              arrivalTime: f.arrivalTime,
+              dep_scheduled_raw: f.dep_scheduled_raw,
+              arr_scheduled_raw: f.arr_scheduled_raw,
+              durationMinutes: f.durationMinutes,
+            })),
+            aerodatabox: adbDl1946.map((f) => ({
+              departureTime: f.departureTime,
+              arrivalTime: f.arrivalTime,
+              dep_scheduled_raw: f.dep_scheduled_raw,
+              arr_scheduled_raw: f.arr_scheduled_raw,
+              durationMinutes: f.durationMinutes,
+            })),
+          });
+        }
+      }
+
       const merged = dedupeFlights(
         aviationstackFlights,
         aerodataboxFlights,
@@ -310,7 +399,72 @@ export async function getCommuteFlights(input: {
         origin,
         destination
       );
-      const { flights, notice } = merged;
+      const deduped = filterCodeShareFlights(merged.flights);
+      const flights = deduped.map((f) => {
+        const normalized = normalizeFlightTiming(f, originTz, destTz);
+        const isAa1352SavClt =
+          normalized.carrier === "AA" &&
+          /1352/.test(normalized.flightNumber ?? "") &&
+          normalized.origin === "SAV" &&
+          normalized.destination === "CLT";
+        const operationalStatus = deriveOperationalStatus(
+          {
+            depUtc: normalized.departureTime,
+            arrUtc: normalized.arrivalTime,
+            originTz: normalized.origin_tz ?? originTz,
+            destTz: normalized.dest_tz ?? destTz,
+            dep_scheduled_raw: normalized.dep_scheduled_raw,
+            dep_estimated_raw: normalized.dep_estimated_raw,
+            dep_actual_raw: normalized.dep_actual_raw,
+            arr_scheduled_raw: normalized.arr_scheduled_raw,
+            arr_estimated_raw: normalized.arr_estimated_raw,
+            arr_actual_raw: normalized.arr_actual_raw,
+            dep_delay_min: normalized.dep_delay_min,
+            arr_delay_min: normalized.arr_delay_min,
+            status: normalized.status,
+            _debug: isAa1352SavClt
+              ? {
+                  carrier: normalized.carrier,
+                  flightNumber: normalized.flightNumber ?? "",
+                  origin: normalized.origin,
+                  destination: normalized.destination,
+                }
+              : undefined,
+          },
+          originTz,
+          destTz
+        );
+        return { ...normalized, operationalStatus };
+      });
+      const aa1352Final = flights.find(
+        (f) =>
+          (f.carrier === "AA" && /1352/.test(f.flightNumber ?? "") && f.origin === "SAV" && f.destination === "CLT")
+      );
+      if (aa1352Final && origin === "SAV" && destination === "CLT") {
+        console.log("[Commute Assist] AA1352 SAV→CLT FINAL (from API)", {
+          departureTime: aa1352Final.departureTime,
+          arrivalTime: aa1352Final.arrivalTime,
+          dep_scheduled_raw: aa1352Final.dep_scheduled_raw,
+          dep_estimated_raw: aa1352Final.dep_estimated_raw,
+          dep_delay_min: aa1352Final.dep_delay_min,
+          operationalStatus: aa1352Final.operationalStatus?.label,
+        });
+      }
+      const dl1946AtlSju = flights.find(
+        (f) =>
+          origin === "ATL" &&
+          destination === "SJU" &&
+          (f.carrier === "DL" || f.carrier === "dl") &&
+          /1946/.test(f.flightNumber ?? "")
+      );
+      if (dl1946AtlSju && process.env.NODE_ENV !== "production") {
+        console.log("[Commute Assist] DL 1946 ATL→SJU FINAL (from API)", {
+          departureTime: dl1946AtlSju.departureTime,
+          arrivalTime: dl1946AtlSju.arrivalTime,
+          durationMinutes: dl1946AtlSju.durationMinutes,
+        });
+      }
+      const { notice } = merged;
 
       const row = {
         tenant,
@@ -378,12 +532,83 @@ export async function getCommuteFlights(input: {
 
   if (cached?.data && !input.forceRefresh) {
     const { originTz, destTz } = await getRouteTzs(origin, destination);
+    const cachedFlights = filterCodeShareFlights(cached.data as CommuteFlight[]);
+    // Re-derive operationalStatus on cache read; do not trust cached value (DERIVED_STATUS_VERSION).
+    const flights = cachedFlights.map((f) => {
+      const normalized = normalizeFlightTiming(f, originTz, destTz);
+      const isAa1352SavClt =
+        normalized.carrier === "AA" &&
+        /1352/.test(normalized.flightNumber ?? "") &&
+        normalized.origin === "SAV" &&
+        normalized.destination === "CLT";
+      const operationalStatus = deriveOperationalStatus(
+        {
+          depUtc: normalized.departureTime,
+          arrUtc: normalized.arrivalTime,
+          originTz: normalized.origin_tz ?? originTz,
+          destTz: normalized.dest_tz ?? destTz,
+          dep_scheduled_raw: normalized.dep_scheduled_raw,
+          dep_estimated_raw: normalized.dep_estimated_raw,
+          dep_actual_raw: normalized.dep_actual_raw,
+          arr_scheduled_raw: normalized.arr_scheduled_raw,
+          arr_estimated_raw: normalized.arr_estimated_raw,
+          arr_actual_raw: normalized.arr_actual_raw,
+          dep_delay_min: normalized.dep_delay_min,
+          arr_delay_min: normalized.arr_delay_min,
+          status: normalized.status,
+          _debug: isAa1352SavClt
+            ? {
+                carrier: normalized.carrier,
+                flightNumber: normalized.flightNumber ?? "",
+                origin: normalized.origin,
+                destination: normalized.destination,
+              }
+            : undefined,
+        },
+        originTz,
+        destTz
+      );
+      return { ...normalized, operationalStatus };
+    });
+    if (origin === "SAV" && destination === "CLT") {
+      const aa1352Cached = flights.find(
+        (f) =>
+          (f.carrier === "AA" && /1352/.test(f.flightNumber ?? "") && f.origin === "SAV" && f.destination === "CLT")
+      );
+      if (aa1352Cached) {
+        console.log("[Commute Assist] AA1352 SAV→CLT reading from CACHE", {
+          departureTime: aa1352Cached.departureTime,
+          arrivalTime: aa1352Cached.arrivalTime,
+          dep_scheduled_raw: aa1352Cached.dep_scheduled_raw,
+          dep_estimated_raw: aa1352Cached.dep_estimated_raw,
+          dep_delay_min: aa1352Cached.dep_delay_min,
+          operationalStatus: aa1352Cached.operationalStatus?.label,
+          fetched_at: cached.fetched_at,
+        });
+      }
+    }
+    if (origin === "ATL" && destination === "SJU" && process.env.NODE_ENV !== "production") {
+      const dl1946Cached = flights.find(
+        (f) =>
+          (f.carrier === "DL" || f.carrier === "dl") &&
+          /1946/.test(f.flightNumber ?? "") &&
+          f.origin === "ATL" &&
+          f.destination === "SJU"
+      );
+      if (dl1946Cached) {
+        console.log("[Commute Assist] DL 1946 ATL→SJU reading from CACHE", {
+          departureTime: dl1946Cached.departureTime,
+          arrivalTime: dl1946Cached.arrivalTime,
+          durationMinutes: dl1946Cached.durationMinutes,
+          fetched_at: cached.fetched_at,
+        });
+      }
+    }
     if (origin === "TPA" && destination === "SJU") {
-      const data = cached.data as CommuteFlight[];
       console.log("[Commute Assist] TPA→SJU from DB cache (no dedupe)", JSON.stringify({
         source: "commute_flight_cache",
-        flightCount: data?.length ?? 0,
-        rows: data?.map((f) => ({
+        flightCount: flights?.length ?? 0,
+        rows: flights?.map((f) => ({
           key: flightKey(f),
           flightNumber: f.flightNumber,
           departureTime: f.departureTime,
@@ -394,7 +619,7 @@ export async function getCommuteFlights(input: {
     return {
       ok: true as const,
       source: "cache" as const,
-      flights: cached.data as CommuteFlight[],
+      flights,
       fetchedAt: cached.fetched_at ?? null,
       notice: undefined,
       originTz,
@@ -483,7 +708,72 @@ export async function getCommuteFlights(input: {
       origin,
       destination
     );
-    const { flights, notice } = merged;
+    const deduped = filterCodeShareFlights(merged.flights);
+    const flights = deduped.map((f) => {
+      const normalized = normalizeFlightTiming(f, originTz, destTz);
+      const isAa1352SavClt =
+        normalized.carrier === "AA" &&
+        /1352/.test(normalized.flightNumber ?? "") &&
+        normalized.origin === "SAV" &&
+        normalized.destination === "CLT";
+      const operationalStatus = deriveOperationalStatus(
+        {
+          depUtc: normalized.departureTime,
+          arrUtc: normalized.arrivalTime,
+          originTz: normalized.origin_tz ?? originTz,
+          destTz: normalized.dest_tz ?? destTz,
+          dep_scheduled_raw: normalized.dep_scheduled_raw,
+          dep_estimated_raw: normalized.dep_estimated_raw,
+          dep_actual_raw: normalized.dep_actual_raw,
+          arr_scheduled_raw: normalized.arr_scheduled_raw,
+          arr_estimated_raw: normalized.arr_estimated_raw,
+          arr_actual_raw: normalized.arr_actual_raw,
+          dep_delay_min: normalized.dep_delay_min,
+          arr_delay_min: normalized.arr_delay_min,
+          status: normalized.status,
+          _debug: isAa1352SavClt
+            ? {
+                carrier: normalized.carrier,
+                flightNumber: normalized.flightNumber ?? "",
+                origin: normalized.origin,
+                destination: normalized.destination,
+              }
+            : undefined,
+        },
+        originTz,
+        destTz
+      );
+      return { ...normalized, operationalStatus };
+    });
+    const aa1352FinalMiss = flights.find(
+      (f) =>
+        (f.carrier === "AA" && /1352/.test(f.flightNumber ?? "") && f.origin === "SAV" && f.destination === "CLT")
+    );
+    if (aa1352FinalMiss && origin === "SAV" && destination === "CLT") {
+      console.log("[Commute Assist] AA1352 SAV→CLT FINAL (from API, cache miss)", {
+        departureTime: aa1352FinalMiss.departureTime,
+        arrivalTime: aa1352FinalMiss.arrivalTime,
+        dep_scheduled_raw: aa1352FinalMiss.dep_scheduled_raw,
+        dep_estimated_raw: aa1352FinalMiss.dep_estimated_raw,
+        dep_delay_min: aa1352FinalMiss.dep_delay_min,
+        operationalStatus: aa1352FinalMiss.operationalStatus?.label,
+      });
+    }
+    const dl1946Miss = flights.find(
+      (f) =>
+        origin === "ATL" &&
+        destination === "SJU" &&
+        (f.carrier === "DL" || f.carrier === "dl") &&
+        /1946/.test(f.flightNumber ?? "")
+    );
+    if (dl1946Miss && process.env.NODE_ENV !== "production") {
+      console.log("[Commute Assist] DL 1946 ATL→SJU FINAL (from API, cache miss)", {
+        departureTime: dl1946Miss.departureTime,
+        arrivalTime: dl1946Miss.arrivalTime,
+        durationMinutes: dl1946Miss.durationMinutes,
+      });
+    }
+    const { notice } = merged;
 
     // 4) Write cache (upsert on unique key)
     const row = {

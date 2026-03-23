@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getProfile } from "@/lib/profile";
+import { getProfile, isProActive } from "@/lib/profile";
 
 const RECENT_LIMIT = 30;
 
@@ -15,10 +15,6 @@ export type QAItem = {
   created_at: string;
 };
 
-function hasQAPersistence(plan: string | undefined | null): boolean {
-  return plan === "pro" || plan === "enterprise";
-}
-
 export async function saveQARow(
   question: string,
   answer: string | null,
@@ -26,7 +22,7 @@ export async function saveQARow(
   citationPath: string | null
 ): Promise<{ error?: string }> {
   const profile = await getProfile();
-  if (!profile || !hasQAPersistence(profile.plan)) return {};
+  if (!profile || !isProActive(profile)) return {};
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -62,7 +58,7 @@ export async function saveQARow(
 
 export async function listRecentQA(): Promise<{ items: QAItem[]; error?: string }> {
   const profile = await getProfile();
-  if (!profile || !hasQAPersistence(profile.plan)) {
+  if (!profile || !isProActive(profile)) {
     return { items: [] };
   }
 
@@ -91,7 +87,7 @@ export async function listArchiveQA(page = 1): Promise<{
   error?: string;
 }> {
   const profile = await getProfile();
-  if (!profile || !hasQAPersistence(profile.plan)) {
+  if (!profile || !isProActive(profile)) {
     return { items: [], total: 0, hasMore: false };
   }
 
@@ -122,5 +118,5 @@ export async function listArchiveQA(page = 1): Promise<{
 
 export async function hasQAPersistencePlan(): Promise<boolean> {
   const profile = await getProfile();
-  return hasQAPersistence(profile?.plan);
+  return isProActive(profile);
 }

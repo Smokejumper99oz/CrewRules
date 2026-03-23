@@ -4,6 +4,7 @@
  */
 
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import type { OperationalStatus } from "@/lib/commute/operational-status-types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { addDays } from "date-fns";
 import { getRouteTzs } from "@/lib/airports";
@@ -36,6 +37,8 @@ export type CommuteFlight = {
   arr_gate?: string | null;
   /** Aircraft type (e.g. A320, B737). */
   aircraft_type?: string | null;
+  /** Canonical operational status (derived once in data layer). */
+  operationalStatus?: OperationalStatus;
 };
 
 export type FetchFlightsResult = {
@@ -46,6 +49,30 @@ export type FetchFlightsResult = {
 /** Strip timezone offset from AviationStack timestamp (scheduled times are airport-local). */
 function stripOffset(s: string): string {
   return s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
+}
+
+/** Whether a timestamp has explicit UTC/offset (Z or ±HH:MM). */
+function hasOffsetOrZ(s: string): boolean {
+  return !!(s?.trim() && (s.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(s)));
+}
+
+/**
+ * Normalize AviationStack scheduled value to UTC ISO string.
+ * AviationStack sometimes sends local airport times mislabeled with +00:00 or Z.
+ * For America/* timezones, treat +00:00/Z as local naive time; otherwise parse as UTC.
+ * Offsetless: treat as local airport time (same-day API returns local without offset).
+ */
+function scheduledToUtcIso(s: string, tz: string): string {
+  if (!s?.trim()) return "";
+  if (hasOffsetOrZ(s)) {
+    const clean = stripOffset(s);
+    if (tz.startsWith("America/")) {
+      return fromZonedTime(clean, tz).toISOString();
+    }
+    return new Date(s).toISOString();
+  }
+  const clean = stripOffset(s);
+  return fromZonedTime(clean, tz).toISOString();
 }
 
 /** Parse AviationStack timestamp (airport-local) to Date. Fixes +00:00 misinterpretation. */
@@ -62,6 +89,14 @@ function calculateDurationMinutes(
   const depUtc = fromZonedTime(stripOffset(dep), originTz).getTime();
   const arrUtc = fromZonedTime(stripOffset(arr), destTz).getTime();
   return Math.max(0, Math.round((arrUtc - depUtc) / 60000));
+}
+
+/** Duration in minutes from UTC ISO strings. */
+function durationMinutesFromUtcIso(depUtc: string, arrUtc: string): number {
+  if (!depUtc || !arrUtc) return 0;
+  const depMs = new Date(depUtc).getTime();
+  const arrMs = new Date(arrUtc).getTime();
+  return Math.max(0, Math.round((arrMs - depMs) / 60000));
 }
 
 const devCache = new Map<string, { expiresAt: number; data: FetchFlightsResult }>();
@@ -267,8 +302,18 @@ async function fetchTimetable(
       const number = f?.flight?.number ?? "";
       const flightNumber = carrier && number ? `${carrier}${number}` : "";
 
-      const depUtc = depTime ? fromZonedTime(stripOffset(depTime), originTz).toISOString() : "";
-      const arrUtc = arrTime ? fromZonedTime(stripOffset(arrTime), destTz).toISOString() : "";
+      const hasOffsetOrZ = (s: string) =>
+        !!(s?.trim() && (s.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(s)));
+      const depUtc = depTime
+        ? (hasOffsetOrZ(depTime)
+            ? new Date(depTime).toISOString()
+            : fromZonedTime(stripOffset(depTime), originTz).toISOString())
+        : "";
+      const arrUtc = arrTime
+        ? (hasOffsetOrZ(arrTime)
+            ? new Date(arrTime).toISOString()
+            : fromZonedTime(stripOffset(arrTime), destTz).toISOString())
+        : "";
 
       return {
         carrier,
@@ -284,11 +329,7 @@ async function fetchTimetable(
         aircraft_type: extractAircraftType(f),
       };
     })
-    .sort(
-      (a, b) =>
-        fromZonedTime(stripOffset(a.arrivalTime), destTz).getTime() -
-        fromZonedTime(stripOffset(b.arrivalTime), destTz).getTime()
-    );
+    .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());
 
   return { flights };
 }
@@ -386,8 +427,10 @@ async function fetchFlightsSameDay(
         return false;
       }
       try {
-        fromZonedTime(depClean, f?.departure?.timezone ?? originTz);
-        fromZonedTime(arrClean, f?.arrival?.timezone ?? destTz);
+        const depTzFilter = f?.departure?.timezone ?? originTz;
+        const arrTzFilter = originTz === destTz ? originTz : (f?.arrival?.timezone ?? destTz);
+        fromZonedTime(depClean, depTzFilter);
+        fromZonedTime(arrClean, arrTzFilter);
       } catch {
         droppedParseFail++;
         return false;
@@ -395,8 +438,24 @@ async function fetchFlightsSameDay(
       return true;
     })
     .map((f) => {
-      const depTime = f?.departure?.scheduled ?? "";
-      const arrTime = f?.arrival?.scheduled ?? "";
+      const depRaw = f?.departure?.scheduled ?? "";
+      const arrRaw = f?.arrival?.scheduled ?? "";
+      // Prefer route timezones when origin and dest share same TZ (e.g. SAV-CLT both Eastern).
+      // AviationStack can return wrong arrival.timezone for some airports, causing arr < dep.
+      const depTz = f?.departure?.timezone ?? originTz;
+      const arrTz =
+        originTz === destTz
+          ? originTz
+          : (f?.arrival?.timezone ?? destTz);
+      const depUtc = scheduledToUtcIso(depRaw, depTz);
+      let arrUtc = scheduledToUtcIso(arrRaw, arrTz);
+      // Sanity: never allow arrival before departure. If invalid, derive arr from dep + duration.
+      const depMs = new Date(depUtc).getTime();
+      const arrMs = new Date(arrUtc).getTime();
+      if (arrMs < depMs) {
+        const durMin = 60; // SAV-CLT ~1h; avoid impossible times
+        arrUtc = new Date(depMs + durMin * 60_000).toISOString();
+      }
       let carrier = (f?.airline?.iataCode ?? "").toUpperCase();
       let number = String(f?.flight?.number ?? "").trim();
       const flightIata = (f?.flight?.iata ?? "").toUpperCase();
@@ -417,17 +476,14 @@ async function fetchFlightsSameDay(
         flightNumber = carrier + number;
       }
 
-      return {
+      const rec = {
         carrier,
         flightNumber,
-        departureTime: depTime,
-        arrivalTime: arrTime,
+        departureTime: depUtc,
+        arrivalTime: arrUtc,
         origin: (f?.departure?.iataCode ?? f?.departure?.iata ?? origin).toUpperCase(),
         destination: (f?.arrival?.iataCode ?? f?.arrival?.iata ?? destination).toUpperCase(),
-        durationMinutes:
-          depTime && arrTime
-            ? calculateDurationMinutes(depTime, arrTime, originTz, destTz)
-            : 0,
+        durationMinutes: depUtc && arrUtc ? durationMinutesFromUtcIso(depUtc, arrUtc) : 0,
         origin_tz: f?.departure?.timezone ?? originTz,
         dest_tz: f?.arrival?.timezone ?? destTz,
         dep_scheduled_raw: f?.departure?.scheduled ?? undefined,
@@ -443,12 +499,37 @@ async function fetchFlightsSameDay(
         arr_gate: f?.arrival?.gate ?? null,
         aircraft_type: extractAircraftType(f),
       };
+      if (o === "SAV" && d === "CLT" && carrier === "AA" && /1352/.test(flightNumber)) {
+        console.log("[Commute Assist] AA1352 SAV→CLT AS", {
+          provider: "AS",
+          carrier: rec.carrier,
+          flightNumber: rec.flightNumber,
+          origin: rec.origin,
+          destination: rec.destination,
+          departureTime: rec.departureTime,
+          arrivalTime: rec.arrivalTime,
+          dep_scheduled_raw: rec.dep_scheduled_raw,
+          dep_estimated_raw: rec.dep_estimated_raw,
+          dep_delay_min: rec.dep_delay_min,
+        });
+      }
+      if (o === "ATL" && d === "SJU" && carrier === "DL" && /1946/.test(flightNumber) && process.env.NODE_ENV !== "production") {
+        console.log("[Commute Assist] DL 1946 ATL→SJU AviationStack raw", {
+          provider: "AviationStack",
+          dep_scheduled_raw: f?.departure?.scheduled,
+          arr_scheduled_raw: f?.arrival?.scheduled,
+          dep_timezone: f?.departure?.timezone,
+          arr_timezone: f?.arrival?.timezone,
+          output: {
+            departureTime: rec.departureTime,
+            arrivalTime: rec.arrivalTime,
+            durationMinutes: rec.durationMinutes,
+          },
+        });
+      }
+      return rec;
     })
-    .sort(
-      (a, b) =>
-        fromZonedTime(stripOffset(a.arrivalTime), a.dest_tz ?? destTz).getTime() -
-        fromZonedTime(stripOffset(b.arrivalTime), b.dest_tz ?? destTz).getTime()
-    );
+    .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());
 
   return { flights: flightsA };
   })();
@@ -554,7 +635,14 @@ async function fetchFlightsFuture(
       const arrLocal = `${arrDate}T${arrTime}`;
 
       const depUtc = fromZonedTime(depLocal, originTz).toISOString();
-      const arrUtc = fromZonedTime(arrLocal, destTz).toISOString();
+      let arrUtc = fromZonedTime(arrLocal, destTz).toISOString();
+      // Sanity: never allow arrival before departure
+      const depMs = new Date(depUtc).getTime();
+      const arrMs = new Date(arrUtc).getTime();
+      if (arrMs < depMs) {
+        const durMin = 60;
+        arrUtc = new Date(depMs + durMin * 60_000).toISOString();
+      }
 
       const carrier = (f?.airline?.iataCode ?? "").toUpperCase();
       const number = f?.flight?.number ?? "";
@@ -643,23 +731,48 @@ async function fetchFlightsHistorical(
   if (!json.data) return { flights: [] };
 
   const mapped = (json.data as any[]).map((f) => {
-    const depTime = f?.departure?.scheduled ?? "";
-    const arrTime = f?.arrival?.scheduled ?? "";
+    const depRaw = f?.departure?.scheduled ?? "";
+    const arrRaw = f?.arrival?.scheduled ?? "";
+    const depTz = f?.departure?.timezone ?? originTz;
+    const arrTz =
+      originTz === destTz ? originTz : (f?.arrival?.timezone ?? destTz);
+    const depUtc = scheduledToUtcIso(depRaw, depTz);
+    let arrUtc = scheduledToUtcIso(arrRaw, arrTz);
+    const depMs = new Date(depUtc).getTime();
+    const arrMs = new Date(arrUtc).getTime();
+    if (arrMs < depMs) {
+      arrUtc = new Date(depMs + 60 * 60_000).toISOString();
+    }
     const carrier = (f?.airline?.iataCode ?? "").toUpperCase();
-    const number = f?.flight?.number ?? "";
-    const flightNumber = carrier && number ? `${carrier}${number}` : "";
+    const number = String(f?.flight?.number ?? "").trim();
+    const flightIata = (f?.flight?.iata ?? "").toUpperCase();
+    let flightNumber = carrier && number ? `${carrier}${number}` : flightIata ? flightIata : "";
+    if (!carrier && flightNumber) {
+      const m = flightNumber.match(/^([A-Z]{2})(\d+)$/);
+      if (m) {
+        flightNumber = m[1] + m[2];
+      }
+    }
 
     return {
       carrier,
       flightNumber,
-      departureTime: depTime,
-      arrivalTime: arrTime,
+      departureTime: depUtc,
+      arrivalTime: arrUtc,
       origin: (f?.departure?.iataCode ?? origin).toUpperCase(),
       destination: (f?.arrival?.iataCode ?? destination).toUpperCase(),
-      durationMinutes:
-        depTime && arrTime ? calculateDurationMinutes(depTime, arrTime, originTz, destTz) : 0,
+      durationMinutes: depUtc && arrUtc ? durationMinutesFromUtcIso(depUtc, arrUtc) : 0,
       origin_tz: f?.departure?.timezone ?? originTz,
       dest_tz: f?.arrival?.timezone ?? destTz,
+      dep_scheduled_raw: f?.departure?.scheduled ?? undefined,
+      dep_estimated_raw: f?.departure?.estimated ?? undefined,
+      dep_actual_raw: f?.departure?.actual ?? undefined,
+      dep_delay_min: f?.departure?.delay != null ? Number(f.departure.delay) : null,
+      arr_scheduled_raw: f?.arrival?.scheduled ?? undefined,
+      arr_estimated_raw: f?.arrival?.estimated ?? undefined,
+      arr_actual_raw: f?.arrival?.actual ?? undefined,
+      arr_delay_min: f?.arrival?.delay != null ? Number(f.arrival.delay) : null,
+      status: f?.flight_status ?? undefined,
       dep_gate: f?.departure?.gate ?? null,
       arr_gate: f?.arrival?.gate ?? null,
       aircraft_type: extractAircraftType(f),
@@ -669,7 +782,7 @@ async function fetchFlightsHistorical(
   const filtered = mapped
     .filter((f) => {
       if (!f.departureTime) return false;
-      const depClean = stripOffset(f.departureTime);
+      const depClean = stripOffset(f.dep_scheduled_raw ?? f.departureTime ?? "");
       return depClean.slice(0, 10) === date;
     })
     .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());

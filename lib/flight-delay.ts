@@ -46,7 +46,8 @@ export function computeDelayInfo(
   const depTz = opt.originTz ?? originTz;
   const arrTz = opt.destTz ?? destTz;
 
-  if (opt.status === "cancelled") {
+  const statusLower = opt.status?.toLowerCase();
+  if (statusLower === "cancelled" || statusLower === "canceled") {
     const depSched = opt.dep_scheduled_raw
       ? formatInTimeZone(parseTs(opt.dep_scheduled_raw, depTz), depTz, "HH:mm")
       : formatInTimeZone(new Date(opt.depUtc), depTz, "HH:mm");

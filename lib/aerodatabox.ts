@@ -39,15 +39,10 @@ function stripOffset(s: unknown): string {
   return str.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
 }
 
-function calculateDurationMinutes(
-  dep: string,
-  arr: string,
-  originTz: string,
-  destTz: string
-): number {
-  const depUtc = fromZonedTime(stripOffset(dep), originTz).getTime();
-  const arrUtc = fromZonedTime(stripOffset(arr), destTz).getTime();
-  return Math.max(0, Math.round((arrUtc - depUtc) / 60000));
+function calculateDurationMinutes(depUtc: string, arrUtc: string): number {
+  const depMs = new Date(depUtc).getTime();
+  const arrMs = new Date(arrUtc).getTime();
+  return Math.max(0, Math.round((arrMs - depMs) / 60000));
 }
 
 /** Extract IATA from nested airport object. */
@@ -58,8 +53,16 @@ function getIata(obj: unknown): string {
   return typeof code === "string" ? code.toUpperCase() : "";
 }
 
-/** Extract time string from movement object. AeroDataBox uses scheduledTime: { local, utc }. */
-function getTime(obj: unknown): string {
+function hasOffsetOrZ(s: string): boolean {
+  return !!(s?.trim() && (s.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(s)));
+}
+
+/**
+ * Extract time from movement object and normalize to UTC ISO string.
+ * Prefer local (scheduledTimeLocal, scheduledTime.local) then UTC (scheduledTime.utc, or string with Z/offset).
+ * Ensures downstream always receives UTC ISO strings.
+ */
+function getTimeAsUtc(obj: unknown, tz: string): string {
   if (!obj || typeof obj !== "object") return "";
   const o = obj as Record<string, unknown>;
   const raw =
@@ -69,13 +72,48 @@ function getTime(obj: unknown): string {
     o.scheduled ??
     o.estimatedTime ??
     o.actualTime;
-  if (typeof raw === "string") return raw;
+
+  let localVal: string | undefined;
+  let utcVal: string | undefined;
+
+  if (typeof raw === "string") {
+    if (hasOffsetOrZ(raw)) {
+      utcVal = raw;
+    } else {
+      localVal = raw;
+    }
+  } else if (raw && typeof raw === "object") {
+    const dt = raw as Record<string, unknown>;
+    const local = dt.local ?? dt.Local;
+    const utc = dt.utc ?? dt.Utc;
+    if (typeof local === "string") localVal = local;
+    if (typeof utc === "string") utcVal = utc;
+  }
+
+  if (localVal) {
+    try {
+      return fromZonedTime(stripOffset(localVal), tz).toISOString();
+    } catch {
+      if (utcVal) return new Date(utcVal).toISOString();
+      return "";
+    }
+  }
+  if (utcVal) return new Date(utcVal).toISOString();
+  return "";
+}
+
+/** Return local time string for _raw fields (delay display). Prefer explicit local. */
+function getLocalTimeForRaw(obj: unknown): string | undefined {
+  if (!obj || typeof obj !== "object") return undefined;
+  const o = obj as Record<string, unknown>;
+  const raw = o.scheduledTimeLocal ?? o.scheduledTime ?? o.ScheduledTime ?? o.scheduled;
+  if (typeof raw === "string" && !hasOffsetOrZ(raw)) return raw;
   if (raw && typeof raw === "object") {
     const dt = raw as Record<string, unknown>;
     const local = dt.local ?? dt.Local;
     if (typeof local === "string") return local;
   }
-  return "";
+  return undefined;
 }
 
 /**
@@ -210,55 +248,78 @@ async function fetchFlightsFromAerodataBoxImpl(
     .filter((f) => {
       const dest = getDestIata(f);
       if (dest !== destUpper) return false;
-      const depTime = getDepTime(f);
-      const arrTime = getArrTime(f);
+      const depTime = getTimeAsUtc(getDep(f), originTz);
+      const arrTime = getTimeAsUtc(getArr(f), destTz);
       if (!depTime || !arrTime) return false;
-      const depDateStr = stripOffset(depTime).slice(0, 10);
+      const depDateStr = depTime.slice(0, 10);
       return depDateStr === dateStr;
     })
     .map((f) => {
-      const depTime = getDepTime(f);
-      const arrTime = getArrTime(f);
+      const dep = getDep(f);
+      const arr = getArr(f);
+      const depTime = getTimeAsUtc(dep, originTz);
+      const arrTime = getTimeAsUtc(arr, destTz);
       const carrier = getCarrier(f);
       const number = getFlightNumber(f);
       const flightNumber = buildFlightNumber(carrier, number);
 
-      return {
+      const rec = {
         carrier,
         flightNumber,
         departureTime: depTime,
         arrivalTime: arrTime,
-        origin: getIata(getDep(f)) || origin,
-        destination: getIata(getArr(f)) || destination,
+        origin: getIata(dep) || origin,
+        destination: getIata(arr) || destination,
         durationMinutes:
-          depTime && arrTime
-            ? calculateDurationMinutes(depTime, arrTime, originTz, destTz)
-            : 0,
-        origin_tz: (getDep(f) as Record<string, string>)?.timezone ?? originTz,
-        dest_tz: (getArr(f) as Record<string, string>)?.timezone ?? destTz,
-        dep_scheduled_raw: (getDep(f) as Record<string, string>)?.scheduledTimeLocal ?? depTime,
-        dep_estimated_raw: (getDep(f) as Record<string, string>)?.estimatedTimeLocal ?? undefined,
-        dep_actual_raw: (getDep(f) as Record<string, string>)?.actualTimeLocal ?? undefined,
-        dep_delay_min: (getDep(f) as Record<string, number>)?.delay != null
-          ? Number((getDep(f) as Record<string, number>).delay)
+          depTime && arrTime ? calculateDurationMinutes(depTime, arrTime) : 0,
+        origin_tz: (dep as Record<string, string>)?.timezone ?? originTz,
+        dest_tz: (arr as Record<string, string>)?.timezone ?? destTz,
+        dep_scheduled_raw: getLocalTimeForRaw(dep) ?? undefined,
+        dep_estimated_raw: (dep as Record<string, string>)?.estimatedTimeLocal ?? undefined,
+        dep_actual_raw: (dep as Record<string, string>)?.actualTimeLocal ?? undefined,
+        dep_delay_min: (dep as Record<string, number>)?.delay != null
+          ? Number((dep as Record<string, number>).delay)
           : null,
-        arr_scheduled_raw: (getArr(f) as Record<string, string>)?.scheduledTimeLocal ?? arrTime,
-        arr_estimated_raw: (getArr(f) as Record<string, string>)?.estimatedTimeLocal ?? undefined,
-        arr_actual_raw: (getArr(f) as Record<string, string>)?.actualTimeLocal ?? undefined,
-        arr_delay_min: (getArr(f) as Record<string, number>)?.delay != null
-          ? Number((getArr(f) as Record<string, number>).delay)
+        arr_scheduled_raw: getLocalTimeForRaw(arr) ?? undefined,
+        arr_estimated_raw: (arr as Record<string, string>)?.estimatedTimeLocal ?? undefined,
+        arr_actual_raw: (arr as Record<string, string>)?.actualTimeLocal ?? undefined,
+        arr_delay_min: (arr as Record<string, number>)?.delay != null
+          ? Number((arr as Record<string, number>).delay)
           : null,
         status: (f as Record<string, string>)?.status ?? undefined,
-        dep_gate: (getDep(f) as Record<string, string>)?.gate ?? null,
-        arr_gate: (getArr(f) as Record<string, string>)?.gate ?? null,
+        dep_gate: (dep as Record<string, string>)?.gate ?? null,
+        arr_gate: (arr as Record<string, string>)?.gate ?? null,
         aircraft_type: getAircraftType(f),
       };
+      if (carrier === "AA" && /1352/.test(flightNumber) && origin.toUpperCase() === "SAV" && destination.toUpperCase() === "CLT") {
+        console.log("[Commute Assist] AA1352 SAV→CLT ADB", {
+          provider: "ADB",
+          carrier: rec.carrier,
+          flightNumber: rec.flightNumber,
+          origin: rec.origin,
+          destination: rec.destination,
+          departureTime: rec.departureTime,
+          arrivalTime: rec.arrivalTime,
+          dep_scheduled_raw: rec.dep_scheduled_raw,
+          dep_estimated_raw: rec.dep_estimated_raw,
+          dep_delay_min: rec.dep_delay_min,
+        });
+      }
+      if (carrier === "DL" && /1946/.test(flightNumber) && origin.toUpperCase() === "ATL" && destination.toUpperCase() === "SJU" && process.env.NODE_ENV !== "production") {
+        console.log("[Commute Assist] DL 1946 ATL→SJU AeroDataBox raw", {
+          provider: "AeroDataBox",
+          dep_scheduled_raw: rec.dep_scheduled_raw,
+          arr_scheduled_raw: rec.arr_scheduled_raw,
+          output: {
+            departureTime: rec.departureTime,
+            arrivalTime: rec.arrivalTime,
+            durationMinutes: rec.durationMinutes,
+          },
+        });
+      }
+      return rec;
     })
-    .sort(
-      (a, b) =>
-        fromZonedTime(stripOffset(a.arrivalTime), a.dest_tz ?? destTz).getTime() -
-        fromZonedTime(stripOffset(b.arrivalTime), b.dest_tz ?? destTz).getTime()
-    );
+    .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());
 
     return { flights };
   } catch (err) {
@@ -277,16 +338,6 @@ function getDep(f: unknown): unknown {
 function getArr(f: unknown): unknown {
   const o = f as Record<string, unknown>;
   return o.Arrival ?? o.arrival ?? o.arr;
-}
-
-function getDepTime(f: unknown): string {
-  const dep = getDep(f);
-  return getTime(dep);
-}
-
-function getArrTime(f: unknown): string {
-  const arr = getArr(f);
-  return getTime(arr);
 }
 
 function getDestIata(f: unknown): string {

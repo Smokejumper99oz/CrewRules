@@ -5,6 +5,9 @@
   "scripts": {
     "backfill:inbound-aliases": "tsx scripts/backfill-inbound-aliases.ts",
     "clear-schedule:dev": "tsx scripts/clear-schedule-dev.ts",
+    "validate:airports": "tsx scripts/validate-airports-tz.ts",
+    "test:operational-status": "tsx lib/commute/derive-operational-status.test.ts",
+    "generate:airports-migration": "tsx scripts/generate-airports-migration.ts",
     "dev": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first next dev",
     "dev:turbopack": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first next dev --turbopack",
     "build": "next build",

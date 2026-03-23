@@ -503,7 +503,7 @@ export default function SchedulePage() {
             <button
               type="button"
               onClick={() => setShowFlicaIcsGuide(true)}
-              className="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2 transition align-baseline"
+              className="inline-flex items-center px-2 py-0.5 ml-2 text-xs font-medium rounded-full border border-[#75C043]/40 text-[#75C043] bg-[#75C043]/10 hover:bg-[#75C043]/20 transition align-baseline"
             >
               View guide
             </button>
