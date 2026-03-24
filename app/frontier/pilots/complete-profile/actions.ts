@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createActionClient } from "@/lib/supabase/server-action";
 import { assignInboundAlias } from "@/lib/email/assign-inbound-alias";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
+import { isAcceptedFrontierCrewBaseCode } from "@/lib/frontier-crew-bases";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -12,7 +13,6 @@ const CONNECT_FLICA_PATH = `/${TENANT}/${PORTAL}/connect-flica`;
 const LOGIN_PATH = `/${TENANT}/${PORTAL}/login`;
 
 const VALID_AIRPORT = /^[A-Za-z]{3}$/;
-const FRONTIER_CREW_BASES = ["ATL", "MDW", "ORD", "CVG", "CLE", "DFW", "DEN", "LAS", "MIA", "MCO", "PHL", "PHX", "SJU"];
 
 export type CreateProfileState = { error?: string } | null;
 
@@ -41,7 +41,7 @@ export async function createProfile(
   const homeAirport = (formData.get("home_airport") as string)?.trim().toUpperCase() || null;
   const alternateHomeAirport = (formData.get("alternate_home_airport") as string)?.trim().toUpperCase() || null;
 
-  if (!baseAirport || !VALID_AIRPORT.test(baseAirport) || !FRONTIER_CREW_BASES.includes(baseAirport)) {
+  if (!baseAirport || !VALID_AIRPORT.test(baseAirport) || !isAcceptedFrontierCrewBaseCode(baseAirport)) {
     return { error: "Please select a valid crew base" };
   }
   if (!position || !["captain", "first_officer", "flight_attendant"].includes(position)) {

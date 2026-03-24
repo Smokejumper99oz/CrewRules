@@ -7,6 +7,11 @@ import { DatePickerInput } from "@/components/date-picker-input";
 import { ProBadge } from "@/components/pro-badge";
 import { formatLastImport } from "@/components/schedule-status-chip";
 import { Lock, Copy, Check } from "lucide-react";
+import {
+  FRONTIER_CREW_BASE_VALUES,
+  getFrontierCrewBaseLabel,
+} from "@/lib/frontier-crew-bases";
+import { getTimezoneFromAirport, DEFAULT_TIMEZONE } from "@/lib/airport-timezone";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -68,44 +73,7 @@ type Props = {
   scheduleStatus?: { count: number; lastImportedAt: string | null };
 };
 
-/** Frontier Airlines crew bases (IATA codes). */
-const FRONTIER_CREW_BASES = [
-  "ATL", // Atlanta
-  "MDW", // Chicago-Midway
-  "ORD", // Chicago-O'Hare
-  "CVG", // Cincinnati
-  "CLE", // Cleveland
-  "DFW", // Dallas/Fort Worth
-  "DEN", // Denver (Main hub)
-  "LAS", // Las Vegas
-  "MIA", // Miami
-  "MCO", // Orlando
-  "PHL", // Philadelphia
-  "PHX", // Phoenix
-  "SJU", // San Juan, Puerto Rico
-];
-
-const AIRPORT_TO_TIMEZONE: Record<string, string> = {
-  ATL: "America/New_York",
-  MDW: "America/Chicago",
-  ORD: "America/Chicago",
-  CVG: "America/New_York",
-  CLE: "America/New_York",
-  DFW: "America/Chicago",
-  DEN: "America/Denver",
-  LAS: "America/Los_Angeles",
-  MIA: "America/New_York",
-  MCO: "America/New_York",
-  PHL: "America/New_York",
-  PHX: "America/Phoenix",
-  SJU: "America/Puerto_Rico",
-};
-
-const DEFAULT_TIMEZONE = "America/Denver";
-
-function getTimezoneFromAirport(airport: string): string {
-  return AIRPORT_TO_TIMEZONE[airport] ?? DEFAULT_TIMEZONE;
-}
+const FRONTIER_CREW_BASE_CANONICAL = new Set(FRONTIER_CREW_BASE_VALUES);
 
 function getTimezoneAbbreviation(iana: string): string {
   try {
@@ -507,11 +475,16 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               className="profile-select-base profile-select mt-1.5 w-full max-w-[8rem]"
             >
               <option value="">Select crew base</option>
-              {[...new Set([...(baseAirport && !FRONTIER_CREW_BASES.includes(baseAirport) ? [baseAirport] : []), ...FRONTIER_CREW_BASES])]
+              {[
+                ...new Set([
+                  ...(baseAirport && !FRONTIER_CREW_BASE_CANONICAL.has(baseAirport) ? [baseAirport] : []),
+                  ...FRONTIER_CREW_BASE_VALUES,
+                ]),
+              ]
                 .sort()
                 .map((code) => (
                   <option key={code} value={code}>
-                    {code}
+                    {getFrontierCrewBaseLabel(code)}
                   </option>
                 ))}
             </select>

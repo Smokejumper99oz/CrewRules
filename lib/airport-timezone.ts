@@ -18,9 +18,10 @@ export const AIRPORT_TO_TIMEZONE: Record<string, string> = {
   PHL: "America/New_York",
   PHX: "America/Phoenix",
   SJU: "America/Puerto_Rico",
+  TPA: "America/New_York",
 };
 
-const DEFAULT_TIMEZONE = "America/Denver";
+export const DEFAULT_TIMEZONE = "America/Denver";
 
 /** ICAO 4-letter codes that need special handling (non-K prefix). */
 const ICAO_TO_IATA: Record<string, string> = {

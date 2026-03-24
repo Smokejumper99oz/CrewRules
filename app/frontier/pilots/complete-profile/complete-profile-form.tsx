@@ -3,24 +3,14 @@
 import { useActionState } from "react";
 import { createProfile } from "./actions";
 import { DatePickerInput } from "@/components/date-picker-input";
-
-const FRONTIER_CREW_BASES = [
-  { value: "ATL", label: "ATL" },
-  { value: "CLE", label: "CLE" },
-  { value: "CVG", label: "CVG" },
-  { value: "DEN", label: "DEN" },
-  { value: "DFW", label: "DFW" },
-  { value: "LAS", label: "LAS" },
-  { value: "MIA", label: "MIA" },
-  { value: "MCO", label: "MCO" },
-  { value: "ORD", label: "MDW/ORD" },
-  { value: "PHL", label: "PHL" },
-  { value: "PHX", label: "PHX" },
-  { value: "SJU", label: "SJU" },
-];
+import { FRONTIER_CREW_BASE_OPTIONS } from "@/lib/frontier-crew-bases";
 
 const INPUT_CLASS =
   "mt-2 w-full rounded-xl bg-slate-800 border border-slate-600 px-4 py-3 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50";
+
+const SORTED_CREW_BASE_OPTIONS = [...FRONTIER_CREW_BASE_OPTIONS].sort((a, b) =>
+  a.value.localeCompare(b.value)
+);
 
 export function CompleteProfileForm() {
   const [state, formAction, isPending] = useActionState(createProfile, null);
@@ -39,7 +29,7 @@ export function CompleteProfileForm() {
           className={`${INPUT_CLASS} cursor-pointer`}
         >
           <option value="">Select crew base</option>
-          {FRONTIER_CREW_BASES.map(({ value, label }) => (
+          {SORTED_CREW_BASE_OPTIONS.map(({ value, label }) => (
             <option key={value} value={value}>
               {label}
             </option>
