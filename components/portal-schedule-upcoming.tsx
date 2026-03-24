@@ -17,8 +17,8 @@ export async function PortalScheduleUpcoming({ tenant, portal }: { tenant: strin
   if (upcomingEvents.length === 0) return null;
 
   return (
-    <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20">
-      <div className="border-b border-white/5 pb-2">
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-emerald-400/30 dark:border-white/5 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03)] dark:hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] dark:hover:border-emerald-400/20">
+      <div className="border-b border-slate-200 pb-2 dark:border-white/5">
         <h2 className="text-xl font-semibold tracking-tight">Upcoming</h2>
       </div>
       <ul className="mt-4 space-y-2">

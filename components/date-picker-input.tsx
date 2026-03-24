@@ -83,12 +83,12 @@ export function DatePickerInput({ id, name, value, placeholder = "mm/dd/yyyy", c
       <input type="hidden" id={id} name={name} value={hiddenValue} />
       {open && (
         <div
-          className="absolute left-0 top-full z-[100] mt-1 w-max rounded-xl border border-white/10 bg-slate-900 text-slate-200 shadow-2xl"
+          className="absolute left-0 top-full z-[100] mt-1 w-max rounded-xl border border-slate-200 bg-white text-slate-900 shadow-2xl dark:border-white/10 dark:bg-slate-900 dark:text-slate-200"
           role="dialog"
           aria-label="Choose date"
         >
-          <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
-            <span className="text-sm font-medium text-slate-400">Jump to year</span>
+          <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-white/10">
+            <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Jump to year</span>
             <input
               type="text"
               inputMode="numeric"
@@ -96,7 +96,7 @@ export function DatePickerInput({ id, name, value, placeholder = "mm/dd/yyyy", c
               value={yearInput}
               onChange={handleYearChange}
               onBlur={handleYearBlur}
-              className="w-16 rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-center text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30"
+              className="w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-center text-sm text-slate-900 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 dark:border-white/10 dark:bg-slate-800 dark:text-white"
               aria-label="Year"
             />
             <span className="text-xs text-slate-500">
@@ -115,7 +115,7 @@ export function DatePickerInput({ id, name, value, placeholder = "mm/dd/yyyy", c
             defaultMonth={selected ?? new Date()}
             startMonth={new Date(MIN_YEAR, 0)}
             endMonth={new Date()}
-            className="rdp-profile-dark p-4"
+            className="rdp-profile-dark rdp-profile-light p-4"
           />
         </div>
       )}

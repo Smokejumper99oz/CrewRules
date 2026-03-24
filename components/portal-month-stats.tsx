@@ -106,12 +106,12 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
   if (!stats || availableMonths.length === 0) return null;
 
   return (
-    <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20">
-      <div className="flex flex-col gap-3 border-b border-white/5 pb-2 sm:flex-row sm:items-center sm:justify-between">
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-emerald-400/30 dark:border-white/5 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03)] dark:hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] dark:hover:border-emerald-400/20">
+      <div className="flex flex-col gap-3 border-b border-slate-200 pb-2 dark:border-white/5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-semibold tracking-tight">Month Overview</h2>
           {availableMonths.length > 1 && (
-            <div className="flex flex-wrap gap-1 rounded-lg border border-white/10 p-0.5">
+            <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 p-0.5 dark:border-white/10">
               {availableMonths.map((m, i) => (
                 <button
                   key={monthKey(m.year, m.month)}
@@ -119,8 +119,8 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
                   onClick={() => setSelectedIndex(i)}
                   className={`touch-target touch-pad rounded-md px-2.5 py-1 text-xs font-medium transition ${
                     i === selectedIndex
-                      ? "bg-white/10 text-white"
-                      : "text-slate-300 hover:text-slate-200"
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-white/10 dark:text-white"
+                      : "text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-slate-200"
                   }`}
                 >
                   {m.shortLabel}
@@ -132,39 +132,39 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
         <ProBadge label={getPlanBadgeLabel(profile)} variant={getPlanBadgeVariant(profile)} size="sm" />
       </div>
       <div className="mt-4">
-        <p className="mb-3 text-sm text-slate-300">{selectedMonth?.label}</p>
+        <p className="mb-3 text-sm text-slate-500 dark:text-slate-300">{selectedMonth?.label}</p>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="min-w-0 overflow-hidden rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-center">
-            <p className="truncate tabular-nums text-2xl font-bold text-emerald-300">{stats.trip}</p>
-            <p className="text-xs text-slate-300">Trips</p>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center dark:border-emerald-500/20 dark:bg-emerald-500/5">
+            <p className="truncate tabular-nums text-2xl font-bold text-emerald-700 dark:text-emerald-300">{stats.trip}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-300">Trips</p>
           </div>
-          <div className="min-w-0 overflow-hidden rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-center">
-            <p className="truncate tabular-nums text-2xl font-bold text-blue-300">{stats.reserve}</p>
-            <p className="text-xs text-slate-300">Reserve days</p>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-center dark:border-blue-500/20 dark:bg-blue-500/5">
+            <p className="truncate tabular-nums text-2xl font-bold text-blue-700 dark:text-blue-300">{stats.reserve}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-300">Reserve days</p>
           </div>
-          <div className="min-w-0 overflow-hidden rounded-xl border border-slate-500/20 bg-slate-500/5 px-4 py-3 text-center">
-            <p className="truncate tabular-nums text-2xl font-bold text-slate-300">{stats.vacationOff}</p>
-            <p className="text-xs text-slate-300">Days off</p>
+          <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center dark:border-slate-500/20 dark:bg-slate-500/5">
+            <p className="truncate tabular-nums text-2xl font-bold text-slate-700 dark:text-slate-300">{stats.vacationOff}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-300">Days off</p>
           </div>
-          <div className="min-w-0 overflow-hidden rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-center">
+          <div className="min-w-0 overflow-hidden rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center dark:border-amber-500/20 dark:bg-amber-500/5">
             <div className="space-y-2">
               <div>
-                <p className="truncate tabular-nums text-2xl font-normal text-amber-300/80">
+                <p className="truncate tabular-nums text-2xl font-normal text-amber-800 dark:text-amber-300/80">
                   {formatMinutesToHhMm(stats.rawCreditMinutes ?? 0)}
                 </p>
-                <p className="text-xs text-slate-300">Credit</p>
+                <p className="text-xs text-slate-500 dark:text-slate-300">Credit</p>
               </div>
-              <div className="border-t border-white/5 pt-2">
-                <p className="truncate tabular-nums text-xs font-normal text-amber-300/80">
+              <div className="border-t border-slate-200 pt-2 dark:border-white/5">
+                <p className="truncate tabular-nums text-xs font-normal text-amber-800 dark:text-amber-300/80">
                   {formatMinutesToHhMm(Math.round((stats.totalBlock ?? 0) * 60))}
                 </p>
-                <p className="text-xs text-slate-300">Block</p>
+                <p className="text-xs text-slate-500 dark:text-slate-300">Block</p>
               </div>
             </div>
           </div>
         </div>
         <div
-          className={`mt-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-slate-900/40 to-slate-950/40 px-5 py-4 shadow-[0_0_0_1px_rgba(16,185,129,0.12),0_20px_60px_rgba(0,0,0,0.35)] transition-all duration-200 hover:shadow-[0_0_0_1px_rgba(16,185,129,0.2),0_0_30px_rgba(16,185,129,0.1),0_20px_60px_rgba(0,0,0,0.35)] ${
+          className={`mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 px-5 py-4 shadow-sm transition-all duration-200 dark:border-emerald-500/20 dark:bg-gradient-to-br dark:from-emerald-500/10 dark:via-slate-900/40 dark:to-slate-950/40 dark:shadow-[0_0_0_1px_rgba(16,185,129,0.12),0_20px_60px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_0_0_1px_rgba(16,185,129,0.2),0_0_30px_rgba(16,185,129,0.1),0_20px_60px_rgba(0,0,0,0.35)] ${
             stats.payEligible && !optimisticShow ? "opacity-60 saturate-75" : ""
           }`}
         >
@@ -186,7 +186,7 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
             <>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-wide text-emerald-200/80">
+                <p className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-200/80">
                   Pay Estimate
                 </p>
                 <p className="mt-1 text-[11px] text-slate-500">
@@ -198,7 +198,7 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
                 type="button"
                 onClick={onTogglePay}
                 disabled={isPending}
-                className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1.5 text-xs text-emerald-800 hover:bg-emerald-200 disabled:opacity-60 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-100 dark:hover:bg-emerald-500/20"
                 aria-label={optimisticShow ? "Hide pay" : "Show pay"}
                 title={optimisticShow ? "Hide pay" : "Show pay"}
               >
@@ -218,7 +218,7 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
 
             {!stats.payProjection ? (
               <div className="mt-4 space-y-2">
-                <p className="text-sm font-medium text-emerald-200/90">
+                <p className="text-sm font-medium text-emerald-700 dark:text-emerald-200/90">
                   Complete your Profile to enable pay estimate
                 </p>
                 <p className="text-xs text-slate-500">
@@ -239,36 +239,36 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
             ) : (
             <>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="min-w-0 overflow-hidden rounded-xl border border-white/5 bg-black/20 p-3">
-                <p className="text-xs text-slate-300">Estimated Payment</p>
-                <p className="text-xs text-slate-300">(20th)</p>
-                <p className="mt-1 break-words font-semibold tabular-nums tracking-tight text-emerald-200">
+              <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100/80 p-3 dark:border-white/5 dark:bg-black/20">
+                <p className="text-xs text-slate-500 dark:text-slate-300">Estimated Payment</p>
+                <p className="text-xs text-slate-500 dark:text-slate-300">(20th)</p>
+                <p className="mt-1 break-words font-semibold tabular-nums tracking-tight text-emerald-700 dark:text-emerald-200">
                   {optimisticShow && stats.payProjection
                     ? formatUSD(stats.payProjection.pay20thGross)
                     : "••••••"}
                 </p>
               </div>
 
-              <div className="min-w-0 overflow-hidden rounded-xl border border-white/5 bg-black/20 p-3">
-                <p className="text-xs text-slate-300">Estimated Payment</p>
-                <p className="text-xs text-slate-300">(5th)</p>
-                <p className="mt-1 break-words text-base font-medium tabular-nums tracking-tight text-emerald-200/90">
+              <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100/80 p-3 dark:border-white/5 dark:bg-black/20">
+                <p className="text-xs text-slate-500 dark:text-slate-300">Estimated Payment</p>
+                <p className="text-xs text-slate-500 dark:text-slate-300">(5th)</p>
+                <p className="mt-1 break-words text-base font-medium tabular-nums tracking-tight text-emerald-700 dark:text-emerald-200/90">
                   {optimisticShow && stats.payProjection
                     ? formatUSD(stats.payProjection.pay5thGross)
                     : "••••••"}
                 </p>
               </div>
 
-              <div className="relative min-w-0 overflow-hidden rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3">
-                {/* subtle glow */}
-                <div className="pointer-events-none absolute -inset-10 opacity-40 blur-2xl bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.35),transparent_60%)]" />
-                <div className="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.25),transparent_70%)]" />
+              <div className="relative min-w-0 overflow-hidden rounded-xl border border-emerald-200 bg-emerald-100 p-3 dark:border-emerald-400/20 dark:bg-emerald-500/10">
+                {/* subtle glow - dark only */}
+                <div className="pointer-events-none absolute -inset-10 hidden opacity-40 blur-2xl bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.35),transparent_60%)] dark:block" />
+                <div className="pointer-events-none absolute inset-0 hidden opacity-20 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.25),transparent_70%)] dark:block" />
 
-                <p className="relative text-xs font-bold text-emerald-100/80 leading-tight">
-                  Estimated Monthly <span className="text-emerald-100/60">(Total)</span>
+                <p className="relative text-xs font-bold text-emerald-800 leading-tight dark:text-emerald-100/80">
+                  Estimated Monthly <span className="text-emerald-700 dark:text-emerald-100/60">(Total)</span>
                 </p>
 
-                <p className="relative mt-1 break-words text-xl font-bold tabular-nums tracking-tight text-emerald-100">
+                <p className="relative mt-1 break-words text-xl font-bold tabular-nums tracking-tight text-emerald-800 dark:text-emerald-100">
                   {optimisticShow && stats.payProjection
                     ? formatUSD(animatedTotal)
                     : "••••••"}
@@ -276,11 +276,11 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
               </div>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-300">
               {optimisticShow && stats.payProjection ? (
                 <span>
                   Rate{" "}
-                  <span className="font-semibold text-emerald-300">
+                  <span className="font-semibold text-emerald-700 dark:text-emerald-300">
                     {formatUSD(stats.payProjection.rate)}/hr
                   </span>{" "}
                   • Year {stats.payProjection.year}
@@ -288,12 +288,12 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
               ) : (
                 <span className="text-slate-500">—</span>
               )}
-              <span className="italic text-slate-300">
+              <span className="italic text-slate-500 dark:text-slate-300">
                 Tap the eye to hide pay before showing your dashboard.
               </span>
             </div>
 
-            <div className="mt-3 border-t border-white/[0.12] pt-3">
+            <div className="mt-3 border-t border-slate-200 pt-3 dark:border-white/[0.12]">
               <p className="text-[11px] text-slate-500">
                 CrewRules™ provides pay estimates only (before tax) and is not an official Frontier Airlines pay statement.
                 For pay questions or discrepancies, please contact the Frontier Airlines Payroll Department.

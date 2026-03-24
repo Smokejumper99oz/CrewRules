@@ -1,6 +1,7 @@
 "use server";
 
 import { addDays } from "date-fns";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createActionClient } from "@/lib/supabase/server-action";
 import { getProfile } from "@/lib/profile";
@@ -57,6 +58,7 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   const familyViewShowExactTimes = formData.get("family_view_show_exact_times") === "1";
   const familyViewShowOvernightCities = formData.get("family_view_show_overnight_cities") === "1";
   const familyViewShowCommuteEstimates = formData.get("family_view_show_commute_estimates") === "1";
+  const colorMode = (formData.get("color_mode") as string) || "dark";
 
   if (fullName && fullName.length > 128) {
     return { error: "Full Name is too long" };
@@ -97,6 +99,9 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   if (![0, 30, 60].includes(commuteRelease)) {
     return { error: "Invalid commute release buffer" };
   }
+  if (!["dark", "light", "system"].includes(colorMode)) {
+    return { error: "Invalid theme" };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -125,11 +130,15 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
       family_view_show_exact_times: familyViewShowExactTimes,
       family_view_show_overnight_cities: familyViewShowOvernightCities,
       family_view_show_commute_estimates: familyViewShowCommuteEstimates,
+      color_mode: colorMode,
       updated_at: new Date().toISOString(),
     })
     .eq("id", profile.id);
 
   if (error) return { error: error.message };
+
+  const cookieStore = await cookies();
+  cookieStore.set("crewrules-color-mode", colorMode, { path: "/", maxAge: 60 * 60 * 24 * 365 });
 
   try {
     await ensureInboundAliasIfMissing(profile.id);

@@ -25,7 +25,7 @@ export default async function PortalDashboard() {
     <div className="space-y-6">
       <div>
         <p className="text-[0.9375rem] text-slate-500">{greetingPart}</p>
-        <p className="text-lg font-semibold text-slate-100">{namePart}</p>
+        <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{namePart}</p>
       </div>
 
       {/* Next Duty */}

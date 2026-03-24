@@ -56,6 +56,7 @@ type Props = {
     family_view_show_exact_times?: boolean;
     family_view_show_overnight_cities?: boolean;
     family_view_show_commute_estimates?: boolean;
+    color_mode?: "dark" | "light" | "system";
     is_founding_pilot?: boolean;
     founding_pilot_started_at?: string | null;
   };
@@ -152,7 +153,7 @@ function ConnectFlicaSection({
   return (
     <section className="space-y-5">
       <div>
-        <h2 className="text-base font-semibold text-white mb-1 flex items-center gap-2">
+        <h2 className="text-base font-semibold text-slate-900 mb-1 dark:text-white flex items-center gap-2">
           Connect FLICA (Auto Sync)
           <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/40">
             BETA
@@ -166,7 +167,7 @@ function ConnectFlicaSection({
       </div>
 
       {/* Status indicator */}
-      <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-950/40 px-4 py-3">
         {hasSchedule ? (
           <p className="text-sm text-emerald-300 flex items-center gap-2">
             <span aria-hidden>✅</span>
@@ -270,6 +271,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
   const pristineSnapshotRef = useRef<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
 
+  const colorMode = profile.color_mode ?? "dark";
   const displayTimezoneMode = profile.display_timezone_mode ?? "base";
   const timeFormat = profile.time_format ?? "24h";
   const showTimezoneLabel = profile.show_timezone_label ?? false;
@@ -429,11 +431,11 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
       <form ref={formRef} onSubmit={handleSubmit} className="mt-6 space-y-8">
       {/* Personal Information */}
       <section>
-        <h2 className="text-base font-semibold text-white mb-1">Personal Information</h2>
+        <h2 className="text-base font-semibold text-slate-900 mb-1 dark:text-white">Personal Information</h2>
         <p className="text-xs text-slate-500 mb-4">Pilot profile and employment details.</p>
         <div className="space-y-4">
           <div>
-            <label htmlFor="full_name" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="full_name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Full Name
             </label>
             <input
@@ -442,11 +444,11 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               type="text"
               defaultValue={profile.full_name ?? ""}
               placeholder="e.g. Jane Smith"
-              className="mt-1.5 w-full max-w-sm rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30"
+              className="profile-input-base mt-1.5 w-full max-w-sm"
             />
           </div>
           <div>
-            <label htmlFor="employee_number" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="employee_number" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Employee Number
             </label>
             <input
@@ -455,14 +457,14 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               type="text"
               defaultValue={profile.employee_number ?? ""}
               placeholder="e.g. 12345"
-              className="mt-1.5 w-full max-w-sm rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30"
+              className="profile-input-base mt-1.5 w-full max-w-sm"
             />
             <p className="mt-1 text-xs text-slate-500">
               Employee Number is used for internal portal identification and to enable pilot matching in the CrewRules™ Mentorship Program.
             </p>
           </div>
           <div>
-            <label htmlFor="date_of_hire" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="date_of_hire" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Date of Hire (DOH)
             </label>
             <DatePickerInput
@@ -470,21 +472,21 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               name="date_of_hire"
               value={profile.date_of_hire ?? undefined}
               placeholder="mm/dd/yyyy"
-              className="mt-1.5 w-full max-w-[12rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 cursor-pointer"
+              className="profile-input-base mt-1.5 w-full max-w-[12rem] cursor-pointer"
             />
             <p className="mt-1 text-xs text-slate-500">
               Used for internal calculations such as anniversary badges and CrewRules™ Pro pay calculations. Your information is never shared.
             </p>
           </div>
           <div>
-            <label htmlFor="position" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="position" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Role
             </label>
             <select
               id="position"
               name="position"
               defaultValue={profile.position ?? ""}
-              className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
+              className="profile-select-base profile-select mt-1.5"
             >
               <option value="">Select role</option>
               <option value="captain">Captain</option>
@@ -493,7 +495,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             </select>
           </div>
           <div>
-            <label htmlFor="base_airport" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="base_airport" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Crew Base
             </label>
             <select
@@ -501,7 +503,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               name="base_airport"
               value={baseAirport}
               onChange={(e) => setBaseAirport(e.target.value)}
-              className="profile-select mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
+              className="profile-select-base profile-select mt-1.5 w-full max-w-[8rem]"
             >
               <option value="">Select crew base</option>
               {[...new Set([...(baseAirport && !FRONTIER_CREW_BASES.includes(baseAirport) ? [baseAirport] : []), ...FRONTIER_CREW_BASES])]
@@ -515,7 +517,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             <p className="mt-1 text-xs text-slate-500">3-letter IATA airport code. Used for reserve calculations and default commute planning. If a trip starts from another airport, Commute Assist automatically uses that airport instead.</p>
           </div>
           <div>
-            <label htmlFor="home_airport" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="home_airport" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Home Airport
             </label>
             <input
@@ -527,7 +529,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               placeholder="e.g. MCO"
               disabled={!proActive}
               readOnly={!proActive}
-              className={`mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
+              className={`profile-input-base mt-1.5 w-full max-w-[8rem] placeholder:normal-case uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
               style={{ textTransform: "uppercase" }}
               onInput={(e) => {
                 e.currentTarget.value = e.currentTarget.value.toUpperCase();
@@ -539,7 +541,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             )}
           </div>
           <div>
-            <label htmlFor="alternate_home_airport" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="alternate_home_airport" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Alternate Home Airport <span className="text-slate-500 font-normal">(Optional)</span>
             </label>
             <input
@@ -551,7 +553,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               placeholder="e.g. MCO"
               disabled={!proActive}
               readOnly={!proActive}
-              className={`mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
+              className={`profile-input-base mt-1.5 w-full max-w-[8rem] placeholder:normal-case uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
               style={{ textTransform: "uppercase" }}
               onInput={(e) => {
                 e.currentTarget.value = e.currentTarget.value.toUpperCase();
@@ -580,14 +582,14 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             </button>
             {showAdvanced && (
               <div className="mt-3">
-                <label htmlFor="base_timezone_override" className="block text-sm font-medium text-slate-300">
+                <label htmlFor="base_timezone_override" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Override crew base timezone
                 </label>
                 <select
                   id="base_timezone_override"
                   value={manualTimezone}
                   onChange={(e) => setManualTimezone(e.target.value)}
-                  className="profile-select mt-1.5 w-full max-w-sm rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
+                  className="profile-select-base profile-select mt-1.5 w-full max-w-sm"
                 >
                   {[...new Set([...(COMMON_TIMEZONES.includes(manualTimezone) ? [] : [manualTimezone]), ...COMMON_TIMEZONES])].map(
                     (tz) => (
@@ -601,7 +603,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             )}
           </div>
           <div>
-            <label htmlFor="equipment" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="equipment" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Equipment <span className="text-slate-500 font-normal">(optional)</span>
             </label>
             <input
@@ -610,7 +612,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               type="text"
               defaultValue={profile.equipment ?? "A320/A321"}
               placeholder="e.g. A320, A321"
-              className="mt-1.5 w-full max-w-sm rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30"
+              className="mt-1.5 w-full max-w-sm profile-input-base"
             />
           </div>
         </div>
@@ -624,7 +626,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
 
       {/* CrewRules™ Pro Features */}
       <section>
-        <h2 className="text-base font-semibold text-white mb-1">
+        <h2 className="text-base font-semibold text-slate-900 mb-1 dark:text-white">
           Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> <span className="text-amber-400">PRO</span> Features
           {!proActive && <span className="ml-1.5 text-xs font-normal text-slate-500">🔒</span>}
         </h2>
@@ -732,7 +734,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             {trialMessage && (
               <p className="mt-2 text-sm text-amber-200/90">{trialMessage}</p>
             )}
-            <div className="mt-6 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4 opacity-60">
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-950/40 px-4 py-4 opacity-60">
               <p className="mb-2 text-sm font-medium text-slate-300">CrewRules™ Pro includes</p>
               <ul className="space-y-2 text-sm text-slate-400">
                 <li className="flex items-start gap-2">
@@ -772,7 +774,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
           )}
 
           {/* Direct Flights card */}
-          <div className={`rounded-xl border border-white/10 bg-slate-950/40 ${!proActive ? "opacity-80" : ""}`}>
+          <div className={`rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-950/40 ${!proActive ? "opacity-80" : ""}`}>
             <button
               type="button"
               onClick={() => setDirectFlightsExpanded(!directFlightsExpanded)}
@@ -785,7 +787,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               <div>
                 <label
                   htmlFor="commute_arrival_buffer_minutes"
-                  className="block text-sm font-medium text-slate-300"
+                  className="block text-sm font-medium text-slate-700 dark:text-slate-300"
                 >
                   Arrival Buffer Before Duty
                 </label>
@@ -794,7 +796,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   name="commute_arrival_buffer_minutes"
                   defaultValue={commuteArrival}
                   disabled={!proActive}
-                  className={`profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200 disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
+                  className={`profile-select-base profile-select mt-1.5 disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
                 >
                   {COMMUTE_BUFFER_OPTIONS.map((m) => (
                     <option key={m} value={m}>
@@ -812,7 +814,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
           </div>
 
           {/* 2 Leg Options card */}
-          <div className={`mt-4 rounded-xl border border-white/10 bg-slate-950/40 ${!proActive ? "opacity-80" : ""}`}>
+          <div className={`mt-4 rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-950/40 ${!proActive ? "opacity-80" : ""}`}>
             <button
               type="button"
               onClick={() => setTwoLegExpanded(!twoLegExpanded)}
@@ -844,7 +846,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 Used when no direct flight exists. Example: SAV → ATL → SJU or SAV → MCO → SJU.
               </p>
               <div>
-                <label htmlFor="commute_two_leg_stop_1" className="block text-sm font-medium text-slate-300">
+                <label htmlFor="commute_two_leg_stop_1" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Connection Airport 1
                 </label>
                 <input
@@ -856,7 +858,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   placeholder="e.g. ATL"
                   disabled={!proActive}
                   readOnly={!proActive}
-                  className={`mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
+                  className={`profile-input-base mt-1.5 w-full max-w-[8rem] placeholder:normal-case uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
                   style={{ textTransform: "uppercase" }}
                   onInput={(e) => {
                     e.currentTarget.value = e.currentTarget.value.toUpperCase();
@@ -864,7 +866,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                 />
               </div>
               <div>
-                <label htmlFor="commute_two_leg_stop_2" className="block text-sm font-medium text-slate-300">
+                <label htmlFor="commute_two_leg_stop_2" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Connection Airport 2
                 </label>
                 <input
@@ -876,7 +878,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                   placeholder="e.g. MCO"
                   disabled={!proActive}
                   readOnly={!proActive}
-                  className={`mt-1.5 w-full max-w-[8rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 placeholder:normal-case focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
+                  className={`profile-input-base mt-1.5 w-full max-w-[8rem] placeholder:normal-case uppercase disabled:opacity-70 disabled:cursor-not-allowed ${!proActive ? "opacity-60 cursor-not-allowed" : ""}`}
                   style={{ textTransform: "uppercase" }}
                   onInput={(e) => {
                     e.currentTarget.value = e.currentTarget.value.toUpperCase();
@@ -912,7 +914,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               🔒 Available with CrewRules™ Pro — start your free 14-day trial to unlock this feature.
             </p>
           )}
-          <div className={`space-y-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4 ${!proActive ? "opacity-80" : ""}`}>
+          <div className={`space-y-4 rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-950/40 px-4 py-4 ${!proActive ? "opacity-80" : ""}`}>
             <div className="flex items-center gap-3">
               {proActive ? (
                 <input type="hidden" name="show_pay_projection" value="0" />
@@ -952,7 +954,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               🔒 Available with CrewRules™ Pro — start your free 14-day trial to unlock this feature.
             </p>
           )}
-          <div className={`space-y-4 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4 ${!proActive ? "opacity-80" : ""}`}>
+          <div className={`space-y-4 rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-950/40 px-4 py-4 ${!proActive ? "opacity-80" : ""}`}>
             <div className="flex items-center gap-3">
               {proActive ? (
                 <input type="hidden" name="family_view_enabled" value="0" />
@@ -1057,7 +1059,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               🔒 Available with CrewRules™ Pro — start your free 14-day trial to unlock this feature.
             </p>
           )}
-          <div className={`rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4 ${!proActive ? "opacity-80" : ""}`}>
+          <div className={`rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-950/40 px-4 py-4 ${!proActive ? "opacity-80" : ""}`}>
             <p className="text-sm text-slate-400">
               {proActive ? "AI features are available in the Ask and Library sections." : "Unlock Pro to access AI search and document insights."}
             </p>
@@ -1065,20 +1067,44 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
         </div>
       </section>
 
+      {/* Appearance */}
+      <section>
+        <h2 className="text-base font-semibold text-slate-900 mb-1 dark:text-white">Appearance</h2>
+        <p className="text-xs text-slate-500 mb-4">Theme preference for the pilot portal.</p>
+        <div>
+          <label htmlFor="color_mode" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Theme
+          </label>
+          <select
+            id="color_mode"
+            name="color_mode"
+            defaultValue={colorMode}
+            className="profile-select-base profile-select mt-1.5"
+          >
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="system">System</option>
+          </select>
+          <p className="mt-1 text-xs text-slate-500">
+            System follows your device light/dark preference.
+          </p>
+        </div>
+      </section>
+
       {/* Schedule Display */}
       <section>
-        <h2 className="text-base font-semibold text-white mb-1">Schedule Display</h2>
+        <h2 className="text-base font-semibold text-slate-900 mb-1 dark:text-white">Schedule Display</h2>
         <p className="text-xs text-slate-500 mb-4">Controls how your schedule is shown.</p>
         <div className="space-y-4">
           <div>
-            <label htmlFor="display_timezone_mode" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="display_timezone_mode" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Schedule Time Reference
             </label>
             <select
               id="display_timezone_mode"
               name="display_timezone_mode"
               defaultValue={displayTimezoneMode === "toggle" ? "both" : displayTimezoneMode}
-              className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
+              className="profile-select-base profile-select mt-1.5"
             >
               <option value="base">Base Time (Recommended)</option>
               <option value="device">Device local time</option>
@@ -1089,14 +1115,14 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             </p>
           </div>
           <div>
-            <label htmlFor="time_format" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="time_format" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Time Format
             </label>
             <select
               id="time_format"
               name="time_format"
               defaultValue={timeFormat}
-              className="profile-select mt-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 [&>option]:bg-slate-900 [&>option]:text-slate-200"
+              className="profile-select-base profile-select mt-1.5"
             >
               <option value="24h">24-hour (Default)</option>
               <option value="12h">12-hour (AM/PM)</option>
@@ -1124,9 +1150,9 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
 
       {/* Account */}
       <section>
-        <h2 className="text-base font-semibold text-white mb-1">Account</h2>
+        <h2 className="text-base font-semibold text-slate-900 mb-1 dark:text-white">Account</h2>
         <p className="text-xs text-slate-500 mb-4">Manage your CrewRules™ Pro subscription and account settings.</p>
-        <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 space-y-3">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-950/40 px-4 py-3 space-y-3">
           <div>
             <span className="text-xs font-medium text-slate-500">Email</span>
             <p className="text-sm text-white">{profile.email ?? "—"}</p>
@@ -1180,7 +1206,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                     minLength={8}
                     autoComplete="new-password"
                     placeholder="At least 8 characters"
-                    className="mt-1 w-full max-w-xs rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30"
+                    className="mt-1 w-full max-w-xs profile-input-base"
                   />
                 </div>
                 <div>
@@ -1195,7 +1221,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
                     minLength={8}
                     autoComplete="new-password"
                     placeholder="Repeat new password"
-                    className="mt-1 w-full max-w-xs rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30"
+                    className="mt-1 w-full max-w-xs profile-input-base"
                   />
                 </div>
                 {passwordMessage && (

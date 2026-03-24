@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Whisper } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const whisper = Whisper({ weight: "400", subsets: ["latin"], variable: "--font-whisper" });
 
@@ -64,14 +66,19 @@ export const viewport = {
   viewportFit: "cover" as const,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const cookieStore = await cookies();
+  const colorMode = (cookieStore.get("crewrules-color-mode")?.value as "dark" | "light" | "system") ?? "dark";
+
   return (
     <html lang="en" className={whisper.variable} suppressHydrationWarning>
-      <body className="min-h-screen bg-slate-950 text-white antialiased" suppressHydrationWarning>{children}</body>
+      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-white" suppressHydrationWarning>
+        <ThemeProvider initialTheme={colorMode}>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

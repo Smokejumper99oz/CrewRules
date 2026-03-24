@@ -91,15 +91,15 @@ export function PortalLayoutShell({
         />
       )}
       <DesktopIdleLogout />
-      <main className="min-h-screen bg-slate-950 text-white">
+      <main className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
         <div className="flex h-screen overflow-hidden">
-          <aside className="sidebar-scrollbar-hide hidden shrink-0 flex-col gap-4 overflow-y-auto border-r border-white/5 bg-slate-950/70 backdrop-blur transition-[width] duration-300 xl:flex xl:h-screen xl:w-72">
+          <aside className="sidebar-scrollbar-hide hidden shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-white transition-[width] duration-300 dark:border-white/5 dark:bg-slate-950/70 dark:backdrop-blur xl:flex xl:h-screen xl:w-72">
             <div className="px-6 pt-6">
               <div className="text-lg font-semibold">
                 Crew<span className="text-[#75C043]">Rules</span>
                 <span className="align-super text-xs">™</span>
               </div>
-              <div className="mt-1 space-y-1 text-xs text-slate-400">
+              <div className="mt-1 space-y-1 text-xs text-slate-500 dark:text-slate-400">
                 <div>{cfg.tenant.displayName}</div>
                 <div>{cfg.portal.displayName}</div>
               </div>
@@ -119,13 +119,13 @@ export function PortalLayoutShell({
           </aside>
 
           {tabletNavOpen && (
-            <aside className="hidden shrink-0 flex-col gap-4 overflow-hidden border-r border-white/5 bg-slate-950/88 backdrop-blur-xl md:flex md:h-screen md:w-56 xl:hidden">
+            <aside className="hidden shrink-0 flex-col gap-4 overflow-hidden border-r border-slate-200 bg-white md:flex md:h-screen md:w-56 dark:border-white/5 dark:bg-slate-950/88 dark:backdrop-blur-xl xl:hidden">
               <div className="px-5 pt-6">
                 <div className="text-lg font-semibold">
                   Crew<span className="text-[#75C043]">Rules</span>
                   <span className="align-super text-xs">™</span>
                 </div>
-                <div className="mt-1 space-y-1 text-xs text-slate-400">
+                <div className="mt-1 space-y-1 text-xs text-slate-500 dark:text-slate-400">
                   <div>{cfg.tenant.displayName}</div>
                   <div>{cfg.portal.displayName}</div>
                 </div>
@@ -151,7 +151,7 @@ export function PortalLayoutShell({
               tabletNavOpen ? "md:ml-0" : "md:ml-0",
             ].join(" ")}
           >
-            <header className="shrink-0 border-b border-white/5 bg-slate-950/70 backdrop-blur pt-[env(safe-area-inset-top,0px)]">
+            <header className="shrink-0 border-b border-slate-200 bg-white pt-[env(safe-area-inset-top,0px)] dark:border-white/5 dark:bg-slate-950/70 dark:backdrop-blur">
               <PortalDebugLine
                 email={user.email}
                 role={profile.role}

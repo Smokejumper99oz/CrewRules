@@ -376,19 +376,19 @@ export async function PortalNextDuty({
 
   return (
     <div
-      className={`rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-4 sm:p-6 transition-all duration-200 hover:-translate-y-0.5 ${
+      className={`rounded-3xl border p-4 sm:p-6 transition-all duration-200 hover:-translate-y-0.5 ${
         isOnDuty
-          ? "border-l-2 border-l-emerald-500 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_0_24px_rgba(16,185,129,0.08)] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_0_28px_rgba(16,185,129,0.1),0_10px_30px_rgba(0,0,0,0.4)]"
-          : "shadow-[0_0_0_1px_rgba(255,255,255,0.03)] hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20"
+          ? "border-l-2 border-l-emerald-500 border-slate-200 bg-white shadow-sm hover:shadow-md dark:border-white/5 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_0_24px_rgba(16,185,129,0.08)] dark:hover:shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_0_28px_rgba(16,185,129,0.1),0_10px_30px_rgba(0,0,0,0.4)]"
+          : "border-slate-200 bg-white shadow-sm hover:shadow-md hover:border-emerald-400/30 dark:border-white/5 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03)] dark:hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] dark:hover:border-emerald-400/20"
       }`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2 dark:border-white/5">
         {isCurrentTripMode ? (
           <h2 className="text-xl font-semibold tracking-tight">
             Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Current Trip<span className="align-super text-[10px]">™</span>
           </h2>
         ) : isOnDuty ? (
-          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-950/80 px-4 py-2 text-base font-bold text-emerald-200">
+          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-2 text-base font-bold text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-200">
             <span
               className="h-2 w-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"
               aria-hidden
@@ -416,7 +416,7 @@ export async function PortalNextDuty({
       )}
 
       {activeTrip && (
-        <div className="mt-4 rounded-lg border border-slate-700/60 bg-slate-900/40 overflow-hidden">
+        <div className="mt-4 rounded-lg border border-slate-200 overflow-hidden bg-slate-50 dark:border-slate-700/60 dark:bg-slate-900/40">
           <div className="border-l-4 border-l-emerald-500">
           {legsToShow && legsToShow.length > 0 ? (
             legsToShow.map((leg, i) => {

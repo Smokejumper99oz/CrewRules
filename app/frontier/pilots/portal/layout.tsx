@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cookies } from "next/headers";
 import { getTenantPortalConfig } from "@/lib/tenant-config";
 import { gateUserForPortal } from "@/lib/portal-gate";
 import { isAdmin, getDisplayName, getProTrialBannerStatus } from "@/lib/profile";
@@ -13,6 +14,12 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   if (!cfg) return null;
 
   const { user, profile } = await gateUserForPortal(TENANT, PORTAL);
+
+  const cookieStore = await cookies();
+  if (!cookieStore.get("crewrules-color-mode")?.value && profile?.color_mode) {
+    cookieStore.set("crewrules-color-mode", profile.color_mode, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+  }
+
   const admin = await isAdmin(TENANT, PORTAL);
   const trialBannerStatus = getProTrialBannerStatus(profile);
   const base = `/${TENANT}/${PORTAL}/portal`;

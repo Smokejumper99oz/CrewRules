@@ -70,7 +70,7 @@ export function PortalMobileNav({
       <button
         type="button"
         onClick={handleHamburgerClick}
-        className="xl:hidden flex shrink-0 h-11 w-11 min-w-[44px] min-h-[44px] items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10 shadow-[0_0_25px_rgba(117,192,67,0.15)] touch-manipulation"
+        className="xl:hidden flex shrink-0 h-11 w-11 min-w-[44px] min-h-[44px] items-center justify-center rounded-xl bg-slate-100 ring-1 ring-slate-200 touch-manipulation dark:bg-white/5 dark:ring-white/10 dark:shadow-[0_0_25px_rgba(117,192,67,0.15)]"
         aria-label={menuClosed ? "Open menu" : "Close menu"}
       >
         {menuClosed ? (
@@ -89,28 +89,28 @@ export function PortalMobileNav({
         createPortal(
           <>
             <div
-              className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm md:hidden"
+              className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm md:hidden dark:bg-black/80"
               aria-hidden
               onClick={() => setOpen(false)}
             />
             <aside
-              className="fixed left-0 top-0 z-[60] h-full w-[85vw] max-w-[340px] bg-slate-900/95 backdrop-blur-xl border-r border-white/10 shadow-2xl ring-1 ring-white/10 md:hidden"
+              className="fixed left-0 top-0 z-[60] h-full w-[85vw] max-w-[340px] border-r border-slate-200 bg-white shadow-2xl md:hidden dark:border-white/10 dark:bg-slate-900/95 dark:backdrop-blur-xl dark:ring-1 dark:ring-white/10"
               role="dialog"
               aria-label="Navigation menu"
             >
               <div className="flex h-full flex-col pt-[env(safe-area-inset-top,0px)]">
-                <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-4 sm:px-5">
+                <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 dark:border-white/10 sm:px-5">
                   <div className="min-w-0 flex-1">
-                    <div className="text-xl font-semibold leading-tight">
+                    <div className="text-xl font-semibold leading-tight text-slate-900 dark:text-white">
                       Crew<span className="text-[#75C043]">Rules</span>
                       <span className="align-super text-xs">™</span>
                     </div>
-                    <div className="mt-0.5 text-sm text-slate-400">{portalName}</div>
+                    <div className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{portalName}</div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
-                    className="flex shrink-0 h-11 w-11 min-w-[44px] min-h-[44px] items-center justify-center rounded-xl text-slate-400 hover:bg-white/5 hover:text-white touch-manipulation"
+                    className="flex shrink-0 h-11 w-11 min-w-[44px] min-h-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 touch-manipulation dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white"
                     aria-label="Close menu"
                   >
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

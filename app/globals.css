@@ -22,15 +22,22 @@
   }
 }
 
-/* Dark theme for native select dropdowns - uses OS/browser dark mode for dropdown panels */
+/* Theme-aware: dark default, light when data-theme="light" (set by ThemeProvider) */
 @layer base {
   html {
     color-scheme: dark;
+  }
+  html[data-theme="light"] {
+    color-scheme: light;
   }
 }
 
 @layer components {
   select option {
+    background-color: #f8fafc;
+    color: #0f172a;
+  }
+  html[data-theme="dark"] select option {
     background-color: #0f172a;
     color: #e2e8f0;
   }
@@ -59,26 +66,50 @@
       padding-bottom: 0.5rem;
     }
   }
+
+  .profile-input-base {
+    @apply rounded-lg border px-3 py-2 text-sm focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30;
+    @apply border-slate-200 bg-white text-slate-900 placeholder:text-slate-400;
+    @apply dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:placeholder:text-slate-500;
+  }
+
+  .profile-select-base {
+    @apply rounded-lg border px-3 py-2 text-sm focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30;
+    @apply border-slate-200 bg-white text-slate-900;
+    @apply dark:border-white/10 dark:bg-slate-900/60 dark:text-white;
+  }
 }
 
-/* Profile date picker - dark theme to match portal (slate-900 / #75C043) */
-.rdp-profile-dark.rdp-root {
+/* Profile date picker - theme-aware (use both classes, CSS scopes by html[data-theme]) */
+html[data-theme="dark"] .rdp-profile-dark.rdp-root,
+html[data-theme="light"] .rdp-profile-light.rdp-root {
   --rdp-accent-color: #75c043;
   --rdp-accent-background-color: rgba(117, 192, 67, 0.2);
   --rdp-today-color: #75c043;
+}
+html[data-theme="dark"] .rdp-profile-dark.rdp-root {
   color: #e2e8f0;
 }
-.rdp-profile-dark .rdp-day_button {
+html[data-theme="light"] .rdp-profile-light.rdp-root {
+  color: #0f172a;
+}
+html[data-theme="dark"] .rdp-profile-dark .rdp-day_button,
+html[data-theme="light"] .rdp-profile-light .rdp-day_button {
   color: inherit;
 }
-.rdp-profile-dark .rdp-day_button:hover {
+html[data-theme="dark"] .rdp-profile-dark .rdp-day_button:hover {
   background: rgba(255, 255, 255, 0.1);
 }
-.rdp-profile-dark .rdp-selected .rdp-day_button {
+html[data-theme="light"] .rdp-profile-light .rdp-day_button:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+html[data-theme="dark"] .rdp-profile-dark .rdp-selected .rdp-day_button,
+html[data-theme="light"] .rdp-profile-light .rdp-selected .rdp-day_button {
   background: #75c043 !important;
   color: #020617 !important;
 }
-.rdp-profile-dark .rdp-chevron {
+html[data-theme="dark"] .rdp-profile-dark .rdp-chevron,
+html[data-theme="light"] .rdp-profile-light .rdp-chevron {
   fill: #75c043;
 }
 

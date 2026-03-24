@@ -55,20 +55,20 @@ export function PageTitle({ portalDisplayName = "", isAdmin = false }: PageTitle
   // Weather Brief uses branded title with role context
   if (!inAdmin && currentSegment === "weather-brief") {
     return (
-      <h1 className="min-w-0 truncate text-xl font-semibold tracking-normal border-b border-white/5 pb-1">
+      <h1 className="min-w-0 truncate text-xl font-semibold tracking-normal border-b border-slate-200 pb-1 dark:border-white/5">
         Crew<span className="text-[#75C043]">Rules</span>
         <span className="align-super text-xs">™</span> Weather Brief
-        {context && <span className="text-slate-400 font-normal mx-1.5">|</span>}
-        {context && <span className="text-slate-400 font-normal">{context}</span>}
+        {context && <span className="text-slate-500 font-normal mx-1.5 dark:text-slate-400">|</span>}
+        {context && <span className="text-slate-500 font-normal dark:text-slate-400">{context}</span>}
       </h1>
     );
   }
 
   return (
-    <h1 className="min-w-0 truncate text-xl font-semibold tracking-normal border-b border-white/5 pb-1">
+    <h1 className="min-w-0 truncate text-xl font-semibold tracking-normal border-b border-slate-200 pb-1 dark:border-white/5">
       {pageTitle}
-      {context && <span className="text-slate-400 font-normal mx-1.5">|</span>}
-      {context && <span className="text-slate-400 font-normal">{context}</span>}
+      {context && <span className="text-slate-500 font-normal mx-1.5 dark:text-slate-400">|</span>}
+      {context && <span className="text-slate-500 font-normal dark:text-slate-400">{context}</span>}
     </h1>
   );
 }

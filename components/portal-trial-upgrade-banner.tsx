@@ -51,8 +51,8 @@ export function PortalTrialUpgradeBanner({ status, daysRemaining }: BannerProps)
     <div
       className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
         isUrgent
-          ? "border-amber-600/40 bg-amber-950/20 text-amber-100"
-          : "border-slate-600/40 bg-slate-800/50 text-slate-200"
+          ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-600/40 dark:bg-amber-950/20 dark:text-amber-100"
+          : "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-600/40 dark:bg-slate-800/50 dark:text-slate-200"
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -63,8 +63,8 @@ export function PortalTrialUpgradeBanner({ status, daysRemaining }: BannerProps)
           disabled={loading}
           className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition disabled:opacity-50 ${
             isUrgent
-              ? "bg-amber-600/80 text-white hover:bg-amber-600"
-              : "bg-slate-700/80 text-white hover:bg-slate-700"
+              ? "bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-600/80 dark:hover:bg-amber-600"
+              : "bg-slate-600 text-white hover:bg-slate-700 dark:bg-slate-700/80 dark:hover:bg-slate-700"
           }`}
         >
           {loading ? "Redirecting…" : "Upgrade to Pro"}

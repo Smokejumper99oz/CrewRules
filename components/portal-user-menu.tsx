@@ -50,12 +50,12 @@ export function PortalUserMenu({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-white/5 transition touch-manipulation min-h-[44px]"
+        className="flex items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-slate-100 transition touch-manipulation min-h-[44px] dark:hover:bg-white/5"
         aria-expanded={open}
         aria-haspopup="true"
         aria-label="User menu"
       >
-        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5 p-[0.2rem] shadow-[0_0_25px_rgba(117,192,67,0.15)]">
+        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 p-[0.2rem] dark:border-white/10 dark:bg-white/5 dark:shadow-[0_0_25px_rgba(117,192,67,0.15)]">
           <Image
             src="/icons/f9-icon.png"
             alt="Frontier Airlines"
@@ -80,14 +80,14 @@ export function PortalUserMenu({
 
       {open && (
         <div
-          className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-white/10 bg-slate-900 shadow-xl"
+          className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-slate-200 bg-white shadow-xl dark:border-white/10 dark:bg-slate-900"
           role="menu"
         >
           <div className="p-4">
-            <div className="font-medium text-white">{displayName}</div>
-            <div className="mt-0.5 text-sm text-slate-400">{roleLabel}</div>
+            <div className="font-medium text-slate-900 dark:text-white">{displayName}</div>
+            <div className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{roleLabel}</div>
           </div>
-          <div className="border-t border-white/10 p-2">
+          <div className="border-t border-slate-200 p-2 dark:border-white/10">
             <SignOutButton signOut={signOut} buttonClassName="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-white hover:bg-white/5 transition touch-manipulation disabled:opacity-50" role="menuitem">
               <span className="flex-1">Sign Out</span>
               <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
