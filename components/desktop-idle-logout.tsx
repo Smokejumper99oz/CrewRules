@@ -47,8 +47,7 @@ export function DesktopIdleLogout() {
       } catch {
         // Best-effort
       }
-      router.replace(LOGIN_PATH);
-      router.refresh();
+      window.location.replace(LOGIN_PATH);
     }
 
     function resetTimer() {
@@ -113,8 +112,7 @@ export function DesktopIdleLogout() {
     } catch {
       // Best-effort
     }
-    router.replace(LOGIN_PATH);
-    router.refresh();
+    window.location.replace(LOGIN_PATH);
   }
 
   if (typeof document === "undefined") return null;

@@ -2,10 +2,18 @@ import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, computeTripCre
 import type { ScheduleEvent, ScheduleEventLeg } from "@/app/frontier/pilots/portal/schedule/actions";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
 
-function formatLeg(leg: ScheduleEventLeg): string {
+/** Prefix flight number for display: carrierCode + number, or FLT + number. Does not change stored data. */
+function formatFlightDisplay(flightNumber: string, carrierCode?: string | null): string {
+  const num = (flightNumber ?? "").trim();
+  if (!num) return "";
+  const prefix = carrierCode?.trim() || "FLT";
+  return `${prefix}${num}`;
+}
+
+function formatLeg(leg: ScheduleEventLeg, carrierCode?: string | null): string {
   const route = `${leg.origin} → ${leg.destination}`;
   const time = leg.depTime && leg.arrTime ? ` ${leg.depTime}–${leg.arrTime}` : "";
-  return leg.flightNumber ? `${leg.flightNumber} ${route}${time}` : `${route}${time}`;
+  return leg.flightNumber ? `${formatFlightDisplay(leg.flightNumber, carrierCode)} ${route}${time}` : `${route}${time}`;
 }
 
 const EVENT_STYLES: Record<string, string> = {
@@ -76,15 +84,9 @@ export function ScheduleEventCard({ event, displaySettings, position, compact, l
     creditMinutes != null && creditMinutes > 0
       ? formatMinutesToHhMm(creditMinutes)
       : "—";
-  const rangeStart =
-    event.event_type === "trip" && event.first_leg_departure_time
-      ? event.first_leg_departure_time
-      : formatScheduleTime(event.start_time, timeOpts);
-
-  const dutyRange =
-    legsToShow && legsToShow.length > 0 && legsToShow[0].depTime && legsToShow[legsToShow.length - 1].arrTime
-      ? `${legsToShow[0].depTime}–${legsToShow[legsToShow.length - 1].arrTime}`
-      : `${rangeStart}–${formatScheduleTime(event.end_time, timeOpts)}`;
+  const departureTime = formatScheduleTime(event.start_time, timeOpts);
+  const arrivalTime = formatScheduleTime(event.end_time, timeOpts);
+  const dutyRange = `${departureTime}–${arrivalTime}`;
   const timeLine =
     event.event_type === "reserve"
       ? `On Call • ${dutyRange}`
@@ -126,6 +128,7 @@ export function ScheduleEventCard({ event, displaySettings, position, compact, l
           {hasLegs ? (
             effectiveLegs!.map((l, i) => (
               <div key={i} className="font-medium text-slate-200 whitespace-nowrap">
+                {l.flightNumber ? `${formatFlightDisplay(l.flightNumber, displaySettings.carrierCode)} ` : ""}
                 {l.origin} → {l.destination}   {l.depTime ?? "—"} – {l.arrTime ?? "—"}
               </div>
             ))

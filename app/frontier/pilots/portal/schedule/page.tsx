@@ -18,7 +18,7 @@ import { formatLegLine } from "@/lib/trips/detect-trip-changes";
 import type { TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { formatMinutesToHhMm } from "@/lib/schedule-time";
 import { ScheduleStatusChip, formatLastImport } from "@/components/schedule-status-chip";
-import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, eventOverlapsDay, addDay } from "@/lib/schedule-time";
+import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, eventOverlapsDay, addDay, isEventOnDay } from "@/lib/schedule-time";
 import { getBidPeriodForTimestamp, getAllBidPeriodsForYear, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
 import { computeLegDates, getTripDateStrings } from "@/lib/leg-dates";
 
@@ -49,6 +49,16 @@ function eventStyle(type: string): string {
 
 function eventPillStyle(ev: ScheduleEvent): string {
   return ev.is_muted === true ? MUTED_EVENT_STYLE : eventStyle(ev.event_type);
+}
+
+function getCalendarPillLabel(ev: ScheduleEvent, dayEvents: ScheduleEvent[]): string {
+  const isPay = ev.title?.trim().toUpperCase() === "PAY" || ev.event_type === "pay";
+  if (!isPay) return ev.title || "Untitled";
+  const tripOnDay = dayEvents.find((e) => {
+    const t = (e.title ?? "").trim().toUpperCase();
+    return e.event_type === "trip" && t !== "PAY";
+  });
+  return tripOnDay ? `PAY for ${tripOnDay.title || "Untitled"}` : ev.title || "Untitled";
 }
 
 /** Calendar tile only: dim trip when day has PAY event. */
@@ -87,6 +97,9 @@ function eventsForDay(events: ScheduleEvent[], day: Date, baseTimezone: string):
     const aMuted = a.is_muted === true ? 1 : 0;
     const bMuted = b.is_muted === true ? 1 : 0;
     if (aMuted !== bMuted) return aMuted - bMuted;
+    const aCarryover = !isEventOnDay(a.start_time, day, baseTimezone) ? 1 : 0;
+    const bCarryover = !isEventOnDay(b.start_time, day, baseTimezone) ? 1 : 0;
+    if (aCarryover !== bCarryover) return aCarryover - bCarryover;
     return (a.start_time ?? "").localeCompare(b.start_time ?? "");
   });
 }
@@ -183,25 +196,9 @@ function EventDetailPopover({
       : null;
 
   const timeRange =
-    legsToShow && legsToShow.length > 0 && clickedDate
-      ? (() => {
-          const tz = displaySettings.baseTimezone;
-          const tripDateStrs = getTripDateStrings(event.start_time, event.end_time, tz);
-          const legDates = computeLegDates(event.legs!, tripDateStrs, tz);
-          const timesOnDate: string[] = [];
-          for (const { leg, departureDate, arrivalDate } of legDates) {
-            if (departureDate === clickedDate && leg.depTime) timesOnDate.push(leg.depTime);
-            if (arrivalDate === clickedDate && leg.arrTime) timesOnDate.push(leg.arrTime);
-          }
-          if (timesOnDate.length > 0) {
-            timesOnDate.sort();
-            return `${timesOnDate[0]} – ${timesOnDate[timesOnDate.length - 1]}`;
-          }
-          return `${legsToShow[0].depTime ?? "—"} – ${legsToShow[legsToShow.length - 1].arrTime ?? "—"}`;
-        })()
-      : legsToShow && legsToShow.length > 0 && legsToShow[0].depTime && legsToShow[legsToShow.length - 1].arrTime
-        ? `${legsToShow[0].depTime} – ${legsToShow[legsToShow.length - 1].arrTime}`
-        : `${formatTimeForDisplay(event.start_time, displaySettings)} – ${formatTimeForDisplay(event.end_time, displaySettings)}`;
+    legsToShow && legsToShow.length > 0 && legsToShow[0].depTime != null && legsToShow[legsToShow.length - 1].arrTime != null
+      ? `${legsToShow[0].depTime} – ${legsToShow[legsToShow.length - 1].arrTime}`
+      : `${formatTimeForDisplay(event.start_time, displaySettings)} – ${formatTimeForDisplay(event.end_time, displaySettings)}`;
 
   if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
     console.log("[EventDetailPopover] render", {
@@ -229,7 +226,7 @@ function EventDetailPopover({
           <div className="mt-2 space-y-1">
             {legsToShow.map((l, i) => (
               <p key={i} className="text-sm text-slate-400 font-mono">
-                {l.flightNumber ? `${l.flightNumber} ` : ""}
+                {l.flightNumber ? `${(displaySettings.carrierCode?.trim() || "FLT")}${l.flightNumber.trim()} ` : ""}
                 {l.origin} → {l.destination}
                 {l.depTime && l.arrTime ? ` ${l.depTime}–${l.arrTime}` : ""}
               </p>
@@ -644,7 +641,7 @@ export default function SchedulePage() {
                                 onClick={(e) => handleEventClick(ev, e.clientX, e.clientY, day)}
                                 className={`flex w-full items-center rounded border px-1.5 py-0.5 text-left text-xs ${getCalendarTileStyle(ev, dayEvents)}`}
                               >
-                                <span className="min-w-0 truncate">{ev.title || "Untitled"}</span>
+                                <span className="min-w-0 truncate">{getCalendarPillLabel(ev, dayEvents)}</span>
                                 {ev.is_muted === true && (
                                   <span className="ml-1 shrink-0 text-[10px] px-1 rounded bg-slate-500/20 text-slate-300">Previous</span>
                                 )}

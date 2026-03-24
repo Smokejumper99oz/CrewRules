@@ -14,6 +14,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { getBidPeriodBounds, getBidPeriodForTimestamp, getAllBidPeriodsForYear, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getPayScale } from "@/lib/tenant-settings";
+import { TENANT_CONFIG } from "@/lib/tenant-config";
 import { payYearFromDOH } from "@/lib/pay-utils";
 import { type TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { getInboundEmailForDisplay } from "@/lib/email/get-inbound-email-for-display";
@@ -492,6 +493,8 @@ export type ScheduleDisplaySettings = {
   displayTimezoneMode: "base" | "device" | "toggle" | "both";
   timeFormat: "24h" | "12h";
   showTimezoneLabel: boolean;
+  /** Tenant carrier code for flight number display prefix (e.g. F9 → F92300). */
+  carrierCode?: string | null;
 };
 
 export async function getScheduleDisplaySettings(): Promise<ScheduleDisplaySettings> {
@@ -503,6 +506,7 @@ export async function getScheduleDisplaySettings(): Promise<ScheduleDisplaySetti
       displayTimezoneMode: "base",
       timeFormat: "24h",
       showTimezoneLabel: false,
+      carrierCode: null,
     };
   }
   const mode = profile.display_timezone_mode ?? "base";
@@ -511,12 +515,14 @@ export async function getScheduleDisplaySettings(): Promise<ScheduleDisplaySetti
     baseTimezone: profile.base_timezone ?? (baseAirport ? getTimezoneFromAirport(baseAirport) : null),
     profileBaseTimezone: profile.base_timezone,
   });
+  const carrierCode = (profile.tenant && TENANT_CONFIG[profile.tenant]?.carrier) ?? null;
   return {
     baseTimezone,
     baseAirport,
     displayTimezoneMode: mode === "toggle" ? "both" : mode,
     timeFormat: profile.time_format ?? "24h",
     showTimezoneLabel: profile.show_timezone_label ?? false,
+    carrierCode,
   };
 }
 
@@ -670,7 +676,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
     const reserveDays = new Set<string>();
     const rslDays = new Set<string>();
     const tripDays = new Set<string>();
-    let tripOccurrences = 0;
+    const seenTripKeys = new Set<string>();
     let totalBlock = 0;
     let totalExtraCredit = 0;
     let tripCreditMinutesLine = 0; // trips that touch a reserve day (not "extra")
@@ -690,6 +696,15 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
 
     for (const ev of rows) {
       if (ev.event_type === "trip" && ev.is_muted === true) continue;
+
+      const normalizedTitle = (ev.title ?? "").trim().toUpperCase();
+      if (normalizedTitle === "PAY") continue;
+
+      if (ev.event_type === "trip") {
+        const tripKey = `${ev.title ?? ""}|${ev.start_time}|${ev.end_time}`;
+        if (seenTripKeys.has(tripKey)) continue;
+        seenTripKeys.add(tripKey);
+      }
 
       const period = getBidPeriodForTimestamp(ev.start_time, baseTimezone);
       if (process.env.NODE_ENV === "development") {
@@ -735,7 +750,6 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
         reserveEvents += 1;
       } else if (ev.event_type === "trip") {
         tripEvents += 1;
-        tripOccurrences += 1;
 
         const evCreditMinutes = ev.credit_minutes != null ? ev.credit_minutes : (ev.credit_hours != null ? Math.round(ev.credit_hours * 60) : null);
         const effectiveCreditMinutes = ev.baseline_credit_minutes != null && evCreditMinutes != null
@@ -834,7 +848,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
     const vacationOff = [...allMonthDays].filter((d) => !reserveDays.has(d) && !tripDays.has(d)).length;
 
     const stats: MonthStats = {
-      trip: tripOccurrences,
+      trip: seenTripKeys.size,
       reserve,
       vacationOff,
       totalBlock,

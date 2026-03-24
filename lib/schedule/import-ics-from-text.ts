@@ -25,10 +25,11 @@ function isReserveAssignmentByTitle(title: string): boolean {
 /**
  * Infer event_type from ICS summary/title (FLICA-style labels).
  */
-function inferEventType(summary: string): "trip" | "reserve" | "vacation" | "off" {
+function inferEventType(summary: string): "trip" | "reserve" | "vacation" | "off" | "pay" {
   const s = summary ?? "";
   if (/\bVAC\b|Vacation|\bV\d+\b/i.test(s)) return "vacation";
   if (/\bOFF\b|\bOff\b|Off Duty|DAY OFF/i.test(s)) return "off";
+  if (/\bPAY\b/i.test(s)) return "pay";
   if (isReserveAssignmentByTitle(s)) return "trip";
   if (/\b(RES|RSA|RSB|RSC|RSD|RDE|RSE|RSL)\b|Reserve/i.test(s)) return "reserve";
   return "trip";
