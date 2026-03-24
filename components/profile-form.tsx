@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { updateProfilePreferences, startProTrial, updatePassword } from "@/app/frontier/pilots/portal/profile/actions";
 import { DatePickerInput } from "@/components/date-picker-input";
 import { ProBadge } from "@/components/pro-badge";
-import { InboundEmailDisplay } from "@/components/inbound-email-display";
-import { Lock } from "lucide-react";
+import { formatLastImport } from "@/components/schedule-status-chip";
+import { Lock, Copy, Check } from "lucide-react";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -64,6 +64,7 @@ type Props = {
   proBadgeVariant: "slate" | "gold" | "emerald" | "amber" | "red";
   foundingPilotCount?: number;
   inboundEmail: string | null;
+  scheduleStatus?: { count: number; lastImportedAt: string | null };
 };
 
 /** Frontier Airlines crew bases (IATA codes). */
@@ -120,7 +121,119 @@ function getTimezoneAbbreviation(iana: string): string {
 
 const COMMUTE_BUFFER_OPTIONS = [30, 60, 90, 120, 180] as const;
 
-export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant, foundingPilotCount = 0, inboundEmail }: Props) {
+function ConnectFlicaSection({
+  inboundEmail,
+  scheduleStatus,
+}: {
+  inboundEmail: string | null;
+  scheduleStatus: { count: number; lastImportedAt: string | null };
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    if (!inboundEmail) return;
+    try {
+      await navigator.clipboard.writeText(inboundEmail);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }, [inboundEmail]);
+
+  const hasSchedule = scheduleStatus.count > 0;
+  const steps = [
+    "Copy your CrewRules import email",
+    "Open FLICA or ELP settings",
+    "Add this email to your schedule distribution list",
+    "Your schedule will sync automatically when updates are sent",
+  ];
+
+  return (
+    <section className="space-y-5">
+      <div>
+        <h2 className="text-base font-semibold text-white mb-1 flex items-center gap-2">
+          Connect FLICA (Auto Sync)
+          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/40">
+            BETA
+          </span>
+        </h2>
+        <h3 className="text-lg font-semibold text-white mt-3">Connect your schedule automatically</h3>
+        <p className="text-sm text-slate-400 mt-2">
+          CrewRules syncs your schedule automatically by receiving updates from FLICA or ELP. Set this up once and your
+          schedule will always stay up to date.
+        </p>
+      </div>
+
+      {/* Status indicator */}
+      <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3">
+        {hasSchedule ? (
+          <p className="text-sm text-emerald-300 flex items-center gap-2">
+            <span aria-hidden>✅</span>
+            <span>
+              Connected
+              {scheduleStatus.lastImportedAt && (
+                <> (Last updated: {formatLastImport(scheduleStatus.lastImportedAt)})</>
+              )}
+            </span>
+          </p>
+        ) : (
+          <p className="text-sm text-amber-400 flex items-center gap-2">
+            <span aria-hidden>⚠️</span>
+            <span>Not connected yet</span>
+          </p>
+        )}
+      </div>
+
+      {inboundEmail ? (
+        <div className="space-y-4">
+          {/* Email + Copy - prominent, mobile-friendly */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            <div className="min-w-0 flex-1 rounded-xl border border-[#75C043]/40 bg-slate-950/60 px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">
+                Your CrewRules import email
+              </p>
+              <p className="text-base font-mono text-white break-all">{inboundEmail}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="shrink-0 flex items-center justify-center gap-2 rounded-xl bg-[#75C043] px-6 py-4 text-sm font-semibold text-slate-950 hover:opacity-95 active:opacity-90 transition min-h-[48px] touch-manipulation"
+            >
+              {copied ? (
+                <>
+                  <Check className="size-5" aria-hidden />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="size-5" aria-hidden />
+                  <span>Copy</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Step-by-step instructions */}
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-slate-300">Setup steps</p>
+            <ol className="list-decimal list-inside space-y-3 text-sm text-slate-400">
+              {steps.map((step, i) => (
+                <li key={i} className="pl-1">
+                  <span className="text-slate-300">{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-slate-500">Your import email will be created after your profile is saved.</p>
+      )}
+    </section>
+  );
+}
+
+export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant, foundingPilotCount = 0, inboundEmail, scheduleStatus = { count: 0, lastImportedAt: null } }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -503,25 +616,11 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
         </div>
       </section>
 
-      {/* FLICA / Schedule Import */}
-      <section>
-        <h2 className="text-base font-semibold text-white mb-1 flex items-center gap-2">
-          FLICA / Schedule Import
-          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/40">
-            BETA
-          </span>
-        </h2>
-        <p className="text-xs text-slate-500 mb-4">
-          Send your schedule export to your personal CrewRules™ import email to import trips into My Schedule.
-        </p>
-        {inboundEmail ? (
-          <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-            <InboundEmailDisplay email={inboundEmail} variant="schedule" />
-          </div>
-        ) : (
-          <p className="text-sm text-slate-500">Your import email will be created after your profile is saved.</p>
-        )}
-      </section>
+      {/* Connect FLICA (Auto Sync) */}
+      <ConnectFlicaSection
+        inboundEmail={inboundEmail}
+        scheduleStatus={scheduleStatus}
+      />
 
       {/* CrewRules™ Pro Features */}
       <section>

@@ -611,7 +611,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("start_time, end_time, event_type, title, credit_hours, credit_minutes, baseline_credit_minutes, pairing_days, block_minutes")
+      .select("start_time, end_time, event_type, title, credit_hours, credit_minutes, baseline_credit_minutes, pairing_days, block_minutes, is_muted")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", endStr)
@@ -664,6 +664,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
       baseline_credit_minutes: number | null;
       pairing_days: number | null;
       block_minutes: number | null;
+      is_muted: boolean | null;
     }[];
 
     const reserveDays = new Set<string>();
@@ -688,6 +689,8 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
     let vacationEvents = 0;
 
     for (const ev of rows) {
+      if (ev.event_type === "trip" && ev.is_muted === true) continue;
+
       const period = getBidPeriodForTimestamp(ev.start_time, baseTimezone);
       if (process.env.NODE_ENV === "development") {
         console.log("[bid-period-check]", {
@@ -734,7 +737,11 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
         tripEvents += 1;
         tripOccurrences += 1;
 
-        const evCreditHrs = ev.credit_minutes != null ? ev.credit_minutes / 60 : ev.credit_hours ?? null;
+        const evCreditMinutes = ev.credit_minutes != null ? ev.credit_minutes : (ev.credit_hours != null ? Math.round(ev.credit_hours * 60) : null);
+        const effectiveCreditMinutes = ev.baseline_credit_minutes != null && evCreditMinutes != null
+          ? Math.max(evCreditMinutes, ev.baseline_credit_minutes)
+          : evCreditMinutes;
+        const evCreditHrs = effectiveCreditMinutes != null ? effectiveCreditMinutes / 60 : ev.credit_hours ?? null;
         let blockHrs = 0;
         let creditHrs = 0;
         let extraHrs = 0;

@@ -11,6 +11,7 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute =
     request.nextUrl.pathname === "/frontier/pilots/login" ||
     request.nextUrl.pathname === "/frontier/pilots/complete-profile" ||
+    request.nextUrl.pathname === "/frontier/pilots/connect-flica" ||
     request.nextUrl.pathname === "/frontier/pilots/sign-up" ||
     request.nextUrl.pathname === "/frontier/pilots/forgot-password" ||
     request.nextUrl.pathname === "/frontier/pilots/reset-password" ||

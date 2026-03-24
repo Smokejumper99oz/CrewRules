@@ -481,7 +481,13 @@ export async function getCommuteFlights(input: {
         .upsert(row, {
           onConflict: "tenant,user_id,commute_date,origin,destination,cache_version",
         });
-      if (upsertErr) console.error("Commute cache upsert failed", upsertErr);
+      if (upsertErr)
+        console.error("Commute cache upsert failed", {
+          code: (upsertErr as { code?: string }).code,
+          message: (upsertErr as { message?: string }).message,
+          details: (upsertErr as { details?: string }).details,
+          hint: (upsertErr as { hint?: string }).hint,
+        });
 
       if (!isPaid && accountAgeDays < 30) {
         const msISO = monthStartISO(now);
@@ -791,7 +797,13 @@ export async function getCommuteFlights(input: {
       .upsert(row, {
         onConflict: "tenant,user_id,commute_date,origin,destination,cache_version",
       });
-    if (upsertErr) console.error("Commute cache upsert failed", upsertErr);
+    if (upsertErr)
+      console.error("Commute cache upsert failed", {
+        code: (upsertErr as { code?: string }).code,
+        message: (upsertErr as { message?: string }).message,
+        details: (upsertErr as { details?: string }).details,
+        hint: (upsertErr as { hint?: string }).hint,
+      });
 
     // 5) Increment usage ONLY when an API refresh occurs and only for Free (first 30 days)
     if (!isPaid && accountAgeDays < 30) {

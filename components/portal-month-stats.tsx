@@ -111,7 +111,7 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-semibold tracking-tight">Month Overview</h2>
           {availableMonths.length > 1 && (
-            <div className="flex rounded-lg border border-white/10 p-0.5">
+            <div className="flex flex-wrap gap-1 rounded-lg border border-white/10 p-0.5">
               {availableMonths.map((m, i) => (
                 <button
                   key={monthKey(m.year, m.month)}

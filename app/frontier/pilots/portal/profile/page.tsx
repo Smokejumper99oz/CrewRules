@@ -4,6 +4,7 @@ import { getProfile, isProActive, getPlanBadgeLabel, getPlanBadgeVariant } from 
 import { ProfileForm } from "@/components/profile-form";
 import { CheckoutStatusBanner } from "@/components/checkout-status-banner";
 import { getInboundEmailForDisplay } from "@/lib/email/get-inbound-email-for-display";
+import { getScheduleImportStatus } from "@/app/frontier/pilots/portal/schedule/actions";
 
 export default async function ProfilePage() {
   const profile = await getProfile();
@@ -17,11 +18,18 @@ export default async function ProfilePage() {
   const planBadgeLabel = getPlanBadgeLabel(profile);
   const planBadgeVariant = getPlanBadgeVariant(profile);
   let inboundEmail: string | null = null;
+  let scheduleStatus: { count: number; lastImportedAt: string | null } = { count: 0, lastImportedAt: null };
   if (profile) {
     try {
       inboundEmail = await getInboundEmailForDisplay(profile.id);
     } catch (err) {
       console.warn("[Profile] getInboundEmailForDisplay failed:", err);
+    }
+    try {
+      const s = await getScheduleImportStatus();
+      scheduleStatus = { count: s.count, lastImportedAt: s.lastImportedAt };
+    } catch (err) {
+      console.warn("[Profile] getScheduleImportStatus failed:", err);
     }
   }
 
@@ -32,7 +40,7 @@ export default async function ProfilePage() {
       </Suspense>
       {profile ? (
         <>
-          <ProfileForm profile={profile} proActive={isProActive(profile)} proBadgeLabel={planBadgeLabel} proBadgeVariant={planBadgeVariant} foundingPilotCount={foundingPilotCount} inboundEmail={inboundEmail} />
+          <ProfileForm profile={profile} proActive={isProActive(profile)} proBadgeLabel={planBadgeLabel} proBadgeVariant={planBadgeVariant} foundingPilotCount={foundingPilotCount} inboundEmail={inboundEmail} scheduleStatus={scheduleStatus} />
         </>
       ) : (
         <p className="text-sm text-slate-500">Sign in to manage your profile.</p>

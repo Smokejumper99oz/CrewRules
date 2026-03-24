@@ -139,6 +139,7 @@ export type SelectedPopoverState = {
 function EventDetailPopover({
   event,
   clickedDate,
+  clickedDayEvents,
   displaySettings,
   eventStyle,
   formatDayLabel,
@@ -148,6 +149,7 @@ function EventDetailPopover({
 }: {
   event: ScheduleEvent;
   clickedDate: string | null;
+  clickedDayEvents: ScheduleEvent[];
   displaySettings: ScheduleDisplaySettings;
   eventStyle: (type: string) => string;
   formatDayLabel: (iso: string, tz: string) => string;
@@ -155,6 +157,7 @@ function EventDetailPopover({
   formatTimeForDisplay: (iso: string, opts: ScheduleDisplaySettings) => string;
   position: { x: number; y: number };
 }) {
+  const hasPayOnClickedDay = clickedDayEvents.some((e) => e.title?.trim().toUpperCase() === "PAY");
   const dateLabel =
     event.event_type === "vacation" || event.event_type === "off"
       ? formatDayRangeLabel(event.start_time, event.end_time, displaySettings.baseTimezone)
@@ -254,7 +257,8 @@ function EventDetailPopover({
             {!event.is_muted &&
               event.block_minutes != null &&
               event.credit_minutes != null &&
-              event.block_minutes < event.credit_minutes && (
+              event.block_minutes < event.credit_minutes &&
+              hasPayOnClickedDay && (
                 <p className="text-xs text-amber-400 mt-1">
                   Credit protected — Trip not fully flown
                 </p>
@@ -738,6 +742,11 @@ export default function SchedulePage() {
             <EventDetailPopover
               event={selectedPopover.event}
               clickedDate={selectedPopover.clickedDate}
+              clickedDayEvents={
+                selectedPopover.clickedDate
+                  ? eventsForDay(eventsToShow, new Date(selectedPopover.clickedDate + "T12:00:00.000Z"), baseTimezone)
+                  : []
+              }
               displaySettings={displaySettings}
               eventStyle={eventStyle}
               formatDayLabel={formatDayLabel}

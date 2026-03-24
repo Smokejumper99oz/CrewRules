@@ -151,15 +151,15 @@ export function PortalLayoutShell({
               tabletNavOpen ? "md:ml-0" : "md:ml-0",
             ].join(" ")}
           >
-            <header className="shrink-0 border-b border-white/5 bg-slate-950/70 backdrop-blur">
+            <header className="shrink-0 border-b border-white/5 bg-slate-950/70 backdrop-blur pt-[env(safe-area-inset-top,0px)]">
               <PortalDebugLine
                 email={user.email}
                 role={profile.role}
                 tenant={profile.tenant}
                 portal={profile.portal}
               />
-              <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-4 py-3 sm:px-6">
-                <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-3 py-3 sm:gap-6 sm:px-6">
+                <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                   <PortalMobileNav
                     base={base}
                     navGroups={NAV_GROUPS}
@@ -184,7 +184,7 @@ export function PortalLayoutShell({
               </div>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
               <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 pb-[env(safe-area-inset-bottom)]">
                 {trialBannerStatus && (
                   <PortalTrialUpgradeBanner

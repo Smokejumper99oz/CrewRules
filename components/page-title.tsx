@@ -55,7 +55,7 @@ export function PageTitle({ portalDisplayName = "", isAdmin = false }: PageTitle
   // Weather Brief uses branded title with role context
   if (!inAdmin && currentSegment === "weather-brief") {
     return (
-      <h1 className="text-xl font-semibold tracking-normal border-b border-white/5 pb-1">
+      <h1 className="min-w-0 truncate text-xl font-semibold tracking-normal border-b border-white/5 pb-1">
         Crew<span className="text-[#75C043]">Rules</span>
         <span className="align-super text-xs">™</span> Weather Brief
         {context && <span className="text-slate-400 font-normal mx-1.5">|</span>}
@@ -65,7 +65,7 @@ export function PageTitle({ portalDisplayName = "", isAdmin = false }: PageTitle
   }
 
   return (
-    <h1 className="text-xl font-semibold tracking-normal border-b border-white/5 pb-1">
+    <h1 className="min-w-0 truncate text-xl font-semibold tracking-normal border-b border-white/5 pb-1">
       {pageTitle}
       {context && <span className="text-slate-400 font-normal mx-1.5">|</span>}
       {context && <span className="text-slate-400 font-normal">{context}</span>}

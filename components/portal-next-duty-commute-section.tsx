@@ -59,8 +59,8 @@ export function PortalNextDutyCommuteSection({
 
   return (
     <div className="mt-3 rounded-2xl border border-white/5 bg-slate-950/30 p-4">
-      <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2 pt-1">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2 pt-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <h3 className="text-lg font-semibold text-slate-200">
             Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Commute Assist<span className="align-super text-[10px]">™</span>
           </h3>

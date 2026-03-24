@@ -72,8 +72,8 @@ export function PortalMobileNav({
             aria-label="Navigation menu"
           >
             <div className="flex h-full flex-col">
-              <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
-                <div className="text-lg font-semibold">
+              <div className="flex min-w-0 items-center justify-between gap-2 border-b border-white/10 px-4 py-4 sm:px-6">
+                <div className="min-w-0 flex-1 truncate text-lg font-semibold">
                   Crew<span className="text-[#75C043]">Rules</span>
                   <span className="align-super text-xs">™</span> · {portalName}
                 </div>
