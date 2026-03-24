@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
+import { createPortal } from "react-dom";
+import { useState, useEffect } from "react";
 import { PortalSidebarContent } from "@/components/portal-sidebar-content";
 
 type NavItem = { label: string; href: string };
@@ -33,78 +33,108 @@ export function PortalMobileNav({
   const [open, setOpen] = useState(false);
 
   const handleHamburgerClick = () => {
+    if (typeof window === "undefined") return;
     if (window.innerWidth >= 768 && window.innerWidth < 1280) {
       setTabletNavOpen(!tabletNavOpen);
     } else {
-      setOpen(true);
+      setOpen((prev) => !prev);
     }
   };
+
+  useEffect(() => {
+    if (!open) return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    if (!mq.matches) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const mq = window.matchMedia("(min-width: 768px)");
+    const handle = () => {
+      if (mq.matches) setOpen(false);
+    };
+    mq.addEventListener("change", handle);
+    return () => mq.removeEventListener("change", handle);
+  }, [open]);
+
+  const mobileDrawerOpen = open;
+  const menuClosed = !tabletNavOpen && !mobileDrawerOpen;
 
   return (
     <>
       <button
         type="button"
         onClick={handleHamburgerClick}
-        className="xl:hidden flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10 shadow-[0_0_25px_rgba(117,192,67,0.15)] touch-manipulation"
-        aria-label={tabletNavOpen ? "Close menu" : "Open menu"}
+        className="xl:hidden flex shrink-0 h-11 w-11 min-w-[44px] min-h-[44px] items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10 shadow-[0_0_25px_rgba(117,192,67,0.15)] touch-manipulation"
+        aria-label={menuClosed ? "Open menu" : "Close menu"}
       >
-        {tabletNavOpen ? (
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : (
+        {menuClosed ? (
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+        ) : (
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         )}
       </button>
 
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm xl:hidden"
-            aria-hidden
-            onClick={() => setOpen(false)}
-          />
-          <aside
-            className="fixed left-0 top-0 z-50 h-full w-72 bg-slate-900/85 backdrop-blur-xl border-r border-white/10 shadow-2xl ring-1 ring-white/10 xl:hidden"
-            role="dialog"
-            aria-label="Navigation menu"
-          >
-            <div className="flex h-full flex-col">
-              <div className="flex min-w-0 items-center justify-between gap-2 border-b border-white/10 px-4 py-4 sm:px-6">
-                <div className="min-w-0 flex-1 truncate text-lg font-semibold">
-                  Crew<span className="text-[#75C043]">Rules</span>
-                  <span className="align-super text-xs">™</span> · {portalName}
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm md:hidden"
+              aria-hidden
+              onClick={() => setOpen(false)}
+            />
+            <aside
+              className="fixed left-0 top-0 z-[60] h-full w-[85vw] max-w-[340px] bg-slate-900/95 backdrop-blur-xl border-r border-white/10 shadow-2xl ring-1 ring-white/10 md:hidden"
+              role="dialog"
+              aria-label="Navigation menu"
+            >
+              <div className="flex h-full flex-col pt-[env(safe-area-inset-top,0px)]">
+                <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-4 sm:px-5">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xl font-semibold leading-tight">
+                      Crew<span className="text-[#75C043]">Rules</span>
+                      <span className="align-super text-xs">™</span>
+                    </div>
+                    <div className="mt-0.5 text-sm text-slate-400">{portalName}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="flex shrink-0 h-11 w-11 min-w-[44px] min-h-[44px] items-center justify-center rounded-xl text-slate-400 hover:bg-white/5 hover:text-white touch-manipulation"
+                    aria-label="Close menu"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 hover:bg-white/5 hover:text-white touch-manipulation"
-                  aria-label="Close menu"
-                >
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <nav className="flex-1 overflow-y-auto px-4 py-4 pb-[env(safe-area-inset-bottom)]">
+                  <PortalSidebarContent
+                    base={base}
+                    navGroups={navGroups}
+                    admin={admin}
+                    displayName={displayName}
+                    roleLabel={roleLabel}
+                    signOut={signOut}
+                    variant="drawer"
+                    onLinkClick={() => setOpen(false)}
+                  />
+                </nav>
               </div>
-              <div className="mx-4 h-px bg-white/10" />
-              <nav className="flex-1 overflow-y-auto px-4 py-4">
-                <PortalSidebarContent
-                  base={base}
-                  navGroups={navGroups}
-                  admin={admin}
-                  displayName={displayName}
-                  roleLabel={roleLabel}
-                  signOut={signOut}
-                  variant="drawer"
-                  onLinkClick={() => setOpen(false)}
-                />
-              </nav>
-            </div>
-          </aside>
-        </>
-      )}
+            </aside>
+          </>,
+          document.body
+        )}
     </>
   );
 }
