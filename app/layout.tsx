@@ -75,7 +75,7 @@ export default async function RootLayout({
   const colorMode = (cookieStore.get("crewrules-color-mode")?.value as "dark" | "light" | "system") ?? "dark";
 
   return (
-    <html lang="en" className={whisper.variable} suppressHydrationWarning>
+    <html lang="en" className={whisper.variable} data-theme={colorMode === "system" ? "dark" : colorMode} suppressHydrationWarning>
       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-white" suppressHydrationWarning>
         <ThemeProvider initialTheme={colorMode}>{children}</ThemeProvider>
       </body>

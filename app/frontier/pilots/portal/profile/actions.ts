@@ -153,6 +153,35 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   return { success: true };
 }
 
+export async function setColorMode(mode: "light" | "dark") {
+  const supabase = await createActionClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in");
+
+  const { data: profile, error: pErr } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (pErr) throw pErr;
+  if (!profile?.id) throw new Error("Profile not found");
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ color_mode: mode, updated_at: new Date().toISOString() })
+    .eq("id", profile.id);
+
+  if (error) throw error;
+
+  const cookieStore = await cookies();
+  cookieStore.set("crewrules-color-mode", mode, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+
+  revalidatePath("/frontier/pilots/portal");
+  return { ok: true };
+}
+
 export async function setShowPayProjection(show: boolean) {
   const supabase = await createActionClient();
   const {

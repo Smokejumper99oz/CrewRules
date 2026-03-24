@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { updateProfilePreferences, startProTrial, updatePassword } from "@/app/frontier/pilots/portal/profile/actions";
+import { updateProfilePreferences, startProTrial, updatePassword, setColorMode } from "@/app/frontier/pilots/portal/profile/actions";
 import { DatePickerInput } from "@/components/date-picker-input";
 import { ProBadge } from "@/components/pro-badge";
 import { formatLastImport } from "@/components/schedule-status-chip";
@@ -272,6 +272,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
   const [isDirty, setIsDirty] = useState(false);
 
   const colorMode = profile.color_mode ?? "dark";
+  const [selectedColorMode, setSelectedColorMode] = useState<"dark" | "light">(colorMode === "light" ? "light" : "dark");
   const displayTimezoneMode = profile.display_timezone_mode ?? "base";
   const timeFormat = profile.time_format ?? "24h";
   const showTimezoneLabel = profile.show_timezone_label ?? false;
@@ -1072,22 +1073,31 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
         <h2 className="text-base font-semibold text-slate-900 mb-1 dark:text-white">Appearance</h2>
         <p className="text-xs text-slate-500 mb-4">Theme preference for the pilot portal.</p>
         <div>
-          <label htmlFor="color_mode" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Theme
-          </label>
-          <select
-            id="color_mode"
-            name="color_mode"
-            defaultValue={colorMode}
-            className="profile-select-base profile-select mt-1.5"
-          >
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-            <option value="system">System</option>
-          </select>
-          <p className="mt-1 text-xs text-slate-500">
-            System follows your device light/dark preference.
-          </p>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Theme</span>
+            <span className="bg-cyan-500/20 text-cyan-200 border border-cyan-400/40 text-xs font-semibold px-2 py-0.5 rounded-full">IN DEVELOPMENT</span>
+          </div>
+          <input type="hidden" name="color_mode" value={selectedColorMode} />
+          <div className="inline-flex rounded-lg border border-slate-200 p-0.5 dark:border-white/10">
+            {(["dark", "light"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => {
+                  setSelectedColorMode(mode);
+                  document.documentElement.setAttribute("data-theme", mode);
+                  setColorMode(mode).catch(console.error);
+                }}
+                className={`touch-target touch-pad rounded-md px-4 py-1.5 text-sm font-medium transition ${
+                  selectedColorMode === mode
+                    ? "bg-[#75C043] text-slate-950"
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-slate-200"
+                }`}
+              >
+                {mode === "light" ? "Light" : "Dark"}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 

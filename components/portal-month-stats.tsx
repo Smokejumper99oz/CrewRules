@@ -106,7 +106,7 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
   if (!stats || availableMonths.length === 0) return null;
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-emerald-400/30 dark:border-white/5 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03)] dark:hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] dark:hover:border-emerald-400/20">
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-emerald-400/30 dark:border-white/5 dark:bg-slate-950 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03)] dark:hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] dark:hover:border-emerald-400/20">
       <div className="flex flex-col gap-3 border-b border-slate-200 pb-2 dark:border-white/5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-semibold tracking-tight">Month Overview</h2>
@@ -164,7 +164,7 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
           </div>
         </div>
         <div
-          className={`mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 px-5 py-4 shadow-sm transition-all duration-200 dark:border-emerald-500/20 dark:bg-gradient-to-br dark:from-emerald-500/10 dark:via-slate-900/40 dark:to-slate-950/40 dark:shadow-[0_0_0_1px_rgba(16,185,129,0.12),0_20px_60px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_0_0_1px_rgba(16,185,129,0.2),0_0_30px_rgba(16,185,129,0.1),0_20px_60px_rgba(0,0,0,0.35)] ${
+          className={`mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 px-5 py-4 shadow-sm transition-all duration-200 dark:border-emerald-500/20 dark:bg-slate-950 dark:bg-gradient-to-br dark:from-emerald-500/10 dark:via-slate-900/40 dark:to-slate-950/40 dark:shadow-[0_0_0_1px_rgba(16,185,129,0.12),0_20px_60px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_0_0_1px_rgba(16,185,129,0.2),0_0_30px_rgba(16,185,129,0.1),0_20px_60px_rgba(0,0,0,0.35)] ${
             stats.payEligible && !optimisticShow ? "opacity-60 saturate-75" : ""
           }`}
         >

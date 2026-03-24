@@ -483,10 +483,13 @@ export async function getCommuteFlights(input: {
         });
       if (upsertErr)
         console.error("Commute cache upsert failed", {
-          code: (upsertErr as { code?: string }).code,
-          message: (upsertErr as { message?: string }).message,
-          details: (upsertErr as { details?: string }).details,
-          hint: (upsertErr as { hint?: string }).hint,
+          typeofError: typeof upsertErr,
+          constructorName: upsertErr?.constructor?.name,
+          keys: upsertErr ? Object.keys(upsertErr) : [],
+          entries: upsertErr ? Object.entries(upsertErr) : [],
+          string: String(upsertErr),
+          json: (() => { try { return JSON.stringify(upsertErr, null, 2); } catch { return "[unserializable]"; } })(),
+          stack: upsertErr instanceof Error ? upsertErr.stack : undefined,
         });
 
       if (!isPaid && accountAgeDays < 30) {
@@ -799,10 +802,13 @@ export async function getCommuteFlights(input: {
       });
     if (upsertErr)
       console.error("Commute cache upsert failed", {
-        code: (upsertErr as { code?: string }).code,
-        message: (upsertErr as { message?: string }).message,
-        details: (upsertErr as { details?: string }).details,
-        hint: (upsertErr as { hint?: string }).hint,
+        typeofError: typeof upsertErr,
+        constructorName: upsertErr?.constructor?.name,
+        keys: upsertErr ? Object.keys(upsertErr) : [],
+        entries: upsertErr ? Object.entries(upsertErr) : [],
+        string: String(upsertErr),
+        json: (() => { try { return JSON.stringify(upsertErr, null, 2); } catch { return "[unserializable]"; } })(),
+        stack: upsertErr instanceof Error ? upsertErr.stack : undefined,
       });
 
     // 5) Increment usage ONLY when an API refresh occurs and only for Free (first 30 days)

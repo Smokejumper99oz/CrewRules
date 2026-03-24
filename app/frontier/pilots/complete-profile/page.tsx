@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
-import { createActionClient } from "@/lib/supabase/server-action";
+import { createClient } from "@/lib/supabase/server";
 import { CompleteProfileForm } from "./complete-profile-form";
+
+export const dynamic = "force-dynamic";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -8,7 +10,7 @@ const PORTAL_PATH = `/${TENANT}/${PORTAL}/portal`;
 const LOGIN_PATH = `/${TENANT}/${PORTAL}/login`;
 
 export default async function CompleteProfilePage() {
-  const supabase = await createActionClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

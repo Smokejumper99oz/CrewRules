@@ -378,8 +378,8 @@ export async function PortalNextDuty({
     <div
       className={`rounded-3xl border p-4 sm:p-6 transition-all duration-200 hover:-translate-y-0.5 ${
         isOnDuty
-          ? "border-l-2 border-l-emerald-500 border-slate-200 bg-white shadow-sm hover:shadow-md dark:border-white/5 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_0_24px_rgba(16,185,129,0.08)] dark:hover:shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_0_28px_rgba(16,185,129,0.1),0_10px_30px_rgba(0,0,0,0.4)]"
-          : "border-slate-200 bg-white shadow-sm hover:shadow-md hover:border-emerald-400/30 dark:border-white/5 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03)] dark:hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] dark:hover:border-emerald-400/20"
+          ? "border-l-2 border-l-emerald-500 border-slate-200 bg-white shadow-sm hover:shadow-md dark:border-white/5 dark:bg-slate-950 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_0_24px_rgba(16,185,129,0.08)] dark:hover:shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_0_28px_rgba(16,185,129,0.1),0_10px_30px_rgba(0,0,0,0.4)]"
+          : "border-slate-200 bg-white shadow-sm hover:shadow-md hover:border-emerald-400/30 dark:border-white/5 dark:bg-slate-950 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03)] dark:hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] dark:hover:border-emerald-400/20"
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2 dark:border-white/5">
