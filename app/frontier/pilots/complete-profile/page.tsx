@@ -1,9 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createActionClient } from "@/lib/supabase/server-action";
-import { signOut } from "../portal/actions";
 import { CompleteProfileForm } from "./complete-profile-form";
-import { SignOutButton } from "@/components/sign-out-button";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -45,26 +42,20 @@ export default async function CompleteProfilePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
-      <div className="max-w-xl w-full text-center">
-        <h1 className="text-3xl font-bold">Complete Your Crew Profile</h1>
-        <p className="mt-4 text-slate-300 max-w-md mx-auto">
-          This setup powers Commute Assist, pay projection, report times, and other personalized CrewRules features.
-        </p>
-        <CompleteProfileForm />
-        <div className="mt-10 flex flex-wrap justify-center gap-4">
-          <Link
-            href="/request-access"
-            className="inline-block rounded-xl border border-white/20 px-6 py-3 font-medium text-slate-200 hover:bg-white/5 transition"
-          >
-            Request Access
-          </Link>
-          <SignOutButton
-            signOut={signOut}
-            buttonClassName="inline-block rounded-xl border border-rose-400/50 bg-rose-900/30 px-6 py-3 font-medium text-rose-200 hover:bg-rose-900/50 transition"
-          >
-            Sign out and use a different account
-          </SignOutButton>
+    <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-12">
+      <div className="w-full max-w-xl">
+        <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] shadow-lg shadow-black/30 p-8 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-400/20 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)]">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold">
+              Set Up Your Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-xs text-white">™</span> Profile
+            </h1>
+            <p className="mt-4 text-slate-300 max-w-md mx-auto">
+              A few details to personalize your portal —
+              <br />
+              Commute Assist™, Pay Projection™, Report Times, and more.
+            </p>
+          </div>
+          <CompleteProfileForm />
         </div>
       </div>
     </main>

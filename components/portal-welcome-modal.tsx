@@ -102,32 +102,40 @@ export function PortalWelcomeModal({ profileBase, onDismiss }: Props) {
             Now onboarding pilots at <span className="font-semibold text-[#75C043]">Frontier Airlines</span>.
           </p>
 
-          {/* Section 1: Complete your Profile */}
+          {/* Section 1: Your CrewRules™ Setup */}
           <div className="mt-8">
-            <h3 className="text-base font-semibold text-white">Complete your Profile</h3>
+            <h3 className="text-base font-semibold text-white">Your Crew<span className="text-[#75C043]">Rules</span>™ Setup</h3>
             <ul className="mt-2 space-y-2 text-sm text-slate-300">
               <li className="flex gap-2">
                 <span className="text-[#75C043]">•</span>
-                <span>Home airport powers Commute Assist™</span>
+                <span>Your Home Airport powers Commute Assist™</span>
               </li>
               <li className="flex gap-2">
                 <span className="text-[#75C043]">•</span>
-                <span>Arrival buffer improves commute timing</span>
+                <span>Your Crew Base aligns duty and report times</span>
               </li>
               <li className="flex gap-2">
                 <span className="text-[#75C043]">•</span>
-                <span>Family View™ controls what family can see</span>
+                <span>Family View™ controls what shared viewers can see</span>
               </li>
               <li className="flex gap-2">
                 <span className="text-[#75C043]">•</span>
-                <span>Pay &amp; Earnings enables projections and tracking</span>
+                <span>Pay &amp; Earnings drives credit, pay, and schedule insights</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-[#75C043]">•</span>
+                <span>AI search for FAR 117 and your CBA with fast, reliable answers</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-[#75C043]">•</span>
+                <span>Connect your FLICA account to automatically sync your schedule</span>
               </li>
             </ul>
-            <p className="mt-3 text-sm text-slate-500">
-              Want to explore everything CrewRules™ offers?
+            <p className="mt-3 text-sm leading-relaxed text-slate-300">
+              Your profile powers how Crew<span className="text-[#75C043]">Rules</span>™ works behind the scenes.
             </p>
             <p className="mt-1 text-sm leading-relaxed text-slate-300">
-              Start your free Crew<span className="text-[#75C043]">Rules</span>™ <span className="font-medium text-amber-400">Pro</span> trial after completing your profile.
+              Once your setup is complete, Crew<span className="text-[#75C043]">Rules</span>™ keeps your schedule and commute insights up to date automatically.
             </p>
           </div>
 
@@ -151,7 +159,7 @@ export function PortalWelcomeModal({ profileBase, onDismiss }: Props) {
           <div className="mt-4 border-t border-white/5 pt-6">
             <div className="rounded-xl border border-white/10 bg-slate-900/60 px-5 py-4 text-center">
             <p className="text-sm text-slate-300">
-              You&apos;re part of the early pilot group helping shape CrewRules™.
+              You&apos;re part of the early pilot group shaping Crew<span className="text-[#75C043]">Rules</span>™.
             </p>
             <p className="mt-1 text-sm text-slate-300">
               Thanks for helping build better tools for airline crew.

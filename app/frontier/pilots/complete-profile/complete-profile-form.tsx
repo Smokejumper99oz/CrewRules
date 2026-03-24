@@ -5,19 +5,18 @@ import { createProfile } from "./actions";
 import { DatePickerInput } from "@/components/date-picker-input";
 
 const FRONTIER_CREW_BASES = [
-  "ATL",
-  "MDW",
-  "ORD",
-  "CVG",
-  "CLE",
-  "DFW",
-  "DEN",
-  "LAS",
-  "MIA",
-  "MCO",
-  "PHL",
-  "PHX",
-  "SJU",
+  { value: "ATL", label: "ATL" },
+  { value: "CLE", label: "CLE" },
+  { value: "CVG", label: "CVG" },
+  { value: "DEN", label: "DEN" },
+  { value: "DFW", label: "DFW" },
+  { value: "LAS", label: "LAS" },
+  { value: "MIA", label: "MIA" },
+  { value: "MCO", label: "MCO" },
+  { value: "ORD", label: "MDW/ORD" },
+  { value: "PHL", label: "PHL" },
+  { value: "PHX", label: "PHX" },
+  { value: "SJU", label: "SJU" },
 ];
 
 const INPUT_CLASS =
@@ -40,13 +39,13 @@ export function CompleteProfileForm() {
           className={`${INPUT_CLASS} cursor-pointer`}
         >
           <option value="">Select crew base</option>
-          {FRONTIER_CREW_BASES.map((code) => (
-            <option key={code} value={code}>
-              {code}
+          {FRONTIER_CREW_BASES.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
             </option>
           ))}
         </select>
-        <p className="mt-1 text-xs text-slate-500">Your crew base</p>
+        <p className="mt-1 text-xs text-slate-500">Used for Commute Assist™, Report Times, and schedule-based features.</p>
       </div>
 
       <div>
@@ -65,7 +64,7 @@ export function CompleteProfileForm() {
           <option value="first_officer">First Officer</option>
           <option value="flight_attendant">Flight Attendant</option>
         </select>
-        <p className="mt-1 text-xs text-slate-500">Required for pay projection.</p>
+        <p className="mt-1 text-xs text-slate-500">Used for Pay Projection™, Duty Limits, and schedule-based features.</p>
       </div>
 
       <div>
@@ -76,9 +75,9 @@ export function CompleteProfileForm() {
           id="date_of_hire"
           name="date_of_hire"
           placeholder="mm/dd/yyyy"
-          className={INPUT_CLASS}
+          className="mt-2 w-full max-w-[12rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 cursor-pointer disabled:opacity-50"
         />
-        <p className="mt-1 text-xs text-slate-500">Required for pay projection.</p>
+        <p className="mt-1 text-xs text-slate-500">Used for pay, seniority-based features, and schedule insights.</p>
       </div>
 
       <div>
@@ -93,10 +92,10 @@ export function CompleteProfileForm() {
           required
           maxLength={3}
           disabled={isPending}
-          className={`${INPUT_CLASS} uppercase`}
+          className={`${INPUT_CLASS} uppercase placeholder:normal-case`}
           style={{ textTransform: "uppercase" }}
         />
-        <p className="mt-1 text-xs text-slate-500">Your usual commute origin airport</p>
+        <p className="mt-1 text-xs text-slate-500">Used for Commute Assist™ to find your best commute options.</p>
       </div>
 
       <div>
@@ -110,10 +109,10 @@ export function CompleteProfileForm() {
           placeholder="e.g. MCO"
           maxLength={3}
           disabled={isPending}
-          className={`${INPUT_CLASS} uppercase`}
+          className={`${INPUT_CLASS} uppercase placeholder:normal-case`}
           style={{ textTransform: "uppercase" }}
         />
-        <p className="mt-1 text-xs text-slate-500">Optional backup airport</p>
+        <p className="mt-1 text-xs text-slate-500">Optional backup for Commute Assist™ to expand commute options.</p>
       </div>
 
       {state?.error && (
@@ -121,12 +120,19 @@ export function CompleteProfileForm() {
           We couldn&apos;t create your profile: {state.error}. Please try again or contact an admin.
         </p>
       )}
+      <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2">
+        <p className="text-xs text-amber-200 leading-relaxed">
+          Your information is private and used only to power CrewRules™ features.
+          <br />
+          It is NEVER shared.
+        </p>
+      </div>
       <button
         type="submit"
         disabled={isPending}
         className="inline-block rounded-xl bg-[#75C043] px-6 py-3 font-semibold text-slate-950 hover:bg-amber-500 transition disabled:opacity-50"
       >
-        {isPending ? "Creating…" : "Create my profile"}
+        {isPending ? "Creating…" : "Create My Profile"}
       </button>
     </form>
   );
