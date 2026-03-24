@@ -100,7 +100,7 @@ export function ScheduleEventCard({ event, displaySettings, position, compact, l
 
   if (compact) {
     return (
-      <div className={`flex flex-col gap-0.5 rounded-xl border px-3 py-2 ${borderStyle} bg-slate-950/40`}>
+      <div className={`flex flex-col gap-0.5 rounded-xl border px-3 py-2 ${borderStyle} bg-white dark:bg-slate-950/40`}>
         <span className="text-xs font-medium text-slate-500">{dateLabel}</span>
         <span className="font-medium text-white">{headerLine}</span>
         {showRoute && <span className="text-xs text-slate-500">{event.route}   {dutyRange}</span>}
@@ -118,7 +118,7 @@ export function ScheduleEventCard({ event, displaySettings, position, compact, l
   }
 
   return (
-    <div className={`flex flex-col gap-0.5 rounded-xl border px-4 py-3 ${borderStyle} bg-slate-950/40`}>
+    <div className={`flex flex-col gap-0.5 rounded-xl border px-4 py-3 ${borderStyle} bg-white dark:bg-slate-950/40`}>
       <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{dateLabel}</span>
       <span className="text-lg font-medium text-white">{headerLine}</span>
       {showRoute && (

@@ -32,7 +32,8 @@ export function SignOutButton({
     } catch {
       // Best-effort: clear browser storage; ignore errors
     }
-    router.push(LOGIN_PATH);
+    router.replace(LOGIN_PATH);
+    router.refresh();
     setPending(false);
   }
 
