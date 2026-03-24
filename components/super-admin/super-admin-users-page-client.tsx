@@ -91,6 +91,8 @@ export function SuperAdminUsersPageClient({
       super_admin,
       phone: formData.get("phone")?.toString().trim() || null,
       employee_number: formData.get("employee_number")?.toString().trim() || null,
+      mentee_employee_number:
+        formData.get("mentee_employee_number")?.toString().trim() || null,
     };
 
     const result = await updateSuperAdminUserAccess(editing.id, data);
@@ -273,6 +275,22 @@ export function SuperAdminUsersPageClient({
                 <label htmlFor="edit-is_mentor" className="text-sm text-slate-300">
                   Mentor
                 </label>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">
+                  Mentee employee # (optional)
+                </label>
+                <input
+                  type="text"
+                  name="mentee_employee_number"
+                  defaultValue=""
+                  className="w-full rounded border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-[#75C043]/50 focus:outline-none"
+                  placeholder={"Mentee's company employee number"}
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  When Mentor is enabled, enter this user&apos;s mentee&apos;s employee number (same tenant) to create the assignment shown on the Mentoring page. Leave blank to only set the Mentor flag.
+                </p>
               </div>
 
               {isCurrentSuperAdmin && (

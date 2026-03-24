@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { gateSuperAdmin } from "./gate";
+import { upsertMentorAssignmentFromSuperAdmin } from "@/lib/mentoring/super-admin-sync-assignment";
 import { subDays, startOfDay, addDays } from "date-fns";
 import { TENANT_CONFIG } from "@/lib/tenant-config";
 import {
@@ -826,6 +827,8 @@ export type UpdateSuperAdminUserAccessInput = {
   super_admin?: boolean;
   phone?: string | null;
   employee_number?: string | null;
+  /** When is_mentor is true, mentee's employee # (same tenant) to upsert mentor_assignments for the Mentoring page. */
+  mentee_employee_number?: string | null;
 };
 
 export async function updateSuperAdminUserAccess(
@@ -842,10 +845,12 @@ export async function updateSuperAdminUserAccess(
 
   const { data: target, error: fetchErr } = await admin
     .from("profiles")
-    .select("role")
+    .select("role, tenant")
     .eq("id", userId)
     .single();
   if (fetchErr || !target) return { error: "User not found" };
+
+  const mentorTenant = String(target.tenant ?? "frontier").trim() || "frontier";
 
   const targetIsSuperAdmin = target.role === "super_admin";
   const canChangeSuperAdmin = data.super_admin !== undefined;
@@ -883,5 +888,16 @@ export async function updateSuperAdminUserAccess(
     .eq("id", userId);
 
   if (error) return { error: error.message };
+
+  const menteeEmpTrimmed = data.mentee_employee_number?.trim() ?? "";
+  if (data.is_mentor && menteeEmpTrimmed) {
+    const syncResult = await upsertMentorAssignmentFromSuperAdmin(admin, {
+      mentorUserId: userId,
+      menteeEmployeeNumber: menteeEmpTrimmed,
+      tenant: mentorTenant,
+    });
+    if (syncResult.error) return { error: syncResult.error };
+  }
+
   return {};
 }
