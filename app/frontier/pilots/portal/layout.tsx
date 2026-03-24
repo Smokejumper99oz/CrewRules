@@ -22,7 +22,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   const displayName = getDisplayName(profile ?? null);
   const roleLabel =
     profile?.role === "super_admin"
-      ? "Super Administrator"
+      ? "Platform Owner"
       : profile?.role === "tenant_admin"
         ? "Administrator"
         : profile?.role === "flight_attendant"

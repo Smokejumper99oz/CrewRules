@@ -50,6 +50,7 @@ export type Profile = {
   family_view_show_commute_estimates?: boolean;
   color_mode?: "dark" | "light" | "system";
   welcome_modal_version_seen?: number | null;
+  is_admin?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -241,8 +242,10 @@ export async function getProfile(): Promise<Profile | null> {
 export async function isAdmin(tenant = "frontier", portal = "pilots"): Promise<boolean> {
   const profile = await getProfile();
   if (!profile) return false;
-  if (profile.role !== "super_admin" && profile.role !== "tenant_admin") return false;
-  if (profile.role === "tenant_admin" && (profile.tenant !== tenant || profile.portal !== portal))
-    return false;
-  return true;
+  if (profile.role === "super_admin") return true;
+  if (profile.role === "tenant_admin" && profile.tenant === tenant && profile.portal === portal)
+    return true;
+  if (profile.is_admin === true && profile.tenant === tenant && profile.portal === portal)
+    return true;
+  return false;
 }

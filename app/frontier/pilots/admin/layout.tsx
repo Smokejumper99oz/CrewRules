@@ -80,7 +80,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                   href="/super-admin"
                   className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-amber-400/90 hover:bg-white/5 hover:text-amber-400 transition"
                 >
-                  Super Admin Dashboard →
+                  Platform Owner Dashboard →
                 </Link>
               )}
               <Link
@@ -107,7 +107,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                     <PageTitle portalDisplayName={cfg.portal.displayName} isAdmin={true} />
                     {isSuperAdmin && (
                       <span className="inline-flex rounded-md bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-400 ring-1 ring-amber-400/30">
-                        Super Admin
+                        Platform Owner
                       </span>
                     )}
                   </div>

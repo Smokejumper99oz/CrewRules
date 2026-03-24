@@ -70,12 +70,18 @@ export function SuperAdminCostMonetization({
 
   return (
     <div className="space-y-4">
-      <h2 className="text-base font-semibold text-slate-200">Cost & Monetization</h2>
+      <h2 className="text-base font-semibold text-slate-200 flex items-center gap-2">
+        <DollarSign className="size-4 text-slate-400 shrink-0" />
+        Cost & Monetization
+      </h2>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Revenue block */}
         <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-4 space-y-4">
-          <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Revenue</div>
+          <div className="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-2">
+            <DollarSign className="size-4 text-slate-400 shrink-0" />
+            Revenue
+          </div>
 
           {/* Live MRR hero */}
           <div

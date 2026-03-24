@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/profile";
-import { WAITLIST_STATUSES, type WaitlistStatus } from "./constants";
+import { WAITLIST_STATUSES, type WaitlistStatus } from "@/lib/waitlist/constants";
 
 export type UpdateStatusResult = { error?: string } | null;
 
@@ -20,10 +20,7 @@ export async function updateWaitlistStatus(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("waitlist")
-    .update({ status })
-    .eq("id", id);
+  const { error } = await supabase.from("waitlist").update({ status }).eq("id", id);
 
   if (error) {
     return { error: error.message };

@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateWaitlistStatus } from "./actions";
-import { WAITLIST_STATUSES } from "./constants";
+import { updateWaitlistStatus } from "@/lib/waitlist/actions";
+import { WAITLIST_STATUSES } from "@/lib/waitlist/constants";
 
 type Props = {
   id: string;

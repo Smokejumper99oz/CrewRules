@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, Fragment } from "react";
 import { format } from "date-fns";
+import type { WaitlistEntryRow } from "@/lib/waitlist/fetch-waitlist-entries";
 import { WaitlistStatusSelect } from "./waitlist-status-select";
 
 const FILTER_OPTIONS = [
@@ -84,17 +85,6 @@ function SortableTh({
   );
 }
 
-type WaitlistEntry = {
-  id: string;
-  email: string | null;
-  full_name: string | null;
-  airline: string | null;
-  requested_portal: string | null;
-  source: string | null;
-  status: string | null;
-  created_at: string | null;
-};
-
 function formatRequestedPortal(value: string | null): string {
   if (!value) return "—";
   const v = value.toLowerCase();
@@ -104,7 +94,7 @@ function formatRequestedPortal(value: string | null): string {
 }
 
 type Props = {
-  entries: WaitlistEntry[];
+  entries: WaitlistEntryRow[];
 };
 
 export function WaitlistTableWithFilter({ entries }: Props) {
@@ -141,7 +131,7 @@ export function WaitlistTableWithFilter({ entries }: Props) {
 
   const sortedEntries = useMemo(() => {
     const arr = [...filteredEntries];
-    const cmp = (a: WaitlistEntry, b: WaitlistEntry): number => {
+    const cmp = (a: WaitlistEntryRow, b: WaitlistEntryRow): number => {
       const av = a[sortBy] ?? "";
       const bv = b[sortBy] ?? "";
       if (sortBy === "created_at") {

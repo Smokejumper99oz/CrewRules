@@ -65,7 +65,7 @@ export function UsersTable({
                     </select>
                   ) : (
                     <span className="text-slate-300">
-                      {u.role === "super_admin" ? "Super Admin" : u.role === "tenant_admin" ? "Admin" : u.role}
+                      {u.role === "super_admin" ? "Platform Owner" : u.role === "tenant_admin" ? "Admin" : u.role}
                     </span>
                   )}
                 </td>

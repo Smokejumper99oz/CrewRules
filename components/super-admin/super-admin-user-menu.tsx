@@ -50,7 +50,7 @@ export function SuperAdminUserMenu({ displayName, signOut }: SuperAdminUserMenuP
         </div>
         <div className="hidden min-w-0 space-y-0.5 sm:block text-left">
           <div className="truncate text-sm font-medium text-slate-200">{displayName}</div>
-          <div className="truncate text-xs text-slate-400">Owner / Super Admin</div>
+          <div className="truncate text-xs text-slate-400">Platform Owner</div>
         </div>
         <svg
           className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
@@ -69,7 +69,7 @@ export function SuperAdminUserMenu({ displayName, signOut }: SuperAdminUserMenuP
         >
           <div className="p-4 border-b border-slate-700/50">
             <div className="font-medium text-slate-200">{displayName}</div>
-            <div className="mt-0.5 text-sm text-slate-400">Owner / Super Admin</div>
+            <div className="mt-0.5 text-sm text-slate-400">Platform Owner</div>
           </div>
           <div className="p-2">
             <SignOutButton

@@ -14,7 +14,7 @@ function emailToDisplayName(email: string | null): string {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  super_admin: "Super Administrator",
+  super_admin: "Platform Owner",
   tenant_admin: "Administrator",
   pilot: "Pilot",
   flight_attendant: "Flight Attendant",

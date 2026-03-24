@@ -778,3 +778,110 @@ export async function getRecentActivity(): Promise<RecentActivityData> {
     recentImports,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Super Admin Users page
+// ---------------------------------------------------------------------------
+
+export type SuperAdminUserRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  tenant: string;
+  role: string;
+  employee_number: string | null;
+  phone: string | null;
+  is_admin: boolean;
+  is_mentor: boolean;
+};
+
+export async function getAllUsersForSuperAdmin(): Promise<SuperAdminUserRow[]> {
+  await ensureSuperAdmin();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, tenant, role, employee_number, phone, is_admin, is_mentor")
+    .order("created_at", { ascending: false });
+
+  if (error) return [];
+
+  return (data ?? []).map((p) => ({
+    id: p.id,
+    full_name: p.full_name ?? null,
+    email: p.email ?? null,
+    tenant: p.tenant ?? "unknown",
+    role: p.role ?? "pilot",
+    employee_number: p.employee_number ?? null,
+    phone: p.phone ?? null,
+    is_admin: p.is_admin ?? false,
+    is_mentor: p.is_mentor ?? false,
+  }));
+}
+
+export type UpdateSuperAdminUserAccessInput = {
+  role: "pilot" | "flight_attendant";
+  is_admin: boolean;
+  is_mentor: boolean;
+  super_admin?: boolean;
+  phone?: string | null;
+  employee_number?: string | null;
+};
+
+export async function updateSuperAdminUserAccess(
+  userId: string,
+  data: UpdateSuperAdminUserAccessInput
+): Promise<{ error?: string }> {
+  const { user } = await gateSuperAdmin();
+
+  if (userId === user.id && data.super_admin === false) {
+    return { error: "Cannot remove your own Platform Owner access" };
+  }
+
+  const admin = createAdminClient();
+
+  const { data: target, error: fetchErr } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single();
+  if (fetchErr || !target) return { error: "User not found" };
+
+  const targetIsSuperAdmin = target.role === "super_admin";
+  const canChangeSuperAdmin = data.super_admin !== undefined;
+
+  if (canChangeSuperAdmin && data.super_admin === false) {
+    const { data: superAdmins } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("role", "super_admin");
+    const count = superAdmins?.length ?? 0;
+    if (targetIsSuperAdmin && count <= 1) {
+      return { error: "Cannot remove the last Platform Owner" };
+    }
+  }
+
+  const effectiveRole =
+    canChangeSuperAdmin && data.super_admin
+      ? "super_admin"
+      : canChangeSuperAdmin && !data.super_admin
+        ? data.role
+        : targetIsSuperAdmin
+          ? "super_admin"
+          : data.role;
+  const is_admin = data.is_admin;
+
+  const { error } = await admin
+    .from("profiles")
+    .update({
+      role: effectiveRole,
+      is_admin,
+      is_mentor: data.is_mentor,
+      phone: data.phone ?? null,
+      employee_number: data.employee_number ?? null,
+    })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+  return {};
+}

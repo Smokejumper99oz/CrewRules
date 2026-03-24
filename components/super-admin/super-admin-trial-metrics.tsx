@@ -1,5 +1,5 @@
 import type { ProTrialMetrics, ProTrialUsers } from "@/lib/super-admin/actions";
-import { Clock, AlertTriangle, CheckCircle, XCircle, TrendingUp } from "lucide-react";
+import { Activity, Clock, AlertTriangle, XCircle, TrendingUp } from "lucide-react";
 import { SuperAdminTrialUsers } from "./super-admin-trial-users";
 
 type SuperAdminTrialMetricsProps = {
@@ -21,7 +21,10 @@ export function SuperAdminTrialMetrics({ metrics, trialUsers }: SuperAdminTrialM
   if (!hasAnyTrials) {
     return (
       <div className="space-y-3">
-        <h2 className="text-base font-semibold text-slate-200">Pro Trial Health</h2>
+        <h2 className="text-base font-semibold text-slate-200 flex items-center gap-2">
+          <Activity className="size-4 text-slate-400 shrink-0" />
+          Pro Trial Health
+        </h2>
         <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-4 text-sm text-slate-400">
           No active Pro trials
         </div>
@@ -31,7 +34,10 @@ export function SuperAdminTrialMetrics({ metrics, trialUsers }: SuperAdminTrialM
 
   return (
     <div className="space-y-3">
-      <h2 className="text-base font-semibold text-slate-200">Pro Trial Health</h2>
+      <h2 className="text-base font-semibold text-slate-200 flex items-center gap-2">
+        <Activity className="size-4 text-slate-400 shrink-0" />
+        Pro Trial Health
+      </h2>
 
       {/* Funnel row */}
       <div className="flex flex-wrap items-stretch gap-2">
@@ -79,7 +85,7 @@ export function SuperAdminTrialMetrics({ metrics, trialUsers }: SuperAdminTrialM
         <div className="text-slate-500 self-center shrink-0">|</div>
         <div className={`${cardBase} border-[#75C043]/30`}>
           <div className="flex items-center gap-2 text-slate-400 text-xs mb-0.5">
-            <CheckCircle className="size-3.5" />
+            <TrendingUp className="size-4 text-emerald-400 shrink-0" />
             Converted
           </div>
           <div className="text-xl font-semibold text-[#75C043]">{metrics.convertedFromTrial}</div>

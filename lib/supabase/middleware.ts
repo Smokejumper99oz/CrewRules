@@ -52,7 +52,7 @@ export async function updateSession(request: NextRequest) {
     if (user && (isAdminRoute || isSuperAdminRoute || redirectLoggedInToPortal || isPortalRoot)) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role, tenant, portal")
+        .select("role, tenant, portal, is_admin")
         .eq("id", user.id)
         .single();
       const email = ((user as { email?: string }).email ?? "").toLowerCase().trim();
@@ -60,7 +60,8 @@ export async function updateSession(request: NextRequest) {
       isSuperAdmin = profile?.role === "super_admin" || isAllowlisted;
       isAdmin =
         isSuperAdmin ||
-        (profile?.role === "tenant_admin" && profile?.tenant === "frontier" && profile?.portal === "pilots");
+        (profile?.role === "tenant_admin" && profile?.tenant === "frontier" && profile?.portal === "pilots") ||
+        (profile?.is_admin === true && profile?.tenant === "frontier" && profile?.portal === "pilots");
     }
   } catch {
     // Supabase unreachable (fetch failed, paused project, etc.)

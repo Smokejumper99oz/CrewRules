@@ -1,5 +1,5 @@
 import type { SuperAdminKpiData } from "@/lib/super-admin/actions";
-import { CreditCard, Building2, UserPlus } from "lucide-react";
+import { CreditCard, Plane, UserPlus, Users, Briefcase } from "lucide-react";
 import { SuperAdminLiveStatusStrip } from "./super-admin-live-status-strip";
 
 type SuperAdminKpiCardsProps = {
@@ -16,19 +16,22 @@ export function SuperAdminKpiCards({ kpis, onlineNow, peakToday }: SuperAdminKpi
 
   return (
     <div className="space-y-4">
-      <h2 className="text-base font-semibold text-slate-200">Business</h2>
+      <h2 className="text-base font-semibold text-slate-200 flex items-center gap-2">
+        <Briefcase className="size-4 text-slate-400 shrink-0" />
+        Business
+      </h2>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <div className={cardBase}>
           <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
-            <Building2 className="size-3.5" />
+            <Plane className="size-4 text-slate-400 shrink-0" />
             Tenants
           </div>
           <div className="text-2xl font-semibold text-slate-200">{kpis.tenantCount}</div>
         </div>
         <div className={cardBase}>
           <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
-            <UserPlus className="size-3.5" />
+            <Users className="size-4 text-slate-400 shrink-0" />
             Total Users
           </div>
           <div className="text-2xl font-semibold text-slate-200">{totalUsers}</div>
@@ -36,7 +39,7 @@ export function SuperAdminKpiCards({ kpis, onlineNow, peakToday }: SuperAdminKpi
         <div className={`${cardBase} border-[#75C043]/30`}>
           <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
             <UserPlus className="size-3.5" />
-            New signups 30d
+            New sign ups last 30 days
           </div>
           <div className="text-2xl font-semibold text-slate-200">{kpis.newSignups30d}</div>
         </div>

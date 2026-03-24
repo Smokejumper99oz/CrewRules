@@ -4,6 +4,8 @@ import { getDisplayName } from "@/lib/profile";
 import { signOut } from "@/app/frontier/pilots/portal/actions";
 import { SuperAdminUserMenu } from "@/components/super-admin/super-admin-user-menu";
 import { SuperAdminNav } from "@/components/super-admin/super-admin-nav";
+import { SuperAdminMainHeaderTitles } from "@/components/super-admin/super-admin-main-header-titles";
+import { SuperAdminHeaderRow } from "@/components/super-admin/super-admin-header-row";
 
 export default async function SuperAdminLayout({ children }: { children: ReactNode }) {
   const { profile } = await gateSuperAdmin();
@@ -19,7 +21,7 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
               <span className="align-super text-xs">™</span>
             </div>
             <div className="mt-1.5 text-xs text-slate-400">
-              Super Admin Dashboard
+              Super Admin
             </div>
           </div>
 
@@ -30,20 +32,15 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
 
         <section className="flex-1 min-w-0">
           <header className="sticky top-0 z-40 border-b border-slate-700/50 bg-slate-900/95">
-            <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-4 sm:px-6">
+            <SuperAdminHeaderRow>
               <div className="min-w-0 flex-1">
-                <h1 className="text-xl font-semibold tracking-tight truncate text-slate-100">
-                  Super Admin Dashboard
-                </h1>
-                <div className="text-xs text-slate-400 mt-0.5">
-                  Platform Owner Console
-                </div>
+                <SuperAdminMainHeaderTitles />
               </div>
 
               <div className="flex shrink-0 items-center">
                 <SuperAdminUserMenu displayName={displayName} signOut={signOut} />
               </div>
-            </div>
+            </SuperAdminHeaderRow>
           </header>
 
           <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 pb-[env(safe-area-inset-bottom)]">

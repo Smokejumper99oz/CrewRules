@@ -16,7 +16,6 @@ import {
   getAviationStackUsageMetrics,
 } from "@/lib/super-admin/actions";
 import { SuperAdminHeader } from "@/components/super-admin/super-admin-header";
-import { SuperAdminAtAGlance } from "@/components/super-admin/super-admin-at-a-glance";
 import { SuperAdminNeedsAttention } from "@/components/super-admin/super-admin-needs-attention";
 import { SuperAdminKpiCards } from "@/components/super-admin/super-admin-kpi-cards";
 import { SuperAdminTrialMetrics } from "@/components/super-admin/super-admin-trial-metrics";
@@ -61,10 +60,6 @@ export default async function SuperAdminPage() {
       <SuperAdminRefreshTrigger />
       <div className="space-y-12">
         <SuperAdminHeader lastRefresh={lastRefresh} totalUsers={totalUsers} usersTodayDelta={kpis.newSignupsToday} onlineNow={onlineNow} peakToday={peakToday} />
-
-      <section className="space-y-2">
-        <SuperAdminAtAGlance kpis={kpis} />
-      </section>
 
       <section>
         <SuperAdminNeedsAttention events={systemEventsResult.events} dismissedCount={systemEventsResult.dismissedCount} />

@@ -10,7 +10,7 @@ export default async function AboutPage() {
 
   const roleLabel =
     profile?.role === "super_admin"
-      ? "Super Administrator"
+      ? "Platform Owner"
       : profile?.role === "tenant_admin"
         ? "Administrator"
         : profile?.role === "flight_attendant"
