@@ -12,7 +12,7 @@ export async function testClaude() {
   });
 
   const text = message.content
-    .filter((block): block is { type: "text"; text: string } => block.type === "text")
+    .filter((block): block is Anthropic.TextBlock => block.type === "text")
     .map((block) => block.text)
     .join("");
   console.log(text);
