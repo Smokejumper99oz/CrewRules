@@ -95,7 +95,7 @@ export default function SignUpPage() {
             </h2>
 
             <p className="mt-2 text-sm text-slate-300">
-              Enter the 6-digit code sent to your email address.
+              Enter the 8-digit code sent to your email address.
             </p>
 
             <form action={otpAction} className="mt-6 space-y-4">
