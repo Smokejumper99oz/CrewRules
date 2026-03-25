@@ -254,8 +254,7 @@ export function ProfileForm({
   /** Beta / Stripe “coming soon” pricing strip for free users and active trial users only (hide for paid Pro and Enterprise). */
   const showBetaPaymentInfo =
     profile?.subscription_tier !== "enterprise" &&
-    (!proActive ||
-      (profile.subscription_tier !== "pro" && profile.subscription_tier !== "enterprise"));
+    (!proActive || profile.subscription_tier !== "pro");
 
   const [baseAirport, setBaseAirport] = useState(profile.base_airport ?? "");
   const [position, setPosition] = useState(() => profile.position ?? "");
