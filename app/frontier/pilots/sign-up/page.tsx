@@ -106,10 +106,9 @@ export default function SignUpPage() {
                 <input
                   name="token"
                   type="text"
-                  inputMode="numeric"
-                  placeholder="123456"
+                  placeholder="Enter code"
+                  autoComplete="one-time-code"
                   required
-                  maxLength={6}
                   disabled={otpPending}
                   className={INPUT_CLASS}
                 />
