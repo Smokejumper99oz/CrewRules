@@ -1,0 +1,27 @@
+---
+description: Do not hide product UI (pricing, billing, roadmap) using subscription/access flags without approval
+alwaysApply: true
+---
+
+# Product UI vs. Access Flags
+
+**Do not** use entitlement or subscription flags (e.g. `proActive`, `isPro`, `hasAccess`, subscription state) to hide **pricing**, **billing**, **payment**, **roadmap**, **beta**, or **“coming soon”** UI unless the user has **explicitly approved** that behavior.
+
+## Access ≠ visibility
+
+Access state and visibility state are **not** the same. A user may already have access to features and still need to see:
+
+- Pricing cards  
+- Billing info  
+- Payment status  
+- Stripe (or other) rollout notices  
+- Coming-soon payment options  
+- Upgrade or future-plan messaging  
+
+## Before gating product-facing UI with a subscription/access flag
+
+1. State **exactly which users** would **stop seeing** that UI.  
+2. State **why** that is acceptable.  
+3. **Wait for approval** — do not assume.  
+
+Do **not** collapse multiple user states into a single condition when that hides differentiated messaging or surfaces users still need to see.

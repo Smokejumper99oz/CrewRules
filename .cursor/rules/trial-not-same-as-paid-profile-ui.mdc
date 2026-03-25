@@ -1,0 +1,23 @@
+---
+description: Trial vs paid on Profile — separate states; do not hide pricing/billing UI from trials via proActive
+alwaysApply: true
+---
+
+# Trial Is Not the Same as Paid (Profile UI)
+
+**Do not** treat **active trial** users the same as **paid subscribers** for **Profile** page UI visibility.
+
+Trial users may have **feature access**, but they must still be able to see:
+
+- Pricing and plan information  
+- Stripe rollout / beta notices  
+- Future payment options  
+- Billing-related informational UI  
+
+Paid subscribers and enterprise users may legitimately get **different billing controls**, but **trial users must not** lose product or payment visibility **only because** `proActive` (or similar) is true.
+
+## Profile page conditions
+
+- **Separate** trial state from paid subscription state — do not infer one from the other for visibility.  
+- **Do not** gate pricing, payment, or plan info **solely** on `proActive` (or a single “has pro access” flag).  
+- **Preserve** “Manage Subscription” / “Cancel” flows for **actual Stripe (or paid) subscribers** — trial ≠ subscribed; UI and actions should reflect the real billing relationship.

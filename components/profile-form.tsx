@@ -250,6 +250,13 @@ export function ProfileForm({
   const canManageSubscription =
     Boolean(profile?.stripe_customer_id) &&
     ((profile?.subscription_tier ?? "free") === "pro" || profile?.billing_source === "stripe");
+
+  /** Beta / Stripe “coming soon” pricing strip for free users and active trial users only (hide for paid Pro and Enterprise). */
+  const showBetaPaymentInfo =
+    profile?.subscription_tier !== "enterprise" &&
+    (!proActive ||
+      (profile.subscription_tier !== "pro" && profile.subscription_tier !== "enterprise"));
+
   const [baseAirport, setBaseAirport] = useState(profile.base_airport ?? "");
   const [position, setPosition] = useState(() => profile.position ?? "");
   const storedTimezone = profile.base_timezone ?? DEFAULT_TIMEZONE;
@@ -706,81 +713,85 @@ export function ProfileForm({
             >
               {trialStarting ? "Starting…" : "Start 14-Day PRO Trial"}
             </button>
-            {profile?.subscription_tier !== "enterprise" && (
-              <>
-                <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200/95">
-                  CrewRules™ Pro is currently in Beta. Payments are being finalized with Stripe and will be enabled soon. You can start your free 14-day trial today.
-                </div>
-                <p className="mt-2 text-xs text-slate-400">
-                  Early users will be the first to access paid plans once Stripe is live.
-                </p>
-                {foundingPilotCount > 0 && (
-                  <div className="mt-3 flex flex-col gap-0.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-                    <span className="text-xs font-medium text-amber-400/90">Founding Pilot Program</span>
-                    <span className="text-xs text-amber-400/80">{foundingPilotCount} / 100 spots claimed</span>
-                  </div>
-                )}
-                <div className="mt-3 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    disabled
-                    className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-center opacity-50 cursor-not-allowed transition"
-                  >
-                    <span className="text-sm font-semibold leading-tight text-amber-200">Pro Monthly</span>
-                    <span className="text-base font-bold leading-tight text-amber-400">$10 / month</span>
-                    <span className="flex items-center justify-center gap-1 text-xs leading-tight text-slate-400">
-                      <Lock className="size-3 opacity-70" aria-hidden />
-                      Available Soon
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-center opacity-50 cursor-not-allowed transition"
-                  >
-                    <span className="text-sm font-semibold leading-tight text-amber-200">Pro Annual</span>
-                    <span className="text-base font-bold leading-tight text-amber-400">$99 / year</span>
-                    <span className="flex items-center justify-center gap-1 text-xs leading-tight text-slate-400">
-                      <Lock className="size-3 opacity-70" aria-hidden />
-                      Best Value • Available Soon
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-center shadow-amber-500/5 opacity-50 cursor-not-allowed transition hover:shadow-[0_0_20px_rgba(251,191,36,0.15)]"
-                  >
-                    <span className="text-sm font-semibold leading-tight text-amber-200">Founding Pilot</span>
-                    <span className="text-base font-bold leading-tight text-amber-400">$59 / year</span>
-                    <span className="flex items-center justify-center gap-1 text-xs leading-tight text-slate-400">
-                      <Lock className="size-3 opacity-70" aria-hidden />
-                      Limited Beta Offer • Unlocking Soon
-                    </span>
-                  </button>
-                </div>
-                <p className="mt-2 text-xs text-slate-400">
-                  Early beta users will get first access when billing goes live.
-                </p>
-                <ul className="mt-3 space-y-1.5 text-xs leading-relaxed text-slate-400">
-                  <li className="flex items-start gap-2">
-                    <span className="mt-0.5 shrink-0 text-slate-500">•</span>
-                    <span>Upgrade to CrewRules™ Pro to support continued development and unlock Pro features. Early members help us build better tools for pilots and flight attendants.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="mt-0.5 shrink-0 text-slate-500">•</span>
-                    <span>CrewRules™ merchandise is on the way — including our new cap and lanyard.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="mt-0.5 shrink-0 text-slate-500">•</span>
-                    <span>Pro supporters will receive early access when they arrive.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="mt-0.5 shrink-0 text-slate-500">•</span>
-                    <span>Beta testers help shape CrewRules™ by testing new features early and helping us improve the tools pilots rely on.</span>
-                  </li>
-                </ul>
-              </>
+          </>
+        )}
+        {showBetaPaymentInfo && (
+          <>
+            <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200/95">
+              CrewRules™ Pro is currently in Beta. Payments are being finalized with Stripe and will be enabled soon. You can start your free 14-day trial today.
+            </div>
+            <p className="mt-2 text-xs text-slate-400">
+              Early users will be the first to access paid plans once Stripe is live.
+            </p>
+            {foundingPilotCount > 0 && (
+              <div className="mt-3 flex flex-col gap-0.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+                <span className="text-xs font-medium text-amber-400/90">Founding Pilot Program</span>
+                <span className="text-xs text-amber-400/80">{foundingPilotCount} / 100 spots claimed</span>
+              </div>
             )}
+            <div className="mt-3 flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled
+                className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-center opacity-50 cursor-not-allowed transition"
+              >
+                <span className="text-sm font-semibold leading-tight text-amber-200">Pro Monthly</span>
+                <span className="text-base font-bold leading-tight text-amber-400">$10 / month</span>
+                <span className="flex items-center justify-center gap-1 text-xs leading-tight text-slate-400">
+                  <Lock className="size-3 opacity-70" aria-hidden />
+                  Available Soon
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled
+                className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-center opacity-50 cursor-not-allowed transition"
+              >
+                <span className="text-sm font-semibold leading-tight text-amber-200">Pro Annual</span>
+                <span className="text-base font-bold leading-tight text-amber-400">$99 / year</span>
+                <span className="flex items-center justify-center gap-1 text-xs leading-tight text-slate-400">
+                  <Lock className="size-3 opacity-70" aria-hidden />
+                  Best Value • Available Soon
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled
+                className="flex min-h-[88px] min-w-[120px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-center shadow-amber-500/5 opacity-50 cursor-not-allowed transition hover:shadow-[0_0_20px_rgba(251,191,36,0.15)]"
+              >
+                <span className="text-sm font-semibold leading-tight text-amber-200">Founding Pilot</span>
+                <span className="text-base font-bold leading-tight text-amber-400">$59 / year</span>
+                <span className="flex items-center justify-center gap-1 text-xs leading-tight text-slate-400">
+                  <Lock className="size-3 opacity-70" aria-hidden />
+                  Limited Beta Offer • Unlocking Soon
+                </span>
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-slate-400">
+              Early beta users will get first access when billing goes live.
+            </p>
+            <ul className="mt-3 space-y-1.5 text-xs leading-relaxed text-slate-400">
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 shrink-0 text-slate-500">•</span>
+                <span>Upgrade to CrewRules™ Pro to support continued development and unlock Pro features. Early members help us build better tools for pilots and flight attendants.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 shrink-0 text-slate-500">•</span>
+                <span>CrewRules™ merchandise is on the way — including our new cap and lanyard.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 shrink-0 text-slate-500">•</span>
+                <span>Pro supporters will receive early access when they arrive.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 shrink-0 text-slate-500">•</span>
+                <span>Beta testers help shape CrewRules™ by testing new features early and helping us improve the tools pilots rely on.</span>
+              </li>
+            </ul>
+          </>
+        )}
+        {!proActive && (
+          <>
             {trialMessage && (
               <p className="mt-2 text-sm text-amber-200/90">{trialMessage}</p>
             )}
@@ -1212,7 +1223,48 @@ export function ProfileForm({
         <h2 className="text-base font-semibold text-slate-900 mb-1 dark:text-white">Account</h2>
         <p className="text-xs text-slate-500 mb-4">Manage your CrewRules™ Pro subscription and account settings.</p>
         <div className="rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-slate-950/40 px-4 py-3 space-y-3">
-          <div>
+          {canManageSubscription && (
+            <div>
+              <span className="text-xs font-medium text-slate-500">Subscription</span>
+              {(profile?.billing_interval || profile?.current_period_end || profile?.cancel_at_period_end) && (
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {profile?.billing_interval && (
+                    <span className="capitalize">{profile.billing_interval}</span>
+                  )}
+                  {profile?.current_period_end && (
+                    <span>
+                      {profile?.billing_interval && " · "}
+                      {profile?.cancel_at_period_end
+                        ? `Access until ${new Date(profile.current_period_end).toLocaleDateString()}`
+                        : `Renews ${new Date(profile.current_period_end).toLocaleDateString()}`}
+                    </span>
+                  )}
+                  {profile?.cancel_at_period_end && (
+                    <span className="text-amber-400/90"> · Cancels at period end</span>
+                  )}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={async () => {
+                  setPortalLoading(true);
+                  try {
+                    const res = await fetch("/api/stripe/portal", { method: "POST" });
+                    const data = await res.json();
+                    if (data.url) window.location.href = data.url;
+                    else setPortalLoading(false);
+                  } catch {
+                    setPortalLoading(false);
+                  }
+                }}
+                disabled={portalLoading}
+                className="mt-2 text-sm text-[#75C043] hover:text-[#75C043]/80 font-medium disabled:opacity-50"
+              >
+                {portalLoading ? "Opening…" : "Manage subscription"}
+              </button>
+            </div>
+          )}
+          <div className={canManageSubscription ? "pt-3 border-t border-white/5" : undefined}>
             <span className="text-xs font-medium text-slate-500">Email</span>
             <p className="text-sm text-white">{profile.email ?? "—"}</p>
             <p className="mt-1 text-xs text-slate-500">Email is managed by CrewRules™ based on your airline access and cannot be edited.</p>
@@ -1298,47 +1350,6 @@ export function ProfileForm({
               </form>
             )}
           </div>
-          {canManageSubscription && (
-            <div className="pt-3 border-t border-white/5">
-              <span className="text-xs font-medium text-slate-500">Subscription</span>
-              {(profile?.billing_interval || profile?.current_period_end || profile?.cancel_at_period_end) && (
-                <p className="mt-0.5 text-xs text-slate-400">
-                  {profile?.billing_interval && (
-                    <span className="capitalize">{profile.billing_interval}</span>
-                  )}
-                  {profile?.current_period_end && (
-                    <span>
-                      {profile?.billing_interval && " · "}
-                      {profile?.cancel_at_period_end
-                        ? `Access until ${new Date(profile.current_period_end).toLocaleDateString()}`
-                        : `Renews ${new Date(profile.current_period_end).toLocaleDateString()}`}
-                    </span>
-                  )}
-                  {profile?.cancel_at_period_end && (
-                    <span className="text-amber-400/90"> · Cancels at period end</span>
-                  )}
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={async () => {
-                  setPortalLoading(true);
-                  try {
-                    const res = await fetch("/api/stripe/portal", { method: "POST" });
-                    const data = await res.json();
-                    if (data.url) window.location.href = data.url;
-                    else setPortalLoading(false);
-                  } catch {
-                    setPortalLoading(false);
-                  }
-                }}
-                disabled={portalLoading}
-                className="mt-2 text-sm text-[#75C043] hover:text-[#75C043]/80 font-medium disabled:opacity-50"
-              >
-                {portalLoading ? "Opening…" : "Manage subscription"}
-              </button>
-            </div>
-          )}
         </div>
       </section>
 
