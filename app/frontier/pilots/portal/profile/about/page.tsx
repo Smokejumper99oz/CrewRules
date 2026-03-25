@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import { getProfile, getDisplayName, getSubscriptionDisplayType } from "@/lib/profile";
+import { getAccountRoleBadges } from "@/lib/account-role-display";
 import { getTenantPortalConfig } from "@/lib/tenant-config";
 import packageJson from "../../../../../../package.json";
 import { AboutDeviceSection } from "./about-device-section";
@@ -7,15 +9,6 @@ export default async function AboutPage() {
   const profile = await getProfile();
   const subscriptionType = getSubscriptionDisplayType(profile);
   const displayName = getDisplayName(profile ?? null);
-
-  const roleLabel =
-    profile?.role === "super_admin"
-      ? "Platform Owner"
-      : profile?.role === "tenant_admin"
-        ? "Administrator"
-        : profile?.role === "flight_attendant"
-          ? "Flight Attendant"
-          : "Pilot";
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
@@ -63,7 +56,20 @@ export default async function AboutPage() {
           </h2>
           <dl className="space-y-0 divide-y divide-white/5">
             <AboutRow label="Logged-in User" value={displayName || "—"} />
-            <AboutRow label="Role" value={roleLabel} />
+            <AboutRow
+              label="Role"
+              value={
+                profile ? (
+                  <AboutRoleBadgeRow
+                    role={profile.role}
+                    is_admin={profile.is_admin}
+                    is_mentor={profile.is_mentor}
+                  />
+                ) : (
+                  "—"
+                )
+              }
+            />
             <AboutRow label="Employee ID" value={profile?.employee_number ?? "—"} />
             <AboutRow label="Airline / Tenant" value={airlineDisplayName} />
             <AboutRow label="Subscription Type" value={subscriptionType} />
@@ -82,11 +88,61 @@ export default async function AboutPage() {
   );
 }
 
-function AboutRow({ label, value }: { label: string; value: string }) {
+function AboutRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex justify-between gap-4 py-3 first:pt-0">
       <dt className="text-sm text-slate-400 shrink-0">{label}</dt>
       <dd className="text-sm text-slate-200 text-right break-all">{value}</dd>
     </div>
+  );
+}
+
+function AboutRoleBadgeRow({
+  role,
+  is_admin,
+  is_mentor,
+}: {
+  role: string;
+  is_admin?: boolean | null;
+  is_mentor?: boolean | null;
+}) {
+  const { baseLabel, badges } = getAccountRoleBadges({
+    role,
+    is_admin,
+    is_mentor,
+  });
+  const isPlatformOwner = role === "super_admin";
+
+  return (
+    <span className="inline-flex max-w-full flex-wrap items-center justify-end gap-1.5">
+      {isPlatformOwner ? (
+        <span className="inline-flex rounded-md border border-amber-400/40 bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-300">
+          {baseLabel}
+        </span>
+      ) : (
+        <>
+          <span className="inline-flex rounded-md border border-slate-400/40 bg-slate-500/20 px-2 py-0.5 text-xs font-semibold text-slate-200">
+            {baseLabel}
+          </span>
+          {badges.map((b) =>
+            b === "Admin" ? (
+              <span
+                key="admin"
+                className="inline-flex rounded-md border border-emerald-400/40 bg-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-300"
+              >
+                Admin
+              </span>
+            ) : (
+              <span
+                key="mentor"
+                className="inline-flex rounded-md border border-cyan-400/40 bg-cyan-500/20 px-2 py-0.5 text-xs font-semibold text-cyan-200"
+              >
+                Mentor
+              </span>
+            )
+          )}
+        </>
+      )}
+    </span>
   );
 }

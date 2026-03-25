@@ -177,7 +177,7 @@ export function PortalLayoutShell({
                 <div className="flex shrink-0 items-center">
                   <PortalUserMenu
                     email={profile.email ?? user.email ?? null}
-                    role={profile.role}
+                    roleLabel={roleLabel}
                     signOut={signOut}
                   />
                 </div>

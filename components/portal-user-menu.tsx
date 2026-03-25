@@ -13,27 +13,19 @@ function emailToDisplayName(email: string | null): string {
     .join(" ") || email;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  super_admin: "Platform Owner",
-  tenant_admin: "Administrator",
-  pilot: "Pilot",
-  flight_attendant: "Flight Attendant",
-};
-
 export function PortalUserMenu({
   email,
-  role,
+  roleLabel,
   signOut,
 }: {
   email: string | null;
-  role: string;
+  roleLabel: string;
   signOut: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const displayName = emailToDisplayName(email);
-  const roleLabel = ROLE_LABELS[role] ?? role;
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

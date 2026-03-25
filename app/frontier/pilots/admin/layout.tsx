@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTenantPortalConfig } from "@/lib/tenant-config";
+import { getAccountRoleDisplay } from "@/lib/account-role-display";
 import { getProfile, isAdmin } from "@/lib/profile";
 import { signOut } from "../portal/actions";
 import { AdminMobileNav } from "@/components/admin-mobile-nav";
@@ -45,6 +46,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const base = `/${TENANT}/${PORTAL}/admin`;
   const isSuperAdmin = userProfile.role === "super_admin";
   const adminNav = getAdminNav(isSuperAdmin);
+  const userMenuRoleLabel = getAccountRoleDisplay({
+    role: userProfile.role,
+    is_admin: userProfile.is_admin,
+    is_mentor: userProfile.is_mentor,
+  }).combined;
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -120,7 +126,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               <div className="flex shrink-0 items-center">
                 <PortalUserMenu
                   email={userProfile.email ?? null}
-                  role={userProfile.role}
+                  roleLabel={userMenuRoleLabel}
                   signOut={signOut}
                 />
               </div>
