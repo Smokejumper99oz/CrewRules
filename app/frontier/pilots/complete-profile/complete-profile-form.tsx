@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { createProfile } from "./actions";
 import { DatePickerInput } from "@/components/date-picker-input";
 import { FRONTIER_CREW_BASE_OPTIONS } from "@/lib/frontier-crew-bases";
@@ -19,8 +19,14 @@ const POSITION_OPTIONS = [
   { value: "flight_attendant", label: "Flight Attendant" },
 ] as const;
 
-const DROPDOWN_PANEL_CLASS =
-  "absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-xl border border-slate-600 bg-slate-900 py-1 shadow-xl [&_button]:text-left";
+/** Outer panel: clips corners; inner list scrolls. High z-index for iPad/Safari stacking. */
+const DROPDOWN_PANEL_WRAPPER_CLASS =
+  "absolute left-0 right-0 z-[200] mt-1 w-full overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7),0_0_0_1px_rgba(15,23,42,0.8)] ring-1 ring-black/30";
+
+const DROPDOWN_LIST_CLASS = "max-h-60 overflow-y-auto py-1";
+
+const TRIGGER_EXTRA_CLASS =
+  "min-h-[3.25rem] flex cursor-pointer items-center justify-between gap-2 text-left disabled:cursor-not-allowed";
 
 type SelectOption = { value: string; label: string };
 
@@ -77,9 +83,9 @@ function CustomFormSelect({
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => !disabled && setOpen((o) => !o)}
-        className={`${INPUT_CLASS} flex cursor-pointer items-center justify-between gap-2 text-left disabled:cursor-not-allowed`}
+        className={`${INPUT_CLASS} ${TRIGGER_EXTRA_CLASS}`}
       >
-        <span className={value ? "text-white" : "text-slate-600"}>
+        <span className={value ? "text-white" : "text-slate-400"}>
           {selectedLabel ?? placeholder}
         </span>
         <ChevronDown
@@ -88,24 +94,39 @@ function CustomFormSelect({
         />
       </button>
       {open && !disabled && (
-        <ul role="listbox" className={DROPDOWN_PANEL_CLASS}>
-          {options.map((opt) => (
-            <li key={opt.value} role="none">
-              <button
-                type="button"
-                role="option"
-                aria-selected={value === opt.value}
-                className="w-full px-4 py-2.5 text-sm text-white hover:bg-slate-700 focus:bg-slate-700 focus:outline-none"
-                onClick={() => {
-                  setValue(opt.value);
-                  setOpen(false);
-                }}
-              >
-                {opt.label}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className={DROPDOWN_PANEL_WRAPPER_CLASS}>
+          <ul role="listbox" className={DROPDOWN_LIST_CLASS}>
+            {options.map((opt) => {
+              const isSelected = value === opt.value;
+              return (
+                <li key={opt.value} role="none">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    className={
+                      "flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm focus:outline-none " +
+                      (isSelected
+                        ? "bg-slate-800 text-emerald-300"
+                        : "text-slate-100 hover:bg-slate-800 focus:bg-slate-800")
+                    }
+                    onClick={() => {
+                      setValue(opt.value);
+                      setOpen(false);
+                    }}
+                  >
+                    <span>{opt.label}</span>
+                    {isSelected ? (
+                      <Check className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
+                    ) : (
+                      <span className="w-4 shrink-0" aria-hidden />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
     </div>
   );
