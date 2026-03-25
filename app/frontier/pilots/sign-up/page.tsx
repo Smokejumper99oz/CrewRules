@@ -75,11 +75,6 @@ export default function SignUpPage() {
 
   function handleClose() {
     window.close();
-    setTimeout(() => {
-      if (!window.closed) {
-        window.location.href = "/frontier/pilots/login";
-      }
-    }, 150);
   }
 
   if (showSignUpSuccess) {
