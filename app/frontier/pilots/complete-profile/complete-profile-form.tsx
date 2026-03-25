@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { createProfile } from "./actions";
 import { DatePickerInput } from "@/components/date-picker-input";
 import { FRONTIER_CREW_BASE_OPTIONS } from "@/lib/frontier-crew-bases";
@@ -12,6 +13,104 @@ const SORTED_CREW_BASE_OPTIONS = [...FRONTIER_CREW_BASE_OPTIONS].sort((a, b) =>
   a.value.localeCompare(b.value)
 );
 
+const POSITION_OPTIONS = [
+  { value: "captain", label: "Captain" },
+  { value: "first_officer", label: "First Officer" },
+  { value: "flight_attendant", label: "Flight Attendant" },
+] as const;
+
+const DROPDOWN_PANEL_CLASS =
+  "absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-xl border border-slate-600 bg-slate-900 py-1 shadow-xl [&_button]:text-left";
+
+type SelectOption = { value: string; label: string };
+
+function CustomFormSelect({
+  id,
+  name,
+  options,
+  placeholder,
+  disabled,
+}: {
+  id: string;
+  name: string;
+  options: readonly SelectOption[];
+  placeholder: string;
+  disabled: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selectedLabel = value
+    ? options.find((o) => o.value === value)?.label ?? value
+    : null;
+
+  useEffect(() => {
+    function handlePointerDown(e: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("pointerdown", handlePointerDown);
+      return () => document.removeEventListener("pointerdown", handlePointerDown);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    if (open) {
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }
+  }, [open]);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <input type="hidden" name={name} value={value} required />
+      <button
+        type="button"
+        id={id}
+        disabled={disabled}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => !disabled && setOpen((o) => !o)}
+        className={`${INPUT_CLASS} flex cursor-pointer items-center justify-between gap-2 text-left disabled:cursor-not-allowed`}
+      >
+        <span className={value ? "text-white" : "text-slate-600"}>
+          {selectedLabel ?? placeholder}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
+          aria-hidden
+        />
+      </button>
+      {open && !disabled && (
+        <ul role="listbox" className={DROPDOWN_PANEL_CLASS}>
+          {options.map((opt) => (
+            <li key={opt.value} role="none">
+              <button
+                type="button"
+                role="option"
+                aria-selected={value === opt.value}
+                className="w-full px-4 py-2.5 text-sm text-white hover:bg-slate-700 focus:bg-slate-700 focus:outline-none"
+                onClick={() => {
+                  setValue(opt.value);
+                  setOpen(false);
+                }}
+              >
+                {opt.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function CompleteProfileForm() {
   const [state, formAction, isPending] = useActionState(createProfile, null);
 
@@ -21,20 +120,13 @@ export function CompleteProfileForm() {
         <label htmlFor="base_airport" className="block text-sm font-medium text-slate-300">
           Crew Base <span className="text-red-400" aria-hidden="true">*</span>
         </label>
-        <select
+        <CustomFormSelect
           id="base_airport"
           name="base_airport"
-          required
+          options={SORTED_CREW_BASE_OPTIONS}
+          placeholder="Select crew base"
           disabled={isPending}
-          className={`${INPUT_CLASS} cursor-pointer`}
-        >
-          <option value="">Select crew base</option>
-          {SORTED_CREW_BASE_OPTIONS.map(({ value, label }) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
+        />
         <p className="mt-1 text-xs text-slate-500">Used for Commute Assist™, Report Times, and schedule-based features.</p>
       </div>
 
@@ -42,18 +134,13 @@ export function CompleteProfileForm() {
         <label htmlFor="position" className="block text-sm font-medium text-slate-300">
           Position <span className="text-red-400" aria-hidden="true">*</span>
         </label>
-        <select
+        <CustomFormSelect
           id="position"
           name="position"
-          required
+          options={POSITION_OPTIONS}
+          placeholder="Select position"
           disabled={isPending}
-          className={`${INPUT_CLASS} cursor-pointer`}
-        >
-          <option value="">Select position</option>
-          <option value="captain">Captain</option>
-          <option value="first_officer">First Officer</option>
-          <option value="flight_attendant">Flight Attendant</option>
-        </select>
+        />
         <p className="mt-1 text-xs text-slate-500">Used for Pay Projection™, Duty Limits, and schedule-based features.</p>
       </div>
 
