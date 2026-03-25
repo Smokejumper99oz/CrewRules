@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 /**
  * Read a tenant setting by key.
  * Lookup order: (tenant, portal, key) then (tenant, null, key) for tenant-wide fallback.
- * Returns the jsonb value, or null if not found. RLS: only admins can read for now.
+ * Returns the jsonb value, or null if not found. RLS: admins for tenant rows; some keys (e.g. show_connect_flica_onboarding) allow tenant users to read.
  */
 export async function getTenantSetting<T = unknown>(
   tenant: string,

@@ -3,9 +3,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/profile";
 import { revalidatePath } from "next/cache";
+import { getTenantSetting } from "@/lib/tenant-settings";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
+const SHOW_CONNECT_FLICA_ONBOARDING_KEY = "show_connect_flica_onboarding";
 
 const PAY_SCALE_VALUE = {
   effective_date: "2026-01-01",
@@ -40,6 +42,69 @@ const PAY_SCALE_VALUE = {
     },
   },
 } as const;
+
+function interpretShowConnectFlicaOnboarding(raw: unknown): boolean {
+  if (raw == null) return true;
+  if (raw === false) return false;
+  if (raw === true) return true;
+  return true;
+}
+
+export async function getShowConnectFlicaOnboardingSetting(): Promise<
+  { enabled: boolean } | { error: string }
+> {
+  const allowed = await isAdmin(TENANT, PORTAL);
+  if (!allowed) {
+    return { error: "Unauthorized" };
+  }
+  const raw = await getTenantSetting<unknown>(TENANT, PORTAL, SHOW_CONNECT_FLICA_ONBOARDING_KEY);
+  return { enabled: interpretShowConnectFlicaOnboarding(raw) };
+}
+
+export async function setShowConnectFlicaOnboardingSetting(
+  enabled: boolean
+): Promise<{ success?: boolean; error?: string }> {
+  const admin = await isAdmin(TENANT, PORTAL);
+  if (!admin) {
+    return { error: "Unauthorized" };
+  }
+
+  try {
+    const supabase = await createClient();
+
+    const { data: existing } = await supabase
+      .from("tenant_settings")
+      .select("tenant")
+      .eq("tenant", TENANT)
+      .eq("portal", PORTAL)
+      .eq("key", SHOW_CONNECT_FLICA_ONBOARDING_KEY)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabase
+        .from("tenant_settings")
+        .update({ value: enabled })
+        .eq("tenant", TENANT)
+        .eq("portal", PORTAL)
+        .eq("key", SHOW_CONNECT_FLICA_ONBOARDING_KEY);
+      if (error) return { error: error.message };
+    } else {
+      const { error } = await supabase.from("tenant_settings").insert({
+        tenant: TENANT,
+        portal: PORTAL,
+        key: SHOW_CONNECT_FLICA_ONBOARDING_KEY,
+        value: enabled,
+      });
+      if (error) return { error: error.message };
+    }
+
+    revalidatePath(`/${TENANT}/${PORTAL}/admin`);
+    revalidatePath(`/${TENANT}/${PORTAL}/admin/settings`);
+    return { success: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Unknown error" };
+  }
+}
 
 export async function upsertPayScaleSetting(): Promise<{ success?: boolean; error?: string }> {
   const admin = await isAdmin(TENANT, PORTAL);

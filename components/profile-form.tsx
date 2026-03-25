@@ -75,6 +75,7 @@ type Props = {
   foundingPilotCount?: number;
   inboundEmail: string | null;
   scheduleStatus?: { count: number; lastImportedAt: string | null };
+  showConnectFlicaOnboarding?: boolean;
 };
 
 const FRONTIER_CREW_BASE_CANONICAL = new Set(FRONTIER_CREW_BASE_VALUES);
@@ -218,7 +219,16 @@ function ConnectFlicaSection({
   );
 }
 
-export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant, foundingPilotCount = 0, inboundEmail, scheduleStatus = { count: 0, lastImportedAt: null } }: Props) {
+export function ProfileForm({
+  profile,
+  proActive,
+  proBadgeLabel,
+  proBadgeVariant,
+  foundingPilotCount = 0,
+  inboundEmail,
+  scheduleStatus = { count: 0, lastImportedAt: null },
+  showConnectFlicaOnboarding = true,
+}: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -660,10 +670,9 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
       </section>
 
       {/* Connect FLICA (Auto Sync) */}
-      <ConnectFlicaSection
-        inboundEmail={inboundEmail}
-        scheduleStatus={scheduleStatus}
-      />
+      {showConnectFlicaOnboarding && (
+        <ConnectFlicaSection inboundEmail={inboundEmail} scheduleStatus={scheduleStatus} />
+      )}
 
       {/* CrewRules™ Pro Features */}
       <section>

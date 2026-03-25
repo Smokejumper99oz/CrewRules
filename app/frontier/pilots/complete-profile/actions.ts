@@ -9,7 +9,6 @@ import { isAcceptedFrontierCrewBaseCode } from "@/lib/frontier-crew-bases";
 const TENANT = "frontier";
 const PORTAL = "pilots";
 const PORTAL_PATH = `/${TENANT}/${PORTAL}/portal`;
-const CONNECT_FLICA_PATH = `/${TENANT}/${PORTAL}/connect-flica`;
 const LOGIN_PATH = `/${TENANT}/${PORTAL}/login`;
 
 const VALID_AIRPORT = /^[A-Za-z]{3}$/;
@@ -91,5 +90,5 @@ export async function createProfile(
     console.warn("[createProfile] alias assignment failed:", err);
   }
 
-  redirect(CONNECT_FLICA_PATH);
+  redirect(PORTAL_PATH);
 }
