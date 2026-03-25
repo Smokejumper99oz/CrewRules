@@ -93,7 +93,7 @@ export function PortalLayoutShell({
       <DesktopIdleLogout />
       <main className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
         <div className="flex h-screen overflow-hidden">
-          <aside className="sidebar-scrollbar-hide hidden shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-white transition-[width] duration-300 dark:border-white/5 dark:bg-slate-950/70 dark:backdrop-blur xl:flex xl:h-screen xl:w-72">
+          <aside className="sidebar-scrollbar-hide hidden shrink-0 flex-col gap-4 overflow-y-auto border-r border-white/5 bg-slate-950/70 backdrop-blur transition-[width] duration-300 xl:flex xl:h-screen xl:w-72 [html[data-theme=light]_&]:border-slate-200 [html[data-theme=light]_&]:bg-white">
             <div className="px-6 pt-6">
               <div className="text-lg font-semibold">
                 Crew<span className="text-[#75C043]">Rules</span>
@@ -119,7 +119,7 @@ export function PortalLayoutShell({
           </aside>
 
           {tabletNavOpen && (
-            <aside className="hidden shrink-0 flex-col gap-4 overflow-hidden border-r border-slate-200 bg-white md:flex md:h-screen md:w-56 dark:border-white/5 dark:bg-slate-950/88 dark:backdrop-blur-xl xl:hidden">
+            <aside className="hidden shrink-0 flex-col gap-4 overflow-hidden border-r border-white/5 bg-slate-950/88 backdrop-blur-xl md:flex md:h-screen md:w-56 xl:hidden [html[data-theme=light]_&]:border-slate-200 [html[data-theme=light]_&]:bg-white">
               <div className="px-5 pt-6">
                 <div className="text-lg font-semibold">
                   Crew<span className="text-[#75C043]">Rules</span>

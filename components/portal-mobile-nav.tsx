@@ -94,12 +94,12 @@ export function PortalMobileNav({
               onClick={() => setOpen(false)}
             />
             <aside
-              className="fixed left-0 top-0 z-[60] h-full w-[85vw] max-w-[340px] border-r border-slate-200 bg-white shadow-2xl md:hidden dark:border-white/10 dark:bg-slate-900/95 dark:backdrop-blur-xl dark:ring-1 dark:ring-white/10"
+              className="fixed left-0 top-0 z-[60] h-full w-[85vw] max-w-[340px] border-r border-white/10 bg-slate-900/95 shadow-2xl backdrop-blur-xl ring-1 ring-white/10 md:hidden [html[data-theme=light]_&]:border-slate-200 [html[data-theme=light]_&]:bg-white [html[data-theme=light]_&]:ring-0"
               role="dialog"
               aria-label="Navigation menu"
             >
               <div className="flex h-full flex-col pt-[env(safe-area-inset-top,0px)]">
-                <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 dark:border-white/10 sm:px-5">
+                <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-4 sm:px-5 [html[data-theme=light]_&]:border-slate-200">
                   <div className="min-w-0 flex-1">
                     <div className="text-xl font-semibold leading-tight text-slate-900 dark:text-white">
                       Crew<span className="text-[#75C043]">Rules</span>

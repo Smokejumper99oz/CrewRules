@@ -5,8 +5,11 @@ import { useEffect } from "react";
 export type ColorMode = "dark" | "light" | "system";
 
 function resolveTheme(mode: ColorMode): "dark" | "light" {
-  if (mode === "system" && typeof window !== "undefined") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  // Must match app/layout.tsx: cookie "system" keeps data-theme="dark" on SSR.
+  // Resolving system from prefers-color-scheme here produced light on iPad while
+  // the shell was authored dark-first, so sidebars fell back to bg-white / light UI.
+  if (mode === "system") {
+    return "dark";
   }
   return mode === "light" ? "light" : "dark";
 }
@@ -26,13 +29,6 @@ export function ThemeProvider({ initialTheme = "dark", children }: ThemeProvider
     };
 
     apply(initialTheme);
-
-    if (initialTheme === "system") {
-      const mq = window.matchMedia("(prefers-color-scheme: dark)");
-      const handle = () => apply("system");
-      mq.addEventListener("change", handle);
-      return () => mq.removeEventListener("change", handle);
-    }
   }, [initialTheme]);
 
   return <>{children}</>;

@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { updateProfilePreferences, startProTrial, updatePassword, setColorMode } from "@/app/frontier/pilots/portal/profile/actions";
 import { DatePickerInput } from "@/components/date-picker-input";
+import { CustomFormSelect } from "@/components/custom-form-select";
 import { ProBadge } from "@/components/pro-badge";
 import { formatLastImport } from "@/components/schedule-status-chip";
 import { Lock, Copy, Check } from "lucide-react";
 import {
   FRONTIER_CREW_BASE_VALUES,
+  FRONTIER_CREW_BASE_OPTIONS,
   getFrontierCrewBaseLabel,
 } from "@/lib/frontier-crew-bases";
 import { getTimezoneFromAirport, DEFAULT_TIMEZONE } from "@/lib/airport-timezone";
@@ -74,6 +76,18 @@ type Props = {
 };
 
 const FRONTIER_CREW_BASE_CANONICAL = new Set(FRONTIER_CREW_BASE_VALUES);
+
+const PROFILE_POSITION_OPTIONS = [
+  { value: "captain", label: "Captain" },
+  { value: "first_officer", label: "First Officer" },
+  { value: "flight_attendant", label: "Flight Attendant" },
+] as const;
+
+/** Matches previous <select> first blank option (value submitted as ""). */
+const PROFILE_ROLE_OPTIONS = [
+  { value: "", label: "Select role" },
+  ...PROFILE_POSITION_OPTIONS,
+] as const;
 
 function getTimezoneAbbreviation(iana: string): string {
   try {
@@ -225,6 +239,7 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
     Boolean(profile?.stripe_customer_id) &&
     ((profile?.subscription_tier ?? "free") === "pro" || profile?.billing_source === "stripe");
   const [baseAirport, setBaseAirport] = useState(profile.base_airport ?? "");
+  const [position, setPosition] = useState(() => profile.position ?? "");
   const storedTimezone = profile.base_timezone ?? DEFAULT_TIMEZONE;
   const derivedFromBase = getTimezoneFromAirport(profile.base_airport ?? "DEN");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -267,6 +282,23 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
       setManualTimezone(getTimezoneFromAirport(baseAirport || "DEN"));
     }
   }, [baseAirport, showAdvanced]);
+
+  useEffect(() => {
+    setPosition(profile.position ?? "");
+  }, [profile.position]);
+
+  useEffect(() => {
+    setBaseAirport(profile.base_airport ?? "");
+  }, [profile.base_airport]);
+
+  const sortedCrewBaseOptions = useMemo(() => {
+    const list = [...FRONTIER_CREW_BASE_OPTIONS];
+    if (baseAirport && !FRONTIER_CREW_BASE_CANONICAL.has(baseAirport)) {
+      list.push({ value: baseAirport, label: getFrontierCrewBaseLabel(baseAirport) });
+    }
+    list.sort((a, b) => a.value.localeCompare(b.value));
+    return [{ value: "", label: "Select crew base" }, ...list];
+  }, [baseAirport]);
 
   function getFormSnapshot(form: HTMLFormElement | null, effectiveTz: string): string | null {
     if (!form) return null;
@@ -451,43 +483,32 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
             <label htmlFor="position" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Role
             </label>
-            <select
+            <CustomFormSelect
               id="position"
               name="position"
-              defaultValue={profile.position ?? ""}
-              className="profile-select-base profile-select mt-1.5"
-            >
-              <option value="">Select role</option>
-              <option value="captain">Captain</option>
-              <option value="first_officer">First Officer</option>
-              <option value="flight_attendant">Flight Attendant</option>
-            </select>
+              options={PROFILE_ROLE_OPTIONS}
+              placeholder="Select role"
+              disabled={saving}
+              value={position}
+              onValueChange={setPosition}
+              triggerClassName="profile-input-base mt-1.5 w-full max-w-sm min-h-[44px]"
+            />
           </div>
           <div>
             <label htmlFor="base_airport" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Crew Base
             </label>
-            <select
+            <CustomFormSelect
               id="base_airport"
               name="base_airport"
+              options={sortedCrewBaseOptions}
+              placeholder="Select crew base"
+              disabled={saving}
               value={baseAirport}
-              onChange={(e) => setBaseAirport(e.target.value)}
-              className="profile-select-base profile-select mt-1.5 w-full max-w-[8rem]"
-            >
-              <option value="">Select crew base</option>
-              {[
-                ...new Set([
-                  ...(baseAirport && !FRONTIER_CREW_BASE_CANONICAL.has(baseAirport) ? [baseAirport] : []),
-                  ...FRONTIER_CREW_BASE_VALUES,
-                ]),
-              ]
-                .sort()
-                .map((code) => (
-                  <option key={code} value={code}>
-                    {getFrontierCrewBaseLabel(code)}
-                  </option>
-                ))}
-            </select>
+              onValueChange={setBaseAirport}
+              triggerClassName="profile-input-base mt-1.5 w-full max-w-[8rem] min-h-[44px]"
+              containerClassName="max-w-[8rem]"
+            />
             <p className="mt-1 text-xs text-slate-500">3-letter IATA airport code. Used for reserve calculations and default commute planning. If a trip starts from another airport, Commute Assist automatically uses that airport instead.</p>
           </div>
           <div>
