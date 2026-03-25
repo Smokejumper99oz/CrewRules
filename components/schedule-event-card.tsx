@@ -1,6 +1,11 @@
 import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, computeTripCredit, formatMinutesToHhMm } from "@/lib/schedule-time";
 import type { ScheduleEvent, ScheduleEventLeg } from "@/app/frontier/pilots/portal/schedule/actions";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
+import {
+  formatReportNightEeeD,
+  getTripReportNightMeta,
+  isRdPlaceholderEvent,
+} from "@/lib/schedule-report-night";
 
 /** Prefix flight number for display: carrierCode + number, or FLT + number. Does not change stored data. */
 function formatFlightDisplay(flightNumber: string, carrierCode?: string | null): string {
@@ -10,10 +15,14 @@ function formatFlightDisplay(flightNumber: string, carrierCode?: string | null):
   return `${prefix}${num}`;
 }
 
-function formatLeg(leg: ScheduleEventLeg, carrierCode?: string | null): string {
-  const route = `${leg.origin} → ${leg.destination}`;
-  const time = leg.depTime && leg.arrTime ? ` ${leg.depTime}–${leg.arrTime}` : "";
-  return leg.flightNumber ? `${formatFlightDisplay(leg.flightNumber, carrierCode)} ${route}${time}` : `${route}${time}`;
+function pairingLengthLabel(pairingDays: number | null | undefined): string | null {
+  if (pairingDays == null) return null;
+  const n = Math.round(Number(pairingDays));
+  if (!Number.isFinite(n) || n < 1) return null;
+  if (n === 1) return "TURN";
+  if (n === 2) return "2-DAY TRIP";
+  if (n === 3) return "3-DAY TRIP";
+  return `${n}-DAY TRIP`;
 }
 
 const EVENT_STYLES: Record<string, string> = {
@@ -46,9 +55,25 @@ type Props = {
   displayDateStr?: string | null;
   /** When set (e.g. 05:15 when out of base = first leg dep - 45 min), use for Report display. */
   reportTimeOverride?: string | null;
+  /** When set, replaces the built header line (e.g. duty-day continuation titles). */
+  headerTitleOverride?: string | null;
+  /** Compact only: replaces the "Report" prefix before reportPart (e.g. FIRST LEG for continuation days). */
+  compactTimeLabelOverride?: string | null;
 };
 
-export function ScheduleEventCard({ event, displaySettings, position, compact, legsToShow, displayDateStr, reportTimeOverride }: Props) {
+export function ScheduleEventCard({
+  event,
+  displaySettings,
+  position,
+  compact,
+  legsToShow,
+  displayDateStr,
+  reportTimeOverride,
+  headerTitleOverride,
+  compactTimeLabelOverride,
+}: Props) {
+  if (isRdPlaceholderEvent(event)) return null;
+
   const timeOpts = {
     timezone: displaySettings.baseTimezone,
     timeFormat: displaySettings.timeFormat,
@@ -56,14 +81,42 @@ export function ScheduleEventCard({ event, displaySettings, position, compact, l
     baseAirport: displaySettings.baseAirport,
   };
 
+  const reportNightMeta = getTripReportNightMeta(event, timeOpts);
+
   const pos = positionLabel(position);
   const rawTitle = event.title?.trim() || "Untitled";
   const titlePart = event.event_type === "reserve" ? rawTitle.replace(/^Trip\s+/i, "") : rawTitle;
   const typePrefix = event.event_type === "reserve" ? "" : `${typeLabel(event.event_type)} `;
   const headerLine = pos ? `${typePrefix}${titlePart} • ${pos}` : `${typePrefix}${titlePart}`;
+  const displayHeader = (headerTitleOverride?.trim() ? headerTitleOverride.trim() : null) ?? headerLine;
   const effectiveLegs = legsToShow ?? event.legs;
   const hasLegs = event.event_type === "trip" && effectiveLegs && effectiveLegs.length > 0;
-  const showRoute = event.event_type === "trip" && (hasLegs || (event.route?.trim() ?? false));
+  const firstLeg = effectiveLegs?.[0];
+  /** Report-night UI only on the calendar day that is the report night (or whole card when displayDateStr omitted). */
+  const reportNightAppliesToThisCard =
+    reportNightMeta.isReportNight &&
+    reportNightMeta.reportLocalDate != null &&
+    (displayDateStr == null || displayDateStr === reportNightMeta.reportLocalDate);
+  const isTripReportNightUi =
+    event.event_type === "trip" &&
+    reportNightAppliesToThisCard &&
+    reportNightMeta.firstDepartureLocalDate != null &&
+    reportNightMeta.reportDisplay != null;
+
+  const reportNightClass =
+    isTripReportNightUi && event.is_muted !== true
+      ? "border-amber-400/40 text-amber-200 bg-amber-500/10"
+      : null;
+
+  const hasExplicitLegsInput = legsToShow !== undefined;
+
+  const showRoute =
+    event.event_type === "trip" &&
+    !isTripReportNightUi &&
+    (
+      hasLegs ||
+      (!hasExplicitLegsInput && (event.route?.trim() ?? false))
+    );
 
   const showReportCredit = event.event_type === "trip" || event.event_type === "reserve";
   const reportPart =
@@ -92,7 +145,8 @@ export function ScheduleEventCard({ event, displaySettings, position, compact, l
       ? `On Call • ${dutyRange}`
       : `Report ${reportPart} • ${dutyRange}`;
 
-  const borderStyle = EVENT_STYLES[event.event_type] ?? EVENT_STYLES.other;
+  const borderStyle =
+    reportNightClass ?? (EVENT_STYLES[event.event_type] ?? EVENT_STYLES.other);
   const showDateRange = event.event_type === "vacation" || event.event_type === "off";
   const dateLabel = showDateRange
     ? formatDayRangeLabel(event.start_time, event.end_time, displaySettings.baseTimezone)
@@ -100,21 +154,60 @@ export function ScheduleEventCard({ event, displaySettings, position, compact, l
       ? formatDayLabel(`${displayDateStr}T12:00:00.000Z`, displaySettings.baseTimezone)
       : formatDayLabel(event.start_time, displaySettings.baseTimezone);
 
+  const tz = displaySettings.baseTimezone;
+  const tripPairingLabel =
+    event.event_type === "trip" ? pairingLengthLabel(event.pairing_days) : null;
+  const pairingLabelClass = compact ? "text-xs text-slate-500" : "text-sm text-slate-500";
+
+  const reportNightBlock = isTripReportNightUi ? (
+    <div className={`flex flex-col gap-0.5 ${compact ? "text-xs" : "text-sm"} text-amber-200/90`}>
+      <span>
+        <span className="font-semibold">REPORT</span> {reportNightMeta.reportDisplay} •{" "}
+        {formatReportNightEeeD(reportNightMeta.reportLocalDate!, tz)}
+      </span>
+      {firstLeg != null && (
+        <span>
+          DEPARTURE {firstLeg.origin} {firstLeg.depTime ?? "—"} → {firstLeg.destination} {firstLeg.arrTime ?? "—"} •{" "}
+          {formatReportNightEeeD(reportNightMeta.firstDepartureLocalDate!, tz)}
+        </span>
+      )}
+    </div>
+  ) : null;
+
+  const hideLegacyReportLine =
+    showReportCredit && event.event_type === "trip" && isTripReportNightUi;
+  const hideDutyRangeFallback =
+    event.event_type === "trip" && isTripReportNightUi;
+
   if (compact) {
     return (
       <div className={`flex flex-col gap-0.5 rounded-xl border px-3 py-2 ${borderStyle} bg-white dark:bg-slate-950/40`}>
         <span className="text-xs font-medium text-slate-500">{dateLabel}</span>
-        <span className="font-medium text-white">{headerLine}</span>
-        {showRoute && <span className="text-xs text-slate-500">{event.route}   {dutyRange}</span>}
+        <span className="font-medium text-white">{displayHeader}</span>
+        {tripPairingLabel != null && !headerTitleOverride?.trim() && (
+          <span className={pairingLabelClass}>{tripPairingLabel}</span>
+        )}
+        {reportNightBlock}
+        {showRoute && !headerTitleOverride?.trim() && (
+          <span className="text-xs text-slate-500">{event.route}   {dutyRange}</span>
+        )}
         {showReportCredit && (
           <>
-            <span className="text-xs text-slate-400">
-              {event.event_type === "reserve" ? timeLine : `Report: ${reportPart}`}
-            </span>
+            {!hideLegacyReportLine && (
+              <span className="text-xs text-slate-400">
+                {event.event_type === "reserve" ? (
+                  timeLine
+                ) : compactTimeLabelOverride?.trim() ? (
+                  `${compactTimeLabelOverride.trim()}: ${reportPart}`
+                ) : (
+                  `Report: ${reportPart}`
+                )}
+              </span>
+            )}
             <span className="text-xs text-slate-400">Credit {creditDisplay}</span>
           </>
         )}
-        {!showReportCredit && <span className="text-xs text-slate-400">{dutyRange}</span>}
+        {!showReportCredit && !hideDutyRangeFallback && <span className="text-xs text-slate-400">{dutyRange}</span>}
       </div>
     );
   }
@@ -122,12 +215,16 @@ export function ScheduleEventCard({ event, displaySettings, position, compact, l
   return (
     <div className={`flex flex-col gap-0.5 rounded-xl border px-4 py-3 ${borderStyle} bg-white dark:bg-slate-950/40`}>
       <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{dateLabel}</span>
-      <span className="text-lg font-medium text-white">{headerLine}</span>
+      <span className="text-lg font-medium text-white">{displayHeader}</span>
+      {tripPairingLabel != null && !headerTitleOverride?.trim() && (
+        <span className={pairingLabelClass}>{tripPairingLabel}</span>
+      )}
+      {reportNightBlock}
       {showRoute && (
         <div className="text-sm space-y-0.5">
           {hasLegs ? (
             effectiveLegs!.map((l, i) => (
-              <div key={i} className="font-medium text-slate-200 whitespace-nowrap">
+              <div key={i} className="font-normal text-slate-300 whitespace-nowrap">
                 {l.flightNumber ? `${formatFlightDisplay(l.flightNumber, displaySettings.carrierCode)} ` : ""}
                 {l.origin} → {l.destination}   {l.depTime ?? "—"} – {l.arrTime ?? "—"}
               </div>
@@ -138,12 +235,12 @@ export function ScheduleEventCard({ event, displaySettings, position, compact, l
         </div>
       )}
       {showReportCredit && (
-        <span className="text-sm text-slate-400">Report: {reportPart}</span>
+        <>
+          {!hideLegacyReportLine && <span className="text-sm text-slate-400">Report: {reportPart}</span>}
+          <span className="text-sm text-slate-400">Credit {creditDisplay}</span>
+        </>
       )}
-      {showReportCredit && (
-        <span className="text-sm text-slate-400">Credit {creditDisplay}</span>
-      )}
-      {!showReportCredit && <span className="text-sm text-slate-400">{dutyRange}</span>}
+      {!showReportCredit && !hideDutyRangeFallback && <span className="text-sm text-slate-400">{dutyRange}</span>}
     </div>
   );
 }

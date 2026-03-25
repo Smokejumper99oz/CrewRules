@@ -276,7 +276,7 @@ export async function getNextDuty(): Promise<{
               event: nextEvent,
               label: "next_duty",
               hasSchedule,
-              legsToShow: nextLegs.length > 0 ? nextLegs : null,
+              legsToShow: nextLegs,
               displayDateStr: tomorrow,
               isInPairing: true,
             };
@@ -391,7 +391,7 @@ function withLegsToShow(
     event,
     label,
     hasSchedule,
-    legsToShow: legsForDate.length > 0 ? legsForDate : null,
+    legsToShow: legsForDate,
     displayDateStr: dateStr ?? legDates.todayStr(timezone),
   };
 }

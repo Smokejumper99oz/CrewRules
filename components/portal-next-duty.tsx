@@ -22,6 +22,7 @@ import {
 } from "@/lib/far-117/fdp-remaining";
 import { getFiledRoute } from "@/lib/weather-brief/get-filed-route";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
+import { getTripReportNightMeta } from "@/lib/schedule-report-night";
 
 function fmtHM(totalMinutes: number) {
   const h = Math.floor(totalMinutes / 60);
@@ -126,6 +127,29 @@ export async function PortalNextDuty({
     isOutOfBase && legsToShow?.[0]?.depTime
       ? subtractMinutesFromTime(legsToShow[0].depTime, 45)
       : undefined;
+
+  /** Duty-day legs for the card; omit prop on report-night day so ScheduleEventCard keeps event.legs for firstLeg in report-night block. */
+  const scheduleCardTimeOpts = {
+    timezone: displaySettings.baseTimezone,
+    timeFormat: displaySettings.timeFormat,
+    showTimezoneLabel: displaySettings.showTimezoneLabel,
+    baseAirport: displaySettings.baseAirport,
+  };
+  let scheduleEventCardLegsToShow = legsToShow;
+  if (event && event.event_type === "trip") {
+    const reportNightMeta = getTripReportNightMeta(event, scheduleCardTimeOpts);
+    const reportNightAppliesToThisCard =
+      reportNightMeta.isReportNight &&
+      reportNightMeta.reportLocalDate != null &&
+      (displayDateStr == null || displayDateStr === reportNightMeta.reportLocalDate);
+    const isTripReportNightUi =
+      reportNightAppliesToThisCard &&
+      reportNightMeta.firstDepartureLocalDate != null &&
+      reportNightMeta.reportDisplay != null;
+    if (isTripReportNightUi) {
+      scheduleEventCardLegsToShow = undefined;
+    }
+  }
 
   const isCurrentTripMode = !!activeTrip;
   const matchingChangeSummary = activeTrip
@@ -640,7 +664,7 @@ export async function PortalNextDuty({
               displaySettings={displaySettings}
               position={profile?.position ?? null}
               compact={false}
-              legsToShow={legsToShow}
+              legsToShow={scheduleEventCardLegsToShow}
               displayDateStr={displayDateStr}
               reportTimeOverride={reportTimeOverride}
             />

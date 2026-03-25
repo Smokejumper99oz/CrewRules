@@ -21,6 +21,12 @@ import { ScheduleStatusChip, formatLastImport } from "@/components/schedule-stat
 import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, eventOverlapsDay, addDay, isEventOnDay } from "@/lib/schedule-time";
 import { getBidPeriodForTimestamp, getAllBidPeriodsForYear, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
 import { computeLegDates, getTripDateStrings } from "@/lib/leg-dates";
+import {
+  formatReportNightEeeD,
+  getTripReportNightMeta,
+  isRdPlaceholderEvent,
+  REPORT_NIGHT_TILE_CLASS,
+} from "@/lib/schedule-report-night";
 
 const EVENT_STYLES: Record<string, string> = {
   trip: "bg-emerald-500/20 border-emerald-500/40 text-emerald-200",
@@ -195,6 +201,13 @@ function EventDetailPopover({
         : event.legs!
       : null;
 
+  const reportNightMeta = getTripReportNightMeta(event, {
+    timezone: displaySettings.baseTimezone,
+    timeFormat: displaySettings.timeFormat,
+    showTimezoneLabel: displaySettings.showTimezoneLabel,
+    baseAirport: displaySettings.baseAirport,
+  });
+
   const timeRange =
     legsToShow && legsToShow.length > 0 && legsToShow[0].depTime != null && legsToShow[legsToShow.length - 1].arrTime != null
       ? `${legsToShow[0].depTime} – ${legsToShow[legsToShow.length - 1].arrTime}`
@@ -233,7 +246,15 @@ function EventDetailPopover({
             ))}
           </div>
         ) : event.legs && event.legs.length > 0 && clickedDate ? (
-          <p className="mt-2 text-sm text-slate-500 italic">Layover day — no flights</p>
+          reportNightMeta.isReportNight &&
+          clickedDate === reportNightMeta.reportLocalDate &&
+          reportNightMeta.reportDisplay ? (
+            <p className="mt-2 text-sm text-amber-300">
+              Report {reportNightMeta.reportDisplay} — Flight Departs after Midnight
+            </p>
+          ) : (
+            <p className="mt-2 text-sm text-slate-500 italic">Layover day — no flights</p>
+          )
         ) : (event.legs == null || event.legs.length === 0) && event.route?.trim() ? (
           <p className="mt-2 text-sm text-slate-400">{event.route}</p>
         ) : null)}
@@ -434,17 +455,6 @@ export default function SchedulePage() {
     })
   );
 
-  const now = new Date();
-  const upcomingStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const upcomingEnd = new Date(upcomingStart);
-  upcomingEnd.setDate(upcomingEnd.getDate() + 14);
-  const upcomingEvents = eventsToShow
-    .filter((e) => {
-      const start = new Date(e.start_time);
-      return start >= upcomingStart && start < upcomingEnd;
-    })
-    .slice(0, 3);
-
   const calendarDays = getCalendarDays(calendarMonth.getFullYear(), calendarMonth.getMonth());
   const monthLabel = calendarMonth.toLocaleString(undefined, { month: "long", year: "numeric" });
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -579,10 +589,9 @@ export default function SchedulePage() {
         </div>
       )}
 
-      {/* Main content: calendar + upcoming */}
+      {/* Main content: calendar */}
       {status != null && status.count > 0 && (
         <div className="space-y-6">
-          {/* Month calendar */}
           <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">{monthLabel}</h2>
@@ -630,25 +639,67 @@ export default function SchedulePage() {
                   {day &&
                     (() => {
                       const dayEvents = eventsForDay(eventsToShow, day, displaySettings.baseTimezone);
+                      const visibleDayEvents = dayEvents.filter((e) => !isRdPlaceholderEvent(e));
+                      const timeOpts = {
+                        timezone: displaySettings.baseTimezone,
+                        timeFormat: displaySettings.timeFormat,
+                        showTimezoneLabel: displaySettings.showTimezoneLabel,
+                        baseAirport: displaySettings.baseAirport,
+                      };
+                      const dayStr = toYyyyMmDd(day);
                       return (
                         <>
                           <div className="text-xs text-slate-500 mb-1">{day.getDate()}</div>
                           <div className="space-y-0.5">
-                            {dayEvents.slice(0, 3).map((ev) => (
-                              <button
-                                key={`${ev.id}-${toYyyyMmDd(day)}`}
-                                type="button"
-                                onClick={(e) => handleEventClick(ev, e.clientX, e.clientY, day)}
-                                className={`flex w-full items-center rounded border px-1.5 py-0.5 text-left text-xs ${getCalendarTileStyle(ev, dayEvents)}`}
-                              >
-                                <span className="min-w-0 truncate">{getCalendarPillLabel(ev, dayEvents)}</span>
-                                {ev.is_muted === true && (
-                                  <span className="ml-1 shrink-0 text-[10px] px-1 rounded bg-slate-500/20 text-slate-300">Previous</span>
-                                )}
-                              </button>
-                            ))}
-                            {dayEvents.length > 3 && (
-                              <span className="text-xs text-slate-500">+{dayEvents.length - 3}</span>
+                            {visibleDayEvents.slice(0, 3).map((ev) => {
+                              const rn = getTripReportNightMeta(ev, timeOpts);
+                              const isReportNightTile =
+                                rn.isReportNight &&
+                                dayStr === rn.reportLocalDate &&
+                                ev.is_muted !== true;
+                              return (
+                                <button
+                                  key={`${ev.id}-${toYyyyMmDd(day)}`}
+                                  type="button"
+                                  onClick={(e) => handleEventClick(ev, e.clientX, e.clientY, day)}
+                                  className={`flex w-full rounded border px-1.5 py-0.5 text-left text-xs ${
+                                    isReportNightTile
+                                      ? `flex-col items-stretch gap-0.5 ${REPORT_NIGHT_TILE_CLASS}`
+                                      : `items-center ${getCalendarTileStyle(ev, visibleDayEvents)}`
+                                  }`}
+                                >
+                                  {isReportNightTile ? (
+                                    <>
+                                      <span className="min-w-0 truncate font-medium">{ev.title || "Untitled"}</span>
+                                      {rn.reportDisplay && rn.reportLocalDate && (
+                                        <span className="text-[10px] leading-tight">
+                                          <span className="font-semibold">REPORT</span> {rn.reportDisplay} •{" "}
+                                          {formatReportNightEeeD(rn.reportLocalDate, displaySettings.baseTimezone)}
+                                        </span>
+                                      )}
+                                      {rn.firstDepDisplay && rn.firstDepartureLocalDate && (
+                                        <span className="text-[10px] leading-tight">
+                                          DEPARTURE {rn.firstDepDisplay} •{" "}
+                                          {formatReportNightEeeD(
+                                            rn.firstDepartureLocalDate,
+                                            displaySettings.baseTimezone
+                                          )}
+                                        </span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="min-w-0 truncate">{getCalendarPillLabel(ev, visibleDayEvents)}</span>
+                                  )}
+                                  {ev.is_muted === true && (
+                                    <span className="ml-1 shrink-0 text-[10px] px-1 rounded bg-slate-500/20 text-slate-300 self-end">
+                                      Previous
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                            {visibleDayEvents.length > 3 && (
+                              <span className="text-xs text-slate-500">+{visibleDayEvents.length - 3}</span>
                             )}
                           </div>
                         </>
@@ -657,35 +708,6 @@ export default function SchedulePage() {
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Upcoming (next 14 days) */}
-          <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-6">
-            <h2 className="text-lg font-semibold mb-4">Upcoming</h2>
-            {upcomingEvents.length === 0 ? (
-              <p className="text-sm text-slate-400">No events in the next 14 days.</p>
-            ) : (
-              <div className="space-y-2">
-                {upcomingEvents.map((ev) => (
-                  <button
-                    key={ev.id}
-                    type="button"
-                    onClick={(e) => handleEventClick(ev, e.clientX, e.clientY)}
-                    className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition hover:opacity-90 ${eventPillStyle(ev)}`}
-                  >
-                    <span className="font-medium min-w-0 truncate">{ev.title || "Untitled"}</span>
-                    {ev.is_muted === true && (
-                      <span className="ml-1 shrink-0 text-[10px] px-1 rounded bg-slate-500/20 text-slate-300">Previous</span>
-                    )}
-                    <span className="text-xs shrink-0 ml-2">
-                      {(ev.event_type === "vacation" || ev.event_type === "off")
-                        ? formatDayRangeLabel(ev.start_time, ev.end_time, displaySettings.baseTimezone)
-                        : formatDayLabel(ev.start_time, displaySettings.baseTimezone)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -741,7 +763,11 @@ export default function SchedulePage() {
               clickedDate={selectedPopover.clickedDate}
               clickedDayEvents={
                 selectedPopover.clickedDate
-                  ? eventsForDay(eventsToShow, new Date(selectedPopover.clickedDate + "T12:00:00.000Z"), baseTimezone)
+                  ? eventsForDay(
+                      eventsToShow,
+                      new Date(selectedPopover.clickedDate + "T12:00:00.000Z"),
+                      baseTimezone
+                    ).filter((e) => !isRdPlaceholderEvent(e))
                   : []
               }
               displaySettings={displaySettings}
