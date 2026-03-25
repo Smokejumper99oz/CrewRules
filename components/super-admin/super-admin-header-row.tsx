@@ -6,7 +6,9 @@ import { usePathname } from "next/navigation";
 export function SuperAdminHeaderRow({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isTightHeader =
-    pathname?.startsWith("/super-admin/users") || pathname?.startsWith("/super-admin/waitlist");
+    pathname?.startsWith("/super-admin/users") ||
+    pathname?.startsWith("/super-admin/mentoring") ||
+    pathname?.startsWith("/super-admin/waitlist");
 
   return (
     <div

@@ -1,14 +1,30 @@
 import { redirect } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/profile";
+import { isSuperAdminAllowlistedEmail } from "@/lib/super-admin/allowlist";
 
-/** Super admin access: role or email allowlist. Used for /super-admin route only. */
-const SUPER_ADMIN_EMAIL_ALLOWLIST = ["svenfolmer92@gmail.com"];
+export { isSuperAdminAllowlistedEmail, SUPER_ADMIN_EMAIL_ALLOWLIST } from "@/lib/super-admin/allowlist";
+
+function syntheticAllowlistProfile(user: User): Profile {
+  const now = new Date().toISOString();
+  return {
+    id: user.id,
+    email: user.email ?? null,
+    tenant: "frontier",
+    portal: "pilots",
+    role: "super_admin",
+    full_name: user.user_metadata?.full_name ?? null,
+    created_at: now,
+    updated_at: now,
+  } as Profile;
+}
 
 /**
  * Gate for Super Admin Dashboard. Redirects if:
  * - Not signed in -> /frontier/pilots/login
  * - Signed in but not super_admin (role or allowlist) -> /frontier/pilots/portal
+ * - No profile and not on allowlist -> login profile_missing
  */
 export async function gateSuperAdmin(): Promise<{ user: { id: string; email?: string }; profile: Profile }> {
   const supabase = await createClient();
@@ -21,7 +37,7 @@ export async function gateSuperAdmin(): Promise<{ user: { id: string; email?: st
   }
 
   const email = (user.email ?? "").toLowerCase().trim();
-  const isAllowlisted = SUPER_ADMIN_EMAIL_ALLOWLIST.some((e) => e.toLowerCase() === email);
+  const isAllowlisted = isSuperAdminAllowlistedEmail(email);
 
   const { data: profile, error } = await supabase
     .from("profiles")
@@ -29,17 +45,23 @@ export async function gateSuperAdmin(): Promise<{ user: { id: string; email?: st
     .eq("id", user.id)
     .maybeSingle();
 
-  if (error || !profile) {
-    redirect("/frontier/pilots/login?error=profile_missing");
+  if (profile) {
+    const isSuperAdmin = profile.role === "super_admin" || isAllowlisted;
+    if (!isSuperAdmin) {
+      redirect("/frontier/pilots/portal");
+    }
+    return {
+      user: { id: user.id, email: user.email ?? undefined },
+      profile: profile as Profile,
+    };
   }
 
-  const isSuperAdmin = profile.role === "super_admin" || isAllowlisted;
-  if (!isSuperAdmin) {
-    redirect("/frontier/pilots/portal");
+  if (isAllowlisted) {
+    return {
+      user: { id: user.id, email: user.email ?? undefined },
+      profile: syntheticAllowlistProfile(user),
+    };
   }
 
-  return {
-    user: { id: user.id, email: user.email ?? undefined },
-    profile: profile as Profile,
-  };
+  redirect("/frontier/pilots/login?error=profile_missing");
 }

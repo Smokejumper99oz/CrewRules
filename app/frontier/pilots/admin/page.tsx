@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { getProfile } from "@/lib/profile";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getMentoringOverviewStats } from "@/lib/mentoring/admin-overview-stats";
+import { MentoringOverviewCard } from "@/components/admin/mentoring-overview-card";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -8,8 +11,21 @@ export default async function AdminDashboard() {
   const profile = await getProfile();
   const isSuperAdmin = profile?.role === "super_admin";
 
+  const admin = createAdminClient();
+  const mentoringOverview = await getMentoringOverviewStats(admin, {
+    kind: "tenant",
+    tenant: TENANT,
+    portal: PORTAL,
+  });
+
   return (
     <div className="space-y-6">
+      <MentoringOverviewCard
+        stats={mentoringOverview}
+        manageHref={`/${TENANT}/${PORTAL}/admin/people`}
+        subtitle={`${TENANT} · ${PORTAL}`}
+        manageCta="People →"
+      />
       <div className={`grid gap-4 ${isSuperAdmin ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
         <Link
           href={`/${TENANT}/${PORTAL}/admin/documents`}

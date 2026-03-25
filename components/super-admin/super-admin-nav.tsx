@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Plane,
   Users,
+  GraduationCap,
   CreditCard,
   DollarSign,
   Upload,
@@ -43,7 +44,9 @@ function NavItem({
     return (
       <span className={`${linkBase} ${comingSoon} flex items-center gap-2`}>
         <Icon className="h-4 w-4 shrink-0" />
-        <span>{label} <span className="ml-1.5 text-xs text-slate-500">(soon)</span></span>
+        <span>
+          {label} <span className="ml-1.5 text-xs text-slate-500">(soon)</span>
+        </span>
       </span>
     );
   }
@@ -107,6 +110,12 @@ export function SuperAdminNav() {
             <List className="h-4 w-4 shrink-0" />
             Waitlist
           </Link>
+          <NavItem
+            href="/super-admin/mentoring"
+            label="Mentoring"
+            icon={GraduationCap}
+            isActive={pathname?.startsWith("/super-admin/mentoring")}
+          />
           <NavItem label="Feature Flags" icon={ToggleLeft} isComingSoon />
           <NavItem label="Admin Settings" icon={Settings} isComingSoon />
         </div>

@@ -66,6 +66,8 @@ type Props = {
     color_mode?: "dark" | "light" | "system";
     is_founding_pilot?: boolean;
     founding_pilot_started_at?: string | null;
+    mentor_phone?: string | null;
+    mentor_contact_email?: string | null;
   };
   proActive: boolean;
   proBadgeLabel: string;
@@ -608,6 +610,50 @@ export function ProfileForm({ profile, proActive, proBadgeLabel, proBadgeVariant
               defaultValue={profile.equipment ?? "A320/A321"}
               placeholder="e.g. A320, A321"
               className="mt-1.5 w-full max-w-sm profile-input-base"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Mentor contact (mentee-facing card) */}
+      <section>
+        <h2 className="text-base font-semibold text-slate-900 mb-1 dark:text-white">Mentor Contact</h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Optional contact details your mentees see on the <span className="font-medium text-slate-600 dark:text-slate-400">Mentoring</span>{" "}
+          contact card (Call / Email). This is separate from your login email.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="mentor_phone" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Mentor phone
+            </label>
+            <input
+              id="mentor_phone"
+              name="mentor_phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              defaultValue={profile.mentor_phone ?? ""}
+              placeholder="e.g. 555-123-4567"
+              className="profile-input-base mt-1.5 w-full max-w-sm min-h-[44px]"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              If blank, your profile phone number is used on the card when available.
+            </p>
+          </div>
+          <div>
+            <label htmlFor="mentor_contact_email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Mentor contact email
+            </label>
+            <input
+              id="mentor_contact_email"
+              name="mentor_contact_email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              defaultValue={profile.mentor_contact_email ?? ""}
+              placeholder="name@example.com"
+              className="profile-input-base mt-1.5 w-full max-w-sm min-h-[44px]"
             />
           </div>
         </div>

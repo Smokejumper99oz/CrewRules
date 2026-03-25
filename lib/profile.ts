@@ -51,6 +51,10 @@ export type Profile = {
   color_mode?: "dark" | "light" | "system";
   welcome_modal_version_seen?: number | null;
   is_admin?: boolean;
+  /** Shown on mentee Mentor Contact card when set; falls back to `phone` there if null. */
+  mentor_phone?: string | null;
+  /** Preferred email on mentee Mentor Contact card; not the login email. */
+  mentor_contact_email?: string | null;
   created_at: string;
   updated_at: string;
 };

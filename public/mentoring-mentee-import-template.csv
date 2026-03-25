@@ -1,0 +1,4 @@
+mentor_user_id,mentor_employee_number,mentor_email,mentee_employee_number,mentee_full_name,hire_date,mentee_email,mentee_phone,active,notes
+,45231,,88901,Alex R. Pilot,2025-06-16,alex.p@airline.example,555-010-0900,true,Example: mentor via employee number only
+,,mentor.smith@airline.example,88902,Jordan Lee,2025-07-01,jordan@airline.example,,true,Example: mentor via email only
+a1b2c3d4-e5f6-7890-abcd-ef1234567890,,,88903,Casey Morgan,2025-08-15,casey@airline.example,555-020-0300,false,Example: mentor via user UUID only

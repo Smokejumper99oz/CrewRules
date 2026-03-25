@@ -11,6 +11,10 @@ export type MentorAssignmentRow = {
   isMentorView: boolean;
   mentee_full_name: string | null;
   mentor_full_name: string | null;
+  /** Preferred contact for mentee card; never login email. */
+  mentor_contact_email: string | null;
+  /** mentor_phone if set, else profiles.phone. */
+  mentor_phone_display: string | null;
   next_milestone_label: string | null;
   next_milestone_due_date: string | null;
   last_interaction_at: string | null;
@@ -49,7 +53,7 @@ export async function getMentorAssignments(): Promise<{
         active,
         assigned_at,
         mentee:profiles!mentor_assignments_mentee_user_id_fkey(full_name),
-        mentor:profiles!mentor_assignments_mentor_user_id_fkey(full_name)
+        mentor:profiles!mentor_assignments_mentor_user_id_fkey(full_name,phone,mentor_phone,mentor_contact_email)
       `
       )
       .or(`mentor_user_id.eq.${profile.id},mentee_user_id.eq.${profile.id}`)
@@ -63,7 +67,12 @@ export async function getMentorAssignments(): Promise<{
       hire_date: string | null;
       active: boolean | null;
       mentee: { full_name: string | null } | null;
-      mentor: { full_name: string | null } | null;
+      mentor: {
+        full_name: string | null;
+        phone: string | null;
+        mentor_phone: string | null;
+        mentor_contact_email: string | null;
+      } | null;
     }>;
 
     if (rows.length === 0) return { assignments: [] };
@@ -111,6 +120,11 @@ export async function getMentorAssignments(): Promise<{
       const isMentorView = row.mentor_user_id === profile.id;
       const next = nextMilestoneByAssignment.get(row.id);
       const lastInt = lastInteractionByAssignment.get(row.id);
+      const m = row.mentor;
+      const mp = m?.mentor_phone?.trim();
+      const p = m?.phone?.trim();
+      const mentorPhone = mp || p || null;
+      const mentorEmail = m?.mentor_contact_email?.trim() || null;
       return {
         id: row.id,
         mentor_user_id: row.mentor_user_id,
@@ -118,6 +132,8 @@ export async function getMentorAssignments(): Promise<{
         isMentorView,
         mentee_full_name: row.mentee?.full_name ?? null,
         mentor_full_name: row.mentor?.full_name ?? null,
+        mentor_contact_email: mentorEmail,
+        mentor_phone_display: mentorPhone,
         next_milestone_label: next?.milestone_type ?? null,
         next_milestone_due_date: next?.due_date ?? null,
         last_interaction_at: lastInt ?? null,
@@ -142,6 +158,8 @@ export type MenteeDetailRow = {
   isMentorView: boolean;
   mentee_full_name: string | null;
   mentor_full_name: string | null;
+  mentor_contact_email: string | null;
+  mentor_phone_display: string | null;
   hire_date: string | null;
   active: boolean;
   next_milestone_label: string | null;
@@ -180,7 +198,7 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
         hire_date,
         active,
         mentee:profiles!mentor_assignments_mentee_user_id_fkey(full_name),
-        mentor:profiles!mentor_assignments_mentor_user_id_fkey(full_name)
+        mentor:profiles!mentor_assignments_mentor_user_id_fkey(full_name,phone,mentor_phone,mentor_contact_email)
       `
       )
       .eq("id", assignmentId)
@@ -198,7 +216,12 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
       hire_date: string | null;
       active: boolean | null;
       mentee: { full_name: string | null } | null;
-      mentor: { full_name: string | null } | null;
+      mentor: {
+        full_name: string | null;
+        phone: string | null;
+        mentor_phone: string | null;
+        mentor_contact_email: string | null;
+      } | null;
     };
 
     const [milestonesRes, interactionsRes] = await Promise.all([
@@ -222,6 +245,11 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
     const nextUpcoming = milestones.find((m) => !m.completed_date && m.due_date >= TODAY_STR);
 
     const isMentorView = row.mentor_user_id === profile.id;
+    const mentorProf = row.mentor;
+    const mp = mentorProf?.mentor_phone?.trim();
+    const p = mentorProf?.phone?.trim();
+    const mentorPhone = mp || p || null;
+    const mentorEmail = mentorProf?.mentor_contact_email?.trim() || null;
     const detail: MenteeDetailRow = {
       id: row.id,
       mentor_user_id: row.mentor_user_id,
@@ -229,6 +257,8 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
       isMentorView,
       mentee_full_name: row.mentee?.full_name ?? null,
       mentor_full_name: row.mentor?.full_name ?? null,
+      mentor_contact_email: mentorEmail,
+      mentor_phone_display: mentorPhone,
       hire_date: row.hire_date ?? null,
       active: row.active === true,
       next_milestone_label: nextUpcoming?.milestone_type ?? null,

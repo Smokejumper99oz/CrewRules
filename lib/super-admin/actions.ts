@@ -15,6 +15,9 @@ import {
   AVIATIONSTACK_PERIOD_START_DAY,
   AVIATIONSTACK_PERIOD_LENGTH_DAYS,
 } from "./pricing-config";
+import { buildImportWarningRows, type ImportWarningRow } from "./import-warnings";
+
+export type { ImportWarningRow };
 
 /** Run gate first; only call these actions from super-admin layout/page. */
 async function ensureSuperAdmin() {
@@ -733,6 +736,11 @@ export type RecentImport = {
   user_id: string;
   imported_at: string;
   count: number;
+  /** Earliest schedule start in this import batch; null if unknown. */
+  earliest_start_time: string | null;
+  import_batch_id: string | null;
+  user_email: string | null;
+  user_full_name: string | null;
 };
 
 export type RecentActivityData = {
@@ -740,10 +748,88 @@ export type RecentActivityData = {
   recentImports: RecentImport[];
 };
 
+/** All import batches from the latest `schedule_events` window (same query as dashboard), enriched with profiles. Caller must `ensureSuperAdmin` first. */
+async function loadAllEnrichedRecentImports(): Promise<RecentImport[]> {
+  const userSupabase = await createClient();
+  const adminSupabase = createAdminClient();
+
+  try {
+    const { data: events } = await adminSupabase
+      .from("schedule_events")
+      .select("user_id, imported_at, start_time, import_batch_id")
+      .order("imported_at", { ascending: false })
+      .limit(100);
+
+    const byBatch = new Map<
+      string,
+      {
+        user_id: string;
+        imported_at: string;
+        count: number;
+        earliest_start: string | null;
+        import_batch_id: string | null;
+      }
+    >();
+    for (const e of events ?? []) {
+      const key = `${e.user_id}-${e.imported_at}`;
+      if (!byBatch.has(key)) {
+        byBatch.set(key, {
+          user_id: e.user_id,
+          imported_at: e.imported_at,
+          count: 0,
+          earliest_start: typeof e.start_time === "string" ? e.start_time : null,
+          import_batch_id: typeof e.import_batch_id === "string" ? e.import_batch_id : null,
+        });
+      }
+      const b = byBatch.get(key)!;
+      b.count++;
+      if (typeof e.start_time === "string") {
+        if (
+          !b.earliest_start ||
+          new Date(e.start_time).getTime() < new Date(b.earliest_start).getTime()
+        ) {
+          b.earliest_start = e.start_time;
+        }
+      }
+      if (!b.import_batch_id && typeof e.import_batch_id === "string") {
+        b.import_batch_id = e.import_batch_id;
+      }
+    }
+    const batchRows = Array.from(byBatch.values()).sort(
+      (a, b) => new Date(b.imported_at).getTime() - new Date(a.imported_at).getTime()
+    );
+
+    const importUserIds = [...new Set(batchRows.map((r) => r.user_id))];
+    const { data: importProfiles } =
+      importUserIds.length > 0
+        ? await userSupabase
+            .from("profiles")
+            .select("id, email, full_name")
+            .in("id", importUserIds)
+        : { data: null };
+
+    const profileById = new Map((importProfiles ?? []).map((p) => [p.id, p]));
+
+    return batchRows.map((r) => {
+      const prof = profileById.get(r.user_id);
+      return {
+        user_id: r.user_id,
+        imported_at: r.imported_at,
+        count: r.count,
+        earliest_start_time: r.earliest_start,
+        import_batch_id: r.import_batch_id,
+        user_email: prof?.email ?? null,
+        user_full_name: prof?.full_name ?? null,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 export async function getRecentActivity(): Promise<RecentActivityData> {
   await ensureSuperAdmin();
   const userSupabase = await createClient();
-  const adminSupabase = createAdminClient();
 
   const { data: signups } = await userSupabase
     .from("profiles")
@@ -751,33 +837,18 @@ export async function getRecentActivity(): Promise<RecentActivityData> {
     .order("created_at", { ascending: false })
     .limit(10);
 
-  let recentImports: RecentImport[] = [];
-  try {
-    const { data: events } = await adminSupabase
-      .from("schedule_events")
-      .select("user_id, imported_at")
-      .order("imported_at", { ascending: false })
-      .limit(100);
-
-    const byBatch = new Map<string, { user_id: string; imported_at: string; count: number }>();
-    for (const e of events ?? []) {
-      const key = `${e.user_id}-${e.imported_at}`;
-      if (!byBatch.has(key)) {
-        byBatch.set(key, { user_id: e.user_id, imported_at: e.imported_at, count: 0 });
-      }
-      byBatch.get(key)!.count++;
-    }
-    recentImports = Array.from(byBatch.values())
-      .sort((a, b) => new Date(b.imported_at).getTime() - new Date(a.imported_at).getTime())
-      .slice(0, 10);
-  } catch {
-    // ignore
-  }
+  const allImports = await loadAllEnrichedRecentImports();
 
   return {
     recentSignups: (signups ?? []) as RecentSignup[],
-    recentImports,
+    recentImports: allImports.slice(0, 10),
   };
+}
+
+/** Import warning heuristics for System Health (recent batches only; same data window as dashboard imports). */
+export async function getRecentImportWarningsForSuperAdmin(): Promise<ImportWarningRow[]> {
+  await ensureSuperAdmin();
+  return buildImportWarningRows(await loadAllEnrichedRecentImports());
 }
 
 // ---------------------------------------------------------------------------
@@ -792,6 +863,8 @@ export type SuperAdminUserRow = {
   role: string;
   employee_number: string | null;
   phone: string | null;
+  mentor_phone: string | null;
+  mentor_contact_email: string | null;
   is_admin: boolean;
   is_mentor: boolean;
 };
@@ -815,6 +888,8 @@ export async function getAllUsersForSuperAdmin(): Promise<SuperAdminUserRow[]> {
     role: p.role ?? "pilot",
     employee_number: p.employee_number ?? null,
     phone: p.phone ?? null,
+    mentor_phone: null,
+    mentor_contact_email: null,
     is_admin: p.is_admin ?? false,
     is_mentor: p.is_mentor ?? false,
   }));
@@ -826,6 +901,8 @@ export type UpdateSuperAdminUserAccessInput = {
   is_mentor: boolean;
   super_admin?: boolean;
   phone?: string | null;
+  mentor_phone?: string | null;
+  mentor_contact_email?: string | null;
   employee_number?: string | null;
   /** When is_mentor is true, mentee's employee # (same tenant) to upsert mentor_assignments for the Mentoring page. */
   mentee_employee_number?: string | null;
@@ -883,6 +960,8 @@ export async function updateSuperAdminUserAccess(
       is_admin,
       is_mentor: data.is_mentor,
       phone: data.phone ?? null,
+      mentor_phone: data.mentor_phone ?? null,
+      mentor_contact_email: data.mentor_contact_email ?? null,
       employee_number: data.employee_number ?? null,
     })
     .eq("id", userId);

@@ -115,9 +115,9 @@ export function CompleteProfileForm() {
       )}
       <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2">
         <p className="text-xs text-amber-200 leading-relaxed">
-          Your information is private and used only to power CrewRules™ features.
+          Your information is private and used to power CrewRules™ features.
           <br />
-          It is NEVER shared.
+          You control what is shared (e.g., Family View™ or Mentoring).
         </p>
       </div>
       <button

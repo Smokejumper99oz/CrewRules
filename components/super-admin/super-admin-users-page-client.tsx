@@ -43,6 +43,7 @@ export function SuperAdminUsersPageClient({
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<SuperAdminUserRow | null>(null);
   const [phoneValue, setPhoneValue] = useState("");
+  const [mentorPhoneValue, setMentorPhoneValue] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,6 +64,7 @@ export function SuperAdminUsersPageClient({
   function openEdit(user: SuperAdminUserRow) {
     setEditing(user);
     setPhoneValue(formatPhone(user.phone ?? ""));
+    setMentorPhoneValue(formatPhone(user.mentor_phone ?? ""));
     setError(null);
   }
 
@@ -91,6 +93,9 @@ export function SuperAdminUsersPageClient({
       is_mentor,
       super_admin,
       phone: formData.get("phone")?.toString().trim() || null,
+      mentor_phone: formData.get("mentor_phone")?.toString().trim() || null,
+      mentor_contact_email:
+        formData.get("mentor_contact_email")?.toString().trim() || null,
       employee_number: formData.get("employee_number")?.toString().trim() || null,
       mentee_employee_number:
         formData.get("mentee_employee_number")?.toString().trim() || null,
@@ -231,7 +236,7 @@ export function SuperAdminUsersPageClient({
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            <form key={editing.id} onSubmit={handleSubmit} className="p-4 space-y-4">
               {error && (
                 <p className="rounded bg-rose-500/20 px-3 py-2 text-sm text-rose-400">
                   {error}
@@ -337,6 +342,33 @@ export function SuperAdminUsersPageClient({
                   onChange={(e) => setPhoneValue(formatPhone(e.target.value))}
                   className="w-full rounded border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-[#75C043]/50 focus:outline-none"
                   placeholder="XXX.XXX.XXXX"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">
+                  Mentor phone (mentee card)
+                </label>
+                <input
+                  type="tel"
+                  name="mentor_phone"
+                  value={mentorPhoneValue}
+                  onChange={(e) => setMentorPhoneValue(formatPhone(e.target.value))}
+                  className="w-full rounded border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-[#75C043]/50 focus:outline-none"
+                  placeholder="Optional; overrides profile phone on mentor card"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">
+                  Mentor contact email (mentee card)
+                </label>
+                <input
+                  type="email"
+                  name="mentor_contact_email"
+                  defaultValue={editing.mentor_contact_email ?? ""}
+                  className="w-full rounded border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-[#75C043]/50 focus:outline-none"
+                  placeholder="Preferred email for mentees (not login email)"
                 />
               </div>
 

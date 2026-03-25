@@ -25,6 +25,9 @@ import { SuperAdminProductUsage } from "@/components/super-admin/super-admin-pro
 import { SuperAdminProviders } from "@/components/super-admin/super-admin-providers";
 import { SuperAdminRecentActivity } from "@/components/super-admin/super-admin-recent-activity";
 import { SuperAdminRefreshTrigger } from "@/components/super-admin/super-admin-refresh-trigger";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getMentoringOverviewStats } from "@/lib/mentoring/admin-overview-stats";
+import { MentoringOverviewCard } from "@/components/admin/mentoring-overview-card";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +52,9 @@ export default async function SuperAdminPage() {
 
   const peakToday = await getOnlinePeakToday(onlineNow);
 
+  const admin = createAdminClient();
+  const mentoringOverview = await getMentoringOverviewStats(admin, { kind: "platform" });
+
   const lastRefresh = format(new Date(), "MMMM d, yyyy") + " • " + format(new Date(), "HH:mm");
   const totalUsers = kpis.freeCount + kpis.proCount + kpis.enterpriseCount;
 
@@ -63,6 +69,14 @@ export default async function SuperAdminPage() {
 
       <section>
         <SuperAdminNeedsAttention events={systemEventsResult.events} dismissedCount={systemEventsResult.dismissedCount} />
+      </section>
+
+      <section>
+        <MentoringOverviewCard
+          stats={mentoringOverview}
+          manageHref="/super-admin/users"
+          subtitle="Platform-wide"
+        />
       </section>
 
       <section>

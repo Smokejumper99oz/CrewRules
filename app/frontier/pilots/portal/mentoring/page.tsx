@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getMentorAssignments, type MentorAssignmentRow } from "./actions";
 import { format, isToday, isTomorrow, isYesterday, differenceInDays, startOfDay } from "date-fns";
+import { MentorContactCard } from "@/components/mentoring/mentor-contact-card";
 
 const CARD_CLASS =
   "rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20";
@@ -85,6 +86,47 @@ function MenteeCard({ a }: { a: MentorAssignmentRow }) {
         : milestoneDue
           ? `Due ${formatMilestoneDueDate(milestoneDue)}`
           : "—";
+
+  if (!a.isMentorView) {
+    return (
+      <div className={`${CARD_CLASS} p-4 sm:p-5 flex flex-col gap-4`}>
+        <MentorContactCard
+          variant="embedded"
+          fullName={fullName}
+          contactEmail={a.mentor_contact_email}
+          phone={a.mentor_phone_display}
+        />
+        <div className="min-w-0 space-y-2 border-t border-white/5 pt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex shrink-0 rounded px-2 py-0.5 text-xs font-medium ${badge.style}`}
+            >
+              {badge.label}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
+            <span>Hire date: {formatHireDate(a.mentee_date_of_hire)}</span>
+            <span>Last interaction: {formatLastInteraction(a.last_interaction_at)}</span>
+          </div>
+          <p className="text-sm text-slate-300">Next milestone: {milestoneText}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Link
+            href={`/frontier/pilots/portal/mentoring/${a.id}`}
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-lg bg-[#75C043] px-4 py-2 text-sm font-semibold text-slate-950 hover:opacity-95 transition sm:flex-none"
+          >
+            View
+          </Link>
+          <button
+            type="button"
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5 transition sm:flex-none"
+          >
+            Notes
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getMenteeDetail } from "../actions";
 import { format, isToday, isTomorrow, isYesterday, differenceInDays, startOfDay } from "date-fns";
+import { MentorContactCard } from "@/components/mentoring/mentor-contact-card";
 
 const CARD_CLASS =
   "rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20";
@@ -98,6 +99,7 @@ export default async function MenteeDetailPage({ params }: PageProps) {
   }
 
   const fullName = (detail.isMentorView ? detail.mentee_full_name : detail.mentor_full_name)?.trim() || "Unknown";
+  const mentorCardName = detail.mentor_full_name?.trim() || "Unknown";
   const nextMilestoneText =
     detail.next_milestone_label && detail.next_milestone_due_date
       ? `${formatMilestoneType(detail.next_milestone_label)} — ${formatNextMilestoneDue(detail.next_milestone_due_date)}`
@@ -141,6 +143,14 @@ export default async function MenteeDetailPage({ params }: PageProps) {
           Next milestone: {nextMilestoneText}
         </p>
       </div>
+
+      {!detail.isMentorView ? (
+        <MentorContactCard
+          fullName={mentorCardName}
+          contactEmail={detail.mentor_contact_email}
+          phone={detail.mentor_phone_display}
+        />
+      ) : null}
 
       <div className={`${CARD_CLASS} p-6`}>
         <h2 className="text-lg font-semibold text-white border-b border-white/5 pb-3">

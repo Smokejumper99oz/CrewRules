@@ -59,6 +59,8 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   const familyViewShowOvernightCities = formData.get("family_view_show_overnight_cities") === "1";
   const familyViewShowCommuteEstimates = formData.get("family_view_show_commute_estimates") === "1";
   const colorMode = (formData.get("color_mode") as string) || "dark";
+  const mentorPhone = (formData.get("mentor_phone") as string)?.trim() || null;
+  const mentorContactEmail = (formData.get("mentor_contact_email") as string)?.trim() || null;
 
   if (fullName && fullName.length > 128) {
     return { error: "Full Name is too long" };
@@ -102,6 +104,15 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   if (!["dark", "light", "system"].includes(colorMode)) {
     return { error: "Invalid theme" };
   }
+  if (mentorPhone && mentorPhone.length > 64) {
+    return { error: "Mentor phone is too long" };
+  }
+  if (mentorContactEmail && mentorContactEmail.length > 254) {
+    return { error: "Mentor contact email is too long" };
+  }
+  if (mentorContactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mentorContactEmail)) {
+    return { error: "Enter a valid mentor contact email" };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -131,6 +142,8 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
       family_view_show_overnight_cities: familyViewShowOvernightCities,
       family_view_show_commute_estimates: familyViewShowCommuteEstimates,
       color_mode: colorMode,
+      mentor_phone: mentorPhone,
+      mentor_contact_email: mentorContactEmail,
       updated_at: new Date().toISOString(),
     })
     .eq("id", profile.id);
@@ -150,6 +163,7 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   revalidatePath("/frontier/pilots/portal/profile");
   revalidatePath("/frontier/pilots/portal/schedule");
   revalidatePath("/frontier/pilots/portal/family-view");
+  revalidatePath("/frontier/pilots/portal/mentoring");
   return { success: true };
 }
 

@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isSuperAdminAllowlistedEmail } from "@/lib/super-admin/allowlist";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -55,8 +56,8 @@ export async function updateSession(request: NextRequest) {
         .select("role, tenant, portal, is_admin")
         .eq("id", user.id)
         .single();
-      const email = ((user as { email?: string }).email ?? "").toLowerCase().trim();
-      const isAllowlisted = ["svenfolmer92@gmail.com"].some((e) => e.toLowerCase() === email);
+      const email = (user as { email?: string }).email ?? "";
+      const isAllowlisted = isSuperAdminAllowlistedEmail(email);
       isSuperAdmin = profile?.role === "super_admin" || isAllowlisted;
       isAdmin =
         isSuperAdmin ||
@@ -90,12 +91,18 @@ export async function updateSession(request: NextRequest) {
   if (isPortalRoot && user && isSuperAdmin) {
     const url = request.nextUrl.clone();
     url.pathname = "/super-admin";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
   if (redirectLoggedInToPortal && user) {
     const url = request.nextUrl.clone();
-    url.pathname = isSuperAdmin ? "/super-admin" : "/frontier/pilots/portal";
+    if (isSuperAdmin) {
+      url.pathname = "/super-admin";
+      url.search = "";
+    } else {
+      url.pathname = "/frontier/pilots/portal";
+    }
     return NextResponse.redirect(url);
   }
 
