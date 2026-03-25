@@ -9,6 +9,7 @@ import {
   type UpdateSuperAdminUserAccessInput,
 } from "@/lib/super-admin/actions";
 import { TENANT_CONFIG } from "@/lib/tenant-config";
+import { formatDisplayName } from "@/lib/format-display-name";
 
 type Props = {
   users: SuperAdminUserRow[];
@@ -155,7 +156,7 @@ export function SuperAdminUsersPageClient({
                 key={u.id}
                 className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]"
               >
-                <td className="px-4 py-3 text-slate-200">{u.full_name ?? "—"}</td>
+                <td className="px-4 py-3 text-slate-200">{formatDisplayName(u.full_name) || "—"}</td>
                 <td className="px-4 py-3 text-slate-300">{u.email ?? "—"}</td>
                 <td className="px-4 py-3 text-slate-300">{tenantLabel(u.tenant)}</td>
                 <td className="px-4 py-3 text-slate-300">
@@ -218,7 +219,7 @@ export function SuperAdminUsersPageClient({
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <h2 id="edit-user-modal-title" className="text-lg font-semibold text-slate-100">
-                Edit User: {editing.full_name || editing.email || "Unknown"}
+                Edit User: {formatDisplayName(editing.full_name) || editing.email || "Unknown"}
               </h2>
               <button
                 type="button"

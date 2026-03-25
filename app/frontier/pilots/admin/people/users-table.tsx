@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatDisplayName } from "@/lib/format-display-name";
 import { updateUserRole } from "./actions";
 import type { UserRow } from "./actions";
 
@@ -49,7 +50,7 @@ export function UsersTable({
             return (
               <tr key={u.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
                 <td className="px-4 py-3 text-white">{u.email ?? "—"}</td>
-                <td className="px-4 py-3 text-slate-300">{u.full_name ?? "—"}</td>
+                <td className="px-4 py-3 text-slate-300">{formatDisplayName(u.full_name) || "—"}</td>
                 <td className="px-4 py-3 text-slate-300">{u.portal}</td>
                 <td className="px-4 py-3">
                   {canEdit ? (

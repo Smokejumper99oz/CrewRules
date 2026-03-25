@@ -1,4 +1,5 @@
 import type { RecentActivityData } from "@/lib/super-admin/actions";
+import { formatDisplayName } from "@/lib/format-display-name";
 import { PlaceholderCard } from "./placeholder-card";
 import { formatDistanceToNow } from "date-fns";
 import { UserPlus, Calendar, AlertCircle, CreditCard } from "lucide-react";
@@ -26,7 +27,7 @@ export function SuperAdminRecentActivity({ data }: SuperAdminRecentActivityProps
               data.recentSignups.map((s) => (
                 <li key={s.id} className="text-sm flex justify-between gap-2">
                   <span className="text-slate-300 truncate">
-                    {s.full_name || s.email || s.id.slice(0, 8)}
+                    {formatDisplayName(s.full_name || s.email || s.id.slice(0, 8))}
                   </span>
                   <span className="text-slate-500 shrink-0 text-xs">
                     {formatDistanceToNow(new Date(s.created_at), { addSuffix: true })}

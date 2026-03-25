@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProTrialUsers, ProTrialUserRow } from "@/lib/super-admin/actions";
+import { formatDisplayName } from "@/lib/format-display-name";
 import { ChevronDown, ChevronRight, AlertTriangle, Clock, XCircle, CheckCircle } from "lucide-react";
 import { useState } from "react";
 
@@ -34,7 +35,7 @@ function UserRow({ row }: { row: ProTrialUserRow }) {
   return (
     <div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md hover:bg-slate-700/30 text-sm">
       <div className="min-w-0 flex-1">
-        <span className="text-slate-200 truncate block">{primary}</span>
+        <span className="text-slate-200 truncate block">{formatDisplayName(primary)}</span>
         {secondary && (
           <span className="text-slate-500 text-xs truncate block">{secondary}</span>
         )}
