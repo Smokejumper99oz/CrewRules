@@ -24,7 +24,6 @@ const GATE_ERROR_MESSAGES: Record<string, string> = {
 export function LoginForm() {
   const searchParams = useSearchParams();
   const redirectError = searchParams?.get("error");
-  const confirmed = searchParams?.get("confirmed") === "1";
   const gateMessage = redirectError ? GATE_ERROR_MESSAGES[redirectError] : null;
 
   const [isPending, setIsPending] = useState(false);
@@ -92,11 +91,6 @@ export function LoginForm() {
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="mx-auto max-w-lg px-6 py-16">
-        {confirmed && (
-          <div className="mb-6 rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-4 py-3">
-            <p className="text-sm text-emerald-200">Email confirmed. You can now log in.</p>
-          </div>
-        )}
         {gateMessage && (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/40 bg-rose-950/30 px-4 py-3">
             <p className="text-sm text-rose-200">{gateMessage}</p>

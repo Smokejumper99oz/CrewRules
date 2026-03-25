@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { submitSignUp } from "./actions";
+import { submitSignUp, verifyOtp, resendOtp } from "./actions";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -73,51 +73,88 @@ export default function SignUpPage() {
     setSubmitted(true);
   }
 
-  function handleClose() {
-    window.close();
-  }
+  const [otpState, otpAction, otpPending] = useActionState(verifyOtp, null);
+  const [resendSent, setResendSent] = useState(false);
+  const [resendPending, setResendPending] = useState(false);
 
   if (showSignUpSuccess) {
     return (
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-4 py-12 sm:px-6">
         <div className="w-full max-w-lg">
           <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] hover:border-emerald-400/20 px-6 py-6 sm:px-8 sm:py-8 shadow-lg shadow-black/30">
-            <div className="text-left">
-              <div className="text-xs uppercase tracking-widest text-slate-400">
-                Frontier Airline Pilots
+            <div className="text-xs uppercase tracking-widest text-slate-400">
+              Frontier Airline Pilots
+            </div>
+
+            <h1 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">
+              Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-xs">™</span>
+            </h1>
+
+            <h2 className="mt-4 text-xl font-bold text-white">
+              Verify your email
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-300">
+              Enter the 6-digit code sent to your email address.
+            </p>
+
+            <form action={otpAction} className="mt-6 space-y-4">
+              <input type="hidden" name="email" value={state?.email ?? ""} />
+
+              <div>
+                <label className="text-sm text-slate-200">Verification Code</label>
+                <input
+                  name="token"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="123456"
+                  required
+                  maxLength={6}
+                  disabled={otpPending}
+                  className={INPUT_CLASS}
+                />
               </div>
 
-              <h1 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">
-                Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-xs">™</span>
-              </h1>
+              {otpState?.error && (
+                <p className="text-sm text-red-400">{otpState.error}</p>
+              )}
 
-              <h2 className="mt-4 text-base font-bold text-white leading-snug sm:text-lg">
-                <span className="text-emerald-400 font-semibold uppercase tracking-widest">EMAIL SENT</span>
-                {" - "}
-                Check your Frontier Airlines email.
-              </h2>
+              <button
+                type="submit"
+                disabled={otpPending}
+                className="block w-full rounded-xl bg-[#75C043] px-4 py-3 font-semibold text-slate-950 hover:opacity-95 transition text-center disabled:opacity-50"
+              >
+                {otpPending ? "Verifying…" : "Verify Email"}
+              </button>
+            </form>
 
-              <p className="mt-2 text-sm text-slate-300 leading-relaxed">
-                Click the confirmation link to finish signing up and check your SPAM folder, if you do not see the email.
-              </p>
+            <div className="mt-4 text-center space-y-2">
+              <button
+                type="button"
+                disabled={resendPending}
+                onClick={async () => {
+                  setResendSent(false);
+                  setResendPending(true);
+                  await resendOtp(state?.email ?? "");
+                  setResendPending(false);
+                  setResendSent(true);
+                }}
+                className="text-sm text-slate-400 hover:text-slate-200 transition disabled:opacity-50"
+              >
+                {resendPending ? "Sending…" : "Resend code"}
+              </button>
+              {resendSent && (
+                <p className="text-xs text-emerald-400">Code resent</p>
+              )}
+            </div>
 
-              <p className="mt-2 text-xs text-slate-500">
-                You can close this window now.
-              </p>
-
-              <div className="mt-4 flex justify-center">
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  className="rounded-xl bg-[#75C043] px-5 py-3 font-semibold text-slate-950 hover:opacity-95 transition disabled:opacity-50"
-                >
-                  Close Window
-                </button>
-              </div>
-
-              <p className="mt-2 text-xs text-slate-500 text-center">
-                If this window does not close automatically, you can close it manually.
-              </p>
+            <div className="mt-3 text-center">
+              <Link
+                href="/frontier/pilots/login"
+                className="text-sm text-slate-400 hover:text-slate-200 transition"
+              >
+                Back to Login
+              </Link>
             </div>
           </div>
         </div>

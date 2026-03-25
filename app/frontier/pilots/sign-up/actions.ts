@@ -109,6 +109,14 @@ export async function submitSignUp(_prev: SignUpState, formData: FormData): Prom
   return { success: true, email };
 }
 
+export async function resendOtp(email: string) {
+  const supabase = await createClient();
+  await supabase.auth.resend({
+    type: "signup",
+    email,
+  });
+}
+
 export async function verifyOtp(_prev: VerifyOtpState, formData: FormData): Promise<VerifyOtpState> {
   const email = (formData.get("email") as string)?.trim();
   const token = (formData.get("token") as string)?.trim();
