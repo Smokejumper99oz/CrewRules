@@ -14,6 +14,7 @@ import {
   getFrontierCrewBaseLabel,
 } from "@/lib/frontier-crew-bases";
 import { getTimezoneFromAirport, DEFAULT_TIMEZONE } from "@/lib/airport-timezone";
+import { FOUNDING_PILOT_CAP } from "@/lib/founding-pilot-constants";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -66,6 +67,7 @@ type Props = {
     color_mode?: "dark" | "light" | "system";
     is_founding_pilot?: boolean;
     founding_pilot_started_at?: string | null;
+    founding_pilot_number?: number | null;
     mentor_phone?: string | null;
     mentor_contact_email?: string | null;
   };
@@ -437,11 +439,19 @@ export function ProfileForm({
           {profile?.is_founding_pilot && (
             <div className="inline-flex flex-col items-center rounded-full border border-amber-400/60 bg-slate-900/70 px-3 py-1.5 text-center shadow-amber-500/10 shadow-sm">
               <span className="text-sm font-semibold tracking-wide text-amber-400">Founding Pilot</span>
-              <span className="text-xs text-amber-400/90">Lifetime Beta Member</span>
-              {profile?.founding_pilot_started_at && (
-                <span className="mt-0.5 text-[10px] text-amber-400/70">
-                  Since {new Date(profile.founding_pilot_started_at).getFullYear()}
+              {profile?.founding_pilot_number != null ? (
+                <span className="text-xs text-amber-400/90">
+                  Pilot #{profile.founding_pilot_number} of {FOUNDING_PILOT_CAP}
                 </span>
+              ) : (
+                <>
+                  <span className="text-xs text-amber-400/90">Lifetime Beta Member</span>
+                  {profile?.founding_pilot_started_at && (
+                    <span className="mt-0.5 text-[10px] text-amber-400/70">
+                      Since {new Date(profile.founding_pilot_started_at).getFullYear()}
+                    </span>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -725,7 +735,9 @@ export function ProfileForm({
             {foundingPilotCount > 0 && (
               <div className="mt-3 flex flex-col gap-0.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
                 <span className="text-xs font-medium text-amber-400/90">Founding Pilot Program</span>
-                <span className="text-xs text-amber-400/80">{foundingPilotCount} / 100 spots claimed</span>
+                <span className="text-xs text-amber-400/80">
+                  {foundingPilotCount} / {FOUNDING_PILOT_CAP} spots claimed
+                </span>
               </div>
             )}
             <div className="mt-3 flex flex-wrap gap-3">

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState, useRef, useEffect } from "react";
 import { SignOutButton } from "@/components/sign-out-button";
+import { FOUNDING_PILOT_CAP } from "@/lib/founding-pilot-constants";
 
 function emailToDisplayName(email: string | null): string {
   if (!email) return "User";
@@ -17,15 +18,23 @@ export function PortalUserMenu({
   email,
   roleLabel,
   signOut,
+  isFoundingPilot = false,
+  foundingPilotNumber = null,
 }: {
   email: string | null;
   roleLabel: string;
   signOut: () => Promise<void>;
+  isFoundingPilot?: boolean;
+  foundingPilotNumber?: number | null;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const displayName = emailToDisplayName(email);
+  const foundingLine =
+    foundingPilotNumber != null
+      ? `Founding Pilot · #${foundingPilotNumber} of ${FOUNDING_PILOT_CAP}`
+      : "Founding Pilot";
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -42,12 +51,12 @@ export function PortalUserMenu({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-slate-100 transition touch-manipulation min-h-[44px] dark:hover:bg-white/5"
+        className="flex items-start gap-3 rounded-xl px-3 py-2 text-left hover:bg-slate-100 transition touch-manipulation min-h-[44px] dark:hover:bg-white/5"
         aria-expanded={open}
         aria-haspopup="true"
         aria-label="User menu"
       >
-        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 p-[0.2rem] dark:border-white/10 dark:bg-white/5 dark:shadow-[0_0_25px_rgba(117,192,67,0.15)]">
+        <div className="relative mt-0.5 h-9 w-9 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 p-[0.2rem] dark:border-white/10 dark:bg-white/5 dark:shadow-[0_0_25px_rgba(117,192,67,0.15)]">
           <Image
             src="/icons/f9-icon.png"
             alt="Frontier Airlines"
@@ -59,6 +68,9 @@ export function PortalUserMenu({
         <div className="hidden min-w-0 space-y-0.5 sm:block">
           <div className="truncate text-sm font-medium text-white">{displayName}</div>
           <div className="truncate text-xs text-slate-400">{roleLabel}</div>
+          {isFoundingPilot ? (
+            <div className="truncate text-[11px] font-medium tracking-wide text-amber-400/85">{foundingLine}</div>
+          ) : null}
         </div>
         <svg
           className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
@@ -78,6 +90,11 @@ export function PortalUserMenu({
           <div className="p-4">
             <div className="font-medium text-slate-900 dark:text-white">{displayName}</div>
             <div className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{roleLabel}</div>
+            {isFoundingPilot ? (
+              <div className="mt-1 truncate text-xs font-medium tracking-wide text-amber-600/95 dark:text-amber-400/85">
+                {foundingLine}
+              </div>
+            ) : null}
           </div>
           <div className="border-t border-slate-200 p-2 dark:border-white/10">
             <SignOutButton signOut={signOut} buttonClassName="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-white hover:bg-white/5 transition touch-manipulation disabled:opacity-50" role="menuitem">

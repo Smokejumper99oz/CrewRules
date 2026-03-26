@@ -92,6 +92,15 @@ async function syncSubscriptionToProfile(
   }
 
   await supabase.from("profiles").update(updates).eq("id", profileId);
+
+  if (isActive && priceId && isFoundingPilotPrice(priceId)) {
+    const { error: claimError } = await supabase.rpc("claim_founding_pilot_number", {
+      p_profile_id: profileId,
+    });
+    if (claimError) {
+      throw new Error(`claim_founding_pilot_number: ${claimError.message}`);
+    }
+  }
 }
 
 export async function handleCustomerSubscriptionCreated(

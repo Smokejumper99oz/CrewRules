@@ -59,6 +59,13 @@ type Props = {
   roleLabel: string;
   signOut: () => Promise<void>;
   trialBannerStatus: TrialBannerStatus | null;
+  trialBannerFoundingPilot: {
+    foundingPilotCount: number;
+    foundingPilotCap: number;
+    foundingPilotSpotsRemaining: number;
+  } | null;
+  isFoundingPilot: boolean;
+  foundingPilotNumber: number | null;
 };
 
 export function PortalLayoutShell({
@@ -72,6 +79,9 @@ export function PortalLayoutShell({
   roleLabel,
   signOut,
   trialBannerStatus,
+  trialBannerFoundingPilot,
+  isFoundingPilot,
+  foundingPilotNumber,
 }: Props) {
   const [tabletNavOpen, setTabletNavOpen] = useState(false);
   const [welcomeModalDismissed, setWelcomeModalDismissed] = useState(false);
@@ -179,6 +189,8 @@ export function PortalLayoutShell({
                     email={profile.email ?? user.email ?? null}
                     roleLabel={roleLabel}
                     signOut={signOut}
+                    isFoundingPilot={isFoundingPilot}
+                    foundingPilotNumber={foundingPilotNumber}
                   />
                 </div>
               </div>
@@ -186,10 +198,14 @@ export function PortalLayoutShell({
 
             <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
               <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 pb-[env(safe-area-inset-bottom)]">
-                {trialBannerStatus && (
+                {trialBannerStatus && trialBannerFoundingPilot && (
                   <PortalTrialUpgradeBanner
+                    displayName={displayName}
                     status={trialBannerStatus.status}
                     daysRemaining={trialBannerStatus.daysRemaining}
+                    foundingPilotCount={trialBannerFoundingPilot.foundingPilotCount}
+                    foundingPilotCap={trialBannerFoundingPilot.foundingPilotCap}
+                    foundingPilotSpotsRemaining={trialBannerFoundingPilot.foundingPilotSpotsRemaining}
                   />
                 )}
                 {children}

@@ -12,6 +12,7 @@ import {
   Upload,
   Activity,
   Sparkles,
+  Award,
   HeartPulse,
   FileText,
   Inbox,
@@ -74,6 +75,12 @@ export function SuperAdminNav() {
           <NavItem href="/super-admin" label="Dashboard" icon={LayoutDashboard} isActive={pathname === "/super-admin"} />
           <NavItem label="Tenants" icon={Plane} isComingSoon />
           <NavItem href="/super-admin/users" label="Users" icon={Users} isActive={pathname?.startsWith("/super-admin/users")} />
+          <NavItem
+            href="/super-admin/founding-members"
+            label="Founding Members"
+            icon={Award}
+            isActive={pathname?.startsWith("/super-admin/founding-members")}
+          />
           <NavItem label="Subscriptions" icon={CreditCard} isComingSoon />
           <NavItem label="Revenue" icon={DollarSign} isComingSoon />
         </div>

@@ -1,13 +1,14 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Users as UsersIcon, List, Activity, GraduationCap } from "lucide-react";
+import { Users as UsersIcon, List, Activity, GraduationCap, Award } from "lucide-react";
 
 export function SuperAdminMainHeaderTitles() {
   const pathname = usePathname();
   const isUsers = pathname?.startsWith("/super-admin/users");
   const isMentoring = pathname?.startsWith("/super-admin/mentoring");
   const isWaitlist = pathname?.startsWith("/super-admin/waitlist");
+  const isFoundingMembers = pathname?.startsWith("/super-admin/founding-members");
   const isSystemHealth = pathname?.startsWith("/super-admin/system-health");
 
   if (isSystemHealth) {
@@ -29,6 +30,15 @@ export function SuperAdminMainHeaderTitles() {
       <div className="flex min-w-0 items-center gap-2">
         <UsersIcon className="h-5 w-5 shrink-0 text-slate-400" aria-hidden />
         <h1 className="text-xl font-semibold tracking-tight truncate text-slate-100">Users</h1>
+      </div>
+    );
+  }
+
+  if (isFoundingMembers) {
+    return (
+      <div className="flex min-w-0 items-center gap-2">
+        <Award className="h-5 w-5 shrink-0 text-amber-400/90" aria-hidden />
+        <h1 className="text-xl font-semibold tracking-tight truncate text-slate-100">Founding Members</h1>
       </div>
     );
   }

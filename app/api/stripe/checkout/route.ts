@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createCheckoutSession } from "@/lib/stripe/checkout";
+import { FOUNDING_PILOT_CAP } from "@/lib/founding-pilot-constants";
+import { getFoundingPilotCount } from "@/lib/founding-pilot-count";
 
 export async function POST(req: Request) {
   try {
@@ -34,11 +36,8 @@ export async function POST(req: Request) {
     }
 
     if (interval === "founding_pilot_annual") {
-      const { count } = await supabase
-        .from("profiles")
-        .select("*", { count: "exact", head: true })
-        .eq("is_founding_pilot", true);
-      if ((count ?? 0) >= 100) {
+      const foundingCount = await getFoundingPilotCount(supabase);
+      if (foundingCount >= FOUNDING_PILOT_CAP) {
         return NextResponse.json(
           { error: "Founding Pilot program is full." },
           { status: 400 }

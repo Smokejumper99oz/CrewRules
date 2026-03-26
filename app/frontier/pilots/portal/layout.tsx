@@ -3,6 +3,8 @@ import { getTenantPortalConfig } from "@/lib/tenant-config";
 import { gateUserForPortal } from "@/lib/portal-gate";
 import { getAccountRoleDisplay } from "@/lib/account-role-display";
 import { isAdmin, getDisplayName, getProTrialBannerStatus } from "@/lib/profile";
+import { FOUNDING_PILOT_CAP } from "@/lib/founding-pilot-constants";
+import { getFoundingPilotCount } from "@/lib/founding-pilot-count";
 import { signOut } from "./actions";
 import { PortalLayoutShell } from "./portal-layout-shell";
 
@@ -19,6 +21,17 @@ export default async function PortalLayout({ children }: { children: ReactNode }
 
   const admin = await isAdmin(TENANT, PORTAL);
   const trialBannerStatus = getProTrialBannerStatus(profile);
+  let trialBannerFoundingPilot: {
+    foundingPilotCount: number;
+    foundingPilotCap: number;
+    foundingPilotSpotsRemaining: number;
+  } | null = null;
+  if (trialBannerStatus) {
+    const foundingPilotCount = await getFoundingPilotCount();
+    const foundingPilotCap = FOUNDING_PILOT_CAP;
+    const foundingPilotSpotsRemaining = Math.max(0, foundingPilotCap - foundingPilotCount);
+    trialBannerFoundingPilot = { foundingPilotCount, foundingPilotCap, foundingPilotSpotsRemaining };
+  }
   const base = `/${TENANT}/${PORTAL}/portal`;
   const displayName = getDisplayName(profile ?? null);
   const roleDisplay = getAccountRoleDisplay({
@@ -39,6 +52,9 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       roleLabel={roleLabel}
       signOut={signOut}
       trialBannerStatus={trialBannerStatus}
+      trialBannerFoundingPilot={trialBannerFoundingPilot}
+      isFoundingPilot={profile.is_founding_pilot === true}
+      foundingPilotNumber={profile.founding_pilot_number ?? null}
     >
       {children}
     </PortalLayoutShell>

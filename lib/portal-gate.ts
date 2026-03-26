@@ -49,7 +49,7 @@ export async function gateUserForPortal(
 
   const { data: minimalProfile } = await supabase
     .from("profiles")
-    .select("id, role, tenant, portal, email, subscription_tier, pro_trial_started_at, pro_trial_expires_at, is_founding_pilot, welcome_modal_version_seen, color_mode, is_admin, is_mentor")
+    .select("id, role, tenant, portal, email, subscription_tier, pro_trial_started_at, pro_trial_expires_at, is_founding_pilot, founding_pilot_number, welcome_modal_version_seen, color_mode, is_admin, is_mentor")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -69,7 +69,7 @@ export async function gateUserForPortal(
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, role, tenant, portal, email, subscription_tier, pro_trial_started_at, pro_trial_expires_at, is_founding_pilot, welcome_modal_version_seen, base_airport, position, date_of_hire, home_airport, color_mode, is_admin, is_mentor")
+    .select("id, role, tenant, portal, email, subscription_tier, pro_trial_started_at, pro_trial_expires_at, is_founding_pilot, founding_pilot_number, welcome_modal_version_seen, base_airport, position, date_of_hire, home_airport, color_mode, is_admin, is_mentor")
     .eq("id", user.id)
     .eq("tenant", tenant)
     .eq("portal", portal)

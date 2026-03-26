@@ -43,6 +43,7 @@ export type Profile = {
   billing_source?: string | null;
   is_founding_pilot?: boolean;
   founding_pilot_started_at?: string | null;
+  founding_pilot_number?: number | null;
   show_pay_projection?: boolean;
   family_view_enabled?: boolean;
   family_view_show_exact_times?: boolean;

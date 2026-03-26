@@ -664,6 +664,46 @@ export async function getTenantOverview(): Promise<TenantOverviewRow[]> {
   }));
 }
 
+export type FoundingMemberRow = {
+  id: string;
+  founding_pilot_number: number | null;
+  full_name: string | null;
+  email: string | null;
+  tenant: string;
+  role: string;
+  founding_pilot_started_at: string | null;
+  subscription_tier: string;
+};
+
+/** Profiles with permanent Founding Pilot status. Sorted by pilot # ascending (unnumbered last). */
+export async function getFoundingMembersForSuperAdmin(): Promise<FoundingMemberRow[]> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("profiles")
+    .select(
+      "id, founding_pilot_number, full_name, email, tenant, role, founding_pilot_started_at, subscription_tier"
+    )
+    .eq("is_founding_pilot", true);
+
+  if (error) {
+    console.error("[getFoundingMembersForSuperAdmin]", error);
+    return [];
+  }
+
+  const rows = (data ?? []) as FoundingMemberRow[];
+  return [...rows].sort((a, b) => {
+    const an = a.founding_pilot_number;
+    const bn = b.founding_pilot_number;
+    if (an == null && bn == null) return (a.email ?? "").localeCompare(b.email ?? "");
+    if (an == null) return 1;
+    if (bn == null) return -1;
+    if (an !== bn) return an - bn;
+    return (a.email ?? "").localeCompare(b.email ?? "");
+  });
+}
+
 export type ProductUsageData = {
   scheduleImportsLast30d: number | null;
   aiSearchLast30d: number | null;

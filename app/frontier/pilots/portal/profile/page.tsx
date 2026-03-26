@@ -6,6 +6,7 @@ import { CheckoutStatusBanner } from "@/components/checkout-status-banner";
 import { getInboundEmailForDisplay } from "@/lib/email/get-inbound-email-for-display";
 import { getScheduleImportStatus } from "@/app/frontier/pilots/portal/schedule/actions";
 import { getTenantSetting } from "@/lib/tenant-settings";
+import { getFoundingPilotCount } from "@/lib/founding-pilot-count";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -26,11 +27,7 @@ export default async function ProfilePage() {
   const profile = await getProfile();
 
   const supabase = await createClient();
-  const { count } = await supabase
-    .from("profiles")
-    .select("*", { count: "exact", head: true })
-    .eq("is_founding_pilot", true);
-  const foundingPilotCount = count ?? 0;
+  const foundingPilotCount = await getFoundingPilotCount(supabase);
   const planBadgeLabel = getPlanBadgeLabel(profile);
   const planBadgeVariant = getPlanBadgeVariant(profile);
   let inboundEmail: string | null = null;
