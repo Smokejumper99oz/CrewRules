@@ -21,7 +21,7 @@ export default function FlightAttendantLoginPage() {
             <p className="mt-2 text-sm text-slate-300">
               The Flight Attendant portal is under development. Check back soon, or{" "}
               <Link href="/request-access" className="text-[#75C043] hover:underline">
-                request access
+                join the waitlist
               </Link>{" "}
               to be notified when it launches.
             </p>

@@ -20,6 +20,7 @@ export async function updateSession(request: NextRequest) {
 
   // Redirect logged-in users away from login/sign-up (but not reset-password - they need to set new password)
   const redirectLoggedInToPortal =
+    request.nextUrl.pathname === "/login" ||
     request.nextUrl.pathname === "/frontier/pilots/login" ||
     request.nextUrl.pathname === "/frontier/pilots/sign-up";
 

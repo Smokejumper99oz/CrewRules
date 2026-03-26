@@ -1,10 +1,18 @@
-import { redirect } from "next/navigation";
+"use client";
 
-/**
- * Login entry point. Redirects to the only live airline portal (Frontier Pilots).
- * To restore multi-airline role/airline chooser: replace this redirect with the
- * previous UI (see git history) and update AVAILABLE_AIRLINES.
- */
+import { Suspense } from "react";
+import { LoginForm } from "@/app/frontier/pilots/login/login-form";
+
 export default function LoginPage() {
-  redirect("/frontier/pilots/login");
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#75C043]/40 border-t-[#75C043]" />
+        </main>
+      }
+    >
+      <LoginForm />
+    </Suspense>
+  );
 }

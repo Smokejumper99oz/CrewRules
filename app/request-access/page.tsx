@@ -12,14 +12,17 @@ export default function RequestAccessPage() {
       <div className="mx-auto max-w-lg w-full px-6 py-16">
         <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-8 shadow-lg shadow-black/30">
           <h1 className="text-3xl font-bold text-center tracking-tight">
-          Crew<span className="text-[#75C043]">Rules</span>
-          <span className="align-super text-sm">™</span> Request Access
+          Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-sm">™</span> Join Waitlist
         </h1>
         <p className="mt-4 text-slate-300 text-left">
-          Crew<span className="text-[#75C043]">Rules</span>™ is launching one airline at a time.
+          CrewRules™ is rolling out one airline at a time to ensure a high-quality experience for verified crew members.
           <br />
-          Request access using your company email. If your airline isn&apos;t live yet, we&apos;ll place you on the waitlist and notify you when it launches.
+          Request access using your company email. If your airline is not live yet, you&apos;ll be added to the waitlist and notified when onboarding begins.
         </p>
+
+        <div className="mt-2 text-sm text-emerald-400 font-medium">
+          Currently Live: Frontier Airlines (Pilots)
+        </div>
 
         <form action={formAction} className="mt-8 space-y-4">
           <label className="block">
@@ -72,7 +75,7 @@ export default function RequestAccessPage() {
           </label>
 
           <label className="block">
-            <span className="text-sm text-slate-300">Employee Number</span>
+            <span className="text-sm text-slate-300">Employee ID</span>
             <input
               name="employee_number"
               type="text"
@@ -80,6 +83,9 @@ export default function RequestAccessPage() {
               disabled={isPending}
               className="mt-2 w-full rounded-xl bg-slate-800 border border-slate-600 px-4 py-3 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
             />
+            <p className="mt-1 text-xs text-slate-400">
+              Used for secure account matching
+            </p>
           </label>
 
           {state?.error && (
@@ -116,8 +122,15 @@ export default function RequestAccessPage() {
             disabled={isPending}
             className="w-full mt-2 px-6 py-3 rounded-xl bg-[#75C043] text-slate-950 font-semibold hover:brightness-110 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isPending ? "Submitting…" : "Request Access"}
+            {isPending ? "Submitting…" : "Join Waitlist"}
           </button>
+
+          <div className="mt-6 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-xs leading-relaxed">
+            <span className="font-medium text-slate-200">Why we ask for this</span>
+            <p className="mt-1 text-slate-400">
+              CrewRules™ uses your company email and employee ID to verify your account and automatically match you to your airline&apos;s contract, rules, and tools.
+            </p>
+          </div>
         </form>
 
           <div className="mt-10 text-center">
