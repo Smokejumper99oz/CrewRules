@@ -62,14 +62,14 @@ export default function HomePage() {
           <div className="grid gap-10 md:grid-cols-2 md:items-start">
             <div className="max-w-xl">
               <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
-                <span className="whitespace-nowrap">
+                <span className="md:whitespace-nowrap">
                   Crew<span className="text-[#75C043]">Rules</span>
                   <span className="align-super text-base">™</span> —
                 </span>
-                <br />
-                <span className="whitespace-nowrap">The Smart Platform</span>
-                <br />
-                <span className="text-slate-300 whitespace-nowrap">for Airline Crew</span>
+                <br className="hidden md:block" />
+                <span className="md:whitespace-nowrap">The Smart Platform</span>
+                <br className="hidden md:block" />
+                <span className="text-slate-300 md:whitespace-nowrap">for Airline Crew</span>
               </h1>
 
               <p className="mt-5 text-lg text-slate-300">
@@ -192,15 +192,17 @@ export default function HomePage() {
 
           <div className="relative flex justify-end min-w-0">
             <div className="relative w-[90%]">
-              <div className="absolute -inset-4 bg-gradient-to-tr from-emerald-500/10 via-transparent to-blue-500/10 rounded-3xl blur-2xl opacity-60" />
+              <div className="relative">
+                <div className="pointer-events-none absolute -inset-6 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-purple-500/10 blur-2xl opacity-70" />
 
-              <div className="relative rounded-2xl border border-white/10 bg-slate-900/40 backdrop-blur-xl shadow-2xl overflow-hidden">
-                <img
-                  src="/hero/crewrules-current-trip-feature.png"
-                  alt="CrewRules Current Trip and Commute Assist preview"
-                  className="block w-full h-auto"
-                />
-                <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10" />
+                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 backdrop-blur-md shadow-[0_0_60px_-20px_rgba(16,185,129,0.25)]">
+                  <img
+                    src="/hero/crewrules-current-trip-feature.png"
+                    alt="CrewRules Current Trip and Commute Assist preview"
+                    className="block w-full h-auto"
+                  />
+                  <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/10" />
+                </div>
               </div>
             </div>
           </div>
@@ -237,15 +239,17 @@ export default function HomePage() {
 
           <div className="relative flex justify-end min-w-0">
             <div className="relative w-[90%]">
-              <div className="absolute -inset-4 bg-gradient-to-tr from-emerald-500/10 via-transparent to-blue-500/10 rounded-3xl blur-2xl opacity-60" />
+              <div className="relative">
+                <div className="pointer-events-none absolute -inset-6 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-purple-500/10 blur-2xl opacity-70" />
 
-              <div className="relative rounded-2xl border border-white/10 bg-slate-900/40 backdrop-blur-xl shadow-2xl overflow-hidden">
-                <img
-                  src="/hero/commute-assist-feature.png"
-                  alt="CrewRules Commute Assist preview"
-                  className="block w-full h-auto"
-                />
-                <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10" />
+                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 backdrop-blur-md shadow-[0_0_60px_-20px_rgba(16,185,129,0.25)]">
+                  <img
+                    src="/hero/commute-assist-feature.png"
+                    alt="CrewRules Commute Assist preview"
+                    className="block w-full h-auto"
+                  />
+                  <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/10" />
+                </div>
               </div>
             </div>
           </div>
@@ -282,15 +286,17 @@ export default function HomePage() {
 
           <div className="relative flex justify-end min-w-0">
             <div className="relative w-[90%]">
-              <div className="absolute -inset-4 bg-gradient-to-tr from-emerald-500/10 via-transparent to-blue-500/10 rounded-3xl blur-2xl opacity-60" />
+              <div className="relative">
+                <div className="pointer-events-none absolute -inset-6 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-purple-500/10 blur-2xl opacity-70" />
 
-              <div className="relative rounded-2xl border border-white/10 bg-slate-900/40 backdrop-blur-xl shadow-2xl overflow-hidden">
-                <img
-                  src="/hero/pay-month-overview-feature.png"
-                  alt="CrewRules Month Overview and pay estimate preview"
-                  className="block w-full h-auto"
-                />
-                <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10" />
+                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 backdrop-blur-md shadow-[0_0_60px_-20px_rgba(16,185,129,0.25)]">
+                  <img
+                    src="/hero/pay-month-overview-feature.png"
+                    alt="CrewRules Month Overview and pay estimate preview"
+                    className="block w-full h-auto"
+                  />
+                  <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/10" />
+                </div>
               </div>
             </div>
           </div>
