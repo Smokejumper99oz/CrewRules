@@ -71,7 +71,7 @@ export function AboutDeviceSection() {
   }
 
   return (
-    <dl className="space-y-0 divide-y divide-white/5">
+    <dl className="space-y-0 divide-y divide-slate-200 dark:divide-white/5">
       <div className="flex justify-between gap-4 py-3 first:pt-0">
         <dt className="text-sm text-slate-400 shrink-0">Device Type</dt>
         <dd className="text-sm text-slate-200 text-right">{info.deviceType}</dd>

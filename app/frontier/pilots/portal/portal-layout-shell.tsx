@@ -161,7 +161,7 @@ export function PortalLayoutShell({
               tabletNavOpen ? "md:ml-0" : "md:ml-0",
             ].join(" ")}
           >
-            <header className="shrink-0 border-b border-slate-200 bg-white pt-[env(safe-area-inset-top,0px)] dark:border-white/5 dark:bg-slate-950/70 dark:backdrop-blur">
+            <header className="relative z-20 shrink-0 border-b border-slate-200 bg-white pt-[env(safe-area-inset-top,0px)] dark:border-white/5 dark:bg-slate-950/70 dark:backdrop-blur">
               <PortalDebugLine
                 email={user.email}
                 role={profile.role}

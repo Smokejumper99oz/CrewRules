@@ -158,6 +158,8 @@ export default function HomePage() {
         </div>
       </section>
 
+      <div className="my-16 h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
       <section id="current-trip" className="scroll-mt-24 mx-auto max-w-6xl px-6 py-20">
         <div className="grid gap-10 items-start lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div>
@@ -209,6 +211,8 @@ export default function HomePage() {
         </div>
       </section>
 
+      <div className="my-16 h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
       <section id="commute-assist" className="scroll-mt-24 mx-auto max-w-6xl px-6 py-20">
         <div className="grid gap-10 items-start lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div>
@@ -256,6 +260,8 @@ export default function HomePage() {
         </div>
       </section>
 
+      <div className="my-16 h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
       <section id="pay" className="scroll-mt-24 mx-auto max-w-6xl px-6 py-20">
         <div className="grid gap-10 items-start lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div>
@@ -302,6 +308,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <div className="my-16 h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
       {/* Features */}
       <section id="features" className="scroll-mt-24 mx-auto max-w-6xl px-6 py-16">
@@ -367,6 +375,8 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+
+      <div className="my-16 h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
       {/* Levels */}
       <section id="levels" className="scroll-mt-24 mx-auto max-w-6xl px-6 py-16">

@@ -28,60 +28,85 @@ export default async function AboutPage() {
   })();
   const deploymentShort = deploymentDisplay;
 
+  const buildDisplay = (() => {
+    const customId = process.env.NEXT_BUILD_ID;
+    if (customId) return customId;
+    const sha = process.env.VERCEL_GIT_COMMIT_SHA;
+    if (sha) return sha.slice(0, 7);
+    return "—";
+  })();
+
+  const buildDateDisplay = (() => {
+    const manual = process.env.NEXT_BUILD_DATE;
+    if (manual) return manual;
+    const ts = process.env.VERCEL_GIT_COMMIT_TIMESTAMP;
+    if (!ts) return "—";
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return "—";
+    const iso = d.toISOString();
+    return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+  })();
+
   return (
     <div className="max-w-2xl">
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* A) SOFTWARE INFORMATION */}
         <section>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-4">
-            A) Software Information
-          </h2>
-          <dl className="space-y-0 divide-y divide-white/5">
-            <AboutRow label="Application Name" value="CrewRules™" />
-            <AboutRow label="Version" value={packageJson.version ?? "—"} />
-            <AboutRow label="Build" value={process.env.NEXT_BUILD_ID ?? "—"} />
-            <AboutRow label="Build Date" value={process.env.NEXT_BUILD_DATE ?? "—"} />
-            <AboutRow label="Environment" value={process.env.NODE_ENV ?? "—"} />
-            <AboutRow label="Deployment" value={deploymentShort} />
-            <AboutRow label="API Base URL" value={apiBaseUrl ?? "—"} />
-            <AboutRow label="License" value="Proprietary" />
-            <AboutRow label="System Status" value="Operational" />
-          </dl>
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-slate-950/40">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-4">
+              A) Software Information
+            </h2>
+            <dl className="space-y-0 divide-y divide-slate-200 dark:divide-white/5">
+              <AboutRow label="Application Name" value="CrewRules™" />
+              <AboutRow label="Version" value={packageJson.version ?? "—"} />
+              <AboutRow label="Build" value={buildDisplay} />
+              <AboutRow label="Build Date" value={buildDateDisplay} />
+              <AboutRow label="Environment" value={process.env.NODE_ENV ?? "—"} />
+              <AboutRow label="Deployment" value={deploymentShort} />
+              <AboutRow label="API Base URL" value={apiBaseUrl ?? "—"} />
+              <AboutRow label="License" value="Proprietary" />
+              <AboutRow label="System Status" value="Operational" />
+            </dl>
+          </div>
         </section>
 
         {/* B) ACCOUNT & ACCESS */}
         <section>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-4">
-            B) Account & Access
-          </h2>
-          <dl className="space-y-0 divide-y divide-white/5">
-            <AboutRow label="Logged-in User" value={displayName || "—"} />
-            <AboutRow
-              label="Role"
-              value={
-                profile ? (
-                  <AboutRoleBadgeRow
-                    role={profile.role}
-                    is_admin={profile.is_admin}
-                    is_mentor={profile.is_mentor}
-                  />
-                ) : (
-                  "—"
-                )
-              }
-            />
-            <AboutRow label="Employee ID" value={profile?.employee_number ?? "—"} />
-            <AboutRow label="Airline / Tenant" value={airlineDisplayName} />
-            <AboutRow label="Subscription Type" value={subscriptionType} />
-          </dl>
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-slate-950/40">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-4">
+              B) Account & Access
+            </h2>
+            <dl className="space-y-0 divide-y divide-slate-200 dark:divide-white/5">
+              <AboutRow label="Logged-in User" value={displayName || "—"} />
+              <AboutRow
+                label="Role"
+                value={
+                  profile ? (
+                    <AboutRoleBadgeRow
+                      role={profile.role}
+                      is_admin={profile.is_admin}
+                      is_mentor={profile.is_mentor}
+                    />
+                  ) : (
+                    "—"
+                  )
+                }
+              />
+              <AboutRow label="Employee ID" value={profile?.employee_number ?? "—"} />
+              <AboutRow label="Airline / Tenant" value={airlineDisplayName} />
+              <AboutRow label="Subscription Type" value={subscriptionType} />
+            </dl>
+          </div>
         </section>
 
         {/* C) DEVICE & BROWSER */}
         <section>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-4">
-            C) Device & Browser
-          </h2>
-          <AboutDeviceSection />
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-slate-950/40">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-4">
+              C) Device & Browser
+            </h2>
+            <AboutDeviceSection />
+          </div>
         </section>
       </div>
     </div>
