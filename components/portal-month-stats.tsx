@@ -146,16 +146,16 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
             <p className="truncate tabular-nums text-2xl font-bold text-slate-700 dark:text-slate-300">{stats.vacationOff}</p>
             <p className="text-xs text-slate-500 dark:text-slate-300">Days off</p>
           </div>
-          <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-white/10 dark:bg-white/5">
-            <div className="grid grid-cols-2 gap-2 divide-x divide-slate-200 dark:divide-white/10">
-              <div className="min-w-0 px-1 text-center">
-                <p className="truncate tabular-nums text-lg font-semibold text-amber-800 dark:text-amber-300/90">
+          <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center dark:border-white/10 dark:bg-white/5">
+            <div className="space-y-2">
+              <div className="min-w-0">
+                <p className="tabular-nums text-2xl font-bold leading-tight text-amber-800 dark:text-amber-300">
                   {formatMinutesToHhMm(stats.rawCreditMinutes ?? 0)}
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-300">Credit</p>
               </div>
-              <div className="min-w-0 px-1 text-center">
-                <p className="truncate tabular-nums text-lg font-semibold text-amber-800 dark:text-amber-300/90">
+              <div className="min-w-0 border-t border-slate-200 pt-2 dark:border-white/10">
+                <p className="tabular-nums text-xs font-normal leading-snug text-slate-600 dark:text-slate-400">
                   {formatMinutesToHhMm(Math.round((stats.totalBlock ?? 0) * 60))}
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-300">Block</p>

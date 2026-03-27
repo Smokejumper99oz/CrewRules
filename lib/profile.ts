@@ -126,13 +126,35 @@ export function isProActive(profile?: Profile | null): boolean {
   return expiresMs > Date.now();
 }
 
-/** Subscription type for display: Free, Pro, or Enterprise. */
-export function getSubscriptionDisplayType(profile?: Profile | null): "Free" | "Pro" | "Enterprise" {
+/** Subscription type for display: Free, Pro Trial, Pro, or Enterprise (effective status; trial uses pro_trial_expires_at). */
+export function getSubscriptionDisplayType(
+  profile?: Profile | null
+): "Free" | "Pro" | "Pro Trial" | "Enterprise" {
   if (!profile) return "Free";
   const tier = profile.subscription_tier;
   if (tier === "enterprise") return "Enterprise";
   if (tier === "pro") return "Pro";
+  const expiresAt = profile.pro_trial_expires_at;
+  if (expiresAt) {
+    const ms = new Date(expiresAt).getTime();
+    if (!Number.isNaN(ms) && ms > Date.now()) return "Pro Trial";
+  }
   return "Free";
+}
+
+/**
+ * Whole days until `pro_trial_expires_at` (ceiling), when the user is on an active Pro trial
+ * (same conditions as `getSubscriptionDisplayType` → "Pro Trial": not Pro/Enterprise tier, future expiry).
+ */
+export function getActiveProTrialDaysRemaining(profile: Profile | null | undefined): number | null {
+  if (!profile) return null;
+  const tier = profile.subscription_tier;
+  if (tier === "enterprise" || tier === "pro") return null;
+  const expiresAt = profile.pro_trial_expires_at;
+  if (!expiresAt) return null;
+  const ms = new Date(expiresAt).getTime();
+  if (Number.isNaN(ms) || ms <= Date.now()) return null;
+  return Math.ceil((ms - Date.now()) / (24 * 60 * 60 * 1000));
 }
 
 /** Pro badge label: "Pro Active" or "Pro Trial — X days remaining", or null. */

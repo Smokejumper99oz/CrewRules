@@ -1,18 +1,20 @@
 import type { ReactNode } from "react";
-import { getProfile, getDisplayName, getSubscriptionDisplayType } from "@/lib/profile";
+import {
+  getProfile,
+  getDisplayName,
+  getSubscriptionDisplayType,
+  getPlanBadgeVariant,
+  getActiveProTrialDaysRemaining,
+} from "@/lib/profile";
+import type { Profile } from "@/lib/profile";
+import { ProBadge } from "@/components/pro-badge";
 import { getAccountRoleBadges } from "@/lib/account-role-display";
 import { getTenantPortalConfig } from "@/lib/tenant-config";
-import packageJson from "../../../../../../package.json";
 import { AboutDeviceSection } from "./about-device-section";
 
 export default async function AboutPage() {
   const profile = await getProfile();
-  const subscriptionType = getSubscriptionDisplayType(profile);
   const displayName = getDisplayName(profile ?? null);
-
-  const apiBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
-    : null;
 
   const tenantConfig = getTenantPortalConfig(profile?.tenant ?? "frontier", profile?.portal ?? "pilots");
   const airlineDisplayName = tenantConfig?.tenant.displayName ?? profile?.tenant ?? "—";
@@ -36,15 +38,15 @@ export default async function AboutPage() {
     return "—";
   })();
 
-  const buildDateDisplay = (() => {
-    const manual = process.env.NEXT_BUILD_DATE;
-    if (manual) return manual;
-    const ts = process.env.VERCEL_GIT_COMMIT_TIMESTAMP;
-    if (!ts) return "—";
-    const d = new Date(ts);
-    if (Number.isNaN(d.getTime())) return "—";
-    const iso = d.toISOString();
-    return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+  const releaseVersionDisplay = process.env.NEXT_PUBLIC_CREWRULES_RELEASE ?? "—";
+
+  const environmentLabel = (() => {
+    const raw = process.env.NODE_ENV;
+    if (!raw) return "—";
+    if (raw === "production") return "Production";
+    if (raw === "development") return "Development";
+    if (raw === "test") return "Test";
+    return raw;
   })();
 
   return (
@@ -58,12 +60,10 @@ export default async function AboutPage() {
             </h2>
             <dl className="space-y-0 divide-y divide-slate-200 dark:divide-white/5">
               <AboutRow label="Application Name" value="CrewRules™" />
-              <AboutRow label="Version" value={packageJson.version ?? "—"} />
+              <AboutRow label="Version" value={releaseVersionDisplay} />
               <AboutRow label="Build" value={buildDisplay} />
-              <AboutRow label="Build Date" value={buildDateDisplay} />
-              <AboutRow label="Environment" value={process.env.NODE_ENV ?? "—"} />
+              <AboutRow label="Environment" value={environmentLabel} />
               <AboutRow label="Deployment" value={deploymentShort} />
-              <AboutRow label="API Base URL" value={apiBaseUrl ?? "—"} />
               <AboutRow label="License" value="Proprietary" />
               <AboutRow label="System Status" value="Operational" />
             </dl>
@@ -94,7 +94,10 @@ export default async function AboutPage() {
               />
               <AboutRow label="Employee ID" value={profile?.employee_number ?? "—"} />
               <AboutRow label="Airline / Tenant" value={airlineDisplayName} />
-              <AboutRow label="Subscription Type" value={subscriptionType} />
+              <AboutRow
+                label="Subscription Type"
+                value={<AboutSubscriptionTypeValue profile={profile} />}
+              />
             </dl>
           </div>
         </section>
@@ -110,6 +113,35 @@ export default async function AboutPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+function AboutSubscriptionTypeValue({ profile }: { profile: Profile | null }) {
+  const subType = getSubscriptionDisplayType(profile ?? undefined);
+
+  if (subType === "Pro Trial") {
+    const days = getActiveProTrialDaysRemaining(profile);
+    const label =
+      days == null
+        ? "Pro Trial"
+        : days === 1
+          ? "Pro Trial — 1 day remaining"
+          : `Pro Trial — ${days} days remaining`;
+    return <ProBadge label={label} variant={getPlanBadgeVariant(profile)} size="sm" />;
+  }
+
+  if (subType === "Pro") {
+    return <ProBadge label="Pro" variant="gold" size="sm" />;
+  }
+
+  if (subType === "Enterprise") {
+    return <ProBadge label="Enterprise" variant="emerald" size="sm" />;
+  }
+
+  return (
+    <span className="inline-flex rounded-md border border-slate-400/40 bg-slate-500/20 px-2 py-0.5 text-xs font-semibold text-slate-200">
+      Free
+    </span>
   );
 }
 
