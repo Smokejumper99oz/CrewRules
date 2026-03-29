@@ -1,0 +1,22 @@
+---
+description: Mentorship milestones use a fixed program order; never use due_date as primary list sort
+globs: "**/mentoring/**/*.{ts,tsx}",lib/mentoring/**/*.ts
+---
+
+# Mentorship milestone program order (do not change)
+
+Milestone **display** and **“next milestone”** selection MUST follow this fixed sequence:
+
+1. `initial_assignment` — Date of Hire / Initial Check-in  
+2. `type_rating` — Type Rating  
+3. `oe_complete` — IOE Complete  
+4. `three_months` — 3 Month On Line  
+5. `six_months` — 6 Month On Line  
+6. `nine_months` — 9 Month On Line  
+7. `probation_checkride` — Probation Checkride  
+
+## Rules
+
+- Do **not** sort milestone lists primarily by `due_date`. Stored due dates can reflect cascades or edits; **program order** is the source of truth for ordering in the UI.
+- Reuse `lib/mentoring/milestone-program-order.ts` (`milestoneProgramRank`, `sortMilestonesByProgramOrder`, `pickNextMilestoneAmongPending`) instead of redefining order elsewhere.
+- **Type Rating** must always appear **before** **IOE Complete** in lists.

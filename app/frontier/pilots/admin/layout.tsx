@@ -16,7 +16,8 @@ const ADMIN_NAV_BASE = [
   { label: "Dashboard", href: "" },
   { label: "Uploads", href: "documents" },
   { label: "Library", href: "library" },
-  { label: "Users", href: "people" },
+  { label: "Users", href: "users" },
+  { label: "Mentoring", href: "mentoring" },
 ];
 
 function getAdminNav(isSuperAdmin: boolean) {

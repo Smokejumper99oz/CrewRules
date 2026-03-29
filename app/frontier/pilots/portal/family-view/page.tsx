@@ -142,8 +142,8 @@ export default async function FamilyViewPage() {
           <p className="font-medium text-amber-800">Family View is not enabled yet.</p>
           <p className="mt-1 text-sm text-[#2F2F2F]">
             Turn it on in{" "}
-            <Link href="/frontier/pilots/portal/profile#family-view-sharing" className="text-[#7FB069] hover:underline">
-              Profile → Family View Sharing
+            <Link href="/frontier/pilots/portal/settings/family-view" className="text-[#7FB069] hover:underline">
+              Settings → Family View
             </Link>{" "}
             to start sharing your schedule with family.
           </p>

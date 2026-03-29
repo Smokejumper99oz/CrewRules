@@ -1,8 +1,13 @@
 "use client";
 
-import { useState, useEffect, type ChangeEvent } from "react";
+import { useState, useEffect, useRef, type ChangeEvent, type FocusEvent } from "react";
 
 const MIN_YEAR = 1985;
+const PAUSE_BEFORE_INCOMPLETE_HINT_MS = 800;
+
+/** Shown under the field when {@link DatePickerInputProps.strictFullDateEntry} is on and the value is incomplete. */
+export const DATE_PICKER_FULL_DATE_HINT =
+  "Enter a full date in MM/DD/YYYY format.";
 
 type Props = {
   id: string;
@@ -10,6 +15,18 @@ type Props = {
   value?: string | null; // yyyy-mm-dd
   placeholder?: string;
   className?: string;
+  /**
+   * When true (e.g. Pilot Settings autosave): do not call {@link onDisplayInput} while the typed value is
+   * incomplete, show blur/idle hint text for partial dates, and only treat MM/DD/YYYY with a valid hidden ISO as complete.
+   */
+  strictFullDateEntry?: boolean;
+  /** Fired while the user types in the display field (for debounced saves). */
+  onDisplayInput?: () => void;
+  /**
+   * Fired when the hidden ISO value becomes a complete valid yyyy-mm-dd after user edits
+   * (not on initial mount / external value sync).
+   */
+  onValidIsoCommit?: () => void;
 };
 
 function digitsOnly(s: string): string {
@@ -55,20 +72,108 @@ function computeHiddenFromDigits(digits: string): string {
   return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
 }
 
-export function DatePickerInput({ id, name, value, placeholder = "mm/dd/yyyy", className }: Props) {
+function isDohCompleteValid(digits: string, hidden: string): boolean {
+  return digits.length === 8 && /^\d{4}-\d{2}-\d{2}$/.test(hidden);
+}
+
+function isDohPartial(digits: string, hidden: string): boolean {
+  return digits.length > 0 && !isDohCompleteValid(digits, hidden);
+}
+
+export function DatePickerInput({
+  id,
+  name,
+  value,
+  placeholder = "mm/dd/yyyy",
+  className,
+  strictFullDateEntry = false,
+  onDisplayInput,
+  onValidIsoCommit,
+}: Props) {
   const normalizedValue = value?.trim() ?? "";
   const [digits, setDigits] = useState(() => isoYmdToDigits(normalizedValue));
+  const [formatHintVisible, setFormatHintVisible] = useState(false);
+  const userEditedRef = useRef(false);
+  const onValidIsoCommitRef = useRef(onValidIsoCommit);
+  const pauseHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hintId = `${id}-format-hint`;
+
+  useEffect(() => {
+    onValidIsoCommitRef.current = onValidIsoCommit;
+  }, [onValidIsoCommit]);
 
   useEffect(() => {
     setDigits(isoYmdToDigits(value?.trim() ?? ""));
+    userEditedRef.current = false;
+    setFormatHintVisible(false);
+    if (pauseHintTimerRef.current) {
+      clearTimeout(pauseHintTimerRef.current);
+      pauseHintTimerRef.current = null;
+    }
   }, [value]);
+
+  useEffect(
+    () => () => {
+      if (pauseHintTimerRef.current) {
+        clearTimeout(pauseHintTimerRef.current);
+        pauseHintTimerRef.current = null;
+      }
+    },
+    [],
+  );
 
   const displayValue = formatDigitsToDisplay(digits);
   const hiddenValue = computeHiddenFromDigits(digits);
 
+  useEffect(() => {
+    if (!userEditedRef.current || !onValidIsoCommitRef.current) return;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(hiddenValue)) {
+      onValidIsoCommitRef.current();
+    }
+  }, [hiddenValue]);
+
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
-    setDigits(digitsOnly(e.target.value).slice(0, 8));
+    userEditedRef.current = true;
+    const nextDigits = digitsOnly(e.target.value).slice(0, 8);
+    const nextHidden = computeHiddenFromDigits(nextDigits);
+    setDigits(nextDigits);
+
+    if (strictFullDateEntry && isDohCompleteValid(nextDigits, nextHidden)) {
+      setFormatHintVisible(false);
+    }
+
+    if (pauseHintTimerRef.current) {
+      clearTimeout(pauseHintTimerRef.current);
+      pauseHintTimerRef.current = null;
+    }
+    if (strictFullDateEntry && isDohPartial(nextDigits, nextHidden)) {
+      pauseHintTimerRef.current = setTimeout(() => {
+        pauseHintTimerRef.current = null;
+        setFormatHintVisible(true);
+      }, PAUSE_BEFORE_INCOMPLETE_HINT_MS);
+    }
+
+    const partialBlocked = strictFullDateEntry && isDohPartial(nextDigits, nextHidden);
+    if (!partialBlocked) {
+      onDisplayInput?.();
+    }
   }
+
+  function handleBlur(_e: FocusEvent<HTMLInputElement>) {
+    if (!strictFullDateEntry) return;
+    if (pauseHintTimerRef.current) {
+      clearTimeout(pauseHintTimerRef.current);
+      pauseHintTimerRef.current = null;
+    }
+    const h = computeHiddenFromDigits(digits);
+    if (isDohPartial(digits, h)) {
+      setFormatHintVisible(true);
+    } else {
+      setFormatHintVisible(false);
+    }
+  }
+
+  const showFormatHint = strictFullDateEntry && formatHintVisible && isDohPartial(digits, hiddenValue);
 
   return (
     <div className="relative">
@@ -79,10 +184,18 @@ export function DatePickerInput({ id, name, value, placeholder = "mm/dd/yyyy", c
         value={displayValue}
         placeholder={placeholder}
         onChange={handleChange}
+        onBlur={handleBlur}
         maxLength={10}
         className={className}
+        aria-invalid={showFormatHint}
+        aria-describedby={showFormatHint ? hintId : undefined}
       />
       <input type="hidden" id={id} name={name} value={hiddenValue} />
+      {showFormatHint ? (
+        <p id={hintId} className="mt-1 text-xs font-medium text-red-600 dark:text-red-400" role="alert">
+          {DATE_PICKER_FULL_DATE_HINT}
+        </p>
+      ) : null}
     </div>
   );
 }

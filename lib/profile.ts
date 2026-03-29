@@ -1,17 +1,26 @@
 import { formatInTimeZone } from "date-fns-tz";
 import { createClient } from "@/lib/supabase/server";
 import type { Role } from "@/lib/rbac";
+import { isMentorForAccountRoleBadges } from "@/lib/account-role-display";
+import { isWithinFirstYearSinceDateOfHire } from "@/lib/profile-first-year";
+import { getProfilePositionLabel, type ProfilePosition } from "@/lib/profile-position-label";
 
-export type ProfilePosition = "captain" | "first_officer" | "flight_attendant";
+export { isWithinFirstYearSinceDateOfHire };
+export type { ProfilePosition };
+export { getProfilePositionLabel };
 
 export type Profile = {
   id: string;
   email: string | null;
+  /** Optional personal (non-company) email when captured (e.g. mentoring CSV). */
+  personal_email?: string | null;
   tenant: string;
   portal: string;
   role: Role;
   plan?: "free" | "pro" | "enterprise";
   full_name?: string | null;
+  /** Optional display name for mentoring card; when null, `full_name` is used. */
+  preferred_name?: string | null;
   employee_number?: string | null;
   date_of_hire?: string | null;
   position?: ProfilePosition | null;
@@ -53,10 +62,18 @@ export type Profile = {
   welcome_modal_version_seen?: number | null;
   is_admin?: boolean;
   is_mentor?: boolean;
+  /** Profile phone (e.g. Super Admin / mentee contact settings); distinct from `mentor_phone`. */
+  phone?: string | null;
   /** Shown on mentee Mentor Contact card when set; falls back to `phone` there if null. */
   mentor_phone?: string | null;
   /** Preferred email on mentee Mentor Contact card; not the login email. */
   mentor_contact_email?: string | null;
+  /** Set when account deletion is scheduled or finalized (soft-delete). */
+  deleted_at?: string | null;
+  /** When scheduled account deletion should take effect. */
+  deletion_scheduled_for?: string | null;
+  /** User-provided reason when scheduling deletion; cleared on cancel. */
+  deletion_reason?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -84,9 +101,10 @@ export function getDashboardGreeting(profile: Profile | null): { greetingPart: s
   else greetingPart = "Good evening";
 
   const displayName = getDisplayName(profile);
+  const pos = getProfilePositionLabel(profile?.position);
   let namePart = displayName;
-  if (profile?.position === "captain") namePart = `Captain ${displayName}`;
-  else if (profile?.position === "first_officer") namePart = `First Officer ${displayName}`;
+  if (pos === "Captain") namePart = `Captain ${displayName}`;
+  else if (pos === "First Officer") namePart = `First Officer ${displayName}`;
 
   return { greetingPart, namePart };
 }
@@ -100,6 +118,28 @@ export function getDisplayName(profile: Profile | null): string {
     .split(/[._-]/)
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
     .join(" ") || profile.email || "User";
+}
+
+export type CommunitySettingsHubTitle = "Mentor" | "Mentee" | "Community";
+
+/**
+ * Community section label: Settings hub card and /settings/community subnav tab (single shared rule).
+ */
+export function getCommunitySettingsTabLabel(profile: Profile | null): CommunitySettingsHubTitle {
+  if (!profile) return "Community";
+  if (isMentorForAccountRoleBadges(profile.is_mentor)) return "Mentor";
+  if (isWithinFirstYearSinceDateOfHire(profile.date_of_hire)) return "Mentee";
+  return "Community";
+}
+
+/**
+ * Settings hub + subnav: show Community / mentoring preferences only for actual mentors or first-year hires.
+ */
+export function shouldShowCommunityMentoringSettings(profile: Profile | null): boolean {
+  if (!profile) return false;
+  if (isMentorForAccountRoleBadges(profile.is_mentor)) return true;
+  if (isWithinFirstYearSinceDateOfHire(profile.date_of_hire)) return true;
+  return false;
 }
 
 /** Pro access: subscription_tier pro/enterprise, or valid trial not yet expired. */
@@ -140,6 +180,18 @@ export function getSubscriptionDisplayType(
     if (!Number.isNaN(ms) && ms > Date.now()) return "Pro Trial";
   }
   return "Free";
+}
+
+/**
+ * Whether the “Start 14-Day PRO Trial” CTA should show: not paid Pro/Enterprise and no prior trial start on record.
+ * Matches backend one-trial enforcement in `startProTrial`.
+ */
+export function isEligibleForProTrialStartCta(profile?: Profile | null): boolean {
+  if (!profile) return false;
+  const tier = profile.subscription_tier;
+  if (tier === "pro" || tier === "enterprise") return false;
+  if (profile.pro_trial_started_at != null) return false;
+  return true;
 }
 
 /**

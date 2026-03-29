@@ -15,7 +15,7 @@ const RECENT_IMPORT_SOURCE_LABEL = "FLICA";
 
 function RecentImportRow({ imp }: { imp: RecentImport }) {
   // Show when the import ran; `earliest_start_time` is kept on `imp` for future detail views only.
-  const dt = format(new Date(imp.imported_at), "MMM d HH:mm");
+  const dt = format(new Date(imp.imported_at), "MMMM d HH:mm");
   const batchPrefix = (imp.import_batch_id ?? imp.user_id).replace(/-/g, "").slice(0, 8);
 
   return (

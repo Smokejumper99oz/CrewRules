@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Users as UsersIcon, List, Activity, GraduationCap, Award } from "lucide-react";
+import { Users as UsersIcon, List, Activity, GraduationCap, Award, Skull, CalendarClock } from "lucide-react";
 
 export function SuperAdminMainHeaderTitles() {
   const pathname = usePathname();
@@ -10,6 +10,40 @@ export function SuperAdminMainHeaderTitles() {
   const isWaitlist = pathname?.startsWith("/super-admin/waitlist");
   const isFoundingMembers = pathname?.startsWith("/super-admin/founding-members");
   const isSystemHealth = pathname?.startsWith("/super-admin/system-health");
+  const isAccountDeletionFinalize = pathname?.startsWith("/super-admin/account-deletion-finalize");
+  const isPendingDeletions = pathname?.startsWith("/super-admin/pending-deletions");
+
+  if (isPendingDeletions) {
+    return (
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <CalendarClock className="h-5 w-5 shrink-0 text-amber-400/90" aria-hidden />
+          <h1 className="min-w-0 truncate text-xl font-semibold tracking-tight text-slate-100">
+            Pending deletions
+          </h1>
+        </div>
+        <p className="mt-1 text-sm leading-snug text-slate-400">
+          Scheduled accounts and recent finalization audit log
+        </p>
+      </div>
+    );
+  }
+
+  if (isAccountDeletionFinalize) {
+    return (
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <Skull className="h-5 w-5 shrink-0 text-red-400/90" aria-hidden />
+          <h1 className="min-w-0 truncate text-xl font-semibold tracking-tight text-slate-100">
+            Test / Manual Finalize Account Deletion
+          </h1>
+        </div>
+        <p className="mt-1 text-sm leading-snug text-red-300/80">
+          Internal destructive tool — Super Admin only
+        </p>
+      </div>
+    );
+  }
 
   if (isSystemHealth) {
     return (

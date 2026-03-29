@@ -1,9 +1,25 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { CREWRULES_PATHNAME_HEADER } from "@/lib/crewrules-pathname-header";
 import { isSuperAdminAllowlistedEmail } from "@/lib/super-admin/allowlist";
 
+/** Same escape hatch as `gateUserForPortal` (restore / Danger Zone). */
+const FRONTIER_PILOTS_PORTAL_ACCOUNT_SETTINGS_PATH = "/frontier/pilots/portal/settings/account";
+
+function normalizeMiddlewarePathname(pathname: string): string {
+  const pathOnly = pathname.split("?")[0]?.split("#")[0] ?? pathname;
+  return pathOnly.replace(/\/+$/, "") || "/";
+}
+
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(CREWRULES_PATHNAME_HEADER, request.nextUrl.pathname);
+
+  let supabaseResponse = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
 
   const isPortalRoute = request.nextUrl.pathname.startsWith("/frontier/pilots/portal");
   const isPortalRoot = request.nextUrl.pathname === "/frontier/pilots/portal";
@@ -105,6 +121,33 @@ export async function updateSession(request: NextRequest) {
       url.pathname = "/frontier/pilots/portal";
     }
     return NextResponse.redirect(url);
+  }
+
+  // Pending account deletion: must run on every request (not only when portal layout RSC refetches).
+  if (isPortalRoute && user && supabase) {
+    const path = normalizeMiddlewarePathname(request.nextUrl.pathname);
+    if (path !== FRONTIER_PILOTS_PORTAL_ACCOUNT_SETTINGS_PATH) {
+      const email = (user as { email?: string }).email ?? "";
+      if (!isSuperAdminAllowlistedEmail(email)) {
+        const { data: fpProfile } = await supabase
+          .from("profiles")
+          .select("role, deleted_at, deletion_scheduled_for")
+          .eq("id", user.id)
+          .eq("tenant", "frontier")
+          .eq("portal", "pilots")
+          .maybeSingle();
+        if (
+          fpProfile &&
+          fpProfile.role !== "super_admin" &&
+          (fpProfile.deleted_at != null || fpProfile.deletion_scheduled_for != null)
+        ) {
+          const url = request.nextUrl.clone();
+          url.pathname = FRONTIER_PILOTS_PORTAL_ACCOUNT_SETTINGS_PATH;
+          url.search = "";
+          return NextResponse.redirect(url);
+        }
+      }
+    }
   }
 
   return supabaseResponse;

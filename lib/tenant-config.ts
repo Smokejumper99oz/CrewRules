@@ -52,6 +52,13 @@ export const TENANT_CARRIER: Record<string, string> = Object.fromEntries(
   Object.entries(TENANT_CONFIG).flatMap(([k, v]) => (v.carrier ? [[k, v.carrier]] : []))
 );
 
+/** Airline / org name for UI copy (e.g. mentoring card). Safe for Client Components. */
+export function getTenantAirlineDisplayName(tenant: string | null | undefined): string {
+  const key = tenant?.trim().toLowerCase();
+  if (!key) return "your airline";
+  return TENANT_CONFIG[key]?.displayName ?? tenant.trim();
+}
+
 export function getTenantPortalConfig(tenant: string, portal: string) {
   const t = TENANT_CONFIG[tenant];
   if (!t) return null;

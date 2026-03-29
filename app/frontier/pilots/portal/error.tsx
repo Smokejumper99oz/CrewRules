@@ -3,9 +3,19 @@
 import { useEffect } from "react";
 
 function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
+  if (error instanceof Error) {
+    if (error.message === "[object Event]" || error.message === "[object PointerEvent]") {
+      return "Something went wrong—often a stale UI action. Try again or refresh the page.";
+    }
+    return error.message;
+  }
+  if (typeof Event !== "undefined" && error instanceof Event) {
+    return "Something went wrong—often a stale UI action. Try again or refresh the page.";
+  }
   const str = String(error);
-  if (str === "[object Event]") return "A network or unexpected error occurred.";
+  if (str === "[object Event]" || str === "[object PointerEvent]") {
+    return "A network or unexpected error occurred.";
+  }
   return str || "An unexpected error occurred.";
 }
 

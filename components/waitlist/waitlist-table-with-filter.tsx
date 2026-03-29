@@ -336,7 +336,7 @@ export function WaitlistTableWithFilter({ entries }: Props) {
                   </td>
                   <td className="py-3 text-slate-400">
                     {row.created_at
-                      ? format(new Date(row.created_at), "MMM d, yyyy HH:mm")
+                      ? format(new Date(row.created_at), "MMMM d, yyyy HH:mm")
                       : "—"}
                   </td>
                   <td className="py-3 pr-4">
@@ -402,7 +402,7 @@ export function WaitlistTableWithFilter({ entries }: Props) {
                           <span className="text-slate-500">Created</span>
                           <div className="text-slate-300">
                             {row.created_at
-                              ? format(new Date(row.created_at), "MMM d, yyyy HH:mm:ss")
+                              ? format(new Date(row.created_at), "MMMM d, yyyy HH:mm:ss")
                               : "—"}
                           </div>
                         </div>

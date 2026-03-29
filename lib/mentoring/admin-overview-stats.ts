@@ -9,6 +9,7 @@ export type MentoringOverviewStats = {
   activeMentees: number;
   unmatchedMentees: number;
   missingMentorContact: number;
+  openMentorshipProgramRequests: number;
 };
 
 const IN_CHUNK = 120;
@@ -25,12 +26,10 @@ function chunk<T>(arr: T[], size: number): T[][] {
 function hasMentorContactRow(p: {
   mentor_contact_email: string | null;
   mentor_phone: string | null;
-  phone: string | null;
 }): boolean {
   const email = (p.mentor_contact_email ?? "").trim();
   const mp = (p.mentor_phone ?? "").trim();
-  const ph = (p.phone ?? "").trim();
-  return Boolean(email || mp || ph);
+  return Boolean(email && mp);
 }
 
 /**
@@ -46,6 +45,7 @@ export async function getMentoringOverviewStats(
     activeMentees: 0,
     unmatchedMentees: 0,
     missingMentorContact: 0,
+    openMentorshipProgramRequests: 0,
   };
 
   let mentorIdsInScope: string[] | null = null;
@@ -69,7 +69,18 @@ export async function getMentoringOverviewStats(
     mentorsQuery.eq("tenant", scope.tenant).eq("portal", scope.portal);
   }
 
-  const { count: mentorsCount, error: mentorsErr } = await mentorsQuery;
+  let programRequestsQuery = admin
+    .from("mentorship_program_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "open");
+  if (scope.kind === "tenant") {
+    programRequestsQuery = programRequestsQuery.eq("tenant", scope.tenant).eq("portal", scope.portal);
+  }
+
+  const [{ count: mentorsCount, error: mentorsErr }, { count: programRequestsCount, error: programRequestsErr }] =
+    await Promise.all([mentorsQuery, programRequestsQuery]);
+  const openMentorshipProgramRequests = programRequestsErr ? 0 : (programRequestsCount ?? 0);
+
   if (mentorsErr) return empty;
 
   const countAssignments = async (
@@ -118,6 +129,7 @@ export async function getMentoringOverviewStats(
         activeMentees,
         unmatchedMentees,
         missingMentorContact: 0,
+        openMentorshipProgramRequests,
       };
     }
     for (const r of data ?? []) {
@@ -131,6 +143,7 @@ export async function getMentoringOverviewStats(
         activeMentees,
         unmatchedMentees,
         missingMentorContact: 0,
+        openMentorshipProgramRequests,
       };
     }
     for (const part of chunk(ids, IN_CHUNK)) {
@@ -144,6 +157,7 @@ export async function getMentoringOverviewStats(
           activeMentees,
           unmatchedMentees,
           missingMentorContact: 0,
+          openMentorshipProgramRequests,
         };
       }
       for (const r of data ?? []) {
@@ -162,6 +176,7 @@ export async function getMentoringOverviewStats(
       activeMentees,
       unmatchedMentees,
       missingMentorContact: 0,
+      openMentorshipProgramRequests,
     };
   }
 
@@ -169,7 +184,7 @@ export async function getMentoringOverviewStats(
   for (const part of chunk(candidates, IN_CHUNK)) {
     const { data: profs, error: pErr } = await admin
       .from("profiles")
-      .select("id, mentor_contact_email, mentor_phone, phone, tenant, portal")
+      .select("id, mentor_contact_email, mentor_phone, tenant, portal")
       .in("id", part);
 
     if (pErr) continue;
@@ -179,7 +194,6 @@ export async function getMentoringOverviewStats(
         id: string;
         mentor_contact_email: string | null;
         mentor_phone: string | null;
-        phone: string | null;
         tenant: string;
         portal: string;
       };
@@ -197,5 +211,6 @@ export async function getMentoringOverviewStats(
     activeMentees,
     unmatchedMentees,
     missingMentorContact,
+    openMentorshipProgramRequests,
   };
 }

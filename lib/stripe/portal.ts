@@ -21,7 +21,7 @@ export async function createPortalSession(stripeCustomerId: string): Promise<{ u
   }
 
   const stripe = new Stripe(STRIPE_SECRET_KEY);
-  const returnUrl = `${getBaseUrl()}/frontier/pilots/portal/profile`;
+  const returnUrl = `${getBaseUrl()}/frontier/pilots/portal/settings`;
 
   const session = await stripe.billingPortal.sessions.create({
     customer: stripeCustomerId,

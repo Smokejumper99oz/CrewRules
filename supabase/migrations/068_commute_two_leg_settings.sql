@@ -1,4 +1,4 @@
--- Add 2-leg commute settings for future SAV→ATL→SJU / SAV→MCO→SJU style commutes.
+-- Add 2-leg commute settings for future SAV→ATL→SJU / SAV→CLT→SJU style commutes.
 -- UI/storage only; not yet connected to commute search logic.
 
 alter table public.profiles

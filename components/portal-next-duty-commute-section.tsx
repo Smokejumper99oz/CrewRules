@@ -62,7 +62,9 @@ export function PortalNextDutyCommuteSection({
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2 pt-1 dark:border-white/10">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-200">
-            Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Commute Assist<span className="align-super text-[10px]">™</span>
+            Crew<span className="text-[#75C043]">Rules</span><span className="align-super text-[10px]">™</span> Commute{" "}
+            <span className="text-[#75C043]">Assist</span>
+            <span className="align-super text-[10px]">™</span>
           </h3>
           {proActive && !showFlights && (
             <button
@@ -95,11 +97,13 @@ export function PortalNextDutyCommuteSection({
       {!proActive ? (
         <div className="mt-3 space-y-2">
           <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-            Commute Assist<span className="align-super text-[10px]">™</span>{"\u00A0"}·{"\u00A0"}PRO
+            Commute <span className="text-[#75C043]">Assist</span>
+            <span className="align-super text-[10px]">™</span>
+            {"\u00A0"}·{"\u00A0"}PRO
           </span>
           <p className="text-xs text-slate-600 dark:text-slate-500">Start a 14-day PRO trial to unlock this feature.</p>
           <Link
-            href={`/${tenant}/${portal}/portal/profile`}
+            href={`/${tenant}/${portal}/portal/settings`}
             className="inline-block text-sm font-medium text-[#75C043] hover:underline"
           >
             Go to Profile →

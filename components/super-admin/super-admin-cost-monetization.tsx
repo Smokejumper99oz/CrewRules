@@ -48,7 +48,7 @@ const cardBase = "rounded-xl border border-slate-700/50 bg-slate-800/50 px-4 py-
 function formatPeriodShort(start: string, end: string): string {
   const s = new Date(start + "T12:00:00Z");
   const e = new Date(end + "T12:00:00Z");
-  return `${s.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${e.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  return `${s.toLocaleDateString("en-US", { month: "long", day: "numeric" })} – ${e.toLocaleDateString("en-US", { month: "long", day: "numeric" })}`;
 }
 
 export function SuperAdminCostMonetization({

@@ -19,6 +19,7 @@ import {
   List,
   ToggleLeft,
   Settings,
+  CalendarClock,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -75,6 +76,12 @@ export function SuperAdminNav() {
           <NavItem href="/super-admin" label="Dashboard" icon={LayoutDashboard} isActive={pathname === "/super-admin"} />
           <NavItem label="Tenants" icon={Plane} isComingSoon />
           <NavItem href="/super-admin/users" label="Users" icon={Users} isActive={pathname?.startsWith("/super-admin/users")} />
+          <NavItem
+            href="/super-admin/pending-deletions"
+            label="Pending deletions"
+            icon={CalendarClock}
+            isActive={pathname?.startsWith("/super-admin/pending-deletions")}
+          />
           <NavItem
             href="/super-admin/founding-members"
             label="Founding Members"

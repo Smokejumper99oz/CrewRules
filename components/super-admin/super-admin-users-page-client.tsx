@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, X, Loader2 } from "lucide-react";
 import {
@@ -8,13 +8,22 @@ import {
   type SuperAdminUserRow,
   type UpdateSuperAdminUserAccessInput,
 } from "@/lib/super-admin/actions";
+
+export type SuperAdminUsersPageVariant = "super-admin" | "frontier-pilots-admin";
 import { TENANT_CONFIG } from "@/lib/tenant-config";
 import { formatDisplayName } from "@/lib/format-display-name";
+import { formatUsPhoneDisplay, formatUsPhoneStored } from "@/lib/format-us-phone";
 
 type Props = {
   users: SuperAdminUserRow[];
   currentUserRole: string;
   currentUserId: string;
+  /** Tenant admin users page: narrower UI and scoped `updateUserAccess`. */
+  variant?: SuperAdminUsersPageVariant;
+  updateUserAccess?: (
+    userId: string,
+    data: UpdateSuperAdminUserAccessInput
+  ) => Promise<{ error?: string }>;
 };
 
 /** Base role label for non-super_admin: Pilot or FA. */
@@ -26,18 +35,129 @@ function tenantLabel(tenant: string): string {
   return TENANT_CONFIG[tenant]?.displayName ?? tenant;
 }
 
-/** Format phone as XXX.XXX.XXXX (e.g. 9419325276 → 941.932.5276). */
-function formatPhone(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 10);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
-  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+/** Pending Deletion when either soft-delete timestamp is set (see scheduleAccountDeletion). */
+function isAccountPendingDeletion(row: SuperAdminUserRow): boolean {
+  return row.deleted_at != null || row.deletion_scheduled_for != null;
+}
+
+function deletionScheduledTitle(iso: string | null | undefined): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return `Scheduled deletion: ${d.toLocaleString(undefined, { dateStyle: "long", timeStyle: "short" })}`;
+}
+
+/** Shared Role/Status chips: one line, consistent height, aligned with table rows. */
+const usersTablePill =
+  "inline-flex h-6 shrink-0 items-center justify-center whitespace-nowrap rounded-md border px-2.5 text-xs font-semibold leading-none";
+
+/** Same width for single-line Active in the Status column (~fits `Active` at text-xs + padding). */
+const usersTableCompactStatusWidth = "w-[3.75rem] min-w-[3.75rem] max-w-[3.75rem] box-border";
+
+/** Never signed in (Auth `last_sign_in_at` null when loaded); same amber family as before. */
+const notJoinedStatusPill =
+  "inline-flex h-6 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-amber-400/30 bg-amber-500/15 px-2 text-[10px] font-semibold leading-none text-amber-200";
+
+/** Signed in but welcome/onboarding marker still null; distinct from never-signed-in. */
+const onboardingPendingStatusPill =
+  "inline-flex h-6 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-cyan-400/35 bg-cyan-500/12 px-2 text-[10px] font-semibold leading-none text-cyan-100";
+
+/**
+ * Status column: Auth sign-in when available, then welcome marker. Never infer "Not Joined" from welcome alone.
+ */
+function usersTablePrimaryStatusNode(u: SuperAdminUserRow): ReactNode {
+  if (isAccountPendingDeletion(u)) {
+    return (
+      <span
+        className={`${usersTablePill} border-orange-400/30 bg-orange-500/15 text-orange-200`}
+        title={deletionScheduledTitle(u.deletion_scheduled_for)}
+      >
+        Pending Deletion
+      </span>
+    );
+  }
+
+  const authLoaded = "last_sign_in_at" in u;
+
+  if (authLoaded) {
+    if (u.last_sign_in_at == null) {
+      return <span className={notJoinedStatusPill}>Not Joined</span>;
+    }
+    if ((u.welcome_modal_version_seen ?? null) == null) {
+      return <span className={onboardingPendingStatusPill}>Onboarding Pending</span>;
+    }
+    return (
+      <span
+        className={`${usersTablePill} ${usersTableCompactStatusWidth} border-slate-400/30 bg-slate-500/18 text-slate-200`}
+      >
+        Active
+      </span>
+    );
+  }
+
+  if ((u.welcome_modal_version_seen ?? null) == null) {
+    return <span className={onboardingPendingStatusPill}>Onboarding Pending</span>;
+  }
+  return (
+    <span
+      className={`${usersTablePill} ${usersTableCompactStatusWidth} border-slate-400/30 bg-slate-500/18 text-slate-200`}
+    >
+      Active
+    </span>
+  );
+}
+
+/** Frontier `/admin/users`: hide platform identity from tenant admins (display only; super-admin page unchanged). */
+function frontierTenantViewerMasksPlatformOwnerRow(
+  isFrontier: boolean,
+  viewerRole: string,
+  u: SuperAdminUserRow
+): boolean {
+  return isFrontier && viewerRole !== "super_admin" && u.role === "super_admin";
+}
+
+/**
+ * When masking a platform owner row for a tenant admin: show email only if it is a Frontier company address;
+ * otherwise redact so private login emails are not exposed.
+ */
+function emailForFrontierTenantAdminPlatformRow(u: SuperAdminUserRow): string {
+  const raw = (u.email ?? "").trim();
+  if (!raw) return "—";
+  if (raw.toLowerCase().endsWith("@flyfrontier.com")) return raw;
+  return "—";
+}
+
+/** Mentee has not completed first-use welcome onboarding (profile `welcome_modal_version_seen` still null). */
+function frontierMenteePreWelcomeOnboarding(u: SuperAdminUserRow): boolean {
+  return u.isMentee && (u.welcome_modal_version_seen ?? null) === null;
+}
+
+/** Violet Mentee pill: Frontier shows first-year DOH as well as assignment-backed mentees; super-admin stays assignment-only. */
+function showMenteeRolePill(isFrontier: boolean, u: SuperAdminUserRow): boolean {
+  if (isFrontier) return u.isMentee || Boolean(u.mentoring_first_year_hire);
+  return u.isMentee;
+}
+
+/** Email cell for `/frontier/pilots/admin/users` only; super-admin roster uses raw `u.email` when variant is default. */
+function emailDisplayedOnFrontierTenantUsersTable(
+  isFrontier: boolean,
+  currentUserRole: string,
+  u: SuperAdminUserRow
+): string {
+  if (!isFrontier) return u.email ?? "—";
+  if (frontierMenteePreWelcomeOnboarding(u)) return "—";
+  if (frontierTenantViewerMasksPlatformOwnerRow(isFrontier, currentUserRole, u)) {
+    return emailForFrontierTenantAdminPlatformRow(u);
+  }
+  return u.email ?? "—";
 }
 
 export function SuperAdminUsersPageClient({
   users,
   currentUserRole,
   currentUserId,
+  variant = "super-admin",
+  updateUserAccess: updateUserAccessProp,
 }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -47,24 +167,39 @@ export function SuperAdminUsersPageClient({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isFrontier = variant === "frontier-pilots-admin";
+  const persistUserAccess = updateUserAccessProp ?? updateSuperAdminUserAccess;
+
+  const canEditUser = (u: SuperAdminUserRow): boolean => {
+    if (!isFrontier) return true;
+    if (u.role === "super_admin") return false;
+    if (u.role === "tenant_admin" && currentUserRole !== "super_admin") return false;
+    return true;
+  };
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     if (!q) return users;
-    return users.filter(
-      (u) =>
+    return users.filter((u) => {
+      const maskPo = frontierTenantViewerMasksPlatformOwnerRow(isFrontier, currentUserRole, u);
+      const emailMatches = maskPo
+        ? emailForFrontierTenantAdminPlatformRow(u).toLowerCase().includes(q)
+        : (u.email ?? "").toLowerCase().includes(q);
+      return (
         (u.full_name ?? "").toLowerCase().includes(q) ||
-        (u.email ?? "").toLowerCase().includes(q) ||
-        (u.tenant ?? "").toLowerCase().includes(q) ||
+        emailMatches ||
+        (!isFrontier && (u.tenant ?? "").toLowerCase().includes(q)) ||
         (u.employee_number ?? "").toLowerCase().includes(q)
-    );
-  }, [users, search]);
+      );
+    });
+  }, [users, search, isFrontier, currentUserRole]);
 
   const isCurrentSuperAdmin = currentUserRole === "super_admin";
 
   function openEdit(user: SuperAdminUserRow) {
     setEditing(user);
-    setPhoneValue(formatPhone(user.phone ?? ""));
-    setMentorPhoneValue(formatPhone(user.mentor_phone ?? ""));
+    setPhoneValue(formatUsPhoneDisplay(user.phone ?? ""));
+    setMentorPhoneValue(formatUsPhoneDisplay(user.mentor_phone ?? ""));
     setError(null);
   }
 
@@ -83,9 +218,8 @@ export function SuperAdminUsersPageClient({
     const baseRole = (formData.get("role") as "pilot" | "flight_attendant") ?? "pilot";
     const is_admin = formData.get("is_admin") === "on";
     const is_mentor = formData.get("is_mentor") === "on";
-    const super_admin = isCurrentSuperAdmin
-      ? formData.get("super_admin") === "on"
-      : undefined;
+    const super_admin =
+      isCurrentSuperAdmin && !isFrontier ? formData.get("super_admin") === "on" : undefined;
 
     const data: UpdateSuperAdminUserAccessInput = {
       role: baseRole,
@@ -98,10 +232,10 @@ export function SuperAdminUsersPageClient({
         formData.get("mentor_contact_email")?.toString().trim() || null,
       employee_number: formData.get("employee_number")?.toString().trim() || null,
       mentee_employee_number:
-        formData.get("mentee_employee_number")?.toString().trim() || null,
+        formData.get("mentee_employee_number")?.toString()?.trim() || null,
     };
 
-    const result = await updateSuperAdminUserAccess(editing.id, data);
+    const result = await persistUserAccess(editing.id, data);
     setPending(false);
 
     if (result.error) {
@@ -135,7 +269,11 @@ export function SuperAdminUsersPageClient({
       <div>
         <input
           type="search"
-          placeholder="Search by name, email, tenant, employee number..."
+          placeholder={
+            isFrontier
+              ? "Search by name, email, employee number…"
+              : "Search by name, email, tenant, employee number..."
+          }
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full max-w-md rounded-lg border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-[#75C043]/50 focus:outline-none"
@@ -143,13 +281,16 @@ export function SuperAdminUsersPageClient({
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-white/5">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[780px] text-sm">
           <thead>
             <tr className="border-b border-white/5 bg-white/5">
               <th className="px-4 py-3 text-left font-medium text-slate-300">Name</th>
               <th className="px-4 py-3 text-left font-medium text-slate-300">Email</th>
-              <th className="px-4 py-3 text-left font-medium text-slate-300">Tenant</th>
+              {!isFrontier ? (
+                <th className="px-4 py-3 text-left font-medium text-slate-300">Tenant</th>
+              ) : null}
               <th className="px-4 py-3 text-left font-medium text-slate-300">Role</th>
+              <th className="px-4 py-3 text-left font-medium text-slate-300">Status</th>
               <th className="px-4 py-3 text-left font-medium text-slate-300">Emp #</th>
               <th className="px-4 py-3 text-left font-medium text-slate-300">Phone</th>
               <th className="px-4 py-3 text-right font-medium text-slate-300">Edit</th>
@@ -161,45 +302,153 @@ export function SuperAdminUsersPageClient({
                 key={u.id}
                 className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]"
               >
-                <td className="px-4 py-3 text-slate-200">{formatDisplayName(u.full_name) || "—"}</td>
-                <td className="px-4 py-3 text-slate-300">{u.email ?? "—"}</td>
-                <td className="px-4 py-3 text-slate-300">{tenantLabel(u.tenant)}</td>
-                <td className="px-4 py-3 text-slate-300">
-                  <span className="inline-flex flex-wrap items-center gap-1.5">
-                    {u.role === "super_admin" ? (
-                      <span className="inline-flex rounded-md border border-amber-400/40 bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-300">
-                        Platform Owner
-                      </span>
-                    ) : (
+                <td className="align-middle px-4 py-3 text-slate-200">{formatDisplayName(u.full_name) || "—"}</td>
+                <td className="align-middle px-4 py-3 text-slate-300">
+                  {emailDisplayedOnFrontierTenantUsersTable(isFrontier, currentUserRole, u)}
+                </td>
+                {!isFrontier ? (
+                  <td className="align-middle px-4 py-3 text-slate-300">{tenantLabel(u.tenant)}</td>
+                ) : null}
+                <td className="align-middle px-4 py-3 text-slate-300">
+                  <span className="inline-flex max-w-full flex-wrap items-center gap-1.5 sm:flex-nowrap">
+                    {frontierTenantViewerMasksPlatformOwnerRow(isFrontier, currentUserRole, u) ? (
                       <>
-                        <span className="inline-flex rounded-md border border-slate-400/40 bg-slate-500/20 px-2 py-0.5 text-xs font-semibold text-slate-200">
+                        <span
+                          className={`${usersTablePill} border-slate-400/35 bg-slate-500/20 text-slate-200`}
+                        >
                           {baseRoleLabel(u)}
                         </span>
                         {u.is_admin && (
-                          <span className="inline-flex rounded-md border border-emerald-400/40 bg-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-300">
+                          <span
+                            className={`${usersTablePill} border-emerald-400/35 bg-emerald-500/15 text-emerald-200`}
+                          >
                             Admin
                           </span>
                         )}
                         {u.is_mentor && (
-                          <span className="inline-flex rounded-md border border-cyan-400/40 bg-cyan-500/20 px-2 py-0.5 text-xs font-semibold text-cyan-200">
+                          <span
+                            className={`${usersTablePill} border-cyan-400/35 bg-cyan-500/15 text-cyan-200`}
+                          >
                             Mentor
+                          </span>
+                        )}
+                        {showMenteeRolePill(isFrontier, u) && (
+                          <span
+                            className={`${usersTablePill} border-violet-400/35 bg-violet-500/15 text-violet-200`}
+                          >
+                            Mentee
+                          </span>
+                        )}
+                      </>
+                    ) : u.role === "super_admin" ? (
+                      <>
+                        <span
+                          className={`${usersTablePill} border-amber-400/35 bg-amber-500/15 text-amber-200`}
+                        >
+                          Platform Owner
+                        </span>
+                        {showMenteeRolePill(isFrontier, u) && (
+                          <span
+                            className={`${usersTablePill} border-violet-400/35 bg-violet-500/15 text-violet-200`}
+                          >
+                            Mentee
+                          </span>
+                        )}
+                      </>
+                    ) : u.role === "tenant_admin" ? (
+                      <>
+                        <span
+                          className={`${usersTablePill} border-sky-400/35 bg-sky-500/15 text-sky-200`}
+                        >
+                          Tenant admin
+                        </span>
+                        {u.is_mentor && (
+                          <span
+                            className={`${usersTablePill} border-cyan-400/35 bg-cyan-500/15 text-cyan-200`}
+                          >
+                            Mentor
+                          </span>
+                        )}
+                        {showMenteeRolePill(isFrontier, u) && (
+                          <span
+                            className={`${usersTablePill} border-violet-400/35 bg-violet-500/15 text-violet-200`}
+                          >
+                            Mentee
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span
+                          className={`${usersTablePill} border-slate-400/35 bg-slate-500/20 text-slate-200`}
+                        >
+                          {baseRoleLabel(u)}
+                        </span>
+                        {u.is_admin && (
+                          <span
+                            className={`${usersTablePill} border-emerald-400/35 bg-emerald-500/15 text-emerald-200`}
+                          >
+                            Admin
+                          </span>
+                        )}
+                        {u.is_mentor && (
+                          <span
+                            className={`${usersTablePill} border-cyan-400/35 bg-cyan-500/15 text-cyan-200`}
+                          >
+                            Mentor
+                          </span>
+                        )}
+                        {showMenteeRolePill(isFrontier, u) && (
+                          <span
+                            className={`${usersTablePill} border-violet-400/35 bg-violet-500/15 text-violet-200`}
+                          >
+                            Mentee
                           </span>
                         )}
                       </>
                     )}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-slate-300">{u.employee_number ?? "—"}</td>
-                <td className="px-4 py-3 text-slate-300">{u.phone ?? "—"}</td>
-                <td className="px-4 py-3 text-right">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(u)}
-                    className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-slate-400 hover:bg-slate-700/50 hover:text-slate-200"
-                  >
-                    <Pencil className="size-3.5" />
-                    Edit
-                  </button>
+                <td className="align-middle px-4 py-3 text-slate-300">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {usersTablePrimaryStatusNode(u)}
+                    {u.mentoring_military_leave ? (
+                      <span
+                        className={`${usersTablePill} border-[#556b3a]/40 bg-[#2f3a23]/25 text-[#cdd6a3]`}
+                        title="Military Leave"
+                      >
+                        MIL LEAVE
+                      </span>
+                    ) : null}
+                    {isFrontier && u.mentoring_first_year_hire && !u.isMentee ? (
+                      <span
+                        className={`${usersTablePill} border-slate-400/35 bg-slate-500/15 text-slate-300`}
+                        title="First-year hire; no active mentor assignment in CrewRules yet"
+                      >
+                        Unassigned
+                      </span>
+                    ) : null}
+                  </div>
+                </td>
+                <td className="align-middle px-4 py-3 text-slate-300">{u.employee_number ?? "—"}</td>
+                <td className="align-middle px-4 py-3 text-slate-300">
+                  <span className="whitespace-nowrap tabular-nums">
+                    {formatUsPhoneStored(u.phone) ?? "—"}
+                  </span>
+                </td>
+                <td className="align-middle px-4 py-3 text-right">
+                  {canEditUser(u) ? (
+                    <button
+                      type="button"
+                      onClick={() => openEdit(u)}
+                      className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-slate-400 hover:bg-slate-700/50 hover:text-slate-200"
+                    >
+                      <Pencil className="size-3.5" />
+                      Edit
+                    </button>
+                  ) : (
+                    <span className="text-xs text-slate-500">—</span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -243,19 +492,29 @@ export function SuperAdminUsersPageClient({
                 </p>
               )}
 
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
-                  Role (Pilot / Flight Attendant)
-                </label>
-                <select
-                  name="role"
-                  defaultValue={baseRole}
-                  className="w-full rounded border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 focus:border-[#75C043]/50 focus:outline-none"
-                >
-                  <option value="pilot">Pilot</option>
-                  <option value="flight_attendant">Flight Attendant</option>
-                </select>
-              </div>
+              {editing.role === "tenant_admin" ? (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-400">Role</label>
+                  <p className="rounded border border-slate-600/40 bg-slate-800/30 px-3 py-2 text-sm text-slate-300">
+                    Tenant admin (unchanged)
+                  </p>
+                  <input type="hidden" name="role" value="pilot" />
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-400">
+                    Role (Pilot / Flight Attendant)
+                  </label>
+                  <select
+                    name="role"
+                    defaultValue={baseRole}
+                    className="w-full rounded border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 focus:border-[#75C043]/50 focus:outline-none"
+                  >
+                    <option value="pilot">Pilot</option>
+                    <option value="flight_attendant">Flight Attendant</option>
+                  </select>
+                </div>
+              )}
 
               <div className="flex items-center gap-2">
                 <input
@@ -283,23 +542,7 @@ export function SuperAdminUsersPageClient({
                 </label>
               </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
-                  Mentee employee # (optional)
-                </label>
-                <input
-                  type="text"
-                  name="mentee_employee_number"
-                  defaultValue=""
-                  className="w-full rounded border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-[#75C043]/50 focus:outline-none"
-                  placeholder={"Mentee's company employee number"}
-                />
-                <p className="mt-1 text-xs text-slate-500">
-                  When Mentor is enabled, enter this user&apos;s mentee&apos;s employee number (same tenant) to create the assignment shown on the Mentoring page. Leave blank to only set the Mentor flag.
-                </p>
-              </div>
-
-              {isCurrentSuperAdmin && (
+              {isCurrentSuperAdmin && !isFrontier && (
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -339,9 +582,9 @@ export function SuperAdminUsersPageClient({
                   type="tel"
                   name="phone"
                   value={phoneValue}
-                  onChange={(e) => setPhoneValue(formatPhone(e.target.value))}
+                  onChange={(e) => setPhoneValue(formatUsPhoneDisplay(e.target.value))}
                   className="w-full rounded border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-[#75C043]/50 focus:outline-none"
-                  placeholder="XXX.XXX.XXXX"
+                  placeholder="(XXX) XXX-XXXX"
                 />
               </div>
 
@@ -353,7 +596,7 @@ export function SuperAdminUsersPageClient({
                   type="tel"
                   name="mentor_phone"
                   value={mentorPhoneValue}
-                  onChange={(e) => setMentorPhoneValue(formatPhone(e.target.value))}
+                  onChange={(e) => setMentorPhoneValue(formatUsPhoneDisplay(e.target.value))}
                   className="w-full rounded border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-[#75C043]/50 focus:outline-none"
                   placeholder="Optional; overrides profile phone on mentor card"
                 />

@@ -7,12 +7,22 @@ const idleNow = 0;
 
 type SuperAdminLiveStatusStripProps = {
   totalUsers: number;
+  /** `welcome_modal_version_seen == null` (same as KPI / mentoring roster not_joined). */
+  notJoinedUserCount: number;
   usersTodayDelta: number;
   onlineNow: number;
   peakToday: number;
+  peakAllTime: number;
 };
 
-export function SuperAdminLiveStatusStrip({ totalUsers, usersTodayDelta, onlineNow, peakToday }: SuperAdminLiveStatusStripProps) {
+export function SuperAdminLiveStatusStrip({
+  totalUsers,
+  notJoinedUserCount,
+  usersTodayDelta,
+  onlineNow,
+  peakToday,
+  peakAllTime,
+}: SuperAdminLiveStatusStripProps) {
   const usersTodayLabel =
     usersTodayDelta > 0
       ? `+${usersTodayDelta} today`
@@ -35,7 +45,9 @@ export function SuperAdminLiveStatusStrip({ totalUsers, usersTodayDelta, onlineN
         <span className="font-medium text-[#75C043]">{onlineNow} Online</span>
         <span className="text-slate-500">({onlineNow} active, {idleNow} idle)</span>
         <span className="mx-1.5 inline-block h-3 w-px bg-slate-600/60 shrink-0 align-middle" aria-hidden />
-        <span className="text-slate-600">Peak: {peakToday}</span>
+        <span className="text-slate-600">
+          Peak: {peakToday} · All-time: {peakAllTime}
+        </span>
       </div>
 
       {/* Tenant chip — matches Users pill styling */}
@@ -44,11 +56,28 @@ export function SuperAdminLiveStatusStrip({ totalUsers, usersTodayDelta, onlineN
         <span className="text-slate-200">1 Tenant</span>
       </div>
 
-      {/* Users chip — darker neutral, subtle border */}
-      <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600/40 bg-slate-800/40 px-2.5 py-1 text-xs">
+      {/* Users chip — darker neutral, subtle border (compact sizing like other chips) */}
+      <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600/40 bg-slate-800/40 px-2.5 py-1 text-xs whitespace-nowrap">
         <Users className="size-4 text-slate-400 shrink-0" />
-        <span className="text-slate-200">{totalUsers} Users</span>
+        <span className="font-medium text-slate-200 tabular-nums">{totalUsers} Users</span>
+        <span className="text-slate-600 select-none" aria-hidden>
+          ·
+        </span>
         <span className={usersTodayClassName}>{usersTodayLabel}</span>
+        <span className="text-slate-600 select-none" aria-hidden>
+          ·
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Users
+            className={`size-4 shrink-0 ${notJoinedUserCount > 0 ? "text-amber-200" : "text-slate-400"}`}
+            aria-hidden
+          />
+          <span
+            className={`tabular-nums ${notJoinedUserCount > 0 ? "font-semibold text-amber-200" : "font-medium text-slate-400"}`}
+          >
+            {notJoinedUserCount} Not Joined
+          </span>
+        </span>
       </div>
     </div>
   );

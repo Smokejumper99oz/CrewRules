@@ -38,7 +38,7 @@ const NAV_GROUPS = [
     items: [
       { label: "Updates", href: "updates" },
       { label: "Archive", href: "archive" },
-      { label: "Profile", href: "profile" },
+      { label: "Settings", href: "settings/pilot" },
       { label: "About", href: "profile/about" },
     ],
   },
@@ -196,8 +196,8 @@ export function PortalLayoutShell({
               </div>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-              <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 pb-[env(safe-area-inset-bottom)]">
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+              <div className="mx-auto w-full min-w-0 max-w-7xl px-4 py-6 sm:px-6 lg:px-8 pb-[env(safe-area-inset-bottom)]">
                 {trialBannerStatus && trialBannerFoundingPilot && (
                   <PortalTrialUpgradeBanner
                     displayName={displayName}

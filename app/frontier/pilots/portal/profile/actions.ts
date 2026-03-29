@@ -8,6 +8,7 @@ import { getProfile } from "@/lib/profile";
 import { CURRENT_WELCOME_MODAL_VERSION } from "@/lib/welcome-modal";
 import { revalidatePath } from "next/cache";
 import { ensureInboundAliasIfMissing } from "@/lib/email/ensure-inbound-alias-if-missing";
+import { formatUsPhoneDisplay } from "@/lib/format-us-phone";
 
 // IANA format: Region/City or Region/Country/City (e.g. America/Puerto_Rico, America/Argentina/Buenos_Aires)
 const VALID_TZ = /^[A-Za-z0-9_+-]+(\/[A-Za-z0-9_+-]+)+$/;
@@ -17,6 +18,116 @@ const VALID_AIRPORT = /^[A-Za-z]{3}$/;
 export type UpdateProfileResult = { success: true } | { error: string };
 
 export type UpdatePasswordResult = { success: true } | { error: string };
+
+export type ScheduleAccountDeletionResult =
+  | { success: true }
+  | { success: true; alreadyScheduled: true }
+  | { error: string };
+
+const MAX_DELETION_REASON_LENGTH = 2000;
+
+function normalizeDeletionReason(raw: string | undefined): string | null {
+  if (raw == null) return null;
+  const t = raw.trim();
+  return t.length ? t : null;
+}
+
+/**
+ * Schedules soft-delete on the current user's profile (does not touch auth.users or sessions).
+ * Idempotent: if deletion is already scheduled or recorded, returns without changing timestamps.
+ *
+ * @param reason Optional user-provided reason (max {@link MAX_DELETION_REASON_LENGTH} chars after trim).
+ */
+export async function scheduleAccountDeletion(reason?: string): Promise<ScheduleAccountDeletionResult> {
+  const profile = await getProfile();
+  if (!profile) return { error: "Not signed in" };
+
+  const normalizedReason = normalizeDeletionReason(reason);
+  if (normalizedReason != null && normalizedReason.length > MAX_DELETION_REASON_LENGTH) {
+    return { error: `Reason must be at most ${MAX_DELETION_REASON_LENGTH} characters` };
+  }
+
+  const supabase = await createClient();
+  const { data: row, error: fetchErr } = await supabase
+    .from("profiles")
+    .select("id, deleted_at, deletion_scheduled_for")
+    .eq("id", profile.id)
+    .maybeSingle();
+
+  if (fetchErr) return { error: fetchErr.message };
+  if (!row?.id) return { error: "Profile not found" };
+
+  if (row.deleted_at != null || row.deletion_scheduled_for != null) {
+    return { success: true, alreadyScheduled: true };
+  }
+
+  const now = new Date();
+  const deletionScheduledFor = addDays(now, 30);
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      deleted_at: now.toISOString(),
+      deletion_scheduled_for: deletionScheduledFor.toISOString(),
+      deletion_reason: normalizedReason,
+      updated_at: now.toISOString(),
+    })
+    .eq("id", profile.id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/frontier/pilots/portal");
+  revalidatePath("/frontier/pilots/portal/profile");
+  revalidatePath("/frontier/pilots/portal/settings", "layout");
+
+  return { success: true };
+}
+
+export type CancelScheduledAccountDeletionResult =
+  | { success: true }
+  | { success: true; notScheduled: true }
+  | { error: string };
+
+/**
+ * Clears scheduled soft-delete on the current user's profile (does not touch auth.users or sessions).
+ * Idempotent: if nothing was scheduled, returns without updating.
+ */
+export async function cancelScheduledAccountDeletion(): Promise<CancelScheduledAccountDeletionResult> {
+  const profile = await getProfile();
+  if (!profile) return { error: "Not signed in" };
+
+  const supabase = await createClient();
+  const { data: row, error: fetchErr } = await supabase
+    .from("profiles")
+    .select("id, deleted_at, deletion_scheduled_for")
+    .eq("id", profile.id)
+    .maybeSingle();
+
+  if (fetchErr) return { error: fetchErr.message };
+  if (!row?.id) return { error: "Profile not found" };
+
+  if (row.deleted_at == null && row.deletion_scheduled_for == null) {
+    return { success: true, notScheduled: true };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      deleted_at: null,
+      deletion_scheduled_for: null,
+      deletion_reason: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", profile.id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/frontier/pilots/portal");
+  revalidatePath("/frontier/pilots/portal/profile");
+  revalidatePath("/frontier/pilots/portal/settings", "layout");
+
+  return { success: true };
+}
 
 export async function updatePassword(newPassword: string): Promise<UpdatePasswordResult> {
   if (!newPassword || newPassword.length < 8) {
@@ -34,8 +145,10 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
 
   const fullName = (formData.get("full_name") as string)?.trim() || null;
   const employeeNumber = (formData.get("employee_number") as string)?.trim() || null;
-  const dateOfHireRaw = (formData.get("date_of_hire") as string)?.trim() || null;
-  const dateOfHire = dateOfHireRaw && /^\d{4}-\d{2}-\d{2}$/.test(dateOfHireRaw) ? dateOfHireRaw : null;
+  const dateOfHireRaw = ((formData.get("date_of_hire") as string) ?? "").trim();
+  const dateOfHire = /^\d{4}-\d{2}-\d{2}$/.test(dateOfHireRaw)
+    ? dateOfHireRaw
+    : (profile.date_of_hire ?? null);
   const position = (formData.get("position") as string) || null;
   const baseAirport = (formData.get("base_airport") as string)?.trim().toUpperCase() || null;
   const equipment = (formData.get("equipment") as string)?.trim() || null;
@@ -59,8 +172,25 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   const familyViewShowOvernightCities = formData.get("family_view_show_overnight_cities") === "1";
   const familyViewShowCommuteEstimates = formData.get("family_view_show_commute_estimates") === "1";
   const colorMode = (formData.get("color_mode") as string) || "dark";
-  const mentorPhone = (formData.get("mentor_phone") as string)?.trim() || null;
+  const mentorPhoneRaw = (formData.get("mentor_phone") as string)?.trim() ?? "";
+  const mentorPhone = mentorPhoneRaw === "" ? null : formatUsPhoneDisplay(mentorPhoneRaw);
   const mentorContactEmail = (formData.get("mentor_contact_email") as string)?.trim() || null;
+
+  const phoneFieldPresent = formData.has("phone");
+  const profilePhoneRaw = (formData.get("phone") as string)?.trim() ?? "";
+  const profilePhoneUpdate = phoneFieldPresent
+    ? profilePhoneRaw === ""
+      ? null
+      : formatUsPhoneDisplay(profilePhoneRaw)
+    : undefined;
+
+  const personalEmailFieldPresent = formData.has("personal_email");
+  const personalEmailRaw = (formData.get("personal_email") as string)?.trim() ?? "";
+  const personalEmailUpdate = personalEmailFieldPresent
+    ? personalEmailRaw === ""
+      ? null
+      : personalEmailRaw
+    : undefined;
 
   if (fullName && fullName.length > 128) {
     return { error: "Full Name is too long" };
@@ -113,40 +243,54 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   if (mentorContactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mentorContactEmail)) {
     return { error: "Enter a valid mentor contact email" };
   }
+  if (profilePhoneUpdate != null && profilePhoneUpdate.length > 64) {
+    return { error: "Phone is too long" };
+  }
+  if (personalEmailUpdate != null && personalEmailUpdate.length > 254) {
+    return { error: "Personal contact email is too long" };
+  }
+  if (personalEmailUpdate && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalEmailUpdate)) {
+    return { error: "Enter a valid personal contact email" };
+  }
 
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      full_name: fullName,
-      employee_number: employeeNumber,
-      date_of_hire: dateOfHire,
-      position: position || null,
-      base_airport: baseAirport,
-      equipment: equipment,
-      base_timezone: baseTimezone,
-      display_timezone_mode: displayTimezoneMode,
-      time_format: timeFormat,
-      show_timezone_label: showTimezoneLabel,
-      home_airport: homeAirport,
-      alternate_home_airport: alternateHomeAirport,
-      commute_arrival_buffer_minutes: commuteArrival,
-      commute_release_buffer_minutes: commuteRelease,
-      commute_nonstop_only: commuteNonstopOnly,
-      commute_two_leg_enabled: commuteTwoLegEnabled,
-      commute_two_leg_stop_1: commuteTwoLegStop1,
-      commute_two_leg_stop_2: commuteTwoLegStop2,
-      show_pay_projection: showPayProjection,
-      family_view_enabled: familyViewEnabled,
-      family_view_show_exact_times: familyViewShowExactTimes,
-      family_view_show_overnight_cities: familyViewShowOvernightCities,
-      family_view_show_commute_estimates: familyViewShowCommuteEstimates,
-      color_mode: colorMode,
-      mentor_phone: mentorPhone,
-      mentor_contact_email: mentorContactEmail,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", profile.id);
+  const updatePayload: Record<string, unknown> = {
+    full_name: fullName,
+    employee_number: employeeNumber,
+    date_of_hire: dateOfHire,
+    position: position || null,
+    base_airport: baseAirport,
+    equipment: equipment,
+    base_timezone: baseTimezone,
+    display_timezone_mode: displayTimezoneMode,
+    time_format: timeFormat,
+    show_timezone_label: showTimezoneLabel,
+    home_airport: homeAirport,
+    alternate_home_airport: alternateHomeAirport,
+    commute_arrival_buffer_minutes: commuteArrival,
+    commute_release_buffer_minutes: commuteRelease,
+    commute_nonstop_only: commuteNonstopOnly,
+    commute_two_leg_enabled: commuteTwoLegEnabled,
+    commute_two_leg_stop_1: commuteTwoLegStop1,
+    commute_two_leg_stop_2: commuteTwoLegStop2,
+    show_pay_projection: showPayProjection,
+    family_view_enabled: familyViewEnabled,
+    family_view_show_exact_times: familyViewShowExactTimes,
+    family_view_show_overnight_cities: familyViewShowOvernightCities,
+    family_view_show_commute_estimates: familyViewShowCommuteEstimates,
+    color_mode: colorMode,
+    mentor_phone: mentorPhone,
+    mentor_contact_email: mentorContactEmail,
+    updated_at: new Date().toISOString(),
+  };
+  if (profilePhoneUpdate !== undefined) {
+    updatePayload.phone = profilePhoneUpdate;
+  }
+  if (personalEmailUpdate !== undefined) {
+    updatePayload.personal_email = personalEmailUpdate;
+  }
+
+  const { error } = await supabase.from("profiles").update(updatePayload).eq("id", profile.id);
 
   if (error) return { error: error.message };
 
@@ -161,6 +305,7 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
 
   revalidatePath("/frontier/pilots/portal");
   revalidatePath("/frontier/pilots/portal/profile");
+  revalidatePath("/frontier/pilots/portal/settings", "layout");
   revalidatePath("/frontier/pilots/portal/schedule");
   revalidatePath("/frontier/pilots/portal/family-view");
   revalidatePath("/frontier/pilots/portal/mentoring");
@@ -226,6 +371,7 @@ export type StartProTrialResult =
   | { ok: false; reason: "profile_missing" }
   | { ok: false; reason: "already_paid" }
   | { ok: false; reason: "trial_active"; pro_trial_expires_at: string }
+  | { ok: false; reason: "trial_already_used" }
   | { ok: false; reason: "update_failed"; error: string }
   | { ok: true; pro_trial_expires_at: string };
 
@@ -246,6 +392,10 @@ export async function startProTrial(): Promise<StartProTrialResult> {
     }
   }
 
+  if (profile.pro_trial_started_at != null) {
+    return { ok: false, reason: "trial_already_used" };
+  }
+
   const now = new Date();
   const newStartedAt = now.toISOString();
   const newExpiresAt = addDays(now, 14).toISOString();
@@ -264,6 +414,7 @@ export async function startProTrial(): Promise<StartProTrialResult> {
 
   revalidatePath("/frontier/pilots/portal");
   revalidatePath("/frontier/pilots/portal/profile");
+  revalidatePath("/frontier/pilots/portal/settings", "layout");
 
   return { ok: true, pro_trial_expires_at: newExpiresAt };
 }

@@ -36,7 +36,7 @@ export function PortalWelcomeModal({ profileBase, onDismiss }: Props) {
     setPending(false);
     if ("success" in result && result.success) {
       onDismiss();
-      router.push(`${profileBase}/profile`);
+      router.push(`${profileBase}/settings`);
     } else {
       setError("Could not save your welcome status. Please try again.");
     }

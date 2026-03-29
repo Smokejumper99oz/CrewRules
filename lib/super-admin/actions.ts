@@ -4,6 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { gateSuperAdmin } from "./gate";
 import { upsertMentorAssignmentFromSuperAdmin } from "@/lib/mentoring/super-admin-sync-assignment";
+import {
+  createMilestonesForAssignment,
+  getMilestoneScheduleForHireDate,
+  syncMentorshipMilestoneDueDatesFromHireForAssignment,
+} from "@/lib/mentoring/create-milestones-for-assignment";
+import { fetchMentoringMilestoneIntegrityScan } from "@/lib/mentoring/mentoring-milestone-integrity-scan";
+import { getMenteeUserIdsWithMilitaryLeaveWorkspace } from "@/lib/mentoring/mentee-military-leave-workspace";
 import { subDays, startOfDay, addDays } from "date-fns";
 import { TENANT_CONFIG } from "@/lib/tenant-config";
 import {
@@ -16,8 +23,16 @@ import {
   AVIATIONSTACK_PERIOD_LENGTH_DAYS,
 } from "./pricing-config";
 import { buildImportWarningRows, type ImportWarningRow } from "./import-warnings";
+import {
+  finalizePendingAccountDeletion,
+  type FinalizePendingAccountDeletionResult,
+} from "@/lib/account-deletion/finalize-pending-account-deletion";
+import { revalidatePath, unstable_noStore as noStore } from "next/cache";
+import { isValidHireDateYyyyMmDd } from "@/lib/mentoring/mentoring-csv-import";
+import { fetchAuthLastSignInAtByUserId } from "@/lib/super-admin/auth-last-sign-in-map";
 
 export type { ImportWarningRow };
+export type { FinalizePendingAccountDeletionResult };
 
 /** Run gate first; only call these actions from super-admin layout/page. */
 async function ensureSuperAdmin() {
@@ -32,6 +47,14 @@ export type SuperAdminKpiData = {
   proCount: number;
   enterpriseCount: number;
   tenantCount: number;
+  /** Profiles with non-null `welcome_modal_version_seen` (same as mentoring roster `active` vs `not_joined`). */
+  joinedUserCount: number;
+  /** Profiles with null `welcome_modal_version_seen` (same rule as mentee-roster `not_joined`). */
+  notJoinedUserCount: number;
+  /** Profiles with a non-null `deletion_scheduled_for` (in grace / awaiting finalize). */
+  pendingDeletionCount: number;
+  /** Latest `profiles.deleted_at` among those pending rows (grace start / click time), ISO string or null. */
+  pendingDeletionMostRecentDeletedAt: string | null;
 };
 
 export async function getSuperAdminKpis(): Promise<SuperAdminKpiData> {
@@ -45,7 +68,9 @@ export async function getSuperAdminKpis(): Promise<SuperAdminKpiData> {
 
   const { data: profiles, error } = await supabase
     .from("profiles")
-    .select("created_at, subscription_tier, tenant");
+    .select(
+      "created_at, subscription_tier, tenant, deleted_at, deletion_scheduled_for, welcome_modal_version_seen"
+    );
 
   if (error) {
     return {
@@ -56,6 +81,10 @@ export async function getSuperAdminKpis(): Promise<SuperAdminKpiData> {
       proCount: 0,
       enterpriseCount: 0,
       tenantCount: 0,
+      joinedUserCount: 0,
+      notJoinedUserCount: 0,
+      pendingDeletionCount: 0,
+      pendingDeletionMostRecentDeletedAt: null,
     };
   }
 
@@ -70,6 +99,22 @@ export async function getSuperAdminKpis(): Promise<SuperAdminKpiData> {
   const proCount = list.filter((p) => (p.subscription_tier ?? "free") === "pro").length;
   const enterpriseCount = list.filter((p) => (p.subscription_tier ?? "free") === "enterprise").length;
 
+  const pendingRows = list.filter((p) => p.deletion_scheduled_for != null);
+  const pendingDeletionCount = pendingRows.length;
+
+  const deletedAtCandidates = pendingRows
+    .map((p) => p.deleted_at)
+    .filter((d): d is string => d != null && String(d).trim() !== "");
+  const pendingDeletionMostRecentDeletedAt =
+    deletedAtCandidates.length > 0
+      ? deletedAtCandidates.reduce((latest, cur) => (cur > latest ? cur : latest))
+      : null;
+
+  const notJoinedUserCount = list.filter(
+    (p) => (p.welcome_modal_version_seen ?? null) == null
+  ).length;
+  const joinedUserCount = list.length - notJoinedUserCount;
+
   return {
     newSignupsToday,
     newSignups7d,
@@ -78,6 +123,10 @@ export async function getSuperAdminKpis(): Promise<SuperAdminKpiData> {
     proCount,
     enterpriseCount,
     tenantCount: tenants.size,
+    joinedUserCount,
+    notJoinedUserCount,
+    pendingDeletionCount,
+    pendingDeletionMostRecentDeletedAt,
   };
 }
 
@@ -100,6 +149,25 @@ export async function getOnlinePeakToday(onlineNow: number): Promise<number> {
   const { data, error } = await admin.rpc("update_online_peak_today", { p_online: onlineNow });
   if (error) {
     console.error("[SuperAdmin] update_online_peak_today RPC failed:", error.message);
+    return onlineNow;
+  }
+  return typeof data === "number" ? data : onlineNow;
+}
+
+/** Update and return all-time peak concurrent users. Same `p_online` source as daily peak. Falls back to onlineNow if RPC fails. */
+export async function getOnlinePeakAllTime(onlineNow: number): Promise<number> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("update_online_peak_all_time", { p_online: onlineNow });
+  if (error) {
+    const msg = error.message;
+    if (msg.includes("update_online_peak_all_time") && msg.includes("schema cache")) {
+      console.warn(
+        "[SuperAdmin] All-time peak RPC missing on database. Apply migration `112_online_peak_all_time.sql` (e.g. `supabase link` + `supabase db push`, or paste the file into the Supabase SQL Editor), then wait a few seconds for the API schema cache to refresh."
+      );
+    } else {
+      console.error("[SuperAdmin] update_online_peak_all_time RPC failed:", msg);
+    }
     return onlineNow;
   }
   return typeof data === "number" ? data : onlineNow;
@@ -143,6 +211,39 @@ export async function getSystemEvents(): Promise<SystemEventsResult> {
   return {
     events: (eventsRes.data ?? []) as SystemEventRow[],
     dismissedCount,
+  };
+}
+
+export type MentoringMilestoneIntegritySignals = {
+  typeRatingWithoutOeCompleteCount: number;
+  hireDateMissingStandardMilestoneCount: number;
+  typeRatingWithoutOeMissingHireDateCount: number;
+  hasAny: boolean;
+};
+
+/** Platform snapshot for System Status: milestone rows vs hire-date schedule (same rules as backfill diagnostics). */
+export async function getMentoringMilestoneIntegritySignals(): Promise<MentoringMilestoneIntegritySignals> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+  const scan = await fetchMentoringMilestoneIntegrityScan(admin);
+  if ("error" in scan) {
+    console.error("[SuperAdmin] mentoring integrity scan failed:", scan.error);
+    return {
+      typeRatingWithoutOeCompleteCount: 0,
+      hireDateMissingStandardMilestoneCount: 0,
+      typeRatingWithoutOeMissingHireDateCount: 0,
+      hasAny: false,
+    };
+  }
+  const hasAny =
+    scan.typeRatingWithoutOeCompleteAssignmentIds.length > 0 ||
+    scan.hireDateMissingAnyStandardMilestoneAssignmentIds.length > 0;
+  return {
+    typeRatingWithoutOeCompleteCount: scan.typeRatingWithoutOeCompleteAssignmentIds.length,
+    hireDateMissingStandardMilestoneCount:
+      scan.hireDateMissingAnyStandardMilestoneAssignmentIds.length,
+    typeRatingWithoutOeMissingHireDateCount: scan.typeRatingWithoutOeMissingHireDateAssignmentIds.length,
+    hasAny,
   };
 }
 
@@ -907,18 +1008,57 @@ export type SuperAdminUserRow = {
   mentor_contact_email: string | null;
   is_admin: boolean;
   is_mentor: boolean;
+  /** True when user is mentee_user_id on at least one active mentor_assignments row (computed; no DB column). */
+  isMentee: boolean;
+  /**
+   * Frontier tenant admin roster only: `date_of_hire` within first year (`isWithinFirstYearSinceDateOfHire`).
+   * Display semantics only; does not replace assignment-based `isMentee`.
+   */
+  mentoring_first_year_hire?: boolean;
+  /**
+   * True when user is an active mentee on an assignment with mentor workspace status Military Leave.
+   * Display-only alongside account status (e.g. Not Joined / Active).
+   */
+  mentoring_military_leave?: boolean;
+  /** Set when Frontier tenant loader includes it; used for mentee email privacy until welcome onboarding. */
+  welcome_modal_version_seen?: number | null;
+  /**
+   * From Auth `last_sign_in_at` when listUsers succeeded for the roster load. Omitted if Auth listing failed.
+   */
+  last_sign_in_at?: string | null;
+  deleted_at?: string | null;
+  deletion_scheduled_for?: string | null;
 };
 
 export async function getAllUsersForSuperAdmin(): Promise<SuperAdminUserRow[]> {
   await ensureSuperAdmin();
   const supabase = await createClient();
+  const admin = createAdminClient();
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, email, tenant, role, employee_number, phone, is_admin, is_mentor")
+    .select(
+      "id, full_name, email, tenant, role, employee_number, phone, is_admin, is_mentor, welcome_modal_version_seen, deleted_at, deletion_scheduled_for"
+    )
     .order("created_at", { ascending: false });
 
   if (error) return [];
+
+  const { data: menteeAssignmentRows } = await admin
+    .from("mentor_assignments")
+    .select("mentee_user_id")
+    .eq("active", true)
+    .not("mentee_user_id", "is", null);
+
+  const activeMenteeIds = new Set(
+    (menteeAssignmentRows ?? [])
+      .map((r) => r.mentee_user_id as string | null)
+      .filter((id): id is string => typeof id === "string" && id.length > 0)
+  );
+
+  const militaryLeaveMenteeIds = await getMenteeUserIdsWithMilitaryLeaveWorkspace(admin);
+
+  const authSignInMap = await fetchAuthLastSignInAtByUserId(admin);
 
   return (data ?? []).map((p) => ({
     id: p.id,
@@ -932,6 +1072,13 @@ export async function getAllUsersForSuperAdmin(): Promise<SuperAdminUserRow[]> {
     mentor_contact_email: null,
     is_admin: p.is_admin ?? false,
     is_mentor: p.is_mentor ?? false,
+    isMentee: activeMenteeIds.has(p.id),
+    mentoring_military_leave: militaryLeaveMenteeIds.has(p.id),
+    welcome_modal_version_seen:
+      (p as { welcome_modal_version_seen?: number | null }).welcome_modal_version_seen ?? null,
+    ...(authSignInMap != null ? { last_sign_in_at: authSignInMap.get(p.id) ?? null } : {}),
+    deleted_at: p.deleted_at ?? null,
+    deletion_scheduled_for: p.deletion_scheduled_for ?? null,
   }));
 }
 
@@ -1015,8 +1162,407 @@ export async function updateSuperAdminUserAccess(
       menteeEmployeeNumber: menteeEmpTrimmed,
       tenant: mentorTenant,
     });
-    if (syncResult.error) return { error: syncResult.error };
+    if ("error" in syncResult) return { error: syncResult.error };
   }
 
   return {};
+}
+
+export type UpdateMentorAssignmentHireDateFormState = { error: string | null };
+
+/**
+ * Super Admin only: set `mentor_assignments.hire_date` by row id, then recalculate milestone `due_date`
+ * values for that assignment via `recalculateSuperAdminMentorshipMilestoneDueDates` (no inserts/deletes,
+ * does not change `completed_date`).
+ */
+export async function updateSuperAdminMentorAssignmentHireDate(
+  assignmentId: string,
+  hireDateYyyyMmDd: string
+): Promise<{ error?: string }> {
+  await ensureSuperAdmin();
+  const id = assignmentId.trim();
+  const raw = hireDateYyyyMmDd.trim();
+  if (!id) {
+    return { error: "Invalid assignment." };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || !isValidHireDateYyyyMmDd(raw)) {
+    return { error: "Date must be a valid YYYY-MM-DD." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("mentor_assignments").update({ hire_date: raw }).eq("id", id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/super-admin/mentoring");
+
+  const recalc = await recalculateSuperAdminMentorshipMilestoneDueDates(id);
+  if (recalc.error) {
+    return { error: recalc.error };
+  }
+
+  return {};
+}
+
+/** Super Admin only: mark one `mentorship_program_requests` row resolved (idempotent for open rows). */
+export async function resolveSuperAdminMentorshipProgramRequest(formData: FormData): Promise<void> {
+  await ensureSuperAdmin();
+  const id = String(formData.get("requestId") ?? "").trim();
+  if (!id) return;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("mentorship_program_requests")
+    .update({ status: "resolved", updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("status", "open");
+
+  if (error) {
+    return;
+  }
+
+  revalidatePath("/super-admin/mentoring");
+}
+
+/** `useActionState` adapter for mentoring admin hire date cell. */
+export async function updateSuperAdminMentorAssignmentHireDateFormState(
+  _prev: UpdateMentorAssignmentHireDateFormState,
+  formData: FormData
+): Promise<UpdateMentorAssignmentHireDateFormState> {
+  const assignmentId = String(formData.get("assignmentId") ?? "").trim();
+  const hireDate = String(formData.get("hireDate") ?? "").trim();
+  const result = await updateSuperAdminMentorAssignmentHireDate(assignmentId, hireDate);
+  if (result.error) {
+    return { error: result.error };
+  }
+  return { error: null };
+}
+
+/**
+ * Super Admin only: sets each existing `mentorship_milestones.due_date` for one assignment from
+ * current `mentor_assignments.hire_date`, using `getMilestoneScheduleForHireDate` (same rules as seed).
+ * Does not insert/delete rows or change `completed_date`.
+ */
+export async function recalculateSuperAdminMentorshipMilestoneDueDates(
+  assignmentId: string
+): Promise<{ error?: string }> {
+  await ensureSuperAdmin();
+  const id = assignmentId.trim();
+  if (!id) {
+    return { error: "Invalid assignment." };
+  }
+
+  const admin = createAdminClient();
+  const result = await syncMentorshipMilestoneDueDatesFromHireForAssignment(admin, id);
+  if (result.error) {
+    return { error: result.error };
+  }
+
+  revalidatePath("/super-admin/mentoring");
+  return {};
+}
+
+export type RefreshAllMentorshipMilestoneDueDatesFromHireResult = {
+  assignmentsWithHireDate: number;
+  failed: number;
+  firstError?: string;
+};
+
+/**
+ * Super Admin only: for every assignment with a non-null `hire_date`, applies
+ * `syncMentorshipMilestoneDueDatesFromHireForAssignment` (updates `due_date` only for milestone
+ * types in the current schedule; does not touch completions or notes).
+ */
+export async function refreshAllSuperAdminMentorshipMilestoneDueDatesFromHire(): Promise<RefreshAllMentorshipMilestoneDueDatesFromHireResult> {
+  noStore();
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+
+  const { data: assignments, error: fetchErr } = await admin
+    .from("mentor_assignments")
+    .select("id, hire_date")
+    .not("hire_date", "is", null);
+
+  if (fetchErr) {
+    return { assignmentsWithHireDate: 0, failed: 0, firstError: fetchErr.message };
+  }
+
+  const rows = assignments ?? [];
+  let failed = 0;
+  let firstError: string | undefined;
+  /** TEMP: log one sample schedule per bulk run to verify bundled `getMilestoneScheduleForHireDate` at runtime. */
+  let loggedScheduleSample = false;
+
+  for (const row of rows) {
+    const id = row.id as string;
+    const hireStr = String((row as { hire_date?: string | null }).hire_date ?? "").trim().slice(0, 10);
+
+    if (!loggedScheduleSample && /^\d{4}-\d{2}-\d{2}$/.test(hireStr)) {
+      const sched = getMilestoneScheduleForHireDate(hireStr);
+      if (sched.ok) {
+        const typeRating = sched.entries.find((e) => e.milestone_type === "type_rating");
+        const oeComplete = sched.entries.find((e) => e.milestone_type === "oe_complete");
+        console.log(
+          "[crewrules mentorship refresh] SCHEDULE_MARKER=bundled-getMilestoneScheduleForHireDate-chained-v1",
+          JSON.stringify({
+            assignmentId: id,
+            hireDate: hireStr,
+            type_rating_due: typeRating?.due_date,
+            oe_complete_due: oeComplete?.due_date,
+          })
+        );
+      } else {
+        console.log(
+          "[crewrules mentorship refresh] SCHEDULE_MARKER=bundled-getMilestoneScheduleForHireDate-chained-v1",
+          "sample schedule error:",
+          sched.error,
+          "assignmentId:",
+          id,
+          "hireDate:",
+          hireStr
+        );
+      }
+      loggedScheduleSample = true;
+    }
+
+    const result = await syncMentorshipMilestoneDueDatesFromHireForAssignment(admin, id);
+    if (result.error) {
+      failed++;
+      if (!firstError) firstError = result.error;
+    }
+  }
+
+  revalidatePath("/super-admin/mentoring");
+  revalidatePath("/frontier/pilots/admin/mentoring");
+  revalidatePath("/frontier/pilots/portal/mentoring");
+  return { assignmentsWithHireDate: rows.length, failed, firstError };
+}
+
+export type BackfillPendingMentorMenteeLinksResult = {
+  linked: number;
+  error?: string;
+};
+
+/**
+ * Super Admin only (service role): link pending `mentor_assignments` rows where `mentee_user_id`
+ * is null by matching `employee_number` to a non-deleted profile in the **mentor's** tenant.
+ * Never overwrites rows that already have `mentee_user_id` set.
+ */
+export async function backfillPendingMentorMenteeLinks(): Promise<BackfillPendingMentorMenteeLinksResult> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+
+  const { data: pending, error: fetchErr } = await admin
+    .from("mentor_assignments")
+    .select("id, mentor_user_id, employee_number")
+    .is("mentee_user_id", null);
+
+  if (fetchErr) {
+    return { linked: 0, error: fetchErr.message };
+  }
+
+  let linked = 0;
+
+  for (const row of pending ?? []) {
+    const emp = row.employee_number?.trim();
+    if (!emp) continue;
+
+    const { data: mentorProfile, error: mentorErr } = await admin
+      .from("profiles")
+      .select("tenant")
+      .eq("id", row.mentor_user_id)
+      .maybeSingle();
+
+    if (mentorErr || !mentorProfile?.tenant) continue;
+
+    const tenant = String(mentorProfile.tenant).trim() || "frontier";
+
+    const { data: mentee, error: menteeErr } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("tenant", tenant)
+      .eq("employee_number", emp)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (menteeErr || !mentee?.id) continue;
+    if (mentee.id === row.mentor_user_id) continue;
+
+    const { data: updated, error: updErr } = await admin
+      .from("mentor_assignments")
+      .update({ mentee_user_id: mentee.id })
+      .eq("id", row.id)
+      .is("mentee_user_id", null)
+      .select("id");
+
+    if (updErr) continue;
+    if (updated && updated.length > 0) linked++;
+  }
+
+  revalidatePath("/super-admin/mentoring");
+  return { linked };
+}
+
+export type BackfillMissingMentorshipMilestonesResult = {
+  /** Assignments with a non-empty hire_date passed to createMilestonesForAssignment (idempotent inserts only). */
+  processedWithHireDate: number;
+  seedErrors: string[];
+  /** After backfill: assignment IDs that still have type_rating but no oe_complete row. */
+  stillMissingOeComplete: string[];
+  /** Subset of stillMissingOeComplete: assignment has no hire_date, so schedule seed cannot run. */
+  missingHireDateBlockingRepair: string[];
+  error?: string;
+};
+
+/**
+ * Super Admin only: idempotently insert any missing standard milestone rows for assignments
+ * that have a hire_date (same helper as CSV import). Does not change completed_date or existing rows.
+ * Then report assignments that still have type_rating without oe_complete (unrepairable without hire_date, etc.).
+ */
+export async function backfillMissingMentorshipMilestones(): Promise<BackfillMissingMentorshipMilestonesResult> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+
+  const { data: assignments, error: fetchErr } = await admin.from("mentor_assignments").select("id, hire_date");
+
+  if (fetchErr) {
+    return {
+      processedWithHireDate: 0,
+      seedErrors: [],
+      stillMissingOeComplete: [],
+      missingHireDateBlockingRepair: [],
+      error: fetchErr.message,
+    };
+  }
+
+  const seedErrors: string[] = [];
+  let processedWithHireDate = 0;
+  const hireDatePresent = new Map<string, boolean>();
+
+  for (const row of assignments ?? []) {
+    const id = row.id as string;
+    const hireRaw = (row.hire_date as string | null) ?? "";
+    const hireTrim = hireRaw.trim();
+    hireDatePresent.set(id, hireTrim.length > 0);
+    if (!hireTrim) continue;
+
+    processedWithHireDate++;
+    const hireDate = hireTrim.slice(0, 10);
+    const result = await createMilestonesForAssignment(id, hireDate);
+    if (result.error) {
+      seedErrors.push(`${id}: ${result.error}`);
+    }
+  }
+
+  const { data: msRows, error: msErr } = await admin
+    .from("mentorship_milestones")
+    .select("assignment_id, milestone_type");
+
+  if (msErr) {
+    seedErrors.push(`milestone scan: ${msErr.message}`);
+    revalidatePath("/super-admin/mentoring");
+    revalidatePath("/frontier/pilots/portal/mentoring");
+    return { processedWithHireDate, seedErrors, stillMissingOeComplete: [], missingHireDateBlockingRepair: [] };
+  }
+
+  const byAid = new Map<string, Set<string>>();
+  for (const r of msRows ?? []) {
+    const rec = r as { assignment_id: string; milestone_type: string };
+    const aid = String(rec.assignment_id);
+    const mt = String(rec.milestone_type);
+    if (!byAid.has(aid)) byAid.set(aid, new Set());
+    byAid.get(aid)!.add(mt);
+  }
+
+  const stillMissingOeComplete: string[] = [];
+  const missingHireDateBlockingRepair: string[] = [];
+
+  for (const [aid, types] of byAid) {
+    if (!types.has("type_rating") || types.has("oe_complete")) continue;
+    stillMissingOeComplete.push(aid);
+    if (!hireDatePresent.get(aid)) {
+      missingHireDateBlockingRepair.push(aid);
+    }
+  }
+
+  revalidatePath("/super-admin/mentoring");
+  revalidatePath("/frontier/pilots/portal/mentoring");
+  return { processedWithHireDate, seedErrors, stillMissingOeComplete, missingHireDateBlockingRepair };
+}
+
+/**
+ * **Internal / destructive:** permanently finalizes a purge-eligible account (single user).
+ * Double-gated: `ensureSuperAdmin()` then `finalizePendingAccountDeletion`.
+ */
+export async function runFinalizePendingAccountDeletionSuperAdmin(
+  userId: string
+): Promise<FinalizePendingAccountDeletionResult> {
+  await ensureSuperAdmin();
+  return finalizePendingAccountDeletion(userId);
+}
+
+export type PendingDeletionProfileRow = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  tenant: string;
+  portal: string;
+  deleted_at: string | null;
+  deletion_scheduled_for: string | null;
+  deletion_reason: string | null;
+};
+
+export type AccountDeletionLogAdminRow = {
+  id: string;
+  user_id: string | null;
+  email: string | null;
+  deletion_reason: string | null;
+  scheduled_for: string | null;
+  started_at: string;
+  completed_at: string | null;
+  status: string;
+  deleted_auth_user: boolean;
+  error: string | null;
+};
+
+/** Profiles with a scheduled purge date (still have a row). */
+export async function getPendingDeletionsForSuperAdmin(): Promise<PendingDeletionProfileRow[]> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("profiles")
+    .select(
+      "id, email, full_name, tenant, portal, deleted_at, deletion_scheduled_for, deletion_reason"
+    )
+    .not("deletion_scheduled_for", "is", null)
+    .order("deletion_scheduled_for", { ascending: true });
+
+  if (error) {
+    console.error("[SuperAdmin] getPendingDeletionsForSuperAdmin:", error.message);
+    return [];
+  }
+  return (data ?? []) as PendingDeletionProfileRow[];
+}
+
+/** Recent finalize attempts (audit; includes successes and failures). */
+export async function getRecentAccountDeletionLogsForSuperAdmin(
+  limit = 75
+): Promise<AccountDeletionLogAdminRow[]> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("account_deletion_log")
+    .select(
+      "id, user_id, email, deletion_reason, scheduled_for, started_at, completed_at, status, deleted_auth_user, error"
+    )
+    .order("started_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("[SuperAdmin] getRecentAccountDeletionLogsForSuperAdmin:", error.message);
+    return [];
+  }
+  return (data ?? []) as AccountDeletionLogAdminRow[];
 }

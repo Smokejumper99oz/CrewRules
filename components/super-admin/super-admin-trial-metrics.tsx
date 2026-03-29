@@ -9,6 +9,12 @@ type SuperAdminTrialMetricsProps = {
 
 const cardBase = "rounded-xl border border-slate-700/50 bg-slate-800/50 px-4 py-3";
 
+/** Tinted card shells (same idea as Pending Deletions KPI: soft bg + border, no solid fills). */
+const trialCardAmberLight = `${cardBase} border-amber-700/35 bg-amber-950/12`;
+const trialCardAmberStrong = `${cardBase} border-amber-500/38 bg-amber-950/18`;
+const trialCardDanger = `${cardBase} border-red-900/35 bg-red-950/14`;
+const trialCardSuccess = `${cardBase} border-emerald-700/35 bg-emerald-950/12`;
+
 export function SuperAdminTrialMetrics({ metrics, trialUsers }: SuperAdminTrialMetricsProps) {
   const hasAnyTrials =
     metrics.trialsStarted > 0 ||
@@ -43,49 +49,39 @@ export function SuperAdminTrialMetrics({ metrics, trialUsers }: SuperAdminTrialM
       <div className="flex flex-wrap items-stretch gap-2">
         <div className={cardBase}>
           <div className="flex items-center gap-2 text-slate-400 text-xs mb-0.5">
-            <Clock className="size-3.5" />
+            <Clock className="size-3.5 shrink-0 text-slate-400" />
             Trials Started
           </div>
           <div className="text-xl font-semibold text-slate-200">{metrics.trialsStarted}</div>
         </div>
         <div className="text-slate-500 self-center shrink-0">→</div>
-        <div className={cardBase}>
-          <div className="flex items-center gap-2 text-slate-400 text-xs mb-0.5">
-            <AlertTriangle className="size-3.5" />
+        <div className={trialCardAmberLight}>
+          <div className="flex items-center gap-2 text-amber-200/75 text-xs mb-0.5">
+            <AlertTriangle className="size-3.5 shrink-0 text-amber-400/70" />
             Expiring in 7 days
           </div>
-          <div className="text-xl font-semibold text-slate-200">{metrics.expiringIn7Days}</div>
+          <div className="text-xl font-semibold text-amber-50/95">{metrics.expiringIn7Days}</div>
         </div>
         <div className="text-slate-500 self-center shrink-0">→</div>
-        <div
-          className={`${cardBase} ${
-            metrics.expiringIn3Days > 0 ? "border-amber-600/40 bg-amber-950/10" : ""
-          }`}
-        >
-          <div className="flex items-center gap-2 text-slate-400 text-xs mb-0.5">
-            <AlertTriangle className="size-3.5" />
+        <div className={trialCardAmberStrong}>
+          <div className="flex items-center gap-2 text-amber-200/85 text-xs mb-0.5">
+            <AlertTriangle className="size-3.5 shrink-0 text-amber-400/85" />
             Expiring in 3 days
           </div>
-          <div
-            className={`text-xl font-semibold ${
-              metrics.expiringIn3Days > 0 ? "text-amber-400" : "text-slate-200"
-            }`}
-          >
-            {metrics.expiringIn3Days}
-          </div>
+          <div className="text-xl font-semibold text-amber-100">{metrics.expiringIn3Days}</div>
         </div>
         <div className="text-slate-500 self-center shrink-0">→</div>
-        <div className={cardBase}>
-          <div className="flex items-center gap-2 text-slate-400 text-xs mb-0.5">
-            <XCircle className="size-3.5" />
+        <div className={trialCardDanger}>
+          <div className="flex items-center gap-2 text-rose-200/78 text-xs mb-0.5">
+            <XCircle className="size-3.5 shrink-0 text-rose-400/72" />
             Trial Expired
           </div>
-          <div className="text-xl font-semibold text-slate-200">{metrics.trialExpired}</div>
+          <div className="text-xl font-semibold text-rose-50/95">{metrics.trialExpired}</div>
         </div>
         <div className="text-slate-500 self-center shrink-0">|</div>
-        <div className={`${cardBase} border-[#75C043]/30`}>
-          <div className="flex items-center gap-2 text-slate-400 text-xs mb-0.5">
-            <TrendingUp className="size-4 text-emerald-400 shrink-0" />
+        <div className={trialCardSuccess}>
+          <div className="flex items-center gap-2 text-emerald-200/80 text-xs mb-0.5">
+            <TrendingUp className="size-4 shrink-0 text-emerald-400/78" />
             Converted
           </div>
           <div className="text-xl font-semibold text-[#75C043]">{metrics.convertedFromTrial}</div>

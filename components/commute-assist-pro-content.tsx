@@ -391,7 +391,7 @@ function TwoLegCompactLeg({
   const durStr = fmtHM(durMin);
   const dep = new Date(depUtc);
   const arr = new Date(arrUtc);
-  const dateStr = formatInTimeZone(dep, depTz, "EEE • MMM d");
+  const dateStr = formatInTimeZone(dep, depTz, "EEE • MMMM d");
   const depDateStr = formatInTimeZone(dep, depTz, "yyyy-MM-dd");
   const arrDateStr = formatInTimeZone(arr, arrTz, "yyyy-MM-dd");
   const arrivesNextDay = arrDateStr > depDateStr;
@@ -522,7 +522,7 @@ function CommuteFlightCard({
   const arrTz = resolveDisplayTz(opt.destTz, destTz, destination);
   const dep = new Date(opt.depUtc);
   const arr = new Date(opt.arrUtc);
-  const dateStr = formatInTimeZone(dep, depTz, "EEE • MMM d");
+  const dateStr = formatInTimeZone(dep, depTz, "EEE • MMMM d");
   const depSched = formatInTimeZone(dep, depTz, "HH:mm");
   const arrSched = formatInTimeZone(arr, arrTz, "HH:mm");
   const durMin = durationMinutesUtc(opt.depUtc, opt.arrUtc);
@@ -643,7 +643,7 @@ function CommuteFlightRow({
   const arrTz = resolveDisplayTz(opt.destTz, destTz, destination);
   const dep = new Date(opt.depUtc);
   const arr = new Date(opt.arrUtc);
-  const dateStr = formatInTimeZone(dep, depTz, "EEE • MMM d");
+  const dateStr = formatInTimeZone(dep, depTz, "EEE • MMMM d");
   const depSched = formatInTimeZone(dep, depTz, "HH:mm");
   const arrSched = formatInTimeZone(arr, arrTz, "HH:mm");
   const durMin = durationMinutesUtc(opt.depUtc, opt.arrUtc);
@@ -1653,7 +1653,9 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   if (!hasValidHome) {
     return (
       <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200/90">
-        Set Home Airport (3-letter IATA) in Profile to use Commute Assist.
+        Set Home Airport (3-letter IATA) in Profile to use Commute{" "}
+        <span className="text-[#75C043]">Assist</span>
+        <span className="align-super text-[10px]">™</span>.
       </div>
     );
   }
@@ -1661,7 +1663,9 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   if (!hasValidBase) {
     return (
       <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200/90">
-        Set Crew Base (3-letter IATA) in Profile to use Commute Assist.
+        Set Crew Base (3-letter IATA) in Profile to use Commute{" "}
+        <span className="text-[#75C043]">Assist</span>
+        <span className="align-super text-[10px]">™</span>.
       </div>
     );
   }
@@ -1735,7 +1739,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const commuteDate = primaryRoute?.commuteDate ?? new Date().toISOString().slice(0, 10);
   // Parse commuteDate as local date in baseTz (noon avoids UTC-midnight → wrong-day display)
   const commuteDateObj = fromZonedTime(`${commuteDate}T12:00:00`, baseTz);
-  const commuteDateFormatted = formatInTimeZone(commuteDateObj, baseTz, "EEE MMM d, yyyy");
+  const commuteDateFormatted = formatInTimeZone(commuteDateObj, baseTz, "EEE MMMM d, yyyy");
   const tzMissing = originTz === "UTC" || destTz === "UTC";
   const commuteWindowValue = direction === "to_base"
     ? (dutyOk ? (toBaseCommuteSearchDate === dutyDateBase ? "Same Day" : "Day Prior") : "Same-day flights")

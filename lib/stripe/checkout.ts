@@ -56,9 +56,9 @@ export async function createCheckoutSession(
 
   const stripe = new Stripe(STRIPE_SECRET_KEY);
   const baseUrl = getBaseUrl();
-  const profilePath = "/frontier/pilots/portal/profile";
-  const successUrl = `${baseUrl}${profilePath}?checkout=success`;
-  const cancelUrl = `${baseUrl}${profilePath}?checkout=cancel`;
+  const settingsPath = "/frontier/pilots/portal/settings/subscription";
+  const successUrl = `${baseUrl}${settingsPath}?checkout=success`;
+  const cancelUrl = `${baseUrl}${settingsPath}?checkout=cancel`;
 
   let customerId: string | undefined;
 

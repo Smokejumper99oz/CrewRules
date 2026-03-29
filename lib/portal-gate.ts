@@ -1,4 +1,6 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { CREWRULES_PATHNAME_HEADER } from "@/lib/crewrules-pathname-header";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/profile";
 
@@ -21,6 +23,30 @@ const PORTAL_ALLOWED_ROLES: Record<string, string[]> = {
   "flight-attendants": ["super_admin", "tenant_admin", "flight_attendant"],
 };
 
+function normalizeRequestPathname(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    const pathOnly = trimmed.startsWith("http://") || trimmed.startsWith("https://")
+      ? new URL(trimmed).pathname
+      : trimmed.split("?")[0]?.split("#")[0] ?? trimmed;
+    const collapsed = pathOnly.replace(/\/+$/, "") || "/";
+    return collapsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pathname for the active request: middleware sets {@link CREWRULES_PATHNAME_HEADER}
+ * from `request.nextUrl.pathname` (no Referer / client-header guessing).
+ */
+async function getRequestPathnameForPortalGate(): Promise<string | null> {
+  const h = await headers();
+  return normalizeRequestPathname(h.get(CREWRULES_PATHNAME_HEADER));
+}
+
 /**
  * Fail-closed portal gate. Redirects to login with error param if:
  * - No auth session
@@ -35,6 +61,9 @@ export async function gateUserForPortal(
 ): Promise<{ user: { id: string; email?: string }; profile: Profile }> {
   const loginPath = `/${tenant}/${portal}/login`;
   const completeProfilePath = `/${tenant}/${portal}/complete-profile`;
+  /** Only path where pending-deletion users may use the portal (restore / Danger Zone). */
+  const accountSettingsPath = `/${tenant}/${portal}/portal/settings/account`;
+  const accountSettingsPathNormalized = normalizeRequestPathname(accountSettingsPath)!;
   const supabase = await createClient();
 
   const {
@@ -49,7 +78,9 @@ export async function gateUserForPortal(
 
   const { data: minimalProfile } = await supabase
     .from("profiles")
-    .select("id, role, tenant, portal, email, subscription_tier, pro_trial_started_at, pro_trial_expires_at, is_founding_pilot, founding_pilot_number, welcome_modal_version_seen, color_mode, is_admin, is_mentor")
+    .select(
+      "id, role, tenant, portal, email, subscription_tier, pro_trial_started_at, pro_trial_expires_at, is_founding_pilot, founding_pilot_number, welcome_modal_version_seen, color_mode, is_admin, is_mentor, deleted_at, deletion_scheduled_for"
+    )
     .eq("id", user.id)
     .maybeSingle();
 
@@ -69,7 +100,9 @@ export async function gateUserForPortal(
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, role, tenant, portal, email, subscription_tier, pro_trial_started_at, pro_trial_expires_at, is_founding_pilot, founding_pilot_number, welcome_modal_version_seen, base_airport, position, date_of_hire, home_airport, color_mode, is_admin, is_mentor")
+    .select(
+      "id, role, tenant, portal, email, subscription_tier, pro_trial_started_at, pro_trial_expires_at, is_founding_pilot, founding_pilot_number, welcome_modal_version_seen, base_airport, position, date_of_hire, home_airport, color_mode, is_admin, is_mentor, deleted_at, deletion_scheduled_for"
+    )
     .eq("id", user.id)
     .eq("tenant", tenant)
     .eq("portal", portal)
@@ -94,6 +127,15 @@ export async function gateUserForPortal(
 
   if (!hasRequiredOnboarding) {
     redirect(completeProfilePath);
+  }
+
+  const pendingDeletion = p.deleted_at != null || p.deletion_scheduled_for != null;
+  if (pendingDeletion) {
+    const path = await getRequestPathnameForPortalGate();
+    const onAccountSettings = path != null && path === accountSettingsPathNormalized;
+    if (!onAccountSettings) {
+      redirect(accountSettingsPath);
+    }
   }
 
   return {

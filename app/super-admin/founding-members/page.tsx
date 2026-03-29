@@ -12,7 +12,7 @@ function formatJoined(iso: string | null): string {
   try {
     return new Date(iso).toLocaleDateString(undefined, {
       year: "numeric",
-      month: "short",
+      month: "long",
       day: "numeric",
     });
   } catch {

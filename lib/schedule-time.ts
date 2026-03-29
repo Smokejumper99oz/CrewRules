@@ -50,7 +50,7 @@ export function formatScheduleDateTime(
     const date = new Date(isoUtc);
     if (isNaN(date.getTime())) return isoUtc;
     const timeFmt = options.timeFormat === "24h" ? "HH:mm" : "h:mm a";
-    const dateFmt = options.dateStyle === "short" ? "EEE, MMM d" : "EEEE, MMMM d";
+    const dateFmt = options.dateStyle === "short" ? "EEE, MMMM d" : "EEEE, MMMM d";
     const fmt = options.includeTime !== false ? `${dateFmt} ${timeFmt}` : dateFmt;
     return formatInTimeZone(date, options.timezone, fmt);
   } catch {
@@ -130,7 +130,7 @@ export function formatDayLabel(isoUtc: string, timezone: string): string {
   try {
     const date = new Date(isoUtc);
     if (isNaN(date.getTime())) return isoUtc;
-    return formatInTimeZone(date, timezone, "EEE • MMM d");
+    return formatInTimeZone(date, timezone, "EEE • MMMM d");
   } catch {
     return isoUtc;
   }

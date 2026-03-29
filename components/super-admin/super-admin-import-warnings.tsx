@@ -39,7 +39,7 @@ export function SuperAdminImportWarnings({ warnings }: { warnings: ImportWarning
                   className="shrink-0 tabular-nums font-medium text-slate-200"
                   dateTime={w.atIso}
                 >
-                  {format(new Date(w.atIso), "MMM d HH:mm")}
+                  {format(new Date(w.atIso), "MMMM d HH:mm")}
                 </time>
                 <span className="shrink-0 text-slate-600" aria-hidden>
                   ·

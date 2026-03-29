@@ -22,16 +22,17 @@ export default async function AdminDashboard() {
     <div className="space-y-6">
       <MentoringOverviewCard
         stats={mentoringOverview}
-        manageHref={`/${TENANT}/${PORTAL}/admin/people`}
-        subtitle={`${TENANT} · ${PORTAL}`}
+        manageHref={`/${TENANT}/${PORTAL}/admin/mentoring`}
+        subtitle="Frontier Airlines • Pilots"
         manageCta="People →"
+        disableHover
       />
       <div className={`grid gap-4 ${isSuperAdmin ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
         <Link
           href={`/${TENANT}/${PORTAL}/admin/documents`}
-          className="group rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20"
+          className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6"
         >
-          <div className="text-xl font-semibold tracking-tight border-b border-white/5 text-white group-hover:text-[#75C043]">
+          <div className="text-xl font-semibold tracking-tight border-b border-white/5 text-white">
             Uploads
           </div>
           <div className="mt-2 text-sm text-slate-300">
@@ -52,10 +53,10 @@ export default async function AdminDashboard() {
         </Link>
 
         <Link
-          href={`/${TENANT}/${PORTAL}/admin/people`}
-          className="group rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20"
+          href={`/${TENANT}/${PORTAL}/admin/users`}
+          className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6"
         >
-          <div className="text-xl font-semibold tracking-tight border-b border-white/5 text-white group-hover:text-[#75C043]">
+          <div className="text-xl font-semibold tracking-tight border-b border-white/5 text-white">
             People & Permissions
           </div>
           <div className="mt-2 text-sm text-slate-300">
@@ -66,9 +67,9 @@ export default async function AdminDashboard() {
         {isSuperAdmin && (
           <Link
             href={`/${TENANT}/${PORTAL}/admin/waitlist`}
-            className="group rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20"
+            className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6"
           >
-            <div className="text-xl font-semibold tracking-tight border-b border-white/5 text-white group-hover:text-[#75C043]">
+            <div className="text-xl font-semibold tracking-tight border-b border-white/5 text-white">
               Waitlist
             </div>
             <div className="mt-2 text-sm text-slate-300">

@@ -1,3 +1,12 @@
+/**
+ * Whether Account & Access shows the Mentor badge. Matches `if (is_mentor)` in badge
+ * construction (JavaScript truthiness — not `=== true` only).
+ */
+export function isMentorForAccountRoleBadges(is_mentor?: boolean | null): boolean {
+  if (is_mentor) return true;
+  return false;
+}
+
 export function getAccountRoleDisplay({
   role,
   is_admin,
@@ -21,7 +30,7 @@ export function getAccountRoleDisplay({
   const badges: string[] = [];
 
   if (is_admin) badges.push("Admin");
-  if (is_mentor) badges.push("Mentor");
+  if (isMentorForAccountRoleBadges(is_mentor)) badges.push("Mentor");
 
   return {
     label: base,
@@ -51,7 +60,7 @@ export function getAccountRoleBadges({
 
   const badges: string[] = [];
   if (is_admin) badges.push("Admin");
-  if (is_mentor) badges.push("Mentor");
+  if (isMentorForAccountRoleBadges(is_mentor)) badges.push("Mentor");
 
   return { baseLabel, badges };
 }

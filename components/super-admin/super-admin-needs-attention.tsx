@@ -3,17 +3,63 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { dismissSystemEvent, type SystemEventRow } from "@/lib/super-admin/actions";
+import {
+  dismissSystemEvent,
+  type MentoringMilestoneIntegritySignals,
+  type SystemEventRow,
+} from "@/lib/super-admin/actions";
 import { AlertCircle, AlertTriangle, Info, X } from "lucide-react";
 
 type SuperAdminNeedsAttentionProps = {
   events: SystemEventRow[];
   dismissedCount: number;
+  mentoringIntegrity: MentoringMilestoneIntegritySignals;
 };
+
+function mentoringIntegrityPseudoEvents(s: MentoringMilestoneIntegritySignals): SystemEventRow[] {
+  if (!s.hasAny) return [];
+  const iso = new Date().toISOString();
+  const out: SystemEventRow[] = [];
+  if (s.typeRatingWithoutOeCompleteCount > 0) {
+    out.push({
+      id: "mentoring-signal-type-rating-no-oe",
+      type: "mentoring",
+      severity: "warning",
+      title: "Type Rating without IOE Complete",
+      message: `${s.typeRatingWithoutOeCompleteCount} assignment(s) have Type Rating but no IOE Complete row. Super Admin → Mentoring → Generate missing milestones.`,
+      metadata: null,
+      created_at: iso,
+    });
+  }
+  if (s.hireDateMissingStandardMilestoneCount > 0) {
+    out.push({
+      id: "mentoring-signal-incomplete-standard",
+      type: "mentoring",
+      severity: "warning",
+      title: "Incomplete standard milestone set",
+      message: `${s.hireDateMissingStandardMilestoneCount} assignment(s) with hire date are missing one or more standard program milestones. Generate missing milestones.`,
+      metadata: null,
+      created_at: iso,
+    });
+  }
+  if (s.typeRatingWithoutOeMissingHireDateCount > 0) {
+    out.push({
+      id: "mentoring-signal-no-hire",
+      type: "mentoring",
+      severity: "warning",
+      title: "Mentoring repair blocked (hire date)",
+      message: `${s.typeRatingWithoutOeMissingHireDateCount} assignment(s) have Type Rating without IOE Complete and no valid hire date. Set hire date on the assignment, then generate milestones.`,
+      metadata: null,
+      created_at: iso,
+    });
+  }
+  return out;
+}
 
 function typeLabel(type: string): string {
   if (type === "import") return "Import";
   if (type === "provider") return "Provider";
+  if (type === "mentoring") return "Mentoring";
   return "System";
 }
 
@@ -23,9 +69,19 @@ function SeverityIcon({ severity }: { severity: string }) {
   return <Info className="size-3.5 text-slate-500 shrink-0" />;
 }
 
-export function SuperAdminNeedsAttention({ events, dismissedCount }: SuperAdminNeedsAttentionProps) {
+export function SuperAdminNeedsAttention({
+  events,
+  dismissedCount,
+  mentoringIntegrity,
+}: SuperAdminNeedsAttentionProps) {
   const router = useRouter();
-  const hasIssues = events.length > 0;
+  const mentoringPseudo =
+    mentoringIntegrity && mentoringIntegrity.hasAny
+      ? mentoringIntegrityPseudoEvents(mentoringIntegrity)
+      : [];
+  const allEvents = [...mentoringPseudo, ...events];
+  const hasIssues = allEvents.length > 0;
+  const hasErrorSeverity = allEvents.some((e) => e.severity === "error");
 
   async function handleDismiss(eventId: string) {
     const { error } = await dismissSystemEvent(eventId);
@@ -34,7 +90,7 @@ export function SuperAdminNeedsAttention({ events, dismissedCount }: SuperAdminN
 
   const issuesBody = hasIssues ? (
     <ul className="space-y-2">
-      {events.map((e) => (
+      {allEvents.map((e) => (
         <li key={e.id} className="flex items-start gap-2 text-sm">
           <SeverityIcon severity={e.severity} />
           <div className="min-w-0 flex-1">
@@ -49,14 +105,16 @@ export function SuperAdminNeedsAttention({ events, dismissedCount }: SuperAdminN
             <div className="font-medium text-slate-200 mt-0.5">{e.title}</div>
             <div className="text-slate-500 text-xs mt-0.5">{e.message}</div>
           </div>
-          <button
-            type="button"
-            onClick={() => handleDismiss(e.id)}
-            className="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-700/50 hover:text-slate-300 transition"
-            aria-label="Dismiss"
-          >
-            <X className="size-3.5" />
-          </button>
+          {e.id.startsWith("mentoring-signal-") ? null : (
+            <button
+              type="button"
+              onClick={() => handleDismiss(e.id)}
+              className="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-700/50 hover:text-slate-300 transition"
+              aria-label="Dismiss"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
         </li>
       ))}
     </ul>
@@ -67,9 +125,11 @@ export function SuperAdminNeedsAttention({ events, dismissedCount }: SuperAdminN
   const heading = (
     <h2 className="text-base font-semibold text-slate-200 flex items-center gap-2">
       <AlertTriangle
-        className={`size-4 shrink-0 ${hasIssues ? "text-red-400" : "text-slate-300"}`}
+        className={`size-4 shrink-0 ${
+          hasIssues ? (hasErrorSeverity ? "text-red-400" : "text-amber-400") : "text-slate-300"
+        }`}
       />
-      {hasIssues ? `Needs Attention (${events.length})` : "System Status"}
+      {hasIssues ? `Needs Attention (${allEvents.length})` : "System Status"}
       {dismissedCount > 0 && (
         <span className="ml-2 font-normal text-slate-500 text-sm">{dismissedCount} dismissed</span>
       )}
@@ -78,7 +138,11 @@ export function SuperAdminNeedsAttention({ events, dismissedCount }: SuperAdminN
 
   if (hasIssues) {
     return (
-      <div className="rounded-xl border px-4 py-6 space-y-3 bg-red-500/5 border-red-400/30">
+      <div
+        className={`rounded-xl border px-4 py-6 space-y-3 ${
+          hasErrorSeverity ? "bg-red-500/5 border-red-400/30" : "bg-amber-500/5 border-amber-400/35"
+        }`}
+      >
         {heading}
         {issuesBody}
       </div>

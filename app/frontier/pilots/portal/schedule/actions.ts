@@ -968,7 +968,7 @@ export async function getAvailableMonths(): Promise<MonthOption[]> {
 
     const toOption = (p: { index: number; name: string; startStr: string; endStr: string }): MonthOption => {
       const fmt = (s: string) =>
-        new Date(s + "T12:00:00.000Z").toLocaleString("en-US", { month: "short", day: "numeric" });
+        new Date(s + "T12:00:00.000Z").toLocaleString("en-US", { month: "long", day: "numeric" });
       return {
         year: currentYear,
         month: p.index,

@@ -4,6 +4,7 @@ import {
   getSuperAdminKpis,
   getOnlineUserCount,
   getOnlinePeakToday,
+  getOnlinePeakAllTime,
   getSystemEvents,
   getTenantOverview,
   getProductUsage,
@@ -14,6 +15,7 @@ import {
   getChurnRenewalMetrics,
   getFlightAwareUsageMetrics,
   getAviationStackUsageMetrics,
+  getMentoringMilestoneIntegritySignals,
 } from "@/lib/super-admin/actions";
 import { SuperAdminHeader } from "@/components/super-admin/super-admin-header";
 import { SuperAdminNeedsAttention } from "@/components/super-admin/super-admin-needs-attention";
@@ -34,23 +36,40 @@ export const dynamic = "force-dynamic";
 export default async function SuperAdminPage() {
   await gateSuperAdmin();
 
-  const [kpis, onlineNow, systemEventsResult, tenants, productUsage, recentActivity, trialMetrics, trialUsers, stripeBilling, churnRenewal, flightAwareMetrics, aviationStackMetrics] =
-    await Promise.all([
-      getSuperAdminKpis(),
-      getOnlineUserCount(),
-      getSystemEvents(),
-      getTenantOverview(),
-      getProductUsage(),
-      getRecentActivity(),
-      getProTrialMetrics(),
-      getProTrialUsers(),
-      getStripeBillingMetrics(),
-      getChurnRenewalMetrics(),
-      getFlightAwareUsageMetrics(),
-      getAviationStackUsageMetrics(),
-    ]);
+  const [
+    kpis,
+    onlineNow,
+    systemEventsResult,
+    mentoringIntegrity,
+    tenants,
+    productUsage,
+    recentActivity,
+    trialMetrics,
+    trialUsers,
+    stripeBilling,
+    churnRenewal,
+    flightAwareMetrics,
+    aviationStackMetrics,
+  ] = await Promise.all([
+    getSuperAdminKpis(),
+    getOnlineUserCount(),
+    getSystemEvents(),
+    getMentoringMilestoneIntegritySignals(),
+    getTenantOverview(),
+    getProductUsage(),
+    getRecentActivity(),
+    getProTrialMetrics(),
+    getProTrialUsers(),
+    getStripeBillingMetrics(),
+    getChurnRenewalMetrics(),
+    getFlightAwareUsageMetrics(),
+    getAviationStackUsageMetrics(),
+  ]);
 
-  const peakToday = await getOnlinePeakToday(onlineNow);
+  const [peakToday, peakAllTime] = await Promise.all([
+    getOnlinePeakToday(onlineNow),
+    getOnlinePeakAllTime(onlineNow),
+  ]);
 
   const admin = createAdminClient();
   const mentoringOverview = await getMentoringOverviewStats(admin, { kind: "platform" });
@@ -65,10 +84,21 @@ export default async function SuperAdminPage() {
     <>
       <SuperAdminRefreshTrigger />
       <div className="space-y-12">
-        <SuperAdminHeader lastRefresh={lastRefresh} totalUsers={totalUsers} usersTodayDelta={kpis.newSignupsToday} onlineNow={onlineNow} peakToday={peakToday} />
+        <SuperAdminHeader
+          lastRefresh={lastRefresh}
+          totalUsers={totalUsers}
+          notJoinedUserCount={kpis.notJoinedUserCount}
+          usersTodayDelta={kpis.newSignupsToday}
+          onlineNow={onlineNow}
+          peakToday={peakToday}
+        />
 
       <section>
-        <SuperAdminNeedsAttention events={systemEventsResult.events} dismissedCount={systemEventsResult.dismissedCount} />
+        <SuperAdminNeedsAttention
+          events={systemEventsResult.events}
+          dismissedCount={systemEventsResult.dismissedCount}
+          mentoringIntegrity={mentoringIntegrity}
+        />
       </section>
 
       <section>
@@ -80,7 +110,7 @@ export default async function SuperAdminPage() {
       </section>
 
       <section>
-        <SuperAdminKpiCards kpis={kpis} onlineNow={onlineNow} peakToday={peakToday} />
+        <SuperAdminKpiCards kpis={kpis} onlineNow={onlineNow} peakToday={peakToday} peakAllTime={peakAllTime} />
       </section>
 
       <section>

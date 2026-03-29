@@ -13,6 +13,7 @@ const PORTAL_TITLES: Record<string, string> = {
   notes: "Notes",
   mentoring: "Mentoring",
   updates: "Updates",
+  settings: "Settings",
   profile: "Profile",
   reserve: "Reserve",
 };
@@ -23,6 +24,7 @@ const ADMIN_TITLES: Record<string, string> = {
   library: "Library",
   people: "People & Permissions",
   waitlist: "Waitlist",
+  mentoring: "Mentoring",
 };
 
 function roleFromPortalDisplayName(displayName: string): string {
@@ -47,7 +49,9 @@ export function PageTitle({ portalDisplayName = "", isAdmin = false }: PageTitle
     ? (ADMIN_TITLES[currentSegment] ?? "Dashboard")
     : currentSegment === "profile" && nextSegment === "about"
       ? "About"
-      : (PORTAL_TITLES[currentSegment] ?? "Dashboard");
+      : currentSegment === "profile"
+        ? "Settings"
+        : (PORTAL_TITLES[currentSegment] ?? "Dashboard");
 
   const role = roleFromPortalDisplayName(portalDisplayName);
   const context = inAdmin && role ? `${role} Admin` : role || (inAdmin ? "Admin" : "");

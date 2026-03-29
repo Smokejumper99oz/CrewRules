@@ -58,16 +58,19 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
 
   const onTogglePay = () => {
     const next = !optimisticShow;
-
-    startTransition(async () => {
+    startTransition(() => {
       setOptimisticShow(next);
+    });
+    void (async () => {
       try {
         await setShowPayProjection(next);
         router.refresh();
       } catch {
-        setOptimisticShow(!next);
+        startTransition(() => {
+          setOptimisticShow(!next);
+        });
       }
-    });
+    })();
   };
 
   const totalTarget = useMemo(() => {
@@ -146,16 +149,16 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
             <p className="truncate tabular-nums text-2xl font-bold text-slate-700 dark:text-slate-300">{stats.vacationOff}</p>
             <p className="text-xs text-slate-500 dark:text-slate-300">Days off</p>
           </div>
-          <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center dark:border-white/10 dark:bg-white/5">
+          <div className="min-w-0 overflow-hidden rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center dark:border-amber-500/20 dark:bg-amber-500/5">
             <div className="space-y-2">
               <div className="min-w-0">
-                <p className="tabular-nums text-2xl font-bold leading-tight text-amber-800 dark:text-amber-300">
+                <p className="tabular-nums text-2xl font-normal leading-tight text-amber-800 dark:text-amber-300">
                   {formatMinutesToHhMm(stats.rawCreditMinutes ?? 0)}
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-300">Credit</p>
               </div>
               <div className="min-w-0 border-t border-slate-200 pt-2 dark:border-white/10">
-                <p className="tabular-nums text-xs font-normal leading-snug text-slate-600 dark:text-slate-400">
+                <p className="tabular-nums text-base font-normal leading-tight text-amber-800 dark:text-amber-300">
                   {formatMinutesToHhMm(Math.round((stats.totalBlock ?? 0) * 60))}
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-300">Block</p>
@@ -176,7 +179,7 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
               <p className="text-xs text-slate-500">See your projected monthly pay based on credit and guarantee.</p>
               <p className="text-xs text-slate-500">Start a 14-day PRO trial to unlock this feature.</p>
               <Link
-                href={`/${tenant}/${portal}/portal/profile`}
+                href={`/${tenant}/${portal}/portal/settings`}
                 className="inline-block text-sm font-medium text-[#75C043] hover:underline"
               >
                 Go to Profile →
@@ -198,7 +201,7 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
                 type="button"
                 onClick={onTogglePay}
                 disabled={isPending}
-                className="inline-flex shrink-0 items-center gap-2 self-start rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                className="inline-flex shrink-0 items-center gap-2 self-start rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1.5 text-xs text-emerald-800 hover:bg-emerald-200 disabled:opacity-60 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-100 dark:hover:bg-emerald-500/20"
                 aria-label={optimisticShow ? "Hide pay" : "Show pay"}
                 title={optimisticShow ? "Hide pay" : "Show pay"}
               >
@@ -230,7 +233,7 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
                   Add it in your Profile to calculate your pay scale year.
                 </p>
                 <Link
-                  href={`/${tenant}/${portal}/portal/profile`}
+                  href={`/${tenant}/${portal}/portal/settings`}
                   className="inline-block text-sm font-medium text-[#75C043] hover:underline"
                 >
                   Go to Profile →
