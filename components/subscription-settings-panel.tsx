@@ -83,16 +83,16 @@ export function SubscriptionSettingsPanel({
               </p>
             )}
             {profile?.is_founding_pilot && (
-              <div className="max-w-full self-start rounded-2xl border border-amber-400/35 bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-950 px-4 py-3 shadow-[inset_0_1px_0_0_rgba(251,191,36,0.12),0_1px_2px_rgba(0,0,0,0.15)] dark:border-amber-400/25 dark:from-slate-950 dark:via-slate-950 dark:to-slate-950/90">
-                <div className="flex items-center gap-3">
+              <div className="max-w-full self-start rounded-2xl border border-amber-400/35 bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-950 px-4 py-3 shadow-[inset_0_1px_0_0_rgba(251,191,36,0.12),0_1px_2px_rgba(0,0,0,0.15),0_0_12px_rgba(251,191,36,0.08)] dark:border-amber-400/25 dark:from-slate-950 dark:via-slate-950 dark:to-slate-950/90">
+                <div className="flex items-start gap-2.5">
                   <Image
                     src="/icons/founding-pilot-badge.png"
                     alt=""
-                    width={56}
-                    height={56}
-                    className="h-12 w-12 shrink-0 rounded-lg object-cover ring-1 ring-amber-400/35 dark:ring-amber-400/25 sm:h-14 sm:w-14"
+                    width={64}
+                    height={64}
+                    className="mt-0.5 h-[54px] w-[54px] shrink-0 rounded-lg object-cover ring-1 ring-amber-400/35 dark:ring-amber-400/25 sm:mt-1 sm:h-16 sm:w-16"
                   />
-                  <p className="min-w-0 text-base font-semibold tracking-tight text-amber-200 dark:text-amber-100">
+                  <p className="min-w-0 pt-px text-base font-semibold leading-tight tracking-tight text-amber-200 dark:text-amber-100">
                     Founding Pilot
                   </p>
                 </div>
