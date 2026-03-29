@@ -229,7 +229,9 @@ export function getPlanBadgeLabel(profile: Profile | null): string {
   if (!profile) return "Free";
   const tier = profile.subscription_tier;
   if (tier === "enterprise") return "Enterprise";
-  if (tier === "pro") return "PRO";
+  if (tier === "pro") {
+    return profile.is_founding_pilot === true ? "PRO · Founding Pilot" : "PRO";
+  }
   if (profile.pro_trial_expires_at) {
     const ms = new Date(profile.pro_trial_expires_at).getTime();
     if (!Number.isNaN(ms) && ms > Date.now()) {

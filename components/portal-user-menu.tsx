@@ -69,7 +69,18 @@ export function PortalUserMenu({
           <div className="truncate text-sm font-medium text-white">{displayName}</div>
           <div className="truncate text-xs text-slate-400">{roleLabel}</div>
           {isFoundingPilot ? (
-            <div className="truncate text-[11px] font-medium tracking-wide text-amber-400/85">{foundingLine}</div>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <Image
+                src="/icons/founding-pilot-badge.png"
+                alt=""
+                width={14}
+                height={14}
+                className="h-3.5 w-3.5 shrink-0 rounded object-cover opacity-90 ring-1 ring-amber-400/25 dark:ring-amber-400/20"
+              />
+              <span className="min-w-0 truncate text-[11px] font-medium tracking-wide text-amber-400/85">
+                {foundingLine}
+              </span>
+            </div>
           ) : null}
         </div>
         <svg
@@ -91,8 +102,17 @@ export function PortalUserMenu({
             <div className="font-medium text-slate-900 dark:text-white">{displayName}</div>
             <div className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{roleLabel}</div>
             {isFoundingPilot ? (
-              <div className="mt-1 truncate text-xs font-medium tracking-wide text-amber-600/95 dark:text-amber-400/85">
-                {foundingLine}
+              <div className="mt-1 flex min-w-0 items-center gap-2">
+                <Image
+                  src="/icons/founding-pilot-badge.png"
+                  alt=""
+                  width={20}
+                  height={20}
+                  className="h-5 w-5 shrink-0 rounded-md object-cover opacity-95 ring-1 ring-amber-500/30 dark:ring-amber-400/25"
+                />
+                <span className="min-w-0 truncate text-xs font-medium tracking-wide text-amber-600/95 dark:text-amber-400/85">
+                  {foundingLine}
+                </span>
               </div>
             ) : null}
           </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { ProBadge } from "@/components/pro-badge";
 import { ProTrialAndPricingBlock } from "@/components/pro-trial-and-pricing-block";
 import { ManageSubscriptionBlock, canManageStripeSubscription } from "@/components/manage-subscription-block";
@@ -42,6 +43,9 @@ export function SubscriptionSettingsPanel({
   trialDaysRemaining: _trialDaysRemaining,
   showProTrialStartCta,
 }: Props) {
+  const hasPaidActiveAccess = planDisplayType === "Pro" || planDisplayType === "Enterprise";
+  const showChooseYourPlan = !hasPaidActiveAccess;
+
   return (
     <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 md:p-6 dark:border-white/5 dark:bg-slate-950 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
       <div className="mb-6 border-b border-slate-200 pb-4 dark:border-white/10">
@@ -71,25 +75,45 @@ export function SubscriptionSettingsPanel({
             <div className="min-w-0 w-fit max-w-full">
               <ProBadge label={proBadgeLabel} variant={proBadgeVariant} size="sm" />
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {planDisplayType === "Pro Trial"
-                ? "You’re currently on a Pro trial. Choose a plan anytime to continue full access."
-                : "PRO access includes trial and paid Pro. Enterprise is organization-wide."}
-            </p>
+            {!hasPaidActiveAccess && (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {planDisplayType === "Pro Trial"
+                  ? "You’re currently on a Pro trial. Choose a plan anytime to continue full access."
+                  : "PRO access includes trial and paid Pro. Enterprise is organization-wide."}
+              </p>
+            )}
             {profile?.is_founding_pilot && (
-              <div className="inline-flex max-w-full flex-col items-center self-start rounded-full border border-amber-400/60 bg-slate-900/70 px-3 py-1.5 text-center shadow-amber-500/10 shadow-sm dark:bg-slate-950/70">
-                <span className="text-sm font-semibold tracking-wide text-amber-400">Founding Pilot</span>
+              <div className="max-w-full self-start rounded-2xl border border-amber-400/35 bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-950 px-4 py-3 shadow-[inset_0_1px_0_0_rgba(251,191,36,0.12),0_1px_2px_rgba(0,0,0,0.15)] dark:border-amber-400/25 dark:from-slate-950 dark:via-slate-950 dark:to-slate-950/90">
+                <div className="flex items-center gap-3">
+                  <Image
+                    src="/icons/founding-pilot-badge.png"
+                    alt=""
+                    width={56}
+                    height={56}
+                    className="h-12 w-12 shrink-0 rounded-lg object-cover ring-1 ring-amber-400/35 dark:ring-amber-400/25 sm:h-14 sm:w-14"
+                  />
+                  <p className="min-w-0 text-base font-semibold tracking-tight text-amber-200 dark:text-amber-100">
+                    Founding Pilot
+                  </p>
+                </div>
                 {profile?.founding_pilot_number != null ? (
-                  <span className="text-xs text-amber-400/90">
-                    Pilot #{profile.founding_pilot_number} of {FOUNDING_PILOT_CAP}
-                  </span>
+                  <>
+                    <p className="mt-3 text-sm font-medium text-amber-400/95 dark:text-amber-300/90">
+                      Frontier Airlines • Pilot #{profile.founding_pilot_number} of {FOUNDING_PILOT_CAP}
+                    </p>
+                    <p className="mt-2 max-w-sm text-pretty text-[11px] leading-snug text-amber-500/70 dark:text-amber-400/55">
+                      Welcome aboard — You claimed one of the 100 Founding Pilot spots.
+                    </p>
+                  </>
                 ) : (
                   <>
-                    <span className="text-xs text-amber-400/90">Lifetime Beta Member</span>
+                    <p className="mt-3 text-sm font-medium text-amber-400/95 dark:text-amber-300/90">
+                      Lifetime Beta Member
+                    </p>
                     {profile?.founding_pilot_started_at && (
-                      <span className="mt-0.5 text-[10px] text-amber-400/70">
+                      <p className="mt-2 text-[11px] leading-snug text-amber-500/70 dark:text-amber-400/55">
                         Since {new Date(profile.founding_pilot_started_at).getFullYear()}
-                      </span>
+                      </p>
                     )}
                   </>
                 )}
@@ -98,47 +122,49 @@ export function SubscriptionSettingsPanel({
           </div>
         </section>
 
-        <section
-          className="rounded-xl border border-slate-200/90 bg-slate-50/60 p-4 sm:p-5 dark:border-white/10 dark:bg-white/[0.04]"
-          aria-labelledby="subscription-plan-heading"
-        >
-          <div className="border-b border-slate-200/80 pb-3 dark:border-white/10">
-            <h3
-              id="subscription-plan-heading"
-              className="text-base font-semibold tracking-tight text-pretty text-slate-900 dark:text-white"
-            >
-              Choose Your Plan
-            </h3>
-            {!proActive && showProTrialStartCta && (
-              <p className="mt-1.5 text-xs leading-relaxed text-pretty text-slate-600 dark:text-slate-400">
-                Subscribe or start your 14-day trial below.
-              </p>
-            )}
-            {!proActive && !showProTrialStartCta && (
-              <p className="mt-1.5 text-xs leading-relaxed text-pretty text-slate-600 dark:text-slate-400">
-                Choose the plan that fits your flying below.
-              </p>
-            )}
-          </div>
-          <div className="mt-4 space-y-4">
-            {!proActive && showProTrialStartCta && (
-              <p className="text-sm leading-relaxed text-pretty text-slate-700 dark:text-slate-300">
-                Commute Assist™, Pay Projection, Family View, and the full Pro toolkit unlock with your trial or a paid plan.
-              </p>
-            )}
-            {!proActive && !showProTrialStartCta && (
-              <p className="text-sm leading-relaxed text-pretty text-slate-700 dark:text-slate-300">
-                Commute Assist™, Pay Projection, Family View, and the full Pro toolkit unlock with a paid Pro plan.
-              </p>
-            )}
-            <ProTrialAndPricingBlock
-              profile={profile}
-              proActive={proActive}
-              foundingPilotCount={foundingPilotCount}
-              showProTrialStartCta={showProTrialStartCta}
-            />
-          </div>
-        </section>
+        {showChooseYourPlan && (
+          <section
+            className="rounded-xl border border-slate-200/90 bg-slate-50/60 p-4 sm:p-5 dark:border-white/10 dark:bg-white/[0.04]"
+            aria-labelledby="subscription-plan-heading"
+          >
+            <div className="border-b border-slate-200/80 pb-3 dark:border-white/10">
+              <h3
+                id="subscription-plan-heading"
+                className="text-base font-semibold tracking-tight text-pretty text-slate-900 dark:text-white"
+              >
+                Choose Your Plan
+              </h3>
+              {!proActive && showProTrialStartCta && (
+                <p className="mt-1.5 text-xs leading-relaxed text-pretty text-slate-600 dark:text-slate-400">
+                  Subscribe or start your 14-day trial below.
+                </p>
+              )}
+              {!proActive && !showProTrialStartCta && (
+                <p className="mt-1.5 text-xs leading-relaxed text-pretty text-slate-600 dark:text-slate-400">
+                  Choose the plan that fits your flying below.
+                </p>
+              )}
+            </div>
+            <div className="mt-4 space-y-4">
+              {!proActive && showProTrialStartCta && (
+                <p className="text-sm leading-relaxed text-pretty text-slate-700 dark:text-slate-300">
+                  Commute Assist™, Pay Projection, Family View, and the full Pro toolkit unlock with your trial or a paid plan.
+                </p>
+              )}
+              {!proActive && !showProTrialStartCta && (
+                <p className="text-sm leading-relaxed text-pretty text-slate-700 dark:text-slate-300">
+                  Commute Assist™, Pay Projection, Family View, and the full Pro toolkit unlock with a paid Pro plan.
+                </p>
+              )}
+              <ProTrialAndPricingBlock
+                profile={profile}
+                proActive={proActive}
+                foundingPilotCount={foundingPilotCount}
+                showProTrialStartCta={showProTrialStartCta}
+              />
+            </div>
+          </section>
+        )}
 
         <section
           className="rounded-xl border border-slate-200/90 bg-slate-50/60 p-4 sm:p-5 dark:border-white/10 dark:bg-white/[0.04]"
