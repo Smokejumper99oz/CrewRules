@@ -64,6 +64,12 @@ function flightKey(f: CommuteFlight): string {
   return `${carrier}-${numeric}-${datePart}`;
 }
 
+/** True if a provider status string is cancellation (UK or US spelling). */
+function statusMeansCancelled(s: string | undefined): boolean {
+  const t = (s ?? "").trim().toLowerCase();
+  return t === "cancelled" || t === "canceled";
+}
+
 /**
  * Merge and deduplicate flights from multiple providers.
  * Prefer AeroDataBox for same-day display timing: AviationStack scheduled timestamps may arrive
@@ -138,7 +144,10 @@ function dedupeFlights(
         arr_actual_raw: as.arr_actual_raw ?? existing.arr_actual_raw,
         dep_delay_min: as.dep_delay_min ?? existing.dep_delay_min,
         arr_delay_min: as.arr_delay_min ?? existing.arr_delay_min,
-        status: as.status ?? existing.status,
+        status:
+          statusMeansCancelled(existing.status) || statusMeansCancelled(as.status)
+            ? "cancelled"
+            : as.status ?? existing.status,
         dep_gate: as.dep_gate ?? existing.dep_gate,
         arr_gate: as.arr_gate ?? existing.arr_gate,
       });
