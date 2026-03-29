@@ -95,14 +95,22 @@ export function deriveOperationalStatus(
   const statusLower = input.status?.toLowerCase();
   if (statusLower === "cancelled" || statusLower === "canceled") {
     let depSched = formatInTimeZone(new Date(input.depUtc), depTz, "HH:mm");
+    let depSortD = new Date(input.depUtc);
     if (input.dep_scheduled_raw) {
       const p = parseTs(input.dep_scheduled_raw, depTz);
-      if (p) depSched = formatInTimeZone(p, depTz, "HH:mm");
+      if (p) {
+        depSched = formatInTimeZone(p, depTz, "HH:mm");
+        depSortD = p;
+      }
     }
     let arrSched = formatInTimeZone(new Date(input.arrUtc), arrTz, "HH:mm");
+    let arrSortD = new Date(input.arrUtc);
     if (input.arr_scheduled_raw) {
       const p = parseTs(input.arr_scheduled_raw, arrTz);
-      if (p) arrSched = formatInTimeZone(p, arrTz, "HH:mm");
+      if (p) {
+        arrSched = formatInTimeZone(p, arrTz, "HH:mm");
+        arrSortD = p;
+      }
     }
     return {
       label: "cancelled",
@@ -111,6 +119,8 @@ export function deriveOperationalStatus(
       confidence: "high",
       dep: { scheduled: depSched, actual: depSched },
       arr: { scheduled: arrSched, actual: arrSched },
+      sort_dep_utc: depSortD.toISOString(),
+      sort_arr_utc: arrSortD.toISOString(),
     };
   }
 
@@ -131,28 +141,40 @@ export function deriveOperationalStatus(
     }
     const depNow = input.dep_actual_raw ?? input.dep_estimated_raw;
     const arrNow = input.arr_actual_raw ?? input.arr_estimated_raw;
+    let depSortD = new Date(input.depUtc);
+    let arrSortD = new Date(input.arrUtc);
     let depActual = depSched;
     if (depNow) {
       const p = parseTs(depNow, depTz);
-      if (p) depActual = formatInTimeZone(p, depTz, "HH:mm");
+      if (p) {
+        depActual = formatInTimeZone(p, depTz, "HH:mm");
+        depSortD = p;
+      }
     } else if (depDelay >= 1) {
       const depSchedDate = input.dep_scheduled_raw
         ? parseTs(input.dep_scheduled_raw, depTz)
         : new Date(input.depUtc);
       if (depSchedDate && !Number.isNaN(depSchedDate.getTime())) {
-        depActual = formatInTimeZone(addMinutes(depSchedDate, depDelay), depTz, "HH:mm");
+        const moved = addMinutes(depSchedDate, depDelay);
+        depActual = formatInTimeZone(moved, depTz, "HH:mm");
+        depSortD = moved;
       }
     }
     let arrActual = arrSched;
     if (arrNow) {
       const p = parseTs(arrNow, arrTz);
-      if (p) arrActual = formatInTimeZone(p, arrTz, "HH:mm");
+      if (p) {
+        arrActual = formatInTimeZone(p, arrTz, "HH:mm");
+        arrSortD = p;
+      }
     } else if (arrDelay >= 1) {
       const arrSchedDate = input.arr_scheduled_raw
         ? parseTs(input.arr_scheduled_raw, arrTz)
         : new Date(input.arrUtc);
       if (arrSchedDate && !Number.isNaN(arrSchedDate.getTime())) {
-        arrActual = formatInTimeZone(addMinutes(arrSchedDate, arrDelay), arrTz, "HH:mm");
+        const moved = addMinutes(arrSchedDate, arrDelay);
+        arrActual = formatInTimeZone(moved, arrTz, "HH:mm");
+        arrSortD = moved;
       }
     }
     return {
@@ -162,6 +184,8 @@ export function deriveOperationalStatus(
       confidence: "high",
       dep: { scheduled: depSched, actual: depActual },
       arr: { scheduled: arrSched, actual: arrActual },
+      sort_dep_utc: depSortD.toISOString(),
+      sort_arr_utc: arrSortD.toISOString(),
     };
   }
 
@@ -175,6 +199,8 @@ export function deriveOperationalStatus(
   let arrTsDelayMs = 0;
   let depDisplay: { scheduled: string; actual: string } | undefined;
   let arrDisplay: { scheduled: string; actual: string } | undefined;
+  let depSortFromTs: Date | undefined;
+  let arrSortFromTs: Date | undefined;
 
   if (depWasRaw && depNowRaw) {
     const was = parseTs(depWasRaw, depTz);
@@ -186,6 +212,7 @@ export function deriveOperationalStatus(
           scheduled: formatInTimeZone(was, depTz, "HH:mm"),
           actual: formatInTimeZone(now, depTz, "HH:mm"),
         };
+        depSortFromTs = now;
       }
     }
   }
@@ -199,6 +226,7 @@ export function deriveOperationalStatus(
           scheduled: formatInTimeZone(was, arrTz, "HH:mm"),
           actual: formatInTimeZone(now, arrTz, "HH:mm"),
         };
+        arrSortFromTs = now;
       }
     }
   }
@@ -212,6 +240,8 @@ export function deriveOperationalStatus(
       depDisplay?.scheduled ?? formatInTimeZone(new Date(input.depUtc), depTz, "HH:mm");
     const arrSched =
       arrDisplay?.scheduled ?? formatInTimeZone(new Date(input.arrUtc), arrTz, "HH:mm");
+    const sortDepD = depSortFromTs ?? new Date(input.depUtc);
+    const sortArrD = arrSortFromTs ?? new Date(input.arrUtc);
     return {
       label: "delayed",
       delay_minutes: delayMin,
@@ -219,6 +249,8 @@ export function deriveOperationalStatus(
       confidence: "medium",
       dep: depDisplay ?? { scheduled: depSched, actual: depSched },
       arr: arrDisplay ?? { scheduled: arrSched, actual: arrSched },
+      sort_dep_utc: sortDepD.toISOString(),
+      sort_arr_utc: sortArrD.toISOString(),
     };
   }
 
@@ -238,6 +270,8 @@ export function deriveOperationalStatus(
       confidence: "medium",
       dep: { scheduled: depSched, actual: depSched },
       arr: { scheduled: arrSched, actual: arrSched },
+      sort_dep_utc: input.depUtc,
+      sort_arr_utc: input.arrUtc,
     };
     if (isAa1352SavClt) {
       console.log("[Commute Assist] AA1352 SAV→CLT deriveOperationalStatus", {
@@ -261,9 +295,20 @@ export function deriveOperationalStatus(
       if (p) depSched = formatInTimeZone(p, depTz, "HH:mm");
     }
     let arrSched = formatInTimeZone(new Date(input.arrUtc), arrTz, "HH:mm");
+    let depSortD = new Date(input.depUtc);
+    let arrSortD = new Date(input.arrUtc);
     if (input.arr_scheduled_raw) {
       const p = parseTs(input.arr_scheduled_raw, arrTz);
-      if (p) arrSched = formatInTimeZone(p, arrTz, "HH:mm");
+      if (p) {
+        arrSched = formatInTimeZone(p, arrTz, "HH:mm");
+        arrSortD = p;
+      }
+    }
+    if (input.dep_scheduled_raw) {
+      const p = parseTs(input.dep_scheduled_raw, depTz);
+      if (p) {
+        depSortD = p;
+      }
     }
     const result: OperationalStatus = {
       label: "delayed",
@@ -272,6 +317,8 @@ export function deriveOperationalStatus(
       confidence: "medium",
       dep: { scheduled: depSched, actual: depSched },
       arr: { scheduled: arrSched, actual: arrSched },
+      sort_dep_utc: depSortD.toISOString(),
+      sort_arr_utc: arrSortD.toISOString(),
     };
     if (isAa1352SavClt) {
       console.log("[Commute Assist] AA1352 SAV→CLT deriveOperationalStatus", {
@@ -297,6 +344,8 @@ export function deriveOperationalStatus(
     confidence: "low",
     dep: { scheduled: depSched, actual: depSched },
     arr: { scheduled: arrSched, actual: arrSched },
+    sort_dep_utc: input.depUtc,
+    sort_arr_utc: input.arrUtc,
   };
   if (isAa1352SavClt) {
     console.log("[Commute Assist] AA1352 SAV→CLT deriveOperationalStatus", {

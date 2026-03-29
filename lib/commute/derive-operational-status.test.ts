@@ -128,16 +128,16 @@ test("unknown: never maps to On time", () => {
   assert.notEqual(operationalStatusToDisplayLabel("unknown"), "On time");
 });
 
-test("offset-aware timestamp: Z parses as UTC", () => {
+test("offset-aware timestamp: Z in America/* uses local wall interpretation (see parseTimestampProviderAware)", () => {
   const d = parseTimestampProviderAware("2026-03-18T11:59:00.000Z", TZ);
   assert.ok(d !== null);
-  assert.equal(d!.toISOString(), "2026-03-18T11:59:00.000Z");
+  assert.equal(d!.toISOString(), "2026-03-18T15:59:00.000Z");
 });
 
-test("offset-aware timestamp: +00:00 parses as UTC", () => {
+test("offset-aware timestamp: +00:00 in America/* matches Z branch (local wall)", () => {
   const d = parseTimestampProviderAware("2026-03-18T11:59:00+00:00", TZ);
   assert.ok(d !== null);
-  assert.equal(d!.toISOString(), "2026-03-18T11:59:00.000Z");
+  assert.equal(d!.toISOString(), "2026-03-18T15:59:00.000Z");
 });
 
 test("airport-local naive: offsetless parses in timezone", () => {
@@ -181,6 +181,132 @@ test("provider status diverted -> delayed", () => {
     TZ
   );
   assert.equal(r.label, "delayed");
+});
+
+test("every status returns sort_dep_utc and sort_arr_utc", () => {
+  const cases = [
+    deriveOperationalStatus({ depUtc: DEP_UTC, arrUtc: ARR_UTC, status: "cancelled" }, TZ, TZ),
+    deriveOperationalStatus({ depUtc: DEP_UTC, arrUtc: ARR_UTC, dep_delay_min: 30 }, TZ, TZ),
+    deriveOperationalStatus(
+      {
+        depUtc: DEP_UTC,
+        arrUtc: ARR_UTC,
+        dep_scheduled_raw: "2026-03-18T06:59",
+        dep_estimated_raw: "2026-03-18T08:05",
+        arr_scheduled_raw: "2026-03-18T08:08",
+        arr_estimated_raw: "2026-03-18T09:14",
+      },
+      TZ,
+      TZ
+    ),
+    deriveOperationalStatus(
+      {
+        depUtc: DEP_UTC,
+        arrUtc: ARR_UTC,
+        dep_scheduled_raw: "2026-03-18T06:59",
+        dep_estimated_raw: "2026-03-18T06:59",
+        arr_scheduled_raw: "2026-03-18T08:08",
+        arr_estimated_raw: "2026-03-18T08:08",
+      },
+      TZ,
+      TZ
+    ),
+    deriveOperationalStatus({ depUtc: DEP_UTC, arrUtc: ARR_UTC }, TZ, TZ),
+  ];
+  for (const r of cases) {
+    assert.ok(r.sort_dep_utc && !Number.isNaN(new Date(r.sort_dep_utc).getTime()));
+    assert.ok(r.sort_arr_utc && !Number.isNaN(new Date(r.sort_arr_utc).getTime()));
+  }
+});
+
+/** Regression: delayed card shows bold estimated arrival — sort_arr must track that instant, not input arrUtc alone. */
+test("timestamp-delayed: sort_arr_utc matches estimated arrival parse", () => {
+  const r = deriveOperationalStatus(
+    {
+      depUtc: DEP_UTC,
+      arrUtc: ARR_UTC,
+      dep_scheduled_raw: "2026-03-18T06:59",
+      dep_estimated_raw: "2026-03-18T06:59",
+      arr_scheduled_raw: "2026-03-18T08:08",
+      arr_estimated_raw: "2026-03-18T09:14",
+    },
+    TZ,
+    TZ
+  );
+  assert.equal(r.label, "delayed");
+  const expectedArr = parseTimestampProviderAware("2026-03-18T09:14", TZ);
+  assert.ok(expectedArr);
+  assert.equal(r.sort_arr_utc, expectedArr!.toISOString());
+  assert.ok(new Date(r.sort_arr_utc).getTime() > new Date(ARR_UTC).getTime());
+});
+
+/** Regression: cancelled card strikethrough uses scheduled — sort uses same scheduled instants when raw present. */
+test("cancelled: sort arr matches scheduled raw instant", () => {
+  const r = deriveOperationalStatus(
+    {
+      depUtc: "2026-03-18T15:00:00.000Z",
+      arrUtc: "2026-03-18T17:00:00.000Z",
+      status: "cancelled",
+      dep_scheduled_raw: "2026-03-18T07:00",
+      arr_scheduled_raw: "2026-03-18T09:00",
+    },
+    TZ,
+    TZ
+  );
+  assert.equal(r.label, "cancelled");
+  const expDep = parseTimestampProviderAware("2026-03-18T07:00", TZ);
+  const expArr = parseTimestampProviderAware("2026-03-18T09:00", TZ);
+  assert.ok(expDep && expArr);
+  assert.equal(r.sort_dep_utc, expDep!.toISOString());
+  assert.equal(r.sort_arr_utc, expArr!.toISOString());
+});
+
+/** Mixed-status: ascending by sort_arr_utc matches visible “earliest arrival” ordering. */
+test("mixed on_time / delayed / cancelled: sort order by sort_arr_utc", () => {
+  const onTime = deriveOperationalStatus(
+    {
+      depUtc: "2026-03-18T14:00:00.000Z",
+      arrUtc: "2026-03-18T15:00:00.000Z",
+      dep_scheduled_raw: "2026-03-18T10:00",
+      dep_estimated_raw: "2026-03-18T10:00",
+      arr_scheduled_raw: "2026-03-18T11:00",
+      arr_estimated_raw: "2026-03-18T11:00",
+    },
+    TZ,
+    TZ
+  );
+  const delayed = deriveOperationalStatus(
+    {
+      depUtc: "2026-03-18T12:00:00.000Z",
+      arrUtc: "2026-03-18T13:30:00.000Z",
+      dep_scheduled_raw: "2026-03-18T08:00",
+      dep_estimated_raw: "2026-03-18T08:00",
+      arr_scheduled_raw: "2026-03-18T09:30",
+      arr_estimated_raw: "2026-03-18T10:45",
+    },
+    TZ,
+    TZ
+  );
+  const cancelled = deriveOperationalStatus(
+    {
+      depUtc: "2026-03-18T11:00:00.000Z",
+      arrUtc: "2026-03-18T18:00:00.000Z",
+      status: "cancelled",
+      dep_scheduled_raw: "2026-03-18T07:00",
+      arr_scheduled_raw: "2026-03-18T14:00",
+    },
+    TZ,
+    TZ
+  );
+  assert.equal(onTime.label, "on_time");
+  assert.equal(delayed.label, "delayed");
+  assert.equal(cancelled.label, "cancelled");
+  const sorted = [cancelled, delayed, onTime].sort(
+    (a, b) => new Date(a.sort_arr_utc).getTime() - new Date(b.sort_arr_utc).getTime()
+  );
+  assert.equal(sorted[0].label, "delayed");
+  assert.equal(sorted[1].label, "on_time");
+  assert.equal(sorted[2].label, "cancelled");
 });
 
 console.log("\nAll tests passed.");

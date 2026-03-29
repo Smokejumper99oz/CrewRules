@@ -21,6 +21,10 @@ export type CommuteFlightOption = {
   flight?: string;
   depUtc: string;
   arrUtc: string;
+  /** Sort key: matches primary visible departure on card (see deriveOperationalStatus.sort_dep_utc). */
+  sortDepUtc?: string;
+  /** Sort key: matches primary visible arrival on card (see deriveOperationalStatus.sort_arr_utc). */
+  sortArrUtc?: string;
   nonstop: boolean;
   risk: CommuteRisk;
   reason: string;

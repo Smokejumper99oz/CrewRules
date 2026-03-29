@@ -1,0 +1,24 @@
+---
+description: Commute Assist list sort must use the same times shown on cards
+alwaysApply: false
+---
+
+# Commute Assist — sort vs. displayed time (source of truth)
+
+For any Commute Assist view that shows flight times and supports sorting:
+
+1. The active sort must use the **exact same final time** the user sees on the card (primary visible dep/arrival — e.g. TimeBlock bold actual when delayed, strikethrough scheduled when cancelled).
+2. Never sort on `depUtc` / `arrUtc` alone if the card derives visible times differently (operational status, delay normalization, cancellation, provider merge).
+3. When timing or status changes (refresh, cache restore, merge), **recompute** canonical sort instants from the same rules as the card before ordering.
+4. Status may change styling only; ordering must follow the sort keys tied to **displayed** times for the active sort mode.
+5. **Canonical sort instants** live on `OperationalStatus` as `sort_dep_utc` / `sort_arr_utc` (see `deriveOperationalStatus`). `CommuteFlightOption` exposes `sortDepUtc` / `sortArrUtc` set in `commuteFlightToOption` (with client re-derive when legacy cache lacks sort fields).
+6. Duration sort uses `(sortArr − sortDep)` so “shortest trip” matches visible endpoints.
+7. Two-leg: connection math and default ordering use **visible** leg land/push times (`sortArr` / `sortDep` per leg), not stale scheduled-only timestamps when the UI shows estimates.
+
+## Verification
+
+Before closing a Commute Assist change that affects times or sorting, run:
+
+`npx tsx lib/commute/derive-operational-status.test.ts`
+
+and confirm a **mixed-status** case (on time, delayed, cancelled) still has list order matching visible arrival times for “Earliest arrival.”

@@ -15,6 +15,7 @@ import {
   operationalStatusToDisplayLabel,
   type OperationalStatus,
 } from "@/lib/commute/operational-status-types";
+import { deriveOperationalStatus } from "@/lib/commute/derive-operational-status";
 
 function fmtHM(totalMinutes: number) {
   const h = Math.floor(totalMinutes / 60);
@@ -89,15 +90,28 @@ function parseDutyStartAirport(route?: string | null): string | null {
   return m?.[1] ?? null;
 }
 
+/** UTC instants used for ordering; must match primary visible times on the card (not raw/scheduled-only when UI shows estimated/actual). */
+function sortDepMs(o: CommuteFlightOption): number {
+  return new Date(o.sortDepUtc ?? o.depUtc).getTime();
+}
+function sortArrMs(o: CommuteFlightOption): number {
+  return new Date(o.sortArrUtc ?? o.arrUtc).getTime();
+}
+
+/** Connection time using visible landing / departure instants (delayed estimates included). */
+function connectionMinutesBetweenLegs(leg1: CommuteFlightOption, leg2: CommuteFlightOption): number {
+  return durationMinutesUtc(leg1.sortArrUtc ?? leg1.arrUtc, leg2.sortDepUtc ?? leg2.depUtc);
+}
+
 function sortFlights(
   list: CommuteFlightOption[],
   sortBy: "arrAsc" | "arrDesc" | "durAsc" | "durDesc"
 ): CommuteFlightOption[] {
   return [...list].sort((a, b) => {
-    const arrA = new Date(a.arrUtc).getTime();
-    const arrB = new Date(b.arrUtc).getTime();
-    const depA = new Date(a.depUtc).getTime();
-    const depB = new Date(b.depUtc).getTime();
+    const arrA = sortArrMs(a);
+    const arrB = sortArrMs(b);
+    const depA = sortDepMs(a);
+    const depB = sortDepMs(b);
     const durA = arrA - depA;
     const durB = arrB - depB;
     if (sortBy === "arrAsc") return arrA - arrB;
@@ -160,12 +174,39 @@ function commuteFlightToOption(
       output: { depUtc, arrUtc, durationMinutes: durMin },
     });
   }
+  let sortDepUtc = f.operationalStatus?.sort_dep_utc;
+  let sortArrUtc = f.operationalStatus?.sort_arr_utc;
+  if (!sortDepUtc || !sortArrUtc) {
+    const derived = deriveOperationalStatus(
+      {
+        depUtc,
+        arrUtc,
+        originTz: depTz,
+        destTz: arrTz,
+        dep_scheduled_raw: f.dep_scheduled_raw,
+        dep_estimated_raw: f.dep_estimated_raw,
+        dep_actual_raw: f.dep_actual_raw,
+        arr_scheduled_raw: f.arr_scheduled_raw,
+        arr_estimated_raw: f.arr_estimated_raw,
+        arr_actual_raw: f.arr_actual_raw,
+        dep_delay_min: f.dep_delay_min,
+        arr_delay_min: f.arr_delay_min,
+        status: f.status,
+      },
+      originTzVal,
+      destTzVal
+    );
+    sortDepUtc = derived.sort_dep_utc;
+    sortArrUtc = derived.sort_arr_utc;
+  }
   return {
     id,
     carrier: f.carrier,
     flight: stripCarrierFromFlight(f.flightNumber, f.carrier),
     depUtc,
     arrUtc,
+    sortDepUtc,
+    sortArrUtc,
     nonstop: true,
     risk: overrides?.risk ?? "recommended",
     reason: overrides?.reason ?? `Leg • ${fmtHM(f.durationMinutes)}`,
@@ -241,14 +282,14 @@ const TWO_LEG_MAX_ONWARD_PER_LEG1 = 2;
 
 /** Temporary: sanity check for 2-leg. Suppress broken itineraries until feature is rebuilt. */
 function isTwoLegOptionSane(opt: TwoLegOption): boolean {
-  const leg1Dep = new Date(opt.leg1.depUtc).getTime();
-  const leg1Arr = new Date(opt.leg1.arrUtc).getTime();
-  const leg2Dep = new Date(opt.leg2.depUtc).getTime();
-  const leg2Arr = new Date(opt.leg2.arrUtc).getTime();
+  const leg1Dep = sortDepMs(opt.leg1);
+  const leg1Arr = sortArrMs(opt.leg1);
+  const leg2Dep = sortDepMs(opt.leg2);
+  const leg2Arr = sortArrMs(opt.leg2);
   if (leg1Arr <= leg1Dep) return false; // leg1: arrival before departure
   if (leg2Arr <= leg2Dep) return false; // leg2: arrival before departure
   if (leg2Dep < leg1Arr) return false;  // leg2 dep before leg1 arr (negative connection)
-  const connectMin = durationMinutesUtc(opt.leg1.arrUtc, opt.leg2.depUtc);
+  const connectMin = connectionMinutesBetweenLegs(opt.leg1, opt.leg2);
   if (connectMin <= 0) return false;   // connection must be positive
   return true;
 }
@@ -258,7 +299,7 @@ function filterTwoLegOptionsForDisplay(options: TwoLegOption[]): TwoLegOption[] 
   const sane = options.filter(isTwoLegOptionSane);
   const byLeg1 = new Map<string, TwoLegOption[]>();
   for (const opt of sane) {
-    const connectMin = durationMinutesUtc(opt.leg1.arrUtc, opt.leg2.depUtc);
+    const connectMin = connectionMinutesBetweenLegs(opt.leg1, opt.leg2);
     if (connectMin > TWO_LEG_MAX_CONNECTION_MINUTES) continue;
     const key = opt.leg1.id;
     if (!byLeg1.has(key)) byLeg1.set(key, []);
@@ -267,13 +308,13 @@ function filterTwoLegOptionsForDisplay(options: TwoLegOption[]): TwoLegOption[] 
   const result: TwoLegOption[] = [];
   for (const opts of byLeg1.values()) {
     opts.sort((a, b) => {
-      const ca = durationMinutesUtc(a.leg1.arrUtc, a.leg2.depUtc);
-      const cb = durationMinutesUtc(b.leg1.arrUtc, b.leg2.depUtc);
+      const ca = connectionMinutesBetweenLegs(a.leg1, a.leg2);
+      const cb = connectionMinutesBetweenLegs(b.leg1, b.leg2);
       return ca - cb;
     });
     result.push(...opts.slice(0, TWO_LEG_MAX_ONWARD_PER_LEG1));
   }
-  return result.sort((a, b) => new Date(a.depUtc).getTime() - new Date(b.depUtc).getTime());
+  return result.sort((a, b) => sortArrMs(a.leg2) - sortArrMs(b.leg2));
 }
 
 const PAGE_SIZE = 5;
@@ -1066,13 +1107,13 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
         const f = flights[i];
         const baseOpt = commuteFlightToOption(f, originTzVal, destTzVal, `${destinationLabel}-${f.flightNumber}-${f.departureTime}-${i}`);
         if (!baseOpt) continue;
-        if (releaseEarliestDepIso && baseOpt.depUtc < releaseEarliestDepIso) continue;
+        if (releaseEarliestDepIso && (baseOpt.sortDepUtc ?? baseOpt.depUtc) < releaseEarliestDepIso) continue;
         let risk: "recommended" | "risky" | "not_recommended" = "recommended";
         let reason = "";
         if (isReturn) {
           reason = `Return home • ${fmtHM(f.durationMinutes)}`;
         } else {
-          const bufferMin = minutesBetween(baseOpt.arrUtc, reportAtIso);
+          const bufferMin = minutesBetween(baseOpt.sortArrUtc ?? baseOpt.arrUtc, reportAtIso);
           if (bufferMin < arrivalBuffer) {
             risk = "not_recommended";
             reason = `Arrives after cutoff (${bufferMin}m < ${arrivalBuffer}m)`;
@@ -1309,9 +1350,11 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
         const minLeg2DepMs = MIN_CONNECTION_MINUTES * 60 * 1000;
         const label = labelPart === "home" ? "home" : "alternate";
         for (const leg1 of leg1Opts) {
-          const minLeg2DepIso = new Date(new Date(leg1.arrUtc).getTime() + minLeg2DepMs).toISOString();
+          const leg1LandIso = leg1.sortArrUtc ?? leg1.arrUtc;
+          const minLeg2DepIso = new Date(new Date(leg1LandIso).getTime() + minLeg2DepMs).toISOString();
           for (const leg2 of leg2Opts) {
-            if (leg2.depUtc >= minLeg2DepIso) {
+            const leg2DepIso = leg2.sortDepUtc ?? leg2.depUtc;
+            if (leg2DepIso >= minLeg2DepIso) {
               allOptions.push({
                 routeKey: route.routeKey,
                 label,
@@ -1320,8 +1363,8 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                 destination: leg2Dest,
                 leg1,
                 leg2,
-                depUtc: leg1.depUtc,
-                arrUtc: leg2.arrUtc,
+                depUtc: leg1.sortDepUtc ?? leg1.depUtc,
+                arrUtc: leg2.sortArrUtc ?? leg2.arrUtc,
               });
               // Debug: DL 1946 ATL-SJU 2-leg option trace (remove after root cause found)
               if (
@@ -1330,10 +1373,10 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                 (leg2.carrier === "DL" || leg2.carrier === "dl") &&
                 /1946/.test(leg2.flight ?? "")
               ) {
-                const connectMin = durationMinutesUtc(leg1.arrUtc, leg2.depUtc);
+                const connectMin = connectionMinutesBetweenLegs(leg1, leg2);
                 console.log("[Commute Assist] DL 1946 ATL→SJU 2-leg option (loadTwoLegFirstLegFlights)", {
-                  leg1ArrUtc: leg1.arrUtc,
-                  leg2DepUtc: leg2.depUtc,
+                  leg1ArrUtc: leg1LandIso,
+                  leg2DepUtc: leg2DepIso,
                   leg2ArrUtc: leg2.arrUtc,
                   connectMin,
                   leg2DurationMin: durationMinutesUtc(leg2.depUtc, leg2.arrUtc),
@@ -1432,9 +1475,11 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           const minLeg2DepMs = MIN_CONNECTION_MINUTES * 60 * 1000;
           const opts: TwoLegOption[] = [];
           for (const leg1 of l1Opts) {
-            const minLeg2DepIso = new Date(new Date(leg1.arrUtc).getTime() + minLeg2DepMs).toISOString();
+            const leg1LandIso = leg1.sortArrUtc ?? leg1.arrUtc;
+            const minLeg2DepIso = new Date(new Date(leg1LandIso).getTime() + minLeg2DepMs).toISOString();
             for (const leg2 of l2Opts) {
-              if (leg2.depUtc >= minLeg2DepIso) {
+              const leg2DepIso = leg2.sortDepUtc ?? leg2.depUtc;
+              if (leg2DepIso >= minLeg2DepIso) {
                 const opt = {
                   routeKey: `${route.label}-${route.stop}`,
                   label: route.label,
@@ -1443,8 +1488,8 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                   destination: route.destination,
                   leg1,
                   leg2,
-                  depUtc: leg1.depUtc,
-                  arrUtc: leg2.arrUtc,
+                  depUtc: leg1.sortDepUtc ?? leg1.depUtc,
+                  arrUtc: leg2.sortArrUtc ?? leg2.arrUtc,
                 };
                 opts.push(opt);
                 // Debug: DL 1946 ATL-SJU 2-leg option trace (remove after root cause found)
@@ -1454,10 +1499,10 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                   (leg2.carrier === "DL" || leg2.carrier === "dl") &&
                   /1946/.test(leg2.flight ?? "")
                 ) {
-                  const connectMin = durationMinutesUtc(leg1.arrUtc, leg2.depUtc);
+                  const connectMin = connectionMinutesBetweenLegs(leg1, leg2);
                   console.log("[Commute Assist] DL 1946 ATL→SJU 2-leg option (loadTwoLegFlights)", {
-                    leg1ArrUtc: leg1.arrUtc,
-                    leg2DepUtc: leg2.depUtc,
+                    leg1ArrUtc: leg1LandIso,
+                    leg2DepUtc: leg2DepIso,
                     leg2ArrUtc: leg2.arrUtc,
                     connectMin,
                     leg2DurationMin: durationMinutesUtc(leg2.depUtc, leg2.arrUtc),
@@ -1491,7 +1536,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
         );
 
         if (tryDayPrior && routeOptions.length > 0) {
-          const anyArriveByCutoff = routeOptions.some((o) => new Date(o.arrUtc).getTime() <= arriveByMs);
+          const anyArriveByCutoff = routeOptions.some((o) => sortArrMs(o.leg2) <= arriveByMs);
           if (!anyArriveByCutoff) {
             const dayPrior = subtractDay(dutyDateBase);
             const leg1Prior = await fetchLeg1(dayPrior);
@@ -1505,9 +1550,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                 leg2Prior.originTz,
                 leg2Prior.destTz
               );
-              const anyFallbackArriveByCutoff = fallbackOptions.some(
-                (o) => new Date(o.arrUtc).getTime() <= arriveByMs
-              );
+              const anyFallbackArriveByCutoff = fallbackOptions.some((o) => sortArrMs(o.leg2) <= arriveByMs);
               if (anyFallbackArriveByCutoff || fallbackOptions.length > 0) {
                 routeOptions = fallbackOptions;
               }
@@ -1574,15 +1617,11 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const alternateList = sortFlights(commuteGroups.alternate ?? [], sortBy);
   const homeLastFlightId =
     homeList.length > 0
-      ? homeList.reduce((best, f) =>
-          new Date(f.depUtc).getTime() > new Date(best.depUtc).getTime() ? f : best
-        ).id
+      ? homeList.reduce((best, f) => (sortDepMs(f) > sortDepMs(best) ? f : best)).id
       : null;
   const alternateLastFlightId =
     alternateList.length > 0
-      ? alternateList.reduce((best, f) =>
-          new Date(f.depUtc).getTime() > new Date(best.depUtc).getTime() ? f : best
-        ).id
+      ? alternateList.reduce((best, f) => (sortDepMs(f) > sortDepMs(best) ? f : best)).id
       : null;
   const homeTotalPages = Math.max(1, Math.ceil(homeList.length / PAGE_SIZE));
   const alternateTotalPages = Math.max(1, Math.ceil(alternateList.length / PAGE_SIZE));
@@ -1596,9 +1635,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const twoLegPageItems = filteredTwoLegOptions.slice((twoLegPage - 1) * PAGE_SIZE, twoLegPage * PAGE_SIZE);
   const twoLegLastFlightId =
     filteredTwoLegOptions.length > 0
-      ? filteredTwoLegOptions.reduce((best, o) =>
-          new Date(o.arrUtc).getTime() > new Date(best.arrUtc).getTime() ? o : best
-        ).leg2.id
+      ? filteredTwoLegOptions.reduce((best, o) => (sortArrMs(o.leg2) > sortArrMs(best.leg2) ? o : best)).leg2.id
       : null;
 
   const filteredTwoLegFirstLegOptions = useMemo(
@@ -1613,7 +1650,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const twoLegFirstLegLastFlightId =
     filteredTwoLegFirstLegOptions.length > 0
       ? filteredTwoLegFirstLegOptions.reduce((best, o) =>
-          new Date(o.arrUtc).getTime() > new Date(best.arrUtc).getTime() ? o : best
+          sortArrMs(o.leg2) > sortArrMs(best.leg2) ? o : best
         ).leg2.id
       : null;
 
@@ -2008,7 +2045,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                   )}
                   <div className="min-w-0 space-y-2">
                     {twoLegPageItems.map((opt) => {
-                      const connectMin = durationMinutesUtc(opt.leg1.arrUtc, opt.leg2.depUtc);
+                      const connectMin = connectionMinutesBetweenLegs(opt.leg1, opt.leg2);
                       return (
                         <div key={`${opt.routeKey}-${opt.leg1.id}-${opt.leg2.id}`} className="min-w-0 w-full rounded-lg border border-slate-700/60 bg-slate-900/40 p-2">
                           <div className="flex flex-col sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-stretch gap-2 min-w-0">
@@ -2101,7 +2138,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                       </p>
                       <div className="min-w-0 space-y-2">
                         {twoLegFirstLegPageItems.map((opt) => {
-                          const connectMin = durationMinutesUtc(opt.leg1.arrUtc, opt.leg2.depUtc);
+                          const connectMin = connectionMinutesBetweenLegs(opt.leg1, opt.leg2);
                           return (
                             <div key={`${opt.routeKey}-${opt.leg1.id}-${opt.leg2.id}`} className="min-w-0 w-full rounded-lg border border-slate-700/60 bg-slate-900/40 p-2">
                               <div className="flex flex-col sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-stretch gap-2 min-w-0">

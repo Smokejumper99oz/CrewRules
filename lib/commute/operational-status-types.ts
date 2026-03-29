@@ -21,6 +21,12 @@ export type OperationalStatus = {
   confidence: "high" | "medium" | "low";
   dep?: { scheduled: string; actual: string };
   arr?: { scheduled: string; actual: string };
+  /**
+   * ISO UTC instants for list sorting — same primary visible times as the Commute Assist card
+   * (TimeBlock: cancelled → scheduled strikethrough; delayed → bold actual when shown; else scheduled).
+   */
+  sort_dep_utc: string;
+  sort_arr_utc: string;
 };
 
 /** Map OperationalStatusLabel to display text. */

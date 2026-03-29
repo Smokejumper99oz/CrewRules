@@ -1,0 +1,25 @@
+---
+description: Commute Assist regression — visible times, sort parity, cancelled/delayed ordering
+globs: lib/commute/**/*.{ts,tsx},components/**/*commute*.{ts,tsx}
+alwaysApply: false
+---
+
+# Commute Assist — regression gate (times, sort, status)
+
+Before closing any change that touches **provider merge**, **`normalizeFlightTiming`**, **`deriveOperationalStatus`**, **cache restore** (hydration / legacy fields), or **Commute Assist card time display**, all of the following must hold:
+
+## 1. Visible times are the audit source
+
+Record the **exact** departure and arrival times shown on the cards (bold actual when delayed, strikethrough scheduled when cancelled, etc.). Treat that UI as ground truth for what “the flight is” in this flow.
+
+## 2. Sort matches what you see
+
+With each relevant sort mode (e.g. earliest departure, earliest arrival, duration), confirm the list order is **exactly** consistent with those **same** visible times — not raw `depUtc` / `arrUtc` or other hidden fields. See also `.cursor/rules/commute-assist-sort-display-time.mdc` and canonical sort fields on `OperationalStatus` / options.
+
+## 3. Cancelled and delayed do not “jump” on hidden UTC
+
+Mixed-status lists (on time, delayed, cancelled) must **not** reorder incorrectly because sort or merge used scheduled-only UTC, unstripped offsets, or pre-status timestamps while the card shows operational times. After refresh and **cache restore**, re-run the same visible-time vs. sort check.
+
+## Automated check
+
+Run and extend tests as needed, e.g. `npx tsx lib/commute/derive-operational-status.test.ts`, including **mixed-status** cases where order must match **display-aligned** sort keys.
