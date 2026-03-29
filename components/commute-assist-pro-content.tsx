@@ -90,28 +90,76 @@ function parseDutyStartAirport(route?: string | null): string | null {
   return m?.[1] ?? null;
 }
 
+type CommuteFlightOptionSorted = CommuteFlightOption & {
+  sortDepUtc: string;
+  sortArrUtc: string;
+};
+
+function isValidSortUtc(iso: string | undefined | null): boolean {
+  return typeof iso === "string" && iso.length > 0 && !Number.isNaN(new Date(iso).getTime());
+}
+
+/**
+ * Guarantees canonical sort instants (sort_dep_utc / sort_arr_utc) before any sort, filter, or connection math.
+ * Missing or invalid fields trigger deriveOperationalStatus using the same inputs as the card.
+ */
+function ensureOptionSortFields(o: CommuteFlightOption): CommuteFlightOptionSorted {
+  if (isValidSortUtc(o.sortDepUtc) && isValidSortUtc(o.sortArrUtc)) {
+    return o as CommuteFlightOptionSorted;
+  }
+  const depTz = o.originTz ?? "UTC";
+  const arrTz = o.destTz ?? "UTC";
+  const derived = deriveOperationalStatus(
+    {
+      depUtc: o.depUtc,
+      arrUtc: o.arrUtc,
+      originTz: depTz,
+      destTz: arrTz,
+      dep_scheduled_raw: o.dep_scheduled_raw,
+      dep_estimated_raw: o.dep_estimated_raw,
+      dep_actual_raw: o.dep_actual_raw,
+      arr_scheduled_raw: o.arr_scheduled_raw,
+      arr_estimated_raw: o.arr_estimated_raw,
+      arr_actual_raw: o.arr_actual_raw,
+      dep_delay_min: o.dep_delay_min,
+      arr_delay_min: o.arr_delay_min,
+      status: o.status,
+    },
+    depTz,
+    arrTz
+  );
+  return {
+    ...o,
+    sortDepUtc: derived.sort_dep_utc,
+    sortArrUtc: derived.sort_arr_utc,
+  };
+}
+
 /** UTC instants used for ordering; must match primary visible times on the card (not raw/scheduled-only when UI shows estimated/actual). */
 function sortDepMs(o: CommuteFlightOption): number {
-  return new Date(o.sortDepUtc ?? o.depUtc).getTime();
+  return new Date(ensureOptionSortFields(o).sortDepUtc).getTime();
 }
 function sortArrMs(o: CommuteFlightOption): number {
-  return new Date(o.sortArrUtc ?? o.arrUtc).getTime();
+  return new Date(ensureOptionSortFields(o).sortArrUtc).getTime();
 }
 
 /** Connection time using visible landing / departure instants (delayed estimates included). */
 function connectionMinutesBetweenLegs(leg1: CommuteFlightOption, leg2: CommuteFlightOption): number {
-  return durationMinutesUtc(leg1.sortArrUtc ?? leg1.arrUtc, leg2.sortDepUtc ?? leg2.depUtc);
+  const L1 = ensureOptionSortFields(leg1);
+  const L2 = ensureOptionSortFields(leg2);
+  return durationMinutesUtc(L1.sortArrUtc, L2.sortDepUtc);
 }
 
 function sortFlights(
   list: CommuteFlightOption[],
   sortBy: "arrAsc" | "arrDesc" | "durAsc" | "durDesc"
 ): CommuteFlightOption[] {
-  return [...list].sort((a, b) => {
-    const arrA = sortArrMs(a);
-    const arrB = sortArrMs(b);
-    const depA = sortDepMs(a);
-    const depB = sortDepMs(b);
+  const ensured = list.map(ensureOptionSortFields);
+  return [...ensured].sort((a, b) => {
+    const arrA = new Date(a.sortArrUtc).getTime();
+    const arrB = new Date(b.sortArrUtc).getTime();
+    const depA = new Date(a.sortDepUtc).getTime();
+    const depB = new Date(b.sortDepUtc).getTime();
     const durA = arrA - depA;
     const durB = arrB - depB;
     if (sortBy === "arrAsc") return arrA - arrB;
@@ -128,7 +176,7 @@ function commuteFlightToOption(
   destTzVal: string,
   id: string,
   overrides?: { risk?: "recommended" | "risky" | "not_recommended"; reason?: string }
-): CommuteFlightOption | null {
+): CommuteFlightOptionSorted | null {
   const stripOffset = (s: string) => s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
   const depTz = f.origin_tz ?? originTzVal;
   const arrTz = f.dest_tz ?? destTzVal;
@@ -174,39 +222,14 @@ function commuteFlightToOption(
       output: { depUtc, arrUtc, durationMinutes: durMin },
     });
   }
-  let sortDepUtc = f.operationalStatus?.sort_dep_utc;
-  let sortArrUtc = f.operationalStatus?.sort_arr_utc;
-  if (!sortDepUtc || !sortArrUtc) {
-    const derived = deriveOperationalStatus(
-      {
-        depUtc,
-        arrUtc,
-        originTz: depTz,
-        destTz: arrTz,
-        dep_scheduled_raw: f.dep_scheduled_raw,
-        dep_estimated_raw: f.dep_estimated_raw,
-        dep_actual_raw: f.dep_actual_raw,
-        arr_scheduled_raw: f.arr_scheduled_raw,
-        arr_estimated_raw: f.arr_estimated_raw,
-        arr_actual_raw: f.arr_actual_raw,
-        dep_delay_min: f.dep_delay_min,
-        arr_delay_min: f.arr_delay_min,
-        status: f.status,
-      },
-      originTzVal,
-      destTzVal
-    );
-    sortDepUtc = derived.sort_dep_utc;
-    sortArrUtc = derived.sort_arr_utc;
-  }
-  return {
+  return ensureOptionSortFields({
     id,
     carrier: f.carrier,
     flight: stripCarrierFromFlight(f.flightNumber, f.carrier),
     depUtc,
     arrUtc,
-    sortDepUtc,
-    sortArrUtc,
+    sortDepUtc: f.operationalStatus?.sort_dep_utc,
+    sortArrUtc: f.operationalStatus?.sort_arr_utc,
     nonstop: true,
     risk: overrides?.risk ?? "recommended",
     reason: overrides?.reason ?? `Leg • ${fmtHM(f.durationMinutes)}`,
@@ -225,7 +248,7 @@ function commuteFlightToOption(
     arr_gate: f.arr_gate,
     aircraft_type: f.aircraft_type,
     operationalStatus: f.operationalStatus,
-  };
+  });
 }
 
 /** Convert raw commute flights to CommuteFlightOption[] for 2-leg legs. Uses shared converter. */
@@ -234,8 +257,8 @@ function convertRawFlightsToLegOptions(
   originTzVal: string,
   destTzVal: string,
   idPrefix: string
-): CommuteFlightOption[] {
-  const options: CommuteFlightOption[] = [];
+): CommuteFlightOptionSorted[] {
+  const options: CommuteFlightOptionSorted[] = [];
   for (let i = 0; i < flights.length; i++) {
     const opt = commuteFlightToOption(flights[i], originTzVal, destTzVal, `${idPrefix}-${flights[i].flightNumber}-${flights[i].departureTime}-${i}`);
     if (opt) options.push(opt);
@@ -296,7 +319,18 @@ function isTwoLegOptionSane(opt: TwoLegOption): boolean {
 
 /** Filter 2-leg options for display: sanity check, cap connection time, keep best 1–2 onward per first leg. */
 function filterTwoLegOptionsForDisplay(options: TwoLegOption[]): TwoLegOption[] {
-  const sane = options.filter(isTwoLegOptionSane);
+  const withSortLegs = options.map((o) => {
+    const leg1 = ensureOptionSortFields(o.leg1);
+    const leg2 = ensureOptionSortFields(o.leg2);
+    return {
+      ...o,
+      leg1,
+      leg2,
+      depUtc: leg1.sortDepUtc,
+      arrUtc: leg2.sortArrUtc,
+    };
+  });
+  const sane = withSortLegs.filter(isTwoLegOptionSane);
   const byLeg1 = new Map<string, TwoLegOption[]>();
   for (const opt of sane) {
     const connectMin = connectionMinutesBetweenLegs(opt.leg1, opt.leg2);
@@ -315,6 +349,43 @@ function filterTwoLegOptionsForDisplay(options: TwoLegOption[]): TwoLegOption[] 
     result.push(...opts.slice(0, TWO_LEG_MAX_ONWARD_PER_LEG1));
   }
   return result.sort((a, b) => sortArrMs(a.leg2) - sortArrMs(b.leg2));
+}
+
+/** Dev-only integrity: Earliest-arrival order vs adjacent sortArrUtc (same source as sort + display). */
+function collectFlightsIfArrAscMismatchDirect(
+  options: CommuteFlightOption[]
+): { flightNumber: string; displayedArrival: string }[] | null {
+  if (options.length < 2) return null;
+  for (let i = 1; i < options.length; i++) {
+    if (sortArrMs(options[i]) < sortArrMs(options[i - 1])) {
+      return options.map((o) => {
+        const e = ensureOptionSortFields(o);
+        return {
+          flightNumber: formatFlightLabel(e.carrier, e.flight),
+          displayedArrival: e.sortArrUtc,
+        };
+      });
+    }
+  }
+  return null;
+}
+
+function collectFlightsIfArrAscMismatchTwoLeg(
+  options: TwoLegOption[]
+): { flightNumber: string; displayedArrival: string }[] | null {
+  if (options.length < 2) return null;
+  for (let i = 1; i < options.length; i++) {
+    if (sortArrMs(options[i].leg2) < sortArrMs(options[i - 1].leg2)) {
+      return options.map((o) => {
+        const leg2 = ensureOptionSortFields(o.leg2);
+        return {
+          flightNumber: formatFlightLabel(leg2.carrier, leg2.flight),
+          displayedArrival: leg2.sortArrUtc,
+        };
+      });
+    }
+  }
+  return null;
 }
 
 const PAGE_SIZE = 5;
@@ -1107,13 +1178,13 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
         const f = flights[i];
         const baseOpt = commuteFlightToOption(f, originTzVal, destTzVal, `${destinationLabel}-${f.flightNumber}-${f.departureTime}-${i}`);
         if (!baseOpt) continue;
-        if (releaseEarliestDepIso && (baseOpt.sortDepUtc ?? baseOpt.depUtc) < releaseEarliestDepIso) continue;
+        if (releaseEarliestDepIso && baseOpt.sortDepUtc < releaseEarliestDepIso) continue;
         let risk: "recommended" | "risky" | "not_recommended" = "recommended";
         let reason = "";
         if (isReturn) {
           reason = `Return home • ${fmtHM(f.durationMinutes)}`;
         } else {
-          const bufferMin = minutesBetween(baseOpt.sortArrUtc ?? baseOpt.arrUtc, reportAtIso);
+          const bufferMin = minutesBetween(baseOpt.sortArrUtc, reportAtIso);
           if (bufferMin < arrivalBuffer) {
             risk = "not_recommended";
             reason = `Arrives after cutoff (${bufferMin}m < ${arrivalBuffer}m)`;
@@ -1350,10 +1421,10 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
         const minLeg2DepMs = MIN_CONNECTION_MINUTES * 60 * 1000;
         const label = labelPart === "home" ? "home" : "alternate";
         for (const leg1 of leg1Opts) {
-          const leg1LandIso = leg1.sortArrUtc ?? leg1.arrUtc;
+          const leg1LandIso = leg1.sortArrUtc;
           const minLeg2DepIso = new Date(new Date(leg1LandIso).getTime() + minLeg2DepMs).toISOString();
           for (const leg2 of leg2Opts) {
-            const leg2DepIso = leg2.sortDepUtc ?? leg2.depUtc;
+            const leg2DepIso = leg2.sortDepUtc;
             if (leg2DepIso >= minLeg2DepIso) {
               allOptions.push({
                 routeKey: route.routeKey,
@@ -1363,8 +1434,8 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                 destination: leg2Dest,
                 leg1,
                 leg2,
-                depUtc: leg1.sortDepUtc ?? leg1.depUtc,
-                arrUtc: leg2.sortArrUtc ?? leg2.arrUtc,
+                depUtc: leg1.sortDepUtc,
+                arrUtc: leg2.sortArrUtc,
               });
               // Debug: DL 1946 ATL-SJU 2-leg option trace (remove after root cause found)
               if (
@@ -1475,10 +1546,10 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           const minLeg2DepMs = MIN_CONNECTION_MINUTES * 60 * 1000;
           const opts: TwoLegOption[] = [];
           for (const leg1 of l1Opts) {
-            const leg1LandIso = leg1.sortArrUtc ?? leg1.arrUtc;
+            const leg1LandIso = leg1.sortArrUtc;
             const minLeg2DepIso = new Date(new Date(leg1LandIso).getTime() + minLeg2DepMs).toISOString();
             for (const leg2 of l2Opts) {
-              const leg2DepIso = leg2.sortDepUtc ?? leg2.depUtc;
+              const leg2DepIso = leg2.sortDepUtc;
               if (leg2DepIso >= minLeg2DepIso) {
                 const opt = {
                   routeKey: `${route.label}-${route.stop}`,
@@ -1488,8 +1559,8 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
                   destination: route.destination,
                   leg1,
                   leg2,
-                  depUtc: leg1.sortDepUtc ?? leg1.depUtc,
-                  arrUtc: leg2.sortArrUtc ?? leg2.arrUtc,
+                  depUtc: leg1.sortDepUtc,
+                  arrUtc: leg2.sortArrUtc,
                 };
                 opts.push(opt);
                 // Debug: DL 1946 ATL-SJU 2-leg option trace (remove after root cause found)
@@ -1673,6 +1744,65 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     if (filteredTwoLegFirstLegOptions.length === 0) setTwoLegFirstLegPage(1);
     else if (twoLegFirstLegPage > twoLegFirstLegTotalPages) setTwoLegFirstLegPage(twoLegFirstLegTotalPages);
   }, [filteredTwoLegFirstLegOptions.length, twoLegFirstLegPage, twoLegFirstLegTotalPages]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production" || sortBy !== "arrAsc") return;
+
+    const primaryRoute =
+      commuteTwoLegEnabled && twoLegFirstLegRoutes[0] ? twoLegFirstLegRoutes[0] : routes[0];
+    const route = `${primaryRoute?.origin ?? ""} → ${primaryRoute?.destination ?? ""}`;
+    const date =
+      primaryRoute?.commuteDate ?? new Date().toISOString().slice(0, 10);
+
+    const reportMismatch = (
+      flights: { flightNumber: string; displayedArrival: string }[]
+    ) => {
+      const payload = {
+        type: "COMMUTE_SORT_MISMATCH" as const,
+        route,
+        date,
+        flights,
+      };
+      console.warn(payload);
+      void fetch("/api/debug/commute-integrity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "COMMUTE_SORT_MISMATCH",
+          route,
+          date,
+          userId: profile.id,
+          flightsSnapshot: flights,
+        }),
+      }).catch(() => {});
+    };
+
+    const homeSorted = sortFlights(commuteGroups.home ?? [], sortBy);
+    const homeMismatch = collectFlightsIfArrAscMismatchDirect(homeSorted);
+    if (homeMismatch) reportMismatch(homeMismatch);
+
+    const altSorted = sortFlights(commuteGroups.alternate ?? [], sortBy);
+    const altMismatch = collectFlightsIfArrAscMismatchDirect(altSorted);
+    if (altMismatch) reportMismatch(altMismatch);
+
+    const twoLegFiltered = filterTwoLegOptionsForDisplay(twoLegOptions);
+    const twoLegMismatch = collectFlightsIfArrAscMismatchTwoLeg(twoLegFiltered);
+    if (twoLegMismatch) reportMismatch(twoLegMismatch);
+
+    const twoLegFirstFiltered = filterTwoLegOptionsForDisplay(twoLegFirstLegOptions);
+    const firstMismatch = collectFlightsIfArrAscMismatchTwoLeg(twoLegFirstFiltered);
+    if (firstMismatch) reportMismatch(firstMismatch);
+  }, [
+    sortBy,
+    commuteGroups.home,
+    commuteGroups.alternate,
+    twoLegOptions,
+    twoLegFirstLegOptions,
+    profile.id,
+    commuteTwoLegEnabled,
+    twoLegFirstLegRoutes,
+    routes,
+  ]);
 
   const didPaginateRef = useRef(false);
   useEffect(() => {
