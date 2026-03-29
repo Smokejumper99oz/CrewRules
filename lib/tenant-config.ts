@@ -56,7 +56,7 @@ export const TENANT_CARRIER: Record<string, string> = Object.fromEntries(
 export function getTenantAirlineDisplayName(tenant: string | null | undefined): string {
   const key = tenant?.trim().toLowerCase();
   if (!key) return "your airline";
-  return TENANT_CONFIG[key]?.displayName ?? tenant.trim();
+  return TENANT_CONFIG[key]?.displayName ?? (tenant?.trim() || key);
 }
 
 export function getTenantPortalConfig(tenant: string, portal: string) {

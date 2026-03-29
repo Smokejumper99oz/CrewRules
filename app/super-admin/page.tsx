@@ -91,6 +91,7 @@ export default async function SuperAdminPage() {
           usersTodayDelta={kpis.newSignupsToday}
           onlineNow={onlineNow}
           peakToday={peakToday}
+          peakAllTime={peakAllTime}
         />
 
       <section>
