@@ -827,6 +827,32 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
     const emailFromAssignment = row.mentee_personal_email?.trim() || null;
     const phoneFromProfile = menteeProf?.phone?.trim() || null;
     const phoneFromAssignment = row.mentee_phone?.trim() || null;
+
+    // profiles.base_airport is the source of truth for crew base; this fallback avoids missing join/embed data on the mentoring detail path.
+    let menteeBaseAirport: string | null = null;
+    const fromMenteeEmbed = row.mentee?.base_airport?.trim();
+    if (fromMenteeEmbed) {
+      menteeBaseAirport = fromMenteeEmbed;
+    } else if (row.mentee_user_id?.trim()) {
+      const { data: menteeAirportRow } = await supabase
+        .from("profiles")
+        .select("base_airport")
+        .eq("id", row.mentee_user_id.trim())
+        .maybeSingle();
+      const fromDirectProfile = menteeAirportRow?.base_airport?.trim();
+      if (fromDirectProfile) menteeBaseAirport = fromDirectProfile;
+    }
+
+    // RLS-safe fallback using RPC so mentors can read mentee base_airport without exposing full profile.
+    if (!menteeBaseAirport && row.id) {
+      const { data } = await supabase.rpc("get_mentee_base_airport_for_mentor", {
+        p_assignment_id: row.id,
+      });
+      if (typeof data === "string" && data.trim()) {
+        menteeBaseAirport = data.trim();
+      }
+    }
+
     const detail: MenteeDetailRow = {
       id: row.id,
       mentor_user_id: row.mentor_user_id,
@@ -847,7 +873,7 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
       mentee_phone: phoneFromProfile || phoneFromAssignment || null,
       mentee_welcome_modal_version_seen: row.mentee?.welcome_modal_version_seen ?? null,
       ...(menteeAuthLastSignIn !== undefined ? { mentee_last_sign_in_at: menteeAuthLastSignIn } : {}),
-      mentee_base_airport: row.mentee?.base_airport?.trim() || null,
+      mentee_base_airport: menteeBaseAirport,
       mentor_workspace_mentoring_status: mentorWorkspaceMentoringStatus,
       mentor_workspace_next_check_in_date: mentorWorkspaceNextCheckInDate,
     };

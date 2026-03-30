@@ -332,8 +332,7 @@ export function PilotProfilePersonalFields({
             />
             <p className="mt-1 text-xs text-slate-500">
               3-letter IATA airport code. Used for reserve calculations and default commute planning. If a trip starts from
-              another airport, Commute{" "}
-              <span className="text-[#75C043]">Assist</span>
+              another airport, Commute Assist
               <span className="align-super text-[10px]">™</span> automatically uses that airport instead.
             </p>
           </div>
