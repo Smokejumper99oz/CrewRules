@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { formatUsPhoneStored } from "@/lib/format-us-phone";
 
 export type MentorRosterRow = {
+  rowKind: "profile" | "preload";
   id: string;
   full_name: string | null;
   employee_number: string | null;
+  /** Raw stored phone (profile: mentor_phone || phone; preload: phone). Formatted in UI. */
   phone: string | null;
-  mentor_phone: string | null;
-  mentor_contact_email: string | null;
-  welcome_modal_version_seen: number | null;
+  /** Raw stored email (profile: mentor_contact_email; preload: work_email). */
+  email: string | null;
   mentee_count: number;
 };
 
@@ -23,6 +25,8 @@ export function MentorRosterTable({ rows }: Props) {
   const toggleContactId = (id: string) => {
     setOpenContactId((prev) => (prev === id ? null : id));
   };
+
+  const rowKey = (m: MentorRosterRow) => `${m.rowKind}-${m.id}`;
 
   return (
     <>
@@ -43,47 +47,50 @@ export function MentorRosterTable({ rows }: Props) {
           </thead>
           <tbody>
             {rows.map((m) => {
-              const craActive = m.welcome_modal_version_seen != null;
+              const craOnCrewRules = m.rowKind === "profile";
               const count = m.mentee_count;
               const name = m.full_name?.trim() || "—";
               const emp = (m.employee_number ?? "").trim() || "—";
-              const phoneDisplay =
-                (m.mentor_phone ?? "").trim() || (m.phone ?? "").trim() || null;
-              const contactEmail = (m.mentor_contact_email ?? "").trim() || null;
+              const phoneFormatted = formatUsPhoneStored(m.phone);
+              const contactEmail = (m.email ?? "").trim() || null;
               return (
-                <tr key={m.id} className="border-t border-white/5">
+                <tr key={rowKey(m)} className="border-t border-white/5">
                   <td className="text-center py-2">
-                    {craActive ? (
-                      <span className="text-emerald-400 font-semibold">✓</span>
+                    {craOnCrewRules ? (
+                      <span className="text-emerald-400 font-semibold" title="On CrewRules">
+                        ✓
+                      </span>
                     ) : (
-                      <span className="text-amber-400 font-semibold">✕</span>
+                      <span className="text-amber-400 font-semibold" title="Preload — not on CrewRules yet">
+                        ✕
+                      </span>
                     )}
                   </td>
                   <td className="py-2 pl-3 pr-2 text-slate-200">
                     <div className="flex flex-col gap-0.5">
                       <button
                         type="button"
-                        onClick={() => toggleContactId(m.id)}
+                        onClick={() => toggleContactId(rowKey(m))}
                         className="text-left text-slate-200 hover:underline"
                       >
                         {name}
                       </button>
-                      {openContactId === m.id && (
+                      {openContactId === rowKey(m) && (
                         <>
                           {contactEmail ? (
                             <div className="text-xs text-slate-500">{contactEmail}</div>
                           ) : (
                             <div className="text-xs text-slate-500">No mentor contact email on file</div>
                           )}
-                          {phoneDisplay ? (
-                            <div className="text-xs text-slate-500">{phoneDisplay}</div>
+                          {phoneFormatted ? (
+                            <div className="text-xs text-slate-500">{phoneFormatted}</div>
                           ) : null}
                         </>
                       )}
                     </div>
                   </td>
                   <td className="py-2 px-2 text-slate-300">{emp}</td>
-                  <td className="py-2 px-2 text-slate-300">{phoneDisplay || "—"}</td>
+                  <td className="py-2 px-2 text-slate-300">{phoneFormatted || "—"}</td>
                   <td className="py-2 px-2 text-slate-300">{contactEmail || "—"}</td>
                   <td className="py-2 pl-2 pr-3 text-right tabular-nums text-slate-300">{count}</td>
                 </tr>

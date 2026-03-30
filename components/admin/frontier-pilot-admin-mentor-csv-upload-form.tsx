@@ -3,10 +3,11 @@
 import { useActionState } from "react";
 import {
   importFrontierPilotAdminMentorCsv,
-  type MentorPreloadCsvImportResult,
+  type MentorPreloadCsvImportActionResult,
 } from "@/app/frontier/pilots/admin/mentoring/actions";
+import { MentoringMentorPreloadImportResults } from "@/components/mentoring/mentoring-mentor-preload-import-results";
 
-const initial: MentorPreloadCsvImportResult = { total: 0, success: 0, failed: 0, rows: [] };
+const initial: MentorPreloadCsvImportActionResult = { total: 0, success: 0, failed: 0, rows: [] };
 
 export function FrontierPilotAdminMentorCsvUploadForm() {
   const [state, formAction, isPending] = useActionState(importFrontierPilotAdminMentorCsv, initial);
@@ -31,35 +32,8 @@ export function FrontierPilotAdminMentorCsvUploadForm() {
         </button>
       </form>
 
-      {state.fatalError ? (
-        <p className="text-sm text-red-300" role="alert">
-          {state.fatalError}
-        </p>
-      ) : null}
-
-      {!state.fatalError && state.total > 0 ? (
-        <p
-          className={`text-sm font-medium ${state.failed > 0 ? "text-amber-200/95" : "text-emerald-300/90"}`}
-          role="status"
-        >
-          Import finished: {state.success} succeeded, {state.failed} failed of {state.total} rows.
-        </p>
-      ) : null}
-
-      {state.rows.length > 0 ? (
-        <div className="rounded-lg border border-slate-700/60 bg-slate-900/35 px-3.5 py-3 max-h-[320px] overflow-y-auto">
-          <p className="text-xs font-semibold text-slate-200 mb-2">Row results</p>
-          <ul className="space-y-1.5 text-xs font-mono leading-snug">
-            {state.rows.map((r) => (
-              <li
-                key={r.rowNumber}
-                className={r.status === "success" ? "text-emerald-300/90" : "text-amber-200/95"}
-              >
-                Row {r.rowNumber}: {r.message}
-              </li>
-            ))}
-          </ul>
-        </div>
+      {state.fatalError || state.meta || state.rows.length > 0 ? (
+        <MentoringMentorPreloadImportResults state={state} isPending={isPending} />
       ) : null}
     </div>
   );

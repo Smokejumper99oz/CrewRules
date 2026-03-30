@@ -10,10 +10,16 @@ import {
 } from "@/lib/mentoring/mentoring-workbook-first-sheet-to-csv-text";
 import { insertMentoringImportHistory } from "@/lib/mentoring/mentoring-import-history";
 import {
+  insertMentorPreloadImportHistory,
+  type MentorPreloadImportHistoryInsertResult,
+} from "@/lib/mentoring/mentor-preload-import-history";
+import {
   runFrontierMentoringCsvImport,
   type MentoringCsvImportResult,
 } from "@/lib/mentoring/run-frontier-mentoring-csv-import";
 import { summarizeMentoringCsvImportRows } from "@/lib/mentoring/mentoring-import-summary";
+import { linkMentorToPreload } from "@/lib/mentoring/link-mentor-to-preload";
+import { parseMentorPreloadCsv } from "@/lib/mentoring/mentor-preload-csv-import";
 import {
   runMentorPreloadCsvImport,
   type MentorPreloadCsvImportResult,
@@ -27,6 +33,20 @@ export type {
   MentoringCsvImportResult,
 } from "@/lib/mentoring/run-frontier-mentoring-csv-import";
 export type { MentorPreloadCsvImportResult } from "@/lib/mentoring/run-mentor-preload-csv-import";
+
+/** Display-only fields for mentor preload upload UI (server action only). */
+export type MentorPreloadCsvImportMeta = {
+  fileName: string;
+  fileType: "csv" | "xlsx";
+  uploadedAtIso: string;
+  totalRows: number;
+  successCount: number;
+  failedCount: number;
+};
+
+export type MentorPreloadCsvImportActionResult = MentorPreloadCsvImportResult & {
+  meta?: MentorPreloadCsvImportMeta;
+};
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -43,6 +63,89 @@ async function ensureFrontierPilotsTenantAdmin(): Promise<{ error?: string }> {
 }
 
 const MAX_CSV_BYTES = 2 * 1024 * 1024;
+
+const PROFILE_LINK_IN_CHUNK = 100;
+
+async function linkExistingProfilesAfterMentorPreloadImport(
+  admin: ReturnType<typeof createAdminClient>,
+  text: string,
+  result: MentorPreloadCsvImportResult,
+): Promise<void> {
+  const successRowNumbers = new Set(
+    result.rows.filter((r) => r.status === "success").map((r) => r.rowNumber),
+  );
+  if (successRowNumbers.size === 0) return;
+
+  const parsed = parseMentorPreloadCsv(text);
+  if (!parsed.ok) {
+    console.error("[importFrontierPilotAdminMentorCsv] link step parse:", parsed.error);
+    return;
+  }
+
+  const employeeNumbers = new Set<string>();
+  for (const row of parsed.data.rows) {
+    if (!successRowNumbers.has(row.rowNumber)) continue;
+    const emp = row.values.mentor_employee_number.trim();
+    if (emp) employeeNumbers.add(emp);
+  }
+  if (employeeNumbers.size === 0) return;
+
+  const empList = [...employeeNumbers];
+  for (let i = 0; i < empList.length; i += PROFILE_LINK_IN_CHUNK) {
+    const chunk = empList.slice(i, i + PROFILE_LINK_IN_CHUNK);
+    const { data: profs, error: profErr } = await admin
+      .from("profiles")
+      .select("id, employee_number, tenant")
+      .eq("tenant", TENANT)
+      .eq("portal", PORTAL)
+      .in("employee_number", chunk)
+      .not("employee_number", "is", null);
+
+    if (profErr) {
+      console.error("[importFrontierPilotAdminMentorCsv] profile lookup for link:", profErr.message);
+      continue;
+    }
+
+    for (const p of profs ?? []) {
+      const pid = p.id as string;
+      const emp = (p.employee_number as string | null)?.trim() ?? "";
+      const ten = (p.tenant as string | null)?.trim() ?? "";
+      if (!emp || !ten) continue;
+      try {
+        await linkMentorToPreload(pid, emp, ten);
+      } catch (e) {
+        console.error("[importFrontierPilotAdminMentorCsv] linkMentorToPreload failed", pid, e);
+      }
+    }
+  }
+}
+
+function buildMentorPreloadHistoryInsertResult(
+  text: string,
+  result: MentorPreloadCsvImportResult,
+): MentorPreloadImportHistoryInsertResult {
+  const parsed = parseMentorPreloadCsv(text);
+  const lookup = new Map<number, { fullName: string | null; employeeNumber: string | null }>();
+  if (parsed.ok) {
+    for (const row of parsed.data.rows) {
+      const emp = row.values.mentor_employee_number.trim();
+      const nameRaw = row.values.mentor_full_name.trim();
+      lookup.set(row.rowNumber, {
+        fullName: nameRaw || null,
+        employeeNumber: emp || null,
+      });
+    }
+  }
+  const enrichedRows = result.rows.map((r) => {
+    const id = lookup.get(r.rowNumber);
+    return {
+      ...r,
+      employeeNumber: id?.employeeNumber ?? null,
+      fullName: id?.fullName ?? null,
+    };
+  });
+  return { ...result, rows: enrichedRows };
+}
 
 /**
  * Frontier pilots tenant admin: same CSV semantics as Platform Owner upload, but tenant is
@@ -129,9 +232,9 @@ export async function importFrontierPilotAdminMentoringCsv(
  * Gated with `isAdmin("frontier","pilots")`.
  */
 export async function importFrontierPilotAdminMentorCsv(
-  _prev: MentorPreloadCsvImportResult | null,
+  _prev: MentorPreloadCsvImportActionResult | null,
   formData: FormData
-): Promise<MentorPreloadCsvImportResult> {
+): Promise<MentorPreloadCsvImportActionResult> {
   const gate = await ensureFrontierPilotsTenantAdmin();
   if (gate.error) {
     return { total: 0, success: 0, failed: 0, rows: [], fatalError: gate.error };
@@ -176,9 +279,34 @@ export async function importFrontierPilotAdminMentorCsv(
   const admin = createAdminClient();
   const result = await runMentorPreloadCsvImport(admin, TENANT, text);
 
-  revalidatePath("/frontier/pilots/admin/mentoring");
+  await linkExistingProfilesAfterMentorPreloadImport(admin, text, result);
 
-  return result;
+  const profile = await getProfile();
+  if (profile?.id) {
+    const historyResult = buildMentorPreloadHistoryInsertResult(text, result);
+    await insertMentorPreloadImportHistory(admin, {
+      tenant: TENANT,
+      uploadedByUserId: profile.id,
+      fileName: file.name,
+      fileType: isCsv ? "csv" : "xlsx",
+      result: historyResult,
+    });
+  }
+
+  const meta: MentorPreloadCsvImportMeta = {
+    fileName: file.name,
+    fileType: isCsv ? "csv" : "xlsx",
+    uploadedAtIso: new Date().toISOString(),
+    totalRows: result.total,
+    successCount: result.success,
+    failedCount: result.failed,
+  };
+
+  revalidatePath("/frontier/pilots/admin/mentoring");
+  revalidatePath("/frontier/pilots/admin/mentoring/mentor-import");
+  revalidatePath("/frontier/pilots/admin/mentoring/mentor-roster");
+
+  return { ...result, meta };
 }
 
 /** Mentor on the assignment must be a Frontier pilots profile (tenant admin scope). */
