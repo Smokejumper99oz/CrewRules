@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
-type SystemEventType = "system" | "import" | "provider";
+type SystemEventType = "system" | "import" | "provider" | "error";
 type SystemEventSeverity = "info" | "warning" | "error";
 
 /**

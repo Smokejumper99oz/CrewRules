@@ -28,7 +28,7 @@ function formatFoundingRole(role: string | null | undefined): string {
   if (r === "flight_attendant") return "Flight Attendant";
   if (r === "tenant_admin") return "Tenant Admin";
   if (r === "super_admin") return "Platform Owner";
-  return role.trim();
+  return (role ?? "").trim();
 }
 
 export default async function SuperAdminFoundingMembersPage() {

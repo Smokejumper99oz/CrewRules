@@ -60,6 +60,7 @@ function typeLabel(type: string): string {
   if (type === "import") return "Import";
   if (type === "provider") return "Provider";
   if (type === "mentoring") return "Mentoring";
+  if (type === "error") return "Error";
   return "System";
 }
 

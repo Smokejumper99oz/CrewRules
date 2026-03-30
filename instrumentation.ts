@@ -1,3 +1,5 @@
+import { logSystemEvent } from "@/lib/system-events";
+
 /**
  * Log server errors to console for debugging.
  * Helps diagnose 500s on routes like /frontier/pilots/portal.
@@ -16,5 +18,21 @@ export async function onRequestError(
     routePath: context.routePath,
     routeType: context.routeType,
     renderSource: context.renderSource,
+  });
+
+  const metadata: Record<string, unknown> = {
+    path: request.path,
+    method: request.method,
+  };
+  if (err.stack) {
+    metadata.stack = err.stack;
+  }
+
+  await logSystemEvent({
+    type: "error",
+    severity: "error",
+    title: "Server request error",
+    message: err.message,
+    metadata,
   });
 }
