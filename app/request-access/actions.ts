@@ -46,10 +46,24 @@ export async function submitAccessRequest(
 
   const trimmedEmail = email.trim();
   const requestedPortal = role === "pilot" ? "pilot" : "fa";
+  const emailLower = trimmedEmail.toLowerCase();
+  const isFrontierEmail = emailLower.endsWith("@flyfrontier.com");
+  const isPilot = role === "pilot";
+  const isFA = role === "fa";
 
   try {
     const supabase = await createClient();
     const inferredAirline = inferAirlineFromEmail(trimmedEmail);
+
+    if (isFrontierEmail && isPilot) {
+      const displayAirline = airline?.trim() || inferredAirline || "Frontier Airlines";
+      const params = new URLSearchParams({
+        airline: displayAirline,
+        live: "1",
+        signupRoute: "/frontier/pilots/sign-up",
+      });
+      redirect(`/request-access/success?${params.toString()}`);
+    }
 
     if (isLiveForEmailAndRole(trimmedEmail, role)) {
       const signupRoute = getSignupRouteForEmail(trimmedEmail);
