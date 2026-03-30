@@ -386,8 +386,8 @@ export function MentoringMilestoneTimeline({
       const completedOn = formatActualCompletedDate(m);
       return (
         <div key={rowKey} className={cardClass}>
-          <div className="flex min-w-0 flex-row flex-nowrap items-center justify-between gap-3">
-            <div className="min-w-0 flex-1 text-left">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-between">
+            <div className="min-w-0 w-full text-left sm:flex-1">
               <div className="text-base font-semibold leading-snug text-slate-200">{m.title}</div>
               {completionNote ? (
                 <p className="mt-2 text-xs leading-relaxed text-slate-400">
@@ -396,7 +396,7 @@ export function MentoringMilestoneTimeline({
               ) : null}
               {renderAttachedCheckIns(attached)}
             </div>
-            <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
+            <div className="flex min-w-0 w-full flex-wrap items-center justify-start gap-x-2 gap-y-1 sm:w-auto sm:shrink-0 sm:justify-end">
               <span className="whitespace-nowrap text-xs text-slate-600 line-through decoration-slate-600/50 tabular-nums">
                 {m.dueDisplay}
               </span>
@@ -438,12 +438,12 @@ export function MentoringMilestoneTimeline({
 
     return (
       <div key={rowKey} className={cardClass}>
-        <div className="flex min-w-0 flex-row flex-nowrap items-center justify-between gap-3">
-          <div className="min-w-0 flex-1 text-left">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-between">
+          <div className="min-w-0 w-full text-left sm:flex-1">
             <div className="truncate text-base font-semibold leading-snug text-slate-200">{m.title}</div>
             {renderAttachedCheckIns(attached)}
           </div>
-          <div className="flex min-w-0 shrink-0 flex-nowrap items-center justify-end gap-2">
+          <div className="flex min-w-0 w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:justify-end">
             <span className="whitespace-nowrap text-sm text-slate-400 tabular-nums">{m.dueDisplay}</span>
             <span className={`${timelineActionSizeClass} border-slate-500/40 bg-slate-500/20 text-slate-400`}>
               Pending
