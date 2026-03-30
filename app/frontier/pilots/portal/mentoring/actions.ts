@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile, type Profile } from "@/lib/profile";
+import { fetchAuthLastSignInAtByUserId } from "@/lib/super-admin/auth-last-sign-in-map";
 import { ROLES, type Role } from "@/lib/rbac";
 import { linkMenteeToAssignments } from "@/lib/mentoring/link-mentee-to-assignments";
 import { linkMentorToPreload } from "@/lib/mentoring/link-mentor-to-preload";
@@ -77,6 +79,11 @@ export type MentorAssignmentRow = {
   mentee_status: string | null;
   /** From mentee profile; null until first-use welcome onboarding completed. */
   mentee_welcome_modal_version_seen: number | null;
+  /**
+   * Mentee Auth `last_sign_in_at` when `auth.admin.listUsers` succeeded for this load and the row has a linked
+   * `mentee_user_id`. Omitted if listing failed (same pattern as Frontier admin users).
+   */
+  mentee_last_sign_in_at?: string | null;
   /** Mentor-only workspace; always null when `isMentorView` is false (not loaded for mentees). */
   mentor_workspace_mentoring_status: string | null;
   mentor_workspace_private_note: string | null;
@@ -360,6 +367,16 @@ export async function getMentorAssignments(): Promise<{
 
     if (rows.length === 0) return { assignments: [] };
 
+    const menteeUserIds = [
+      ...new Set(
+        rows
+          .map((r) => r.mentee_user_id?.trim())
+          .filter((id): id is string => typeof id === "string" && id.length > 0)
+      ),
+    ];
+    const authSignInMap =
+      menteeUserIds.length > 0 ? await fetchAuthLastSignInAtByUserId(createAdminClient()) : null;
+
     const assignmentIds = rows.map((r) => r.id);
 
     const rpcMentorByUserId = new Map<string, NonNullable<Parameters<typeof mentorProfileForSharedMentoringCard>[1]>>();
@@ -536,6 +553,9 @@ export async function getMentorAssignments(): Promise<{
         mentee_date_of_hire: row.hire_date ?? null,
         mentee_status: row.active === true ? "active" : "inactive",
         mentee_welcome_modal_version_seen: row.mentee?.welcome_modal_version_seen ?? null,
+        ...(authSignInMap != null && row.mentee_user_id?.trim()
+          ? { mentee_last_sign_in_at: authSignInMap.get(row.mentee_user_id) ?? null }
+          : {}),
         mentor_workspace_mentoring_status: ws ? ws.mentoring_status : null,
         mentor_workspace_private_note: ws ? ws.private_note : null,
         mentor_workspace_next_check_in_date: ws?.next_check_in_date ?? null,
@@ -570,8 +590,10 @@ export type MenteeDetailRow = {
   mentee_employee_number: string | null;
   mentee_personal_email: string | null;
   mentee_phone: string | null;
-  /** From linked mentee profile; null means not completed welcome → "Not Joined" on mentor UI. */
+  /** From linked mentee profile; used for onboarding vs active when Auth sign-in is known. */
   mentee_welcome_modal_version_seen: number | null;
+  /** Mentee Auth `last_sign_in_at` when `getUserById` succeeded; omitted on failure (Frontier admin users pattern). */
+  mentee_last_sign_in_at?: string | null;
   /** Mentee profile IATA crew base; only meaningful after linked profile + welcome completed. */
   mentee_base_airport: string | null;
   /** Mentor-only workspace; null for mentee view or when row missing. */
@@ -790,6 +812,15 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
     const mentorPhone = mp || p || null;
     const mentorEmail = mentorProf?.mentor_contact_email?.trim() || null;
     const menteeProf = row.mentee;
+    let menteeAuthLastSignIn: string | null | undefined;
+    const menteeIdForAuth = row.mentee_user_id?.trim();
+    if (menteeIdForAuth) {
+      const admin = createAdminClient();
+      const { data: menteeAuthData, error: menteeAuthErr } = await admin.auth.admin.getUserById(menteeIdForAuth);
+      if (!menteeAuthErr && menteeAuthData?.user) {
+        menteeAuthLastSignIn = menteeAuthData.user.last_sign_in_at ?? null;
+      }
+    }
     const empFromProfile = menteeProf?.employee_number?.trim() || null;
     const empFromAssignment = row.employee_number?.trim() || null;
     const emailFromProfile = menteeProf?.personal_email?.trim() || null;
@@ -815,6 +846,7 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
       mentee_personal_email: emailFromProfile || emailFromAssignment || null,
       mentee_phone: phoneFromProfile || phoneFromAssignment || null,
       mentee_welcome_modal_version_seen: row.mentee?.welcome_modal_version_seen ?? null,
+      ...(menteeAuthLastSignIn !== undefined ? { mentee_last_sign_in_at: menteeAuthLastSignIn } : {}),
       mentee_base_airport: row.mentee?.base_airport?.trim() || null,
       mentor_workspace_mentoring_status: mentorWorkspaceMentoringStatus,
       mentor_workspace_next_check_in_date: mentorWorkspaceNextCheckInDate,

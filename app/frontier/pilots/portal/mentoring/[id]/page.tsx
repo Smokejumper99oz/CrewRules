@@ -98,6 +98,7 @@ function NextMilestoneHero({
   );
 }
 
+/** Same rules as `menteeAssignmentBadge` on `mentoring/page.tsx`. */
 function menteeDetailAssignmentBadge(detail: MenteeDetailRow) {
   const hasMenteeId = Boolean(detail.mentee_user_id?.trim());
   const assignmentActive = detail.active === true;
@@ -113,10 +114,17 @@ function menteeDetailAssignmentBadge(detail: MenteeDetailRow) {
       className: "bg-slate-500/20 text-slate-400 border border-slate-500/40",
     };
   }
-  if (detail.mentee_welcome_modal_version_seen == null) {
+  const authLoaded = "mentee_last_sign_in_at" in detail;
+  if (authLoaded) {
+    if (detail.mentee_last_sign_in_at == null) {
+      return {
+        label: "Not Joined" as const,
+        className: "bg-amber-500/15 text-amber-200 border border-amber-400/30",
+      };
+    }
     return {
-      label: "Not Joined" as const,
-      className: "bg-amber-500/15 text-amber-200 border border-amber-400/30",
+      label: "Active" as const,
+      className: "bg-emerald-500/20 text-emerald-200 border border-emerald-500/40",
     };
   }
   return {
@@ -154,7 +162,10 @@ export default async function MenteeDetailPage({ params }: PageProps) {
   const assignmentBadge = menteeDetailAssignmentBadge(detail);
 
   const menteeJoinedCrewrules =
-    Boolean(detail.mentee_user_id?.trim()) && detail.mentee_welcome_modal_version_seen != null;
+    Boolean(detail.mentee_user_id?.trim()) &&
+    ("mentee_last_sign_in_at" in detail
+      ? detail.mentee_last_sign_in_at != null
+      : detail.mentee_welcome_modal_version_seen != null);
   const crewBaseLine = menteeJoinedCrewrules
     ? detail.mentee_base_airport?.trim() || "—"
     : "Pending";

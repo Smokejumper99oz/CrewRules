@@ -58,12 +58,8 @@ const usersTableCompactStatusWidth = "w-[3.75rem] min-w-[3.75rem] max-w-[3.75rem
 const notJoinedStatusPill =
   "inline-flex h-6 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-amber-400/30 bg-amber-500/15 px-2 text-[10px] font-semibold leading-none text-amber-200";
 
-/** Signed in but welcome/onboarding marker still null; distinct from never-signed-in. */
-const onboardingPendingStatusPill =
-  "inline-flex h-6 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-cyan-400/35 bg-cyan-500/12 px-2 text-[10px] font-semibold leading-none text-cyan-100";
-
 /**
- * Status column: Auth sign-in when available, then welcome marker. Never infer "Not Joined" from welcome alone.
+ * Status column: Auth `last_sign_in_at` when available; never infer "Not Joined" from welcome alone.
  */
 function usersTablePrimaryStatusNode(u: SuperAdminUserRow): ReactNode {
   if (isAccountPendingDeletion(u)) {
@@ -83,9 +79,6 @@ function usersTablePrimaryStatusNode(u: SuperAdminUserRow): ReactNode {
     if (u.last_sign_in_at == null) {
       return <span className={notJoinedStatusPill}>Not Joined</span>;
     }
-    if ((u.welcome_modal_version_seen ?? null) == null) {
-      return <span className={onboardingPendingStatusPill}>Onboarding Pending</span>;
-    }
     return (
       <span
         className={`${usersTablePill} ${usersTableCompactStatusWidth} border-slate-400/30 bg-slate-500/18 text-slate-200`}
@@ -95,9 +88,6 @@ function usersTablePrimaryStatusNode(u: SuperAdminUserRow): ReactNode {
     );
   }
 
-  if ((u.welcome_modal_version_seen ?? null) == null) {
-    return <span className={onboardingPendingStatusPill}>Onboarding Pending</span>;
-  }
   return (
     <span
       className={`${usersTablePill} ${usersTableCompactStatusWidth} border-slate-400/30 bg-slate-500/18 text-slate-200`}

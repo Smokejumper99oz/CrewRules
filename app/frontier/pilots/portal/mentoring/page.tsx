@@ -124,7 +124,10 @@ function formatWorkspaceNextCheckIn(ymd: string | null | undefined): string {
   }
 }
 
-/** Matches tenant admin users: pre-onboarding mentees show Not / Joined when assignment is active. */
+/**
+ * Mentor-side assignment pill: when Auth sign-in is available, null `last_sign_in_at` → Not Joined; any signed-in
+ * mentee is Active (welcome modal is not used for this pill).
+ */
 function menteeAssignmentBadge(a: MentorAssignmentRow) {
   const hasMenteeId = Boolean(a.mentee_user_id?.trim());
   const assignmentActive = a.mentee_status === "active";
@@ -142,11 +145,19 @@ function menteeAssignmentBadge(a: MentorAssignmentRow) {
       className: "bg-slate-500/20 text-slate-400 border border-slate-500/40",
     };
   }
-  if (a.mentee_welcome_modal_version_seen == null) {
+  const authLoaded = "mentee_last_sign_in_at" in a;
+  if (authLoaded) {
+    if (a.mentee_last_sign_in_at == null) {
+      return {
+        variant: "not_joined" as const,
+        label: "Not Joined",
+        className: "bg-amber-500/15 text-amber-200 border border-amber-400/30",
+      };
+    }
     return {
-      variant: "not_joined" as const,
-      label: "Not Joined",
-      className: "bg-amber-500/15 text-amber-200 border border-amber-400/30",
+      variant: "active" as const,
+      label: "Active",
+      className: "bg-emerald-500/20 text-emerald-200 border border-emerald-500/40",
     };
   }
   return {
