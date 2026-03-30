@@ -444,7 +444,9 @@ export function MentoringMilestoneTimeline({
             {renderAttachedCheckIns(attached)}
           </div>
           <div className="flex min-w-0 w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:justify-end">
-            <span className="whitespace-nowrap text-sm text-slate-400 tabular-nums">{m.dueDisplay}</span>
+            <span className="w-full basis-full whitespace-nowrap text-sm text-slate-400 tabular-nums sm:w-auto sm:basis-auto">
+              {m.dueDisplay}
+            </span>
             <span className={`${timelineActionSizeClass} border-slate-500/40 bg-slate-500/20 text-slate-400`}>
               Pending
             </span>
@@ -468,15 +470,15 @@ export function MentoringMilestoneTimeline({
       <p className="text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-amber-400/80">
         Check-in note
       </p>
-      <div className="flex min-w-0 flex-row flex-nowrap items-start gap-2 sm:gap-3">
-        <span className="min-w-0 flex-1 break-words text-sm leading-snug text-amber-50/95">
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-nowrap sm:items-start sm:gap-3">
+        <span className="min-w-0 w-full break-words text-sm leading-snug text-amber-50/95 sm:flex-1">
           {ci.note}
         </span>
         <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs leading-snug text-amber-200/90 tabular-nums">
           {ymdToDohDisplay(occurredYmd(ci))}
         </span>
         {canEditMilestones ? (
-          <div className="flex shrink-0 flex-nowrap items-center gap-1.5 pt-0.5">
+          <div className="flex shrink-0 flex-wrap items-center gap-1.5 pt-0 sm:flex-nowrap sm:pt-0.5">
             <button type="button" onClick={() => openDeleteCheckInConfirm(ci)} className={checkInDeletePillClass}>
               Delete Note
             </button>
