@@ -3,7 +3,9 @@ import {
   MENTOR_PRELOAD_CSV_HEADERS,
   parseMentorPreloadCsv,
 } from "@/lib/mentoring/mentor-preload-csv-import";
-import { normalizeOptionalPersonalEmail } from "@/lib/mentoring/mentoring-csv-import";
+
+/** CSV / XLSX header (must match MENTOR_PRELOAD_CSV_HEADERS entry). */
+const MENTOR_PRELOAD_WORK_EMAIL_HEADER = "mentor_email_@flyfrontier.com" as const;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -21,22 +23,13 @@ export type MentorPreloadCsvImportResult = {
   fatalError?: string;
 };
 
-function parseActiveField(raw: string): { ok: true; value: boolean } | { ok: false; error: string } {
-  const t = raw.trim().toLowerCase();
-  if (!t) return { ok: true, value: true };
-  if (["true", "1", "yes"].includes(t)) return { ok: true, value: true };
-  if (["false", "0", "no"].includes(t)) return { ok: true, value: false };
-  return {
-    ok: false,
-    error: "active must be true/false, 1/0, yes/no, or blank (default true)",
-  };
-}
-
-function normalizeWorkEmail(raw: string): { ok: true; email: string | null } | { ok: false; error: string } {
+function normalizeMentorWorkEmail(raw: string): { ok: true; email: string | null } | { ok: false; error: string } {
   const s = raw.trim();
   if (!s) return { ok: true, email: null };
   const lower = s.toLowerCase();
-  if (!EMAIL_RE.test(lower)) return { ok: false, error: "Invalid work_email" };
+  if (!EMAIL_RE.test(lower)) {
+    return { ok: false, error: `Invalid ${MENTOR_PRELOAD_WORK_EMAIL_HEADER}` };
+  }
   return { ok: true, email: lower };
 }
 
@@ -83,18 +76,18 @@ export async function runMentorPreloadCsvImport(
       rowResults.push({
         rowNumber,
         status: "error",
-        message: "employee_number is required.",
+        message: "mentor_employee_number is required.",
       });
       failed += 1;
       continue;
     }
 
-    const emp = values.employee_number.trim();
+    const emp = values.mentor_employee_number.trim();
     if (!emp) {
       rowResults.push({
         rowNumber,
         status: "error",
-        message: "employee_number is required.",
+        message: "mentor_employee_number is required.",
       });
       failed += 1;
       continue;
@@ -104,49 +97,42 @@ export async function runMentorPreloadCsvImport(
       rowResults.push({
         rowNumber,
         status: "error",
-        message: `Duplicate employee_number in file: ${emp}`,
+        message: `Duplicate mentor_employee_number in file: ${emp}`,
       });
       failed += 1;
       continue;
     }
     seenEmp.add(emp);
 
-    const personalResult = normalizeOptionalPersonalEmail(values.personal_email);
-    if (!personalResult.ok) {
-      rowResults.push({
-        rowNumber,
-        status: "error",
-        message: personalResult.error === "Invalid mentee_email@private" ? "Invalid personal_email" : personalResult.error,
-      });
-      failed += 1;
-      continue;
-    }
-
-    const workResult = normalizeWorkEmail(values.work_email);
+    const workEmailRaw = values[MENTOR_PRELOAD_WORK_EMAIL_HEADER];
+    const workResult = normalizeMentorWorkEmail(workEmailRaw);
     if (!workResult.ok) {
       rowResults.push({ rowNumber, status: "error", message: workResult.error });
       failed += 1;
       continue;
     }
 
-    const activeResult = parseActiveField(values.active);
-    if (!activeResult.ok) {
-      rowResults.push({ rowNumber, status: "error", message: activeResult.error });
-      failed += 1;
-      continue;
-    }
-
-    const fullName = values.full_name.trim() || null;
-    const phone = values.phone.trim() || null;
+    const fullName = values.mentor_full_name.trim() || null;
+    const phone = values.mentor_phone_number.trim() || null;
     const notes = values.notes.trim() || null;
     const nowIso = new Date().toISOString();
 
-    const payload = {
+    const insertPayload = {
       full_name: fullName,
       work_email: workResult.email,
-      personal_email: personalResult.email,
+      personal_email: null as string | null,
       phone,
-      active: activeResult.value,
+      active: true,
+      notes,
+      updated_at: nowIso,
+    };
+
+    /** Omits personal_email so existing DB values are not cleared on update. */
+    const updatePayload = {
+      full_name: fullName,
+      work_email: workResult.email,
+      phone,
+      active: true,
       notes,
       updated_at: nowIso,
     };
@@ -169,7 +155,7 @@ export async function runMentorPreloadCsvImport(
     }
 
     if (existing?.id) {
-      const { error: updErr } = await admin.from("mentor_preload").update(payload).eq("id", existing.id);
+      const { error: updErr } = await admin.from("mentor_preload").update(updatePayload).eq("id", existing.id);
       if (updErr) {
         rowResults.push({ rowNumber, status: "error", message: updErr.message });
         failed += 1;
@@ -185,7 +171,7 @@ export async function runMentorPreloadCsvImport(
       const { error: insErr } = await admin.from("mentor_preload").insert({
         tenant: tenantTrim,
         employee_number: emp,
-        ...payload,
+        ...insertPayload,
       });
       if (insErr) {
         rowResults.push({ rowNumber, status: "error", message: insErr.message });

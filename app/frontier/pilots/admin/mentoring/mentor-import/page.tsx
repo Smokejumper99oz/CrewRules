@@ -29,9 +29,9 @@ export default function FrontierPilotAdminMentoringMentorImportPage() {
           </a>
         </div>
         <p className="mt-2 text-sm leading-snug text-slate-400">
-          Bulk import mentors using the template. Each row requires Employee Number, Full Name, optional are Work Email,
-          Personal Email, Phone number—use the template columns exactly for accurate preload. Existing preload rows
-          update automatically. Duplicate employee numbers in the same file are ignored and flagged.
+          Bulk import mentors using the template. Columns must match exactly: mentor_full_name, mentor_employee_number,
+          mentor_phone_number, mentor_email_@flyfrontier.com, and notes (optional text). Existing preload rows update
+          automatically. Duplicate mentor_employee_number values in the same file are ignored and flagged.
         </p>
         <div className="mt-3">
           <FrontierPilotAdminMentorCsvUploadForm />

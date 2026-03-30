@@ -3,12 +3,10 @@
  */
 
 export const MENTOR_PRELOAD_CSV_HEADERS = [
-  "employee_number",
-  "full_name",
-  "work_email",
-  "personal_email",
-  "phone",
-  "active",
+  "mentor_full_name",
+  "mentor_employee_number",
+  "mentor_phone_number",
+  "mentor_email_@flyfrontier.com",
   "notes",
 ] as const;
 

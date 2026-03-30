@@ -1,6 +1,6 @@
 /**
  * Converts the **first worksheet only** of an .xlsx workbook into CSV text that
- * `parseFrontierMentoringCsv` / `parseMentorPreloadCsv` accept (same headers and row shape).
+ * `parseFrontierMentoringCsv` / `parseMentorPreloadCsv` accept (each uses its own required header list).
  *
  * - Uses SheetJS (`xlsx`) with `cellDates: true` so Excel date cells become `Date` when supported.
  * - Coerces every cell to string for output; trims headers to match CSV behavior.
