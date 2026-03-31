@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, type RefObject } from "react";
 import {
   importIcsFile,
   clearScheduleImport,
@@ -155,6 +155,28 @@ export type SelectedPopoverState = {
   clickedDate: string | null; // YYYY-MM-DD, null when from Upcoming list
 };
 
+const POPOVER_VIEWPORT_MARGIN = 8;
+
+function clampPopoverToViewport(
+  anchor: { x: number; y: number },
+  size: { width: number; height: number }
+): { left: number; top: number } {
+  const margin = POPOVER_VIEWPORT_MARGIN;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const { width: w, height: h } = size;
+  let top = anchor.y + 8;
+  if (top + h > vh - margin) {
+    top = anchor.y - h - 8;
+  }
+  top = Math.max(margin, Math.min(top, vh - h - margin));
+
+  let left = anchor.x;
+  left = Math.max(margin, Math.min(left, vw - w - margin));
+
+  return { left, top };
+}
+
 function EventDetailPopover({
   event,
   clickedDate,
@@ -164,7 +186,8 @@ function EventDetailPopover({
   formatDayLabel,
   formatDayRangeLabel,
   formatTimeForDisplay,
-  position,
+  anchorPosition,
+  popoverRef,
 }: {
   event: ScheduleEvent;
   clickedDate: string | null;
@@ -174,8 +197,47 @@ function EventDetailPopover({
   formatDayLabel: (iso: string, tz: string) => string;
   formatDayRangeLabel: (start: string, end: string, tz: string) => string;
   formatTimeForDisplay: (iso: string, opts: ScheduleDisplaySettings) => string;
-  position: { x: number; y: number };
+  anchorPosition: { x: number; y: number };
+  popoverRef: RefObject<HTMLDivElement | null>;
 }) {
+  const [popoverPos, setPopoverPos] = useState<{ left: number; top: number }>(() => ({
+    left: anchorPosition.x,
+    top: anchorPosition.y + 8,
+  }));
+
+  const reposition = useCallback(() => {
+    const el = popoverRef.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+    if (width <= 0 || height <= 0) return;
+    setPopoverPos(clampPopoverToViewport(anchorPosition, { width, height }));
+  }, [anchorPosition.x, anchorPosition.y, popoverRef]);
+
+  useLayoutEffect(() => {
+    reposition();
+  }, [
+    reposition,
+    event.id,
+    clickedDate,
+    event.title,
+    event.event_type,
+    event.is_muted,
+    event.credit_minutes,
+    event.baseline_credit_minutes,
+    event.block_minutes,
+    event.legs?.length,
+    event.route,
+    clickedDayEvents.length,
+  ]);
+
+  useEffect(() => {
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [reposition]);
   const hasPayOnClickedDay = clickedDayEvents.some((e) => e.title?.trim().toUpperCase() === "PAY");
   const dateLabel =
     event.event_type === "vacation" || event.event_type === "off"
@@ -225,8 +287,9 @@ function EventDetailPopover({
 
   return (
     <div
+      ref={popoverRef}
       className="fixed z-50 min-w-[200px] max-w-[320px] rounded-xl border border-white/10 bg-slate-900 shadow-xl p-4"
-      style={{ left: Math.min(position.x, window.innerWidth - 340), top: position.y + 8 }}
+      style={{ left: popoverPos.left, top: popoverPos.top }}
     >
       <p className="font-medium text-white">{event.title || "Untitled"}</p>
       <p className="mt-2 text-sm text-slate-400">
@@ -757,27 +820,26 @@ export default function SchedulePage() {
       {selectedPopover && detailPosition && (
         <>
           <div className="fixed inset-0 z-40 pointer-events-none" aria-hidden />
-          <div ref={popoverRef} className="relative z-50">
-            <EventDetailPopover
-              event={selectedPopover.event}
-              clickedDate={selectedPopover.clickedDate}
-              clickedDayEvents={
-                selectedPopover.clickedDate
-                  ? eventsForDay(
-                      eventsToShow,
-                      new Date(selectedPopover.clickedDate + "T12:00:00.000Z"),
-                      baseTimezone
-                    ).filter((e) => !isRdPlaceholderEvent(e))
-                  : []
-              }
-              displaySettings={displaySettings}
-              eventStyle={eventStyle}
-              formatDayLabel={formatDayLabel}
-              formatDayRangeLabel={formatDayRangeLabel}
-              formatTimeForDisplay={formatTimeForDisplay}
-              position={detailPosition}
-            />
-          </div>
+          <EventDetailPopover
+            popoverRef={popoverRef}
+            event={selectedPopover.event}
+            clickedDate={selectedPopover.clickedDate}
+            clickedDayEvents={
+              selectedPopover.clickedDate
+                ? eventsForDay(
+                    eventsToShow,
+                    new Date(selectedPopover.clickedDate + "T12:00:00.000Z"),
+                    baseTimezone
+                  ).filter((e) => !isRdPlaceholderEvent(e))
+                : []
+            }
+            displaySettings={displaySettings}
+            eventStyle={eventStyle}
+            formatDayLabel={formatDayLabel}
+            formatDayRangeLabel={formatDayRangeLabel}
+            formatTimeForDisplay={formatTimeForDisplay}
+            anchorPosition={detailPosition}
+          />
         </>
       )}
 
