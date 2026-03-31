@@ -24,7 +24,7 @@ const ADMIN_TITLES: Record<string, string> = {
   library: "Library",
   people: "People & Permissions",
   waitlist: "Waitlist",
-  mentoring: "Mentoring",
+  mentoring: "ALPA Mentoring",
 };
 
 function roleFromPortalDisplayName(displayName: string): string {

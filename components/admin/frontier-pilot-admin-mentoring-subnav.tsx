@@ -1,17 +1,25 @@
 "use client";
 
+import type { LucideIcon } from "lucide-react";
+import {
+  ClipboardList,
+  LayoutDashboard,
+  Upload,
+  UserCheck,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const BASE = "/frontier/pilots/admin/mentoring";
 
-const TABS: readonly { href: string; label: string }[] = [
-  { href: BASE, label: "Overview" },
-  { href: `${BASE}/assignments`, label: "Assignments" },
-  { href: `${BASE}/mentee-roster`, label: "Mentee Roster" },
-  { href: `${BASE}/mentor-roster`, label: "Mentor Roster" },
-  { href: `${BASE}/mentee-import`, label: "Mentee Imports" },
-  { href: `${BASE}/mentor-import`, label: "Mentor Imports" },
+const TABS: readonly { href: string; label: string; Icon: LucideIcon }[] = [
+  { href: BASE, label: "Overview", Icon: LayoutDashboard },
+  { href: `${BASE}/assignments`, label: "Assignments", Icon: ClipboardList },
+  { href: `${BASE}/mentee-roster`, label: "Mentee Roster", Icon: Users },
+  { href: `${BASE}/mentor-roster`, label: "Mentor Roster", Icon: UserCheck },
+  { href: `${BASE}/mentee-import`, label: "Mentee Imports", Icon: Upload },
+  { href: `${BASE}/mentor-import`, label: "Mentor Imports", Icon: Upload },
 ];
 
 export function FrontierPilotAdminMentoringSubnav() {
@@ -26,7 +34,7 @@ export function FrontierPilotAdminMentoringSubnav() {
           "max-lg:snap-x max-lg:snap-mandatory",
         ].join(" ")}
       >
-        {TABS.map(({ href, label }) => {
+        {TABS.map(({ href, label, Icon }) => {
           const isActive = pathname === href || (href === BASE && pathname === `${BASE}/`);
           return (
             <Link
@@ -41,6 +49,7 @@ export function FrontierPilotAdminMentoringSubnav() {
                   : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100",
               ].join(" ")}
             >
+              <Icon className="h-4 w-4 shrink-0 opacity-80 group-hover:opacity-100" aria-hidden />
               <span className="whitespace-nowrap">{label}</span>
             </Link>
           );
