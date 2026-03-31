@@ -53,7 +53,7 @@ export function MentoringSectionChrome({
   menteeNavAssignmentId: string | null;
   children: ReactNode;
 }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const norm = normalizePathname(pathname);
   const detailIdFromPath = mentoringPathnameAssignmentId(pathname);
 

@@ -1,3 +1,4 @@
+import type { HTMLAttributes } from "react";
 import type { SystemUpdateEntry, SystemUpdateType } from "@/lib/portal/system-updates-changelog";
 
 const CARD =
@@ -115,7 +116,12 @@ export function SystemUpdatesChangelog(props: Props) {
       <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Update history</h2>
       <div className="mt-4 space-y-10 sm:space-y-12">
         {groups.map((group) => (
-          <details key={group.monthKey} defaultOpen={group.monthKey === currentMonthKey}>
+          <details
+            key={group.monthKey}
+            {...({
+              defaultOpen: group.monthKey === currentMonthKey,
+            } as HTMLAttributes<HTMLDetailsElement>)}
+          >
             <summary className="cursor-pointer text-lg font-semibold tracking-tight text-white border-b border-white/10 pb-2">
               {monthSummaryLine(group.heading, group.entries.length)}
             </summary>
