@@ -328,6 +328,10 @@ export function MentoringMilestoneTimeline({
         setCheckInError(result.error);
         return;
       }
+      if (!checkInEditId) {
+        setCheckInNote("");
+        setCheckInDateInput(ymdToDohDisplay(defaultCompletedDateYmd()));
+      }
       closeCheckInModal();
       router.refresh();
     });

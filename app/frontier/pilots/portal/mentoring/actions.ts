@@ -297,6 +297,26 @@ function milestoneCompletionTimestampForLastInteraction(m: {
   return null;
 }
 
+/** YMD string used to sort mentor overview rows (check-in first, else next milestone due). */
+function getSortDate(row: MentorAssignmentRow): string | null {
+  const checkIn = row.mentor_workspace_next_check_in_date?.trim();
+  if (checkIn) return checkIn;
+  const milestone = row.next_milestone_due_date?.trim();
+  return milestone || null;
+}
+
+/** Parse YYYY-MM-DD for stable sort; invalid / null → null (row sorts to bottom among mentor rows). */
+function assignmentSortYmdToMs(ymd: string | null | undefined): number | null {
+  try {
+    const t = String(ymd ?? "").trim().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null;
+    const ms = Date.parse(`${t}T12:00:00.000Z`);
+    return Number.isNaN(ms) ? null : ms;
+  } catch {
+    return null;
+  }
+}
+
 /** Get mentor assignments for the current user (as mentor). Returns mentee profile data joined.
  * Next milestone: first incomplete row in fixed program order (`lib/mentoring/milestone-program-order.ts`).
  * Last Interaction: latest of mentor_assignments.last_interaction_at, mentorship_interactions,
@@ -563,7 +583,23 @@ export async function getMentorAssignments(): Promise<{
       };
     });
 
-    return { assignments };
+    const indexed = assignments.map((row, originalIndex) => ({ row, originalIndex }));
+    indexed.sort((A, B) => {
+      if (A.row.isMentorView && B.row.isMentorView) {
+        const aMs = assignmentSortYmdToMs(getSortDate(A.row));
+        const bMs = assignmentSortYmdToMs(getSortDate(B.row));
+        const aOk = aMs !== null;
+        const bOk = bMs !== null;
+        if (!aOk && !bOk) return A.originalIndex - B.originalIndex;
+        if (!aOk) return 1;
+        if (!bOk) return -1;
+        if (aMs !== bMs) return aMs - bMs;
+        return A.originalIndex - B.originalIndex;
+      }
+      return A.originalIndex - B.originalIndex;
+    });
+
+    return { assignments: indexed.map(({ row }) => row) };
   } catch (e) {
     return {
       assignments: [],
