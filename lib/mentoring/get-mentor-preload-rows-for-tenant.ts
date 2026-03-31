@@ -6,6 +6,8 @@ export type MentorPreloadRow = {
   full_name: string | null;
   work_email: string | null;
   phone: string | null;
+  position: string | null;
+  base_airport: string | null;
   active: boolean;
   matched_profile_id: string | null;
   updated_at: string;
@@ -35,6 +37,8 @@ export async function getMentorPreloadRowsForTenant(
       full_name,
       work_email,
       phone,
+      position,
+      base_airport,
       active,
       matched_profile_id,
       updated_at,
@@ -66,6 +70,8 @@ export async function getMentorPreloadRowsForTenant(
       full_name: row.full_name,
       work_email: row.work_email,
       phone: row.phone,
+      position: row.position as string | null,
+      base_airport: row.base_airport as string | null,
       active: row.active,
       matched_profile_id: row.matched_profile_id,
       updated_at: row.updated_at,

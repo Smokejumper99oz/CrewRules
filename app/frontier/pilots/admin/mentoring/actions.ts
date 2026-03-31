@@ -25,6 +25,17 @@ import {
   type MentorPreloadCsvImportResult,
 } from "@/lib/mentoring/run-mentor-preload-csv-import";
 import { getProfile, isAdmin } from "@/lib/profile";
+import {
+  normalizeMentorPreloadBaseAirportForAdmin,
+  normalizeMentorPreloadPersonalEmailForAdmin,
+  normalizeMentorPreloadPositionForAdmin,
+  normalizeMentorPreloadWorkEmailForAdmin,
+} from "@/lib/mentoring/mentor-preload-admin-field-normalize";
+import {
+  isMentorRegistryStatusValue,
+  isMentorRegistryTypeValue,
+  MENTOR_REGISTRY_ADMIN_NOTES_MAX_LEN,
+} from "@/lib/mentoring/mentor-registry-admin-options";
 import type { UpdateMentorAssignmentHireDateFormState } from "@/lib/super-admin/actions";
 
 export type {
@@ -457,4 +468,287 @@ export async function resolveFrontierPilotAdminMentorshipProgramRequest(formData
   }
 
   revalidatePath("/frontier/pilots/admin/mentoring");
+}
+
+/**
+ * Frontier pilots tenant admin: create or update mentor_registry for one Mentor Roster row.
+ */
+export async function upsertFrontierPilotAdminMentorRegistry(
+  formData: FormData
+): Promise<{ error?: string }> {
+  const gate = await ensureFrontierPilotsTenantAdmin();
+  if (gate.error) {
+    return { error: gate.error };
+  }
+
+  const rowKind = String(formData.get("rowKind") ?? "").trim();
+  const rowId = String(formData.get("rowId") ?? "").trim();
+  const mentorType = String(formData.get("mentor_type") ?? "").trim();
+  const mentorStatus = String(formData.get("mentor_status") ?? "").trim();
+  const adminNotesRaw = String(formData.get("admin_notes") ?? "");
+  const adminNotesTrimmed = adminNotesRaw.trim();
+
+  if (rowKind !== "profile" && rowKind !== "preload") {
+    return { error: "Invalid row." };
+  }
+  if (!rowId) {
+    return { error: "Invalid row." };
+  }
+  if (!isMentorRegistryTypeValue(mentorType)) {
+    return { error: "Invalid mentor type." };
+  }
+  if (!isMentorRegistryStatusValue(mentorStatus)) {
+    return { error: "Invalid mentor status." };
+  }
+  if (adminNotesTrimmed.length > MENTOR_REGISTRY_ADMIN_NOTES_MAX_LEN) {
+    return { error: "Admin notes are too long." };
+  }
+
+  const admin = createAdminClient();
+  const nowIso = new Date().toISOString();
+  const notesPayload = adminNotesTrimmed.length > 0 ? adminNotesTrimmed : null;
+
+  if (rowKind === "profile") {
+    const { data: prof, error: pErr } = await admin
+      .from("profiles")
+      .select("id, tenant, portal, is_mentor, deleted_at")
+      .eq("id", rowId)
+      .maybeSingle();
+
+    if (pErr) {
+      return { error: pErr.message };
+    }
+    if (
+      !prof ||
+      prof.tenant !== TENANT ||
+      prof.portal !== PORTAL ||
+      prof.is_mentor !== true ||
+      prof.deleted_at != null
+    ) {
+      return { error: "Not allowed to edit program data for this mentor." };
+    }
+
+    const { data: existing, error: exErr } = await admin
+      .from("mentor_registry")
+      .select("id")
+      .eq("profile_id", rowId)
+      .maybeSingle();
+
+    if (exErr) {
+      return { error: exErr.message };
+    }
+
+    if (existing?.id) {
+      const { error: uErr } = await admin
+        .from("mentor_registry")
+        .update({
+          mentor_type: mentorType,
+          mentor_status: mentorStatus,
+          admin_notes: notesPayload,
+          updated_at: nowIso,
+        })
+        .eq("id", existing.id);
+      if (uErr) {
+        return { error: uErr.message };
+      }
+    } else {
+      const { error: iErr } = await admin.from("mentor_registry").insert({
+        profile_id: rowId,
+        preload_id: null,
+        mentor_type: mentorType,
+        mentor_status: mentorStatus,
+        admin_notes: notesPayload,
+        updated_at: nowIso,
+      });
+      if (iErr) {
+        return { error: iErr.message };
+      }
+    }
+  } else {
+    const { data: pre, error: preErr } = await admin
+      .from("mentor_preload")
+      .select("id, tenant, matched_profile_id")
+      .eq("id", rowId)
+      .maybeSingle();
+
+    if (preErr) {
+      return { error: preErr.message };
+    }
+    if (!pre || pre.tenant !== TENANT || pre.matched_profile_id != null) {
+      return { error: "Not allowed to edit program data for this preload row." };
+    }
+
+    const { data: existing, error: exErr } = await admin
+      .from("mentor_registry")
+      .select("id")
+      .eq("preload_id", rowId)
+      .maybeSingle();
+
+    if (exErr) {
+      return { error: exErr.message };
+    }
+
+    if (existing?.id) {
+      const { error: uErr } = await admin
+        .from("mentor_registry")
+        .update({
+          mentor_type: mentorType,
+          mentor_status: mentorStatus,
+          admin_notes: notesPayload,
+          updated_at: nowIso,
+        })
+        .eq("id", existing.id);
+      if (uErr) {
+        return { error: uErr.message };
+      }
+    } else {
+      const { error: iErr } = await admin.from("mentor_registry").insert({
+        profile_id: null,
+        preload_id: rowId,
+        mentor_type: mentorType,
+        mentor_status: mentorStatus,
+        admin_notes: notesPayload,
+        updated_at: nowIso,
+      });
+      if (iErr) {
+        return { error: iErr.message };
+      }
+    }
+  }
+
+  revalidatePath("/frontier/pilots/admin/mentoring/mentor-roster");
+  return {};
+}
+
+const MENTOR_PRELOAD_ROSTER_NOTES_MAX = 8000;
+
+/**
+ * Frontier pilots tenant admin: update mentor_preload staging fields for an unmatched row only.
+ */
+export async function updateFrontierPilotAdminMentorPreloadFromRoster(
+  formData: FormData
+): Promise<{ error?: string }> {
+  const gate = await ensureFrontierPilotsTenantAdmin();
+  if (gate.error) {
+    return { error: gate.error };
+  }
+
+  const preloadId = String(formData.get("preloadId") ?? "").trim();
+  if (!preloadId) {
+    return { error: "Invalid preload." };
+  }
+
+  const admin = createAdminClient();
+  const { data: row, error: fetchErr } = await admin
+    .from("mentor_preload")
+    .select("id, tenant, matched_profile_id, employee_number")
+    .eq("id", preloadId)
+    .maybeSingle();
+
+  if (fetchErr) {
+    return { error: fetchErr.message };
+  }
+  if (!row || (row.tenant as string) !== TENANT || row.matched_profile_id != null) {
+    return { error: "This preload row cannot be edited (wrong tenant or already linked)." };
+  }
+
+  const fullNameRaw = String(formData.get("full_name") ?? "").trim();
+  const full_name = fullNameRaw.length > 0 ? fullNameRaw : null;
+
+  const employee_number = String(formData.get("employee_number") ?? "").trim();
+  if (!employee_number) {
+    return { error: "Employee number is required." };
+  }
+  if (employee_number.length > 64) {
+    return { error: "Employee number is too long." };
+  }
+
+  const oldEmp = String((row.employee_number as string | null) ?? "").trim();
+  if (employee_number !== oldEmp) {
+    const { data: clash, error: clashErr } = await admin
+      .from("mentor_preload")
+      .select("id")
+      .eq("tenant", TENANT)
+      .eq("employee_number", employee_number)
+      .neq("id", preloadId)
+      .maybeSingle();
+
+    if (clashErr) {
+      return { error: clashErr.message };
+    }
+    if (clash?.id) {
+      return {
+        error: `Another mentor preload already uses employee number ${employee_number}.`,
+      };
+    }
+  }
+
+  const phoneRaw = String(formData.get("phone") ?? "").trim();
+  const phone = phoneRaw.length > 0 ? phoneRaw : null;
+  if (phone && phone.length > 64) {
+    return { error: "Phone is too long." };
+  }
+
+  const workResult = normalizeMentorPreloadWorkEmailForAdmin(String(formData.get("work_email") ?? ""));
+  if (!workResult.ok) {
+    return { error: workResult.error };
+  }
+
+  const personalResult = normalizeMentorPreloadPersonalEmailForAdmin(
+    String(formData.get("personal_email") ?? "")
+  );
+  if (!personalResult.ok) {
+    return { error: personalResult.error };
+  }
+
+  const position = normalizeMentorPreloadPositionForAdmin(String(formData.get("position") ?? ""));
+  const base_airport = normalizeMentorPreloadBaseAirportForAdmin(String(formData.get("base_airport") ?? ""));
+
+  const notesRaw = String(formData.get("preload_notes") ?? "").trim();
+  const notes =
+    notesRaw.length === 0
+      ? null
+      : notesRaw.length > MENTOR_PRELOAD_ROSTER_NOTES_MAX
+        ? notesRaw.slice(0, MENTOR_PRELOAD_ROSTER_NOTES_MAX)
+        : notesRaw;
+
+  const activeRaw = String(formData.get("preload_active") ?? "").trim();
+  const active = activeRaw === "true";
+
+  const nowIso = new Date().toISOString();
+
+  const { error: uErr } = await admin
+    .from("mentor_preload")
+    .update({
+      full_name,
+      employee_number,
+      phone,
+      work_email: workResult.email,
+      personal_email: personalResult.email,
+      position,
+      base_airport,
+      notes,
+      active,
+      updated_at: nowIso,
+    })
+    .eq("id", preloadId)
+    .eq("tenant", TENANT)
+    .is("matched_profile_id", null);
+
+  if (uErr) {
+    const msg = uErr.message ?? "";
+    if (
+      msg.toLowerCase().includes("duplicate") ||
+      msg.toLowerCase().includes("unique") ||
+      (uErr as { code?: string }).code === "23505"
+    ) {
+      return {
+        error: "That employee number is already used by another mentor preload in this tenant.",
+      };
+    }
+    return { error: uErr.message };
+  }
+
+  revalidatePath("/frontier/pilots/admin/mentoring/mentor-roster");
+  return {};
 }

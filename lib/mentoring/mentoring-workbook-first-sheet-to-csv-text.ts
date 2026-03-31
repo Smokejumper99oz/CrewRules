@@ -10,7 +10,10 @@
  */
 
 import * as XLSX from "xlsx";
-import { MENTOR_PRELOAD_CSV_HEADERS } from "@/lib/mentoring/mentor-preload-csv-import";
+import {
+  MENTOR_PRELOAD_CSV_OPTIONAL_HEADERS,
+  MENTOR_PRELOAD_CSV_REQUIRED_HEADERS,
+} from "@/lib/mentoring/mentor-preload-csv-import";
 import { FRONTIER_MENTORING_CSV_HEADERS } from "@/lib/mentoring/mentoring-csv-import";
 
 /** RFC 4180-style quoted fields so commas/quotes in cells round-trip through existing CSV parsers. */
@@ -104,12 +107,17 @@ export function frontierMentoringAssignXlsxToCsvText(
 export function mentorPreloadXlsxToCsvText(
   buffer: ArrayBuffer,
 ): { ok: true; csvText: string } | { ok: false; error: string } {
-  return mentoringAssignXlsxBufferToCsvText(buffer, MENTOR_PRELOAD_CSV_HEADERS);
+  return mentoringAssignXlsxBufferToCsvText(
+    buffer,
+    MENTOR_PRELOAD_CSV_REQUIRED_HEADERS,
+    MENTOR_PRELOAD_CSV_OPTIONAL_HEADERS,
+  );
 }
 
 function mentoringAssignXlsxBufferToCsvText(
   buffer: ArrayBuffer,
   requiredHeaders: readonly string[],
+  optionalHeaders: readonly string[] = [],
 ): { ok: true; csvText: string } | { ok: false; error: string } {
   const aoa = workbookFirstSheetToAoA(buffer);
   if (!aoa || aoa.length < 2) {
@@ -119,7 +127,7 @@ function mentoringAssignXlsxBufferToCsvText(
   const headerRowRaw = aoa[0] as unknown[];
   const headerCells = headerCellStrings(
     headerRowRaw,
-    Math.max(headerRowRaw.length, requiredHeaders.length),
+    Math.max(headerRowRaw.length, requiredHeaders.length + optionalHeaders.length),
   );
   const headerIndex = new Map<string, number>();
   headerCells.forEach((h, i) => {
@@ -133,14 +141,20 @@ function mentoringAssignXlsxBufferToCsvText(
     }
   }
 
-  const maxCol = Math.max(...requiredHeaders.map((h) => headerIndex.get(h)!), ...headerIndex.values()) + 1;
+  const outputHeaders = [
+    ...requiredHeaders,
+    ...optionalHeaders.filter((h) => headerIndex.has(h)),
+  ];
+
+  const maxCol =
+    Math.max(...outputHeaders.map((h) => headerIndex.get(h)!), ...headerIndex.values()) + 1;
   const lines: string[] = [];
-  lines.push(encodeCsvRow([...requiredHeaders]));
+  lines.push(encodeCsvRow([...outputHeaders]));
 
   for (let r = 1; r < aoa.length; r++) {
     const raw = aoa[r] as unknown[];
     const wide = rowStrings(raw, Math.max(raw?.length ?? 0, maxCol));
-    const values = requiredHeaders.map((h) => wide[headerIndex.get(h)!] ?? "");
+    const values = outputHeaders.map((h) => wide[headerIndex.get(h)!] ?? "");
     if (isRowAllBlank(values)) continue;
     lines.push(encodeCsvRow(values));
   }

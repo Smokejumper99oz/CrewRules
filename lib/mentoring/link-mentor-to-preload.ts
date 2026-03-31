@@ -73,5 +73,34 @@ export async function linkMentorToPreload(
     console.error("[linkMentorToPreload] profile update failed", patchErr);
   }
 
+  const { data: regByPreload } = await admin
+    .from("mentor_registry")
+    .select("id")
+    .eq("preload_id", preload.id)
+    .maybeSingle();
+
+  if (regByPreload?.id) {
+    const { data: regByProfile } = await admin
+      .from("mentor_registry")
+      .select("id")
+      .eq("profile_id", profileId)
+      .maybeSingle();
+
+    if (regByProfile?.id) {
+      const { error: delErr } = await admin.from("mentor_registry").delete().eq("id", regByPreload.id);
+      if (delErr) {
+        console.error("[linkMentorToPreload] mentor_registry preload row delete failed", delErr);
+      }
+    } else {
+      const { error: regUpdErr } = await admin
+        .from("mentor_registry")
+        .update({ profile_id: profileId, preload_id: null, updated_at: nowIso })
+        .eq("id", regByPreload.id);
+      if (regUpdErr) {
+        console.error("[linkMentorToPreload] mentor_registry re-point failed", regUpdErr);
+      }
+    }
+  }
+
   return 1;
 }

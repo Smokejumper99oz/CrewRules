@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  MENTOR_PRELOAD_CSV_HEADERS,
+  MENTOR_PRELOAD_CSV_REQUIRED_HEADERS,
   parseMentorPreloadCsv,
 } from "@/lib/mentoring/mentor-preload-csv-import";
 
-/** CSV / XLSX header (must match MENTOR_PRELOAD_CSV_HEADERS entry). */
+/** CSV / XLSX header (must match required headers entry). */
 const MENTOR_PRELOAD_WORK_EMAIL_HEADER = "mentor_email_@flyfrontier.com" as const;
+
+const ALLOWED_POSITIONS = new Set(["captain", "first_officer", "flight_attendant"]);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -31,6 +33,22 @@ function normalizeMentorWorkEmail(raw: string): { ok: true; email: string | null
     return { ok: false, error: `Invalid ${MENTOR_PRELOAD_WORK_EMAIL_HEADER}` };
   }
   return { ok: true, email: lower };
+}
+
+/** Aligns with profiles.position check; invalid or blank → null (DB rejects bad enum otherwise). */
+function normalizeStagingPosition(raw: string): string | null {
+  const s = raw.trim().toLowerCase().replace(/\s+/g, "_");
+  if (!s) return null;
+  if (ALLOWED_POSITIONS.has(s)) return s;
+  return null;
+}
+
+/** 3-letter IATA-style staging base; invalid or blank → null. */
+function normalizeStagingBaseAirport(raw: string): string | null {
+  const s = raw.trim().toUpperCase();
+  if (!s) return null;
+  if (!/^[A-Z]{3}$/.test(s)) return null;
+  return s;
 }
 
 /**
@@ -65,13 +83,14 @@ export async function runMentorPreloadCsvImport(
   }
 
   const dataRows = parsed.data.rows;
+  const { optionalPresent } = parsed.data;
   const rowResults: MentorPreloadCsvImportRowResult[] = [];
   const seenEmp = new Set<string>();
   let success = 0;
   let failed = 0;
 
   for (const { rowNumber, values } of dataRows) {
-    const allEmpty = MENTOR_PRELOAD_CSV_HEADERS.every((k) => values[k] === "");
+    const allEmpty = MENTOR_PRELOAD_CSV_REQUIRED_HEADERS.every((k) => values[k] === "");
     if (allEmpty) {
       rowResults.push({
         rowNumber,
@@ -117,6 +136,14 @@ export async function runMentorPreloadCsvImport(
     const notes = values.notes.trim() || null;
     const nowIso = new Date().toISOString();
 
+    const staging: { position?: string | null; base_airport?: string | null } = {};
+    if (optionalPresent.mentor_position) {
+      staging.position = normalizeStagingPosition(values.mentor_position);
+    }
+    if (optionalPresent.mentor_base_airport) {
+      staging.base_airport = normalizeStagingBaseAirport(values.mentor_base_airport);
+    }
+
     const insertPayload = {
       full_name: fullName,
       work_email: workResult.email,
@@ -125,10 +152,11 @@ export async function runMentorPreloadCsvImport(
       active: true,
       notes,
       updated_at: nowIso,
+      ...staging,
     };
 
     /** Omits personal_email so existing DB values are not cleared on update. */
-    const updatePayload = {
+    const updatePayload: Record<string, unknown> = {
       full_name: fullName,
       work_email: workResult.email,
       phone,
@@ -136,6 +164,12 @@ export async function runMentorPreloadCsvImport(
       notes,
       updated_at: nowIso,
     };
+    if (optionalPresent.mentor_position) {
+      updatePayload.position = staging.position ?? null;
+    }
+    if (optionalPresent.mentor_base_airport) {
+      updatePayload.base_airport = staging.base_airport ?? null;
+    }
 
     const { data: existing, error: findErr } = await admin
       .from("mentor_preload")

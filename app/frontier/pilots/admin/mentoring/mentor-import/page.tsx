@@ -84,9 +84,11 @@ export default async function FrontierPilotAdminMentoringMentorImportPage() {
           </a>
         </div>
         <p className="mt-2 text-sm leading-snug text-slate-400">
-          Bulk import mentors using the template. Columns must match exactly: mentor_full_name, mentor_employee_number,
-          mentor_phone_number, mentor_email_@flyfrontier.com, and notes (optional text). Existing preload rows update
-          automatically. Duplicate mentor_employee_number values in the same file are ignored and flagged.
+          Bulk import mentors using the template. Required columns: mentor_full_name, mentor_employee_number,
+          mentor_phone_number, mentor_email_@flyfrontier.com, and notes. Optional staging columns (when present in the
+          header row): mentor_position (captain, first_officer, flight_attendant) and mentor_base_airport (3-letter IATA).
+          Existing preload rows update automatically. Duplicate mentor_employee_number values in the same file are ignored
+          and flagged.
         </p>
         <div className="mt-3">
           <FrontierPilotAdminMentorCsvUploadForm />
