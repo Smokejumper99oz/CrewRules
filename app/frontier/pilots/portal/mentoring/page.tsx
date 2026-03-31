@@ -184,13 +184,10 @@ function UnassignedMentorPlaceholderCard() {
     <div
       className={`${CARD_CLASS} border-l-[3px] border-l-slate-500/45 p-4 sm:p-5 flex flex-col gap-4`}
     >
-      <div>
-        <h2 className="text-base font-semibold text-white border-b border-white/5 pb-3">Mentor</h2>
-        <p className="mt-4 text-sm text-slate-400 leading-relaxed">
-          No mentor is assigned yet. When your mentoring team pairs you with someone, their name and contact options will
-          appear here.
-        </p>
-      </div>
+      <p className="text-sm text-slate-400 leading-relaxed">
+        No mentor is assigned yet. When your mentoring team pairs you with someone, their name and contact options will
+        appear here.
+      </p>
     </div>
   );
 }
@@ -211,7 +208,7 @@ function MenteeCard({ a }: { a: MentorAssignmentRow }) {
 
   if (!a.isMentorView) {
     return (
-      <div className={`${CARD_CLASS} ${cardStateAccentClass} p-4 sm:p-5 flex flex-col gap-4`}>
+      <div className={`${CARD_CLASS} p-4 sm:p-5 flex flex-col gap-4`}>
         {a.mentor_shared_card_profile ? (
           <SharedMentoringCardPreview profile={a.mentor_shared_card_profile} variant="portal-mentee" />
         ) : a.mentee_status === "active" ? (
@@ -315,7 +312,7 @@ export default async function MentoringPage({
   const profile = await getProfile();
   const { assignments, error } = await getMentorAssignments();
   const isMentorView = assignments.length > 0 && assignments.some((a) => a.isMentorView);
-  const sectionTitle = isMentorView ? "My Mentees" : "My Mentor";
+  const sectionTitle = isMentorView ? "My Mentees" : "Mentor";
 
   const isMentor = Boolean(profile?.is_mentor);
   const isFirstYear = isWithinFirstYearSinceDateOfHire(profile?.date_of_hire);
@@ -350,7 +347,7 @@ export default async function MentoringPage({
             : isMentor
               ? "My Mentees"
               : isFirstYear
-                ? "My Mentor"
+                ? "Mentor"
                 : "My Mentees"}
         </h2>
 

@@ -342,6 +342,83 @@ function getStatusForDay(
   const isLastDay = tripDates[tripDates.length - 1] === dateStr;
 
   if (isLastDay) {
+    const legs = primary.legs ?? [];
+    let shortTurnaroundAway: FamilyViewDayItem | null = null;
+    if (legs.length > 0 && tripDates.length > 0) {
+      const legDates = computeLegDates(legs, tripDates, baseTimezone);
+      const arrivalsOnDay = legDates.filter((ld) => ld.arrivalDate === dateStr);
+      const lastArrEntry =
+        arrivalsOnDay.length > 0 ? arrivalsOnDay[arrivalsOnDay.length - 1]! : null;
+      const lastLeg = lastArrEntry?.leg as ScheduleEventLeg | undefined;
+      const lastArrivalIata =
+        (lastLeg?.destination ?? "").trim().toUpperCase() || null;
+      const arrivalDateStr = lastArrEntry?.arrivalDate ?? null;
+      const lastArrivalIso =
+        lastLeg?.arrTime && arrivalDateStr
+          ? reportTimeToIsoUtc(lastLeg.arrTime, arrivalDateStr, baseTimezone)
+          : null;
+
+      const nextTrips = events
+        .filter(
+          (e) => e.event_type === "trip" && e.start_time > primary.end_time
+        )
+        .sort((a, b) => a.start_time.localeCompare(b.start_time));
+      const nextTrip = nextTrips[0];
+      const nextFirstLeg = nextTrip?.legs?.[0] as ScheduleEventLeg | undefined;
+      const nextReportIata = (nextFirstLeg?.origin ?? "").trim().toUpperCase() || null;
+
+      const nextTripDates =
+        nextTrip
+          ? getTripDateStrings(nextTrip.start_time, nextTrip.end_time, baseTimezone)
+          : [];
+      const nextFirstDutyDate = nextTripDates[0];
+      const nextReportIso =
+        nextTrip?.report_time && nextFirstDutyDate
+          ? reportTimeToIsoUtc(nextTrip.report_time, nextFirstDutyDate, baseTimezone)
+          : null;
+
+      if (
+        lastArrivalIso &&
+        nextReportIso &&
+        lastArrivalIata &&
+        nextReportIata &&
+        lastArrivalIata === nextReportIata
+      ) {
+        const lastArrDate = new Date(lastArrivalIso);
+        const nextRepDate = new Date(nextReportIso);
+        const gapMs = nextRepDate.getTime() - lastArrDate.getTime();
+        const sameDay =
+          formatInTimeZone(lastArrDate, baseTimezone, "yyyy-MM-dd") ===
+          formatInTimeZone(nextRepDate, baseTimezone, "yyyy-MM-dd");
+        const under18h =
+          gapMs >= 0 && gapMs < 18 * 60 * 60 * 1000;
+        const shortGap = sameDay || under18h;
+
+        if (shortGap) {
+          const cityLabel = iataToCityName(lastArrivalIata);
+          const landedTime = settings.showExactTimes
+            ? formatTime12h(lastArrivalIso, baseTimezone)
+            : formatIsoToTimeOfDay(lastArrivalIso, baseTimezone);
+          const nextReportTime = settings.showExactTimes
+            ? formatReportTime12h(nextTrip!.report_time)
+            : formatReportTimeOfDay(nextTrip!.report_time);
+          if (landedTime && nextReportTime) {
+            shortTurnaroundAway = {
+              dateStr,
+              dayLabel,
+              status: "Overnight Away",
+              detail: `Landed ${cityLabel} ${landedTime} • Next report ${nextReportTime} • Likely staying in base`,
+              reportTime: null,
+            };
+          }
+        }
+      }
+    }
+
+    if (shortTurnaroundAway) {
+      return shortTurnaroundAway;
+    }
+
     const detail = formatExpectedHomeForDisplay(primary.end_time, baseTimezone, settings);
     return {
       dateStr,

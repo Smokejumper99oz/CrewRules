@@ -94,12 +94,12 @@ export function PortalSettingsShell({
                   key={href}
                   href={href}
                   className={[
-                    "group flex shrink-0 items-center gap-1.5 border-b-2 border-transparent text-sm transition touch-manipulation",
+                    "group flex shrink-0 items-center gap-1.5 border-0 border-b-2 border-b-transparent text-sm transition touch-manipulation",
                     "-mb-px px-3 py-2.5 max-lg:min-h-[48px] max-lg:snap-start max-lg:snap-always max-lg:py-3 lg:min-h-0 lg:px-3.5 lg:py-2",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-emerald-400/50 dark:focus-visible:ring-offset-slate-950",
                     isActive
-                      ? "border-[#75C043] font-medium text-slate-900 dark:border-emerald-400 dark:text-white"
-                      : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100",
+                      ? "font-medium text-slate-900 shadow-[inset_0_-2px_0_0_#75C043] dark:text-white dark:shadow-[inset_0_-2px_0_0_#34d399]"
+                      : "shadow-none text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100",
                   ].join(" ")}
                 >
                   <Icon

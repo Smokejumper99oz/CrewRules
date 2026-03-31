@@ -18,6 +18,9 @@ export const STRIPE_PRO_MONTHLY_PRICE_USD =
 export const STRIPE_PRO_ANNUAL_PRICE_USD =
   Number(process.env.STRIPE_PRO_ANNUAL_PRICE_USD) || 0;
 
+export const STRIPE_FOUNDING_PILOT_ANNUAL_PRICE_USD =
+  Number(process.env.STRIPE_FOUNDING_PILOT_ANNUAL_PRICE_USD) || 0;
+
 /**
  * FlightAware AeroAPI cost per request (Super Admin reporting only).
  * Temporary default; update when actual pricing is known.

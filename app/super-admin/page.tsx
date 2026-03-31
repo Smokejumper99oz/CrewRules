@@ -12,10 +12,12 @@ import {
   getProTrialMetrics,
   getProTrialUsers,
   getStripeBillingMetrics,
+  getStripeSubscriptionCashMetrics,
   getChurnRenewalMetrics,
   getFlightAwareUsageMetrics,
   getAviationStackUsageMetrics,
   getMentoringMilestoneIntegritySignals,
+  getSuperAdminWaitlistKpis,
 } from "@/lib/super-admin/actions";
 import { SuperAdminHeader } from "@/components/super-admin/super-admin-header";
 import { SuperAdminNeedsAttention } from "@/components/super-admin/super-admin-needs-attention";
@@ -47,9 +49,11 @@ export default async function SuperAdminPage() {
     trialMetrics,
     trialUsers,
     stripeBilling,
+    stripeCash,
     churnRenewal,
     flightAwareMetrics,
     aviationStackMetrics,
+    waitlistKpis,
   ] = await Promise.all([
     getSuperAdminKpis(),
     getOnlineUserCount(),
@@ -61,9 +65,11 @@ export default async function SuperAdminPage() {
     getProTrialMetrics(),
     getProTrialUsers(),
     getStripeBillingMetrics(),
+    getStripeSubscriptionCashMetrics(),
     getChurnRenewalMetrics(),
     getFlightAwareUsageMetrics(),
     getAviationStackUsageMetrics(),
+    getSuperAdminWaitlistKpis(),
   ]);
 
   const [peakToday, peakAllTime] = await Promise.all([
@@ -92,6 +98,7 @@ export default async function SuperAdminPage() {
           onlineNow={onlineNow}
           peakToday={peakToday}
           peakAllTime={peakAllTime}
+          waitlistKpis={waitlistKpis}
         />
 
       <section>
@@ -124,6 +131,7 @@ export default async function SuperAdminPage() {
           trialMetrics={trialMetrics}
           tenants={tenants}
           stripeBilling={stripeBilling}
+          stripeCash={stripeCash}
           churnRenewal={churnRenewal}
           flightAwareMetrics={flightAwareMetrics}
           aviationStackMetrics={aviationStackMetrics}

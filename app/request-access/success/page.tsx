@@ -1,7 +1,13 @@
 import Link from "next/link";
 
 type PageProps = {
-  searchParams: Promise<{ airline?: string; live?: string; signupRoute?: string }>;
+  searchParams: Promise<{
+    airline?: string;
+    live?: string;
+    signupRoute?: string;
+    /** Present when user joined waitlist as flight attendant (request-access flow). */
+    role?: string;
+  }>;
 };
 
 function formatAirline(airline: string | undefined): string {
@@ -19,6 +25,7 @@ export default async function RequestAccessSuccessPage({ searchParams }: PagePro
   const isLive = params.live === "1";
   const signupRoute = params.signupRoute;
   const airlineDisplay = formatAirline(airline);
+  const waitlistRoleSuffix = params.role === "fa" ? " Flight Attendant" : "";
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -46,13 +53,16 @@ export default async function RequestAccessSuccessPage({ searchParams }: PagePro
             <>
               <h1 className="text-3xl font-bold text-center tracking-tight">Thank You!</h1>
               <p className="mt-4 text-slate-300 text-center">
-                We placed you on the Waitlist for {airlineDisplay}.
+                We placed you on the waitlist for {airlineDisplay}
+                {waitlistRoleSuffix}.
               </p>
-              <p className="mt-4 text-sm text-slate-400 text-center">
-                We&apos;ll review your request and notify you when access is available for your airline.
+              <p className="mt-4 text-sm text-slate-400 text-center leading-relaxed">
+                We review waitlist requests as we bring new airlines and crew roles onto CrewRules™.
+                When it&apos;s your turn, we&apos;ll email you with a link to create your account—you
+                won&apos;t need to join the waitlist again.
               </p>
-              <p className="mt-2 text-xs text-slate-500 text-center">
-                Please keep an eye on your email.
+              <p className="mt-2 text-xs text-slate-500 text-center leading-relaxed">
+                Watch your inbox (and spam or promotions folders) so you don&apos;t miss that message.
               </p>
               <div className="mt-8">
                 <Link

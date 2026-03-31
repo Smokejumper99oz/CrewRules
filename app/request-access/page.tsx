@@ -6,6 +6,8 @@ import { submitAccessRequest } from "./actions";
 
 export default function RequestAccessPage() {
   const [state, formAction, isPending] = useActionState(submitAccessRequest, null);
+  const v = state?.values;
+  const formKey = state?.echoKey ?? "request-access-form";
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -24,13 +26,14 @@ export default function RequestAccessPage() {
           Currently Live: Frontier Airlines (Pilots)
         </div>
 
-        <form action={formAction} className="mt-8 space-y-4">
+        <form key={formKey} action={formAction} className="mt-8 space-y-4">
           <label className="block">
             <span className="text-sm text-slate-300">Full Name</span>
             <input
               name="full_name"
               type="text"
               placeholder="Your full name"
+              defaultValue={v?.full_name ?? ""}
               required
               disabled={isPending}
               className="mt-2 w-full rounded-xl bg-slate-800 border border-slate-600 px-4 py-3 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
@@ -43,6 +46,7 @@ export default function RequestAccessPage() {
               name="email"
               type="email"
               placeholder="you@company.com"
+              defaultValue={v?.email ?? ""}
               required
               disabled={isPending}
               className="mt-2 w-full rounded-xl bg-slate-800 border border-slate-600 px-4 py-3 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
@@ -53,6 +57,7 @@ export default function RequestAccessPage() {
             <span className="text-sm text-slate-300">Role</span>
             <select
               name="role"
+              defaultValue={v?.role ?? ""}
               required
               disabled={isPending}
               className="mt-2 w-full rounded-xl bg-slate-800 border border-slate-600 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
@@ -69,6 +74,7 @@ export default function RequestAccessPage() {
               name="airline"
               type="text"
               placeholder="Your Airline"
+              defaultValue={v?.airline ?? ""}
               disabled={isPending}
               className="mt-2 w-full rounded-xl bg-slate-800 border border-slate-600 px-4 py-3 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
             />
@@ -80,6 +86,7 @@ export default function RequestAccessPage() {
               name="employee_number"
               type="text"
               placeholder="Your Employee ID"
+              defaultValue={v?.employee_number ?? ""}
               disabled={isPending}
               className="mt-2 w-full rounded-xl bg-slate-800 border border-slate-600 px-4 py-3 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
             />

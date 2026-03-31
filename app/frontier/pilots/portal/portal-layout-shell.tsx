@@ -36,7 +36,7 @@ const NAV_GROUPS = [
   {
     title: "System",
     items: [
-      { label: "Updates", href: "updates" },
+      { label: "System updates", href: "updates" },
       { label: "Archive", href: "archive" },
       { label: "Settings", href: "settings/pilot" },
       { label: "About", href: "profile/about" },

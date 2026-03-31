@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { format, isValid, parse } from "date-fns";
+import { format, isValid, parse, parseISO } from "date-fns";
 import {
   completeMentorshipMilestone,
   createMentorshipCheckIn,
+  deleteLatestMenteeMilestoneUpdate,
   deleteMentorshipCheckIn,
+  submitMenteeMilestoneUpdate,
   updateCompletedMentorshipMilestone,
   updateMentorshipCheckIn,
 } from "@/app/frontier/pilots/portal/mentoring/actions";
@@ -18,6 +20,13 @@ export type MentoringCheckInItem = {
   created_at: string;
 };
 
+export type MentoringMenteeMilestoneUpdateItem = {
+  id: string;
+  milestone_type: "type_rating" | "oe_complete";
+  message: string;
+  created_at: string;
+};
+
 export type MentoringMilestoneTimelineItem = {
   milestone_type: string;
   due_date: string;
@@ -25,6 +34,8 @@ export type MentoringMilestoneTimelineItem = {
   completed_at: string | null;
   completion_note: string | null;
   title: string;
+  /** Optional mentee-facing line under the title (mentors omit). */
+  subtitle?: string;
   dueDisplay: string;
   /** Pre-formatted date-only fallback when `completed_at` is missing */
   completedDisplay: string | null;
@@ -34,6 +45,7 @@ type Props = {
   assignmentId: string;
   items: MentoringMilestoneTimelineItem[];
   checkIns: MentoringCheckInItem[];
+  menteeMilestoneUpdates?: ReadonlyArray<MentoringMenteeMilestoneUpdateItem>;
   /** When true, mentor can edit completion note/date on completed rows and add check-ins. */
   canEditMilestones?: boolean;
   showMenteeCheckIn?: boolean;
@@ -61,6 +73,15 @@ const completedPillWithDateClass =
   "inline-flex shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-1.5 text-xs font-semibold leading-none text-emerald-200";
 
 const secondaryActionPillClass = `${timelineActionSizeClass} border-slate-500/40 bg-slate-500/20 text-slate-400 transition hover:border-slate-400/50 max-[380px]:px-2`;
+
+/** Same footprint as `secondaryActionPillClass` so “Remove” and “Edit” read as a matched pair. */
+const menteeRemoveLastPillClass = `${timelineActionSizeClass} border-red-500/35 bg-red-950/25 text-red-200/90 antialiased transition-colors duration-200 hover:border-red-400/45 hover:bg-red-950/40 active:bg-red-950/45 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-red-500/35 disabled:hover:bg-red-950/25 max-[380px]:px-2`;
+
+/** Pending milestone: due date + status in one chip (matches site rhythm; no plain date beside a lone pill). */
+const pendingDueStatusChipClass =
+  "inline-flex min-h-7 shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border border-slate-500/35 bg-slate-900/50 px-2.5 py-1 text-xs leading-none tabular-nums";
+
+const MENTEE_MILESTONE_UPDATE_MAX_LEN = 500;
 
 const checkInNoteActionPillClass =
   "inline-flex h-6 min-h-6 shrink-0 items-center justify-center rounded-md border border-amber-500/45 bg-amber-950/35 px-2 text-xs font-semibold leading-none text-amber-100/95 antialiased transition-colors duration-200 hover:border-amber-400/55 hover:bg-amber-950/50 active:bg-amber-950/60 disabled:opacity-50";
@@ -114,6 +135,27 @@ function milestoneCompletedYmd(m: MentoringMilestoneTimelineItem): string {
 
 function dueYmd(m: MentoringMilestoneTimelineItem): string {
   return String(m.due_date ?? "").trim().slice(0, 10);
+}
+
+function formatMenteeMilestoneUpdateTimestamp(iso: string): string {
+  const t = iso?.trim() ?? "";
+  if (!t) return "";
+  const d = parseISO(t);
+  if (!isValid(d)) return "";
+  return format(d, "MMM d, yyyy");
+}
+
+/** Message from the most recent row for this milestone type (`created_at` order), regardless of prop ordering. */
+function latestMenteeMilestoneUpdateMessage(
+  updates: ReadonlyArray<MentoringMenteeMilestoneUpdateItem>,
+  milestoneType: MentoringMenteeMilestoneUpdateItem["milestone_type"]
+): string {
+  const rows = updates.filter((u) => u.milestone_type === milestoneType);
+  if (rows.length === 0) return "";
+  const sorted = [...rows].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+  return sorted[sorted.length - 1]?.message ?? "";
 }
 
 function standaloneCheckInsForTimeline(
@@ -203,6 +245,7 @@ export function MentoringMilestoneTimeline({
   assignmentId,
   items,
   checkIns,
+  menteeMilestoneUpdates = [],
   canEditMilestones = false,
   showMenteeCheckIn = false,
 }: Props) {
@@ -218,12 +261,21 @@ export function MentoringMilestoneTimeline({
   const [checkInError, setCheckInError] = useState<string | null>(null);
   const [deleteCheckInConfirm, setDeleteCheckInConfirm] = useState<MentoringCheckInItem | null>(null);
   const [deleteCheckInError, setDeleteCheckInError] = useState<string | null>(null);
+  const [menteeUpdateOpenFor, setMenteeUpdateOpenFor] = useState<string | null>(null);
+  const [menteeUpdateMessage, setMenteeUpdateMessage] = useState("");
+  const [menteeUpdateError, setMenteeUpdateError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [isMenteeUpdatePending, startMenteeUpdateTransition] = useTransition();
+  const [isMenteeRemoveLastPending, startMenteeRemoveLastTransition] = useTransition();
+  const [menteeRemoveLastError, setMenteeRemoveLastError] = useState<{
+    milestoneType: string;
+    message: string;
+  } | null>(null);
 
   const segments = useMemo(() => buildTimelineSegments(items, checkIns), [items, checkIns]);
 
   useEffect(() => {
-    if (!modal && !checkInOpen && !deleteCheckInConfirm) return;
+    if (!modal && !checkInOpen && !deleteCheckInConfirm && !menteeUpdateOpenFor) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setModal(null);
@@ -231,11 +283,14 @@ export function MentoringMilestoneTimeline({
         setCheckInEditId(null);
         setDeleteCheckInConfirm(null);
         setDeleteCheckInError(null);
+        setMenteeUpdateOpenFor(null);
+        setMenteeUpdateMessage("");
+        setMenteeUpdateError(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [modal, checkInOpen, deleteCheckInConfirm]);
+  }, [modal, checkInOpen, deleteCheckInConfirm, menteeUpdateOpenFor]);
 
   const modalItem = modal ? items.find((x) => x.milestone_type === modal.milestoneType) : null;
 
@@ -382,6 +437,196 @@ export function MentoringMilestoneTimeline({
       </div>
     ));
 
+  const menteeMilestoneUpdateLabel = canEditMilestones ? "Mentee update" : "Your update";
+
+  const closeMenteeUpdateComposer = () => {
+    setMenteeUpdateOpenFor(null);
+    setMenteeUpdateMessage("");
+    setMenteeUpdateError(null);
+  };
+
+  const openMenteeUpdateComposer = (milestoneType: MentoringMenteeMilestoneUpdateItem["milestone_type"]) => {
+    setMenteeUpdateOpenFor(milestoneType);
+    setMenteeUpdateMessage(latestMenteeMilestoneUpdateMessage(menteeMilestoneUpdates, milestoneType));
+    setMenteeUpdateError(null);
+    setMenteeRemoveLastError(null);
+  };
+
+  const removeLatestMenteeMilestoneUpdateForRow = (
+    milestoneType: MentoringMenteeMilestoneUpdateItem["milestone_type"]
+  ) => {
+    setMenteeRemoveLastError(null);
+    startMenteeRemoveLastTransition(async () => {
+      const result = await deleteLatestMenteeMilestoneUpdate({ assignmentId, milestoneType });
+      if (result.error) {
+        setMenteeRemoveLastError({ milestoneType, message: result.error });
+        return;
+      }
+      if (menteeUpdateOpenFor === milestoneType) {
+        closeMenteeUpdateComposer();
+      }
+      router.refresh();
+    });
+  };
+
+  const saveMenteeMilestoneUpdate = (milestoneType: "type_rating" | "oe_complete") => {
+    const msg = menteeUpdateMessage.trim();
+    if (!msg) {
+      setMenteeUpdateError("Message is required.");
+      return;
+    }
+    if (msg.length > MENTEE_MILESTONE_UPDATE_MAX_LEN) {
+      setMenteeUpdateError(`Message is too long (max ${MENTEE_MILESTONE_UPDATE_MAX_LEN} characters).`);
+      return;
+    }
+    setMenteeUpdateError(null);
+    startMenteeUpdateTransition(async () => {
+      const result = await submitMenteeMilestoneUpdate({
+        assignmentId,
+        milestoneType,
+        message: msg,
+      });
+      if (result.error) {
+        setMenteeUpdateError(result.error);
+        return;
+      }
+      closeMenteeUpdateComposer();
+      router.refresh();
+    });
+  };
+
+  const renderMenteeMilestoneUpdateEntries = (m: MentoringMilestoneTimelineItem) => {
+    if (m.milestone_type !== "type_rating" && m.milestone_type !== "oe_complete") return null;
+    const rows = menteeMilestoneUpdates.filter((u) => u.milestone_type === m.milestone_type);
+    if (rows.length === 0) return null;
+    return (
+      <div className="space-y-1.5">
+        {rows.map((u) => {
+          const ts = formatMenteeMilestoneUpdateTimestamp(u.created_at);
+          return (
+            <div
+              key={u.id}
+              className="rounded-md border border-sky-400/35 border-l-[3px] border-l-sky-400/55 bg-sky-400/[0.08] px-2.5 py-1.5"
+            >
+              <p className="text-[10px] font-medium uppercase tracking-wide text-sky-50/90">
+                {menteeMilestoneUpdateLabel}
+              </p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed text-slate-300">
+                {u.message}
+              </p>
+              {ts ? <p className="mt-1 text-[10px] tabular-nums text-slate-500">{ts}</p> : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderMenteeRemoveLastBlock = (m: MentoringMilestoneTimelineItem) => {
+    if (canEditMilestones) return null;
+    if (m.milestone_type !== "type_rating" && m.milestone_type !== "oe_complete") return null;
+    const rows = menteeMilestoneUpdates.filter((u) => u.milestone_type === m.milestone_type);
+    if (rows.length === 0) return null;
+    return (
+      <div className="min-w-0 shrink-0">
+        <button
+          type="button"
+          onClick={() =>
+            removeLatestMenteeMilestoneUpdateForRow(
+              m.milestone_type as MentoringMenteeMilestoneUpdateItem["milestone_type"]
+            )
+          }
+          disabled={isMenteeRemoveLastPending || isMenteeUpdatePending}
+          className={menteeRemoveLastPillClass}
+        >
+          {isMenteeRemoveLastPending ? "Removing…" : "Remove last update"}
+        </button>
+        {menteeRemoveLastError?.milestoneType === m.milestone_type ? (
+          <p className="mt-1 text-xs leading-snug text-slate-400">{menteeRemoveLastError.message}</p>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderMenteeMilestoneUpdatesForRow = (
+    m: MentoringMilestoneTimelineItem,
+    options?: { omitRemove?: boolean }
+  ) => {
+    const entries = renderMenteeMilestoneUpdateEntries(m);
+    const remove = options?.omitRemove ? null : renderMenteeRemoveLastBlock(m);
+    if (!entries && !remove) return null;
+    return (
+      <div className="mt-2 space-y-2">
+        {entries}
+        {remove}
+      </div>
+    );
+  };
+
+  /** Pending row only: mentee share-updates for type_rating / oe_complete (mentor workflow unchanged). */
+  const renderMenteeMilestoneUpdateComposer = (m: MentoringMilestoneTimelineItem) => {
+    if (canEditMilestones) return null;
+    if (m.milestone_type !== "type_rating" && m.milestone_type !== "oe_complete") return null;
+    const mt = m.milestone_type;
+    const isOpen = menteeUpdateOpenFor === mt;
+    const textId = `mentee-milestone-update-${mt}`;
+    const hasExistingMenteeUpdatesForRow = menteeMilestoneUpdates.some((u) => u.milestone_type === mt);
+
+    if (!isOpen) {
+      return (
+        <div className="shrink-0">
+          <button
+            type="button"
+            onClick={() => openMenteeUpdateComposer(mt)}
+            className={secondaryActionPillClass}
+          >
+            {hasExistingMenteeUpdatesForRow ? "Edit update" : "Share update with mentor"}
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mt-2 w-full min-w-0 basis-full space-y-2 rounded-md border border-slate-600/40 bg-slate-950/40 px-3 py-2.5 sm:order-last">
+        <label htmlFor={textId} className="text-xs font-medium text-slate-400">
+          Update for your mentor
+        </label>
+        <textarea
+          id={textId}
+          value={menteeUpdateMessage}
+          onChange={(e) => setMenteeUpdateMessage(e.target.value)}
+          rows={3}
+          maxLength={MENTEE_MILESTONE_UPDATE_MAX_LEN}
+          disabled={isMenteeUpdatePending}
+          placeholder="Short note (progress, timing, questions)…"
+          className="min-h-[4.5rem] w-full resize-y rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/40 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 disabled:opacity-50"
+        />
+        <p className="text-[10px] text-slate-500">
+          {menteeUpdateMessage.length}/{MENTEE_MILESTONE_UPDATE_MAX_LEN}
+        </p>
+        {menteeUpdateError ? <p className="text-xs text-red-400">{menteeUpdateError}</p> : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={closeMenteeUpdateComposer}
+            disabled={isMenteeUpdatePending}
+            className="inline-flex min-h-8 items-center justify-center rounded-lg border border-slate-500/40 bg-slate-900/50 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:border-slate-400/50 hover:bg-slate-800/80 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => saveMenteeMilestoneUpdate(mt)}
+            disabled={isMenteeUpdatePending}
+            className="inline-flex min-h-8 items-center justify-center rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/25 disabled:opacity-50"
+          >
+            {isMenteeUpdatePending ? "Sending…" : "Submit"}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderMilestoneCard = (m: MentoringMilestoneTimelineItem, attached: MentoringCheckInItem[]) => {
     const rowKey = m.milestone_type + m.due_date;
     const completionNote = m.completion_note?.trim() ?? "";
@@ -393,7 +638,11 @@ export function MentoringMilestoneTimeline({
           <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-between">
             <div className="min-w-0 w-full text-left sm:flex-1">
               <div className="text-base font-semibold leading-snug text-slate-200">{m.title}</div>
-              {completionNote ? (
+              {m.subtitle?.trim() ? (
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">{m.subtitle.trim()}</p>
+              ) : null}
+              {renderMenteeMilestoneUpdatesForRow(m)}
+              {canEditMilestones && completionNote ? (
                 <p className="mt-2 text-xs leading-relaxed text-slate-400">
                   <span className="font-semibold text-slate-500">NOTE:</span> {completionNote}
                 </p>
@@ -442,28 +691,40 @@ export function MentoringMilestoneTimeline({
 
     return (
       <div key={rowKey} className={cardClass}>
-        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-between">
-          <div className="min-w-0 w-full text-left sm:flex-1">
-            <div className="truncate text-base font-semibold leading-snug text-slate-200">{m.title}</div>
-            {renderAttachedCheckIns(attached)}
+        <div className="flex min-w-0 flex-col gap-3">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <div className="min-w-0 flex-1 text-left">
+              <div className="text-base font-semibold leading-snug text-slate-200">{m.title}</div>
+              {m.subtitle?.trim() ? (
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">{m.subtitle.trim()}</p>
+              ) : null}
+            </div>
+            <div className="flex min-w-0 shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              <div className={pendingDueStatusChipClass} title={`Due ${m.dueDisplay} · Pending`}>
+                <span className="text-slate-500">Due</span>
+                <span className="font-medium text-slate-200">{m.dueDisplay}</span>
+                <span className="hidden h-3 w-px shrink-0 self-center bg-white/10 sm:block" aria-hidden />
+                <span className="font-semibold text-slate-400">Pending</span>
+              </div>
+              {canEditMilestones && !modalOpenHere ? (
+                <button
+                  type="button"
+                  onClick={() => openComplete(m.milestone_type)}
+                  className={`${timelineActionSizeClass} border-emerald-500/40 bg-emerald-500/15 text-emerald-200 antialiased transition-colors duration-200 hover:border-emerald-400/50 hover:bg-emerald-500/25 active:bg-emerald-500/20`}
+                >
+                  Mark complete
+                </button>
+              ) : null}
+            </div>
           </div>
-          <div className="flex min-w-0 w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:justify-end">
-            <span className="w-full basis-full whitespace-nowrap text-sm text-slate-400 tabular-nums sm:w-auto sm:basis-auto">
-              {m.dueDisplay}
-            </span>
-            <span className={`${timelineActionSizeClass} border-slate-500/40 bg-slate-500/20 text-slate-400`}>
-              Pending
-            </span>
-            {!modalOpenHere ? (
-              <button
-                type="button"
-                onClick={() => openComplete(m.milestone_type)}
-                className={`${timelineActionSizeClass} border-emerald-500/40 bg-emerald-500/15 text-emerald-200 antialiased transition-colors duration-200 hover:border-emerald-400/50 hover:bg-emerald-500/25 active:bg-emerald-500/20`}
-              >
-                Mark complete
-              </button>
-            ) : null}
-          </div>
+          {renderMenteeMilestoneUpdatesForRow(m, { omitRemove: true })}
+          {!canEditMilestones && (m.milestone_type === "type_rating" || m.milestone_type === "oe_complete") ? (
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+              {renderMenteeRemoveLastBlock(m)}
+              {renderMenteeMilestoneUpdateComposer(m)}
+            </div>
+          ) : null}
+          {renderAttachedCheckIns(attached)}
         </div>
       </div>
     );

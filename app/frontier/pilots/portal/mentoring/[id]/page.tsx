@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { getMenteeDetail, type MenteeDetailRow } from "../actions";
-import { format, isToday, isTomorrow, isYesterday, differenceInDays, startOfDay } from "date-fns";
-import { MentorContactCard } from "@/components/mentoring/mentor-contact-card";
+import { getProfile } from "@/lib/profile";
+import { getTenantAirlineDisplayName } from "@/lib/tenant-config";
+import { format, isToday, isTomorrow, differenceInDays, startOfDay } from "date-fns";
 import { LastInteractionSignal } from "@/components/mentoring/last-interaction-signal";
 import { MentoringMilestoneTimeline } from "@/components/mentoring/mentoring-milestone-timeline";
 import { MentorWorkspaceStatusPill } from "@/components/mentoring/mentor-mentee-card-workspace";
@@ -137,7 +138,7 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function MenteeDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const { detail, milestones, checkIns, error } = await getMenteeDetail(id);
+  const { detail, milestones, checkIns, menteeMilestoneUpdates, error } = await getMenteeDetail(id);
 
   if (error || !detail) {
     return (
@@ -155,10 +156,10 @@ export default async function MenteeDetailPage({ params }: PageProps) {
     );
   }
 
-  const fullName = (detail.isMentorView ? detail.mentee_full_name : detail.mentor_full_name)?.trim() || "Unknown";
-  const mentorCardName = detail.mentor_full_name?.trim() || "Unknown";
+  const profile = await getProfile();
+  const tenantDisplayName = getTenantAirlineDisplayName(profile?.tenant);
 
-  const backLabel = detail.isMentorView ? "← Back to My Mentees" : "← Back to My Mentor";
+  const fullName = (detail.isMentorView ? detail.mentee_full_name : detail.mentor_full_name)?.trim() || "Unknown";
   const assignmentBadge = menteeDetailAssignmentBadge(detail);
 
   const menteeJoinedCrewrules =
@@ -175,30 +176,30 @@ export default async function MenteeDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-4">
-      <Link
-        href="/frontier/pilots/portal/mentoring"
-        className="inline-block text-sm text-slate-400 hover:text-white transition"
-      >
-        {backLabel}
-      </Link>
+      {detail.isMentorView ? (
+        <>
+          <Link
+            href="/frontier/pilots/portal/mentoring"
+            className="inline-block text-sm text-slate-400 hover:text-white transition"
+          >
+            ← Back to My Mentees
+          </Link>
 
-      <div className={`${CARD_CLASS} p-6`}>
-        <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-y-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
-            <h1 className="text-xl font-semibold tracking-tight text-white">{fullName}</h1>
-            <span
-              className={`inline-flex shrink-0 whitespace-nowrap rounded px-2 py-0.5 text-xs font-medium ${assignmentBadge.className}`}
-            >
-              {assignmentBadge.label}
-            </span>
-          </div>
-          <LastInteractionSignal
-            at={detail.last_interaction_at}
-            className="w-full shrink-0 sm:ml-auto sm:w-auto"
-          />
-        </div>
-        {detail.isMentorView ? (
-          <>
+          <div className={`${CARD_CLASS} p-6`}>
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-y-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+                <h1 className="text-xl font-semibold tracking-tight text-white">{fullName}</h1>
+                <span
+                  className={`inline-flex shrink-0 whitespace-nowrap rounded px-2 py-0.5 text-xs font-medium ${assignmentBadge.className}`}
+                >
+                  {assignmentBadge.label}
+                </span>
+              </div>
+              <LastInteractionSignal
+                at={detail.last_interaction_at}
+                className="w-full shrink-0 sm:ml-auto sm:w-auto"
+              />
+            </div>
             <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1.5 text-sm leading-snug text-slate-500">
               <span className="tabular-nums">
                 <span>DOH:</span> {formatHireDate(detail.hire_date)}
@@ -242,28 +243,8 @@ export default async function MenteeDetailPage({ params }: PageProps) {
                 dueDate={detail.next_milestone_due_date}
               />
             )}
-          </>
-        ) : (
-          <>
-            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1.5 text-sm leading-snug text-slate-500">
-              <span className="tabular-nums">
-                <span>DOH:</span> {formatHireDate(detail.hire_date)}
-              </span>
-            </div>
-            <NextMilestoneHero
-              milestoneType={detail.next_milestone_label}
-              dueDate={detail.next_milestone_due_date}
-            />
-          </>
-        )}
-      </div>
-
-      {!detail.isMentorView ? (
-        <MentorContactCard
-          fullName={mentorCardName}
-          contactEmail={detail.mentor_contact_email}
-          phone={detail.mentor_phone_display}
-        />
+          </div>
+        </>
       ) : null}
 
       <div className={`${CARD_CLASS} p-6`}>
@@ -271,21 +252,72 @@ export default async function MenteeDetailPage({ params }: PageProps) {
           assignmentId={detail.id}
           canEditMilestones={detail.isMentorView}
           showMenteeCheckIn={detail.isMentorView}
-          checkIns={checkIns}
-          items={milestones.map((m) => ({
-            milestone_type: m.milestone_type,
-            due_date: m.due_date,
-            completed_date: m.completed_date,
-            completed_at: m.completed_at,
-            completion_note: m.completion_note,
-            title: formatMilestoneType(m.milestone_type),
-            dueDisplay: formatTimelineDueDate(m.due_date),
-            completedDisplay: m.completed_date
-              ? formatTimelineDueDate(
-                  String(m.completed_date).trim().slice(0, 10) || m.due_date
-                )
-              : null,
-          }))}
+          checkIns={detail.isMentorView ? checkIns : []}
+          menteeMilestoneUpdates={menteeMilestoneUpdates}
+          items={milestones.map((m) => {
+            const base = {
+              milestone_type: m.milestone_type,
+              due_date: m.due_date,
+              completed_date: m.completed_date,
+              completed_at: m.completed_at,
+              completion_note: m.completion_note,
+              title: formatMilestoneType(m.milestone_type),
+              dueDisplay: formatTimelineDueDate(m.due_date),
+              completedDisplay: m.completed_date
+                ? formatTimelineDueDate(
+                    String(m.completed_date).trim().slice(0, 10) || m.due_date
+                  )
+                : null,
+            };
+
+            if (!detail.isMentorView && m.milestone_type === "initial_assignment") {
+              const initialComplete = Boolean(m.completed_date?.trim());
+              const hasMentor = Boolean(detail.mentor_user_id?.trim());
+              if (initialComplete) {
+                return {
+                  ...base,
+                  title: `Date of Hire - Welcome to ${tenantDisplayName}`,
+                  subtitle: "We are glad you are here.",
+                };
+              }
+              if (hasMentor) {
+                return {
+                  ...base,
+                  title: "Date of Hire - Mentor Assigned",
+                  subtitle: "A mentor has been assigned and will contact you shortly.",
+                };
+              }
+              return {
+                ...base,
+                title: "Date of Hire - Mentor Assignment Pending",
+                subtitle: "A mentor has not been assigned yet. You will be matched soon.",
+              };
+            }
+
+            if (
+              !detail.isMentorView &&
+              m.milestone_type === "type_rating" &&
+              Boolean(m.completed_date?.trim())
+            ) {
+              return {
+                ...base,
+                title: "Congratulations on your Airbus A320 Type Rating",
+              };
+            }
+
+            if (
+              !detail.isMentorView &&
+              m.milestone_type === "oe_complete" &&
+              Boolean(m.completed_date?.trim())
+            ) {
+              return {
+                ...base,
+                title: `Congratulations on becoming a fully qualified First Officer with ${tenantDisplayName}`,
+              };
+            }
+
+            return base;
+          })}
         />
       </div>
     </div>

@@ -44,7 +44,12 @@ function formatTenureWithAirline(
 
 function previewDisplayName(profile: Profile): string {
   const pref = profile.preferred_name?.trim();
-  if (pref) return pref;
+  if (pref) {
+    if (/^my\s*mentor$/i.test(pref)) {
+      return profile.full_name?.trim() || pref;
+    }
+    return pref;
+  }
   return profile.full_name?.trim() ?? "";
 }
 

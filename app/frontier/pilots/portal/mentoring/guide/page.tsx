@@ -1,8 +1,3 @@
-import Link from "next/link";
-
-const guideLinkClass =
-  "text-sm font-medium text-[#75C043] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950";
-
 const sectionEyebrowClass =
   "mb-1 text-[11px] uppercase tracking-wide text-slate-500";
 
@@ -22,65 +17,107 @@ export default function PilotPortalMentoringGuidePage() {
             <h2 className="text-lg font-semibold text-white">For Mentors</h2>
           </div>
           <p className="mt-2 text-sm leading-relaxed text-slate-400">
-            CrewRules mentoring tools help you stay organized and proactive while supporting your
-            mentees. Use the portal to see progress at a glance and keep touchpoints on track.
+            You manage your mentee&apos;s progress. Keep milestones accurate and use updates to
+            stay ahead of changes.
           </p>
-          <ul className="mt-3 list-disc space-y-1.5 pl-4 text-sm leading-relaxed text-slate-400">
-            <li>Track mentee progress and milestones</li>
-            <li>Log and review check-ins</li>
-            <li>Stay ahead of important training events</li>
-            <li>Keep communication organized</li>
+          <ul className="mt-3 list-disc space-y-3 pl-4 text-sm leading-relaxed text-slate-400">
+            <li>
+              <span className="font-medium text-slate-300">Manage the timeline</span>
+              <span className="mt-1 block">
+                Each milestone reflects your mentee&apos;s progress (Type Rating, IOE, etc.). Keep
+                these accurate.
+              </span>
+            </li>
+            <li>
+              <span className="font-medium text-slate-300">Mark Complete (your responsibility)</span>
+              <span className="mt-1 block">
+                Mark a milestone complete when your mentee finishes that step. This updates the
+                timeline and moves them forward.
+              </span>
+            </li>
+            <li>
+              <span className="font-medium text-slate-300">Adjust when things change</span>
+              <span className="mt-1 block">
+                If training shifts (delays, early completion), update the timeline so it stays
+                correct.
+              </span>
+            </li>
+            <li>
+              <span className="font-medium text-slate-300">Use notes for context</span>
+              <span className="mt-1 block">
+                Add short notes like:
+              </span>
+              <span className="mt-1 block pl-3 italic text-slate-500">
+                &ldquo;Type Rating moved due sim availability&rdquo;
+              </span>
+              <span className="mt-0.5 block pl-3 italic text-slate-500">
+                &ldquo;IOE completed early&rdquo;
+              </span>
+            </li>
+            <li>
+              <span className="font-medium text-slate-300">Stay ahead of milestones</span>
+              <span className="mt-1 block">
+                Use the timeline to anticipate upcoming events and check in before issues arise.
+              </span>
+            </li>
           </ul>
-          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5">
-            <Link href="/frontier/pilots/portal/mentoring" className={guideLinkClass}>
-              View My Mentees
-            </Link>
-            <Link href="/frontier/pilots/portal/mentoring/profile" className={guideLinkClass}>
-              Open Mentor Profile
-            </Link>
-          </div>
         </section>
         <section className="rounded-2xl border border-white/5 bg-slate-950/40 p-5">
           <div>
-            <p className={sectionEyebrowClass}>Mentee tools</p>
-            <h2 className="text-lg font-semibold text-white">For Mentees</h2>
+            <p className={sectionEyebrowClass}>Overview</p>
+            <h2 className="text-lg font-semibold text-white">Your Guide</h2>
           </div>
           <p className="mt-2 text-sm leading-relaxed text-slate-400">
-            Your mentoring experience is clearer when you know what is coming next. CrewRules
-            surfaces milestones and context so you and your mentor stay aligned.
+            Your mentoring timeline shows where you are and what&apos;s coming next. Your mentor
+            updates milestones — you keep them informed.
           </p>
-          <ul className="mt-3 list-disc space-y-1.5 pl-4 text-sm leading-relaxed text-slate-400">
-            <li>Understand your mentoring timeline</li>
-            <li>Track milestones and key events</li>
-            <li>Stay connected with your mentor</li>
-            <li>Know what to expect at each stage</li>
-          </ul>
-          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5">
-            <Link href="/frontier/pilots/portal/mentoring" className={guideLinkClass}>
-              View My Mentor
-            </Link>
-          </div>
-        </section>
-        <section className="rounded-2xl border border-white/5 bg-slate-950/40 p-5">
-          <div>
-            <p className={sectionEyebrowClass}>Admin tools</p>
-            <h2 className="text-lg font-semibold text-white">For Admins</h2>
-          </div>
-          <p className="mt-2 text-sm leading-relaxed text-slate-400">
-            Administrators can steer program health from pairing through participation. CrewRules
-            supports operational oversight without replacing the relationship between mentors and
-            mentees.
-          </p>
-          <ul className="mt-3 list-disc space-y-1.5 pl-4 text-sm leading-relaxed text-slate-400">
-            <li>Assign and manage mentor/mentee relationships</li>
-            <li>Upload resources and guidance</li>
-            <li>Monitor mentoring engagement</li>
-            <li>Support mentor and mentee success</li>
-          </ul>
-          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5">
-            <Link href="/frontier/pilots/admin/mentoring" className={guideLinkClass}>
-              Open Admin Mentoring
-            </Link>
+          <div className="mt-5 space-y-5 text-sm leading-relaxed text-slate-400">
+            <div>
+              <p className="font-medium text-slate-300">🔹 Understand your timeline</p>
+              <p className="mt-2">Each milestone is a key step in your training:</p>
+              <ul className="mt-2 list-disc space-y-1 pl-4">
+                <li>Type Rating</li>
+                <li>IOE Complete</li>
+                <li>3 Months On Line</li>
+              </ul>
+              <p className="mt-2 text-slate-300">
+                👉 Use this to stay aware of what&apos;s next.
+              </p>
+            </div>
+            <div>
+              <p className="font-medium text-slate-300">🔹 Your role</p>
+              <p className="mt-2">You do not update milestones.</p>
+              <p>Your mentor marks progress.</p>
+              <p className="mt-2 text-slate-300">
+                👉 Your job is to keep your mentor informed
+              </p>
+            </div>
+            <div>
+              <p className="font-medium text-slate-300">🔹 Add updates when things change</p>
+              <p className="mt-2">Use updates when your schedule shifts:</p>
+              <ul className="mt-2 list-disc space-y-1 pl-4">
+                <li>Type Rating moved</li>
+                <li>IOE start date changed</li>
+                <li>Finished earlier than planned</li>
+              </ul>
+              <p className="mt-2 text-slate-300">👉 This keeps your timeline accurate.</p>
+            </div>
+            <div>
+              <p className="font-medium text-slate-300">🔹 Why updates matter</p>
+              <p className="mt-2">If you don&apos;t update:</p>
+              <ul className="mt-2 list-disc space-y-1 pl-4">
+                <li>Your mentor sees outdated info</li>
+                <li>Check-ins may be off</li>
+                <li>Expectations get misaligned</li>
+              </ul>
+              <p className="mt-2 text-slate-300">👉 Quick updates = smoother training</p>
+            </div>
+            <div>
+              <p className="font-medium text-slate-300">🔹 Stay ahead</p>
+              <p className="mt-2">
+                Check your timeline regularly and update your mentor early when something changes.
+              </p>
+            </div>
           </div>
         </section>
       </div>

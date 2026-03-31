@@ -3,6 +3,7 @@ import type {
   ProTrialMetrics,
   TenantOverviewRow,
   StripeBillingMetrics,
+  StripeSubscriptionCashMetrics,
   ChurnRenewalMetrics,
   FlightAwareUsageMetrics,
   AviationStackUsageMetrics,
@@ -37,6 +38,7 @@ type SuperAdminCostMonetizationProps = {
   trialMetrics: ProTrialMetrics;
   tenants: TenantOverviewRow[];
   stripeBilling: StripeBillingMetrics;
+  stripeCash: StripeSubscriptionCashMetrics;
   churnRenewal: ChurnRenewalMetrics;
   flightAwareMetrics: FlightAwareUsageMetrics;
   aviationStackMetrics: AviationStackUsageMetrics;
@@ -57,6 +59,7 @@ export function SuperAdminCostMonetization({
   tenants,
   churnRenewal,
   stripeBilling,
+  stripeCash,
   flightAwareMetrics,
   aviationStackMetrics,
   totalPlatformCostUsd,
@@ -110,6 +113,61 @@ export function SuperAdminCostMonetization({
             <div className={`${cardBase} py-2 px-3`}>
               <div className="text-slate-500 text-[10px] mb-0.5">Annual</div>
               <div className="text-lg font-semibold text-slate-200">{stripeBilling.annualCount}</div>
+            </div>
+            <div className={`${cardBase} py-2 px-3`}>
+              <div className="text-slate-500 text-[10px] mb-0.5">Founding Annual</div>
+              <div className="text-lg font-semibold text-slate-200">{stripeBilling.foundingAnnualCount}</div>
+            </div>
+            <div
+              className={`${cardBase} py-2 px-3 border-slate-600/30`}
+              title="Estimated: Live ARR minus estimated Stripe fees (2.9% + $0.30 per payment, list prices as Live MRR)."
+            >
+              <div className="text-slate-500 text-[10px] mb-0.5">Net ARR (Est.)</div>
+              <div className="text-lg font-semibold text-slate-200">{formatUsd(stripeBilling.estimatedNetARR)}</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">
+                Net MRR (Est.) {formatUsd(stripeBilling.estimatedNetMRR)}
+              </div>
+            </div>
+          </div>
+
+          {/* Actual cash collected (not MRR/ARR) */}
+          <div className="pt-3 border-t border-slate-700/50 space-y-2">
+            <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+              Stripe cash (actual)
+            </div>
+            <p className="text-[10px] text-slate-500">
+              All-time totals from recorded subscription invoice payments (balance transactions). USD
+              figures assume rows were stored in USD; not annualized.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <div
+                className={`${cardBase} py-2 px-3 border-sky-600/20 bg-sky-950/15`}
+                title="Sum of amount_gross_cents / 100 for all payment rows."
+              >
+                <div className="text-slate-500 text-[10px] mb-0.5">Collected Revenue</div>
+                <div className="text-lg font-semibold text-sky-200/90">{formatUsdCost(stripeCash.collectedGrossAllTime)}</div>
+              </div>
+              <div
+                className={`${cardBase} py-2 px-3 border-sky-600/20 bg-sky-950/15`}
+                title="Sum of fee_cents / 100 from Stripe balance transactions."
+              >
+                <div className="text-slate-500 text-[10px] mb-0.5">Stripe Fees (Actual)</div>
+                <div className="text-lg font-semibold text-sky-200/90">{formatUsdCost(stripeCash.stripeFeesAllTime)}</div>
+              </div>
+              <div
+                className={`${cardBase} py-2 px-3 border-sky-600/20 bg-sky-950/15`}
+                title="Sum of net_cents / 100 from Stripe balance transactions."
+              >
+                <div className="text-slate-500 text-[10px] mb-0.5">Net Revenue</div>
+                <div className="text-lg font-semibold text-sky-200/90">{formatUsdCost(stripeCash.netRevenueAllTime)}</div>
+              </div>
+              <div
+                className={`${cardBase} py-2 px-3 border-sky-600/20 bg-sky-950/15`}
+                title="Row count in stripe_subscription_payments."
+              >
+                <div className="text-slate-500 text-[10px] mb-0.5">Payments</div>
+                <div className="text-lg font-semibold text-sky-200/90">{stripeCash.paymentCountAllTime}</div>
+              </div>
             </div>
           </div>
 
@@ -211,6 +269,15 @@ export function SuperAdminCostMonetization({
         <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-4 space-y-3">
           <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Cost</div>
           <div className="flex flex-wrap gap-2">
+            <div
+              className={`${cardBase} py-2 px-3`}
+              title="Estimated: monthly subs × (monthly list × 2.9% + $0.30) + annual subs × (annual list × 2.9% + $0.30)."
+            >
+              <div className="text-slate-500 text-[10px] mb-0.5">Stripe Fees (Est.)</div>
+              <div className="text-lg font-semibold text-slate-200">
+                {formatUsdCost(stripeBilling.estimatedStripeFeesTotal)}
+              </div>
+            </div>
             <div className={`${cardBase} py-2 px-3`}>
               <div className="text-slate-500 text-[10px] mb-0.5">FlightAware</div>
               <div className="text-lg font-semibold text-slate-200">{flightAwareMetrics.totalCalls}</div>

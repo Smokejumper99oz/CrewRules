@@ -152,14 +152,10 @@ export default function PilotPortalMentoringLibraryPage() {
             Core tools and guidance to help you navigate mentoring in CrewRules.
           </p>
           <ul className="mt-3 list-disc space-y-1.5 pl-4 text-sm leading-relaxed text-slate-400">
-            <li>Mentoring Guide (how the system works)</li>
             <li>Mentor Profile (how mentees see you)</li>
             <li>CrewRules mentoring features overview</li>
           </ul>
           <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5">
-            <Link href="/frontier/pilots/portal/mentoring/guide" className={guideLinkClass}>
-              Open Mentoring Guide
-            </Link>
             <Link href="/frontier/pilots/portal/mentoring/profile" className={guideLinkClass}>
               View Mentor Profile
             </Link>

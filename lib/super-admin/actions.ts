@@ -16,12 +16,18 @@ import { TENANT_CONFIG } from "@/lib/tenant-config";
 import {
   STRIPE_PRO_MONTHLY_PRICE_USD,
   STRIPE_PRO_ANNUAL_PRICE_USD,
+  STRIPE_FOUNDING_PILOT_ANNUAL_PRICE_USD,
   FLIGHTAWARE_COST_PER_REQUEST_USD,
   AVIATIONSTACK_MONTHLY_LIMIT,
   AVIATIONSTACK_COST_PER_REQUEST_USD,
   AVIATIONSTACK_PERIOD_START_DAY,
   AVIATIONSTACK_PERIOD_LENGTH_DAYS,
 } from "./pricing-config";
+import {
+  STRIPE_PRO_MONTHLY_PRICE_ID,
+  STRIPE_PRO_ANNUAL_PRICE_ID,
+  STRIPE_FOUNDING_PILOT_ANNUAL_PRICE_ID,
+} from "@/lib/stripe/config";
 import { buildImportWarningRows, type ImportWarningRow } from "./import-warnings";
 import {
   finalizePendingAccountDeletion,
@@ -127,6 +133,69 @@ export async function getSuperAdminKpis(): Promise<SuperAdminKpiData> {
     notJoinedUserCount,
     pendingDeletionCount,
     pendingDeletionMostRecentDeletedAt,
+  };
+}
+
+export type SuperAdminWaitlistKpiData = {
+  total: number;
+  newToday: number;
+  airlines: number;
+};
+
+/** Waitlist-only KPIs for super-admin dashboard (admin client; not part of getSuperAdminKpis). */
+export async function getSuperAdminWaitlistKpis(): Promise<SuperAdminWaitlistKpiData> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+  const todayStart = startOfDay(new Date()).toISOString();
+  const fallback = { total: 0, newToday: 0, airlines: 0 };
+
+  const { count: totalCount, error: totalError } = await admin
+    .from("waitlist")
+    .select("*", { count: "exact", head: true });
+
+  if (totalError) {
+    console.error("[SuperAdmin] getSuperAdminWaitlistKpis total:", totalError.message);
+    return fallback;
+  }
+
+  const { count: newTodayCount, error: newTodayError } = await admin
+    .from("waitlist")
+    .select("*", { count: "exact", head: true })
+    .gte("created_at", todayStart);
+
+  if (newTodayError) {
+    console.error("[SuperAdmin] getSuperAdminWaitlistKpis newToday:", newTodayError.message);
+    return {
+      total: totalCount ?? 0,
+      newToday: 0,
+      airlines: 0,
+    };
+  }
+
+  const { data: airlineRows, error: airlineError } = await admin.from("waitlist").select("airline");
+
+  if (airlineError) {
+    console.error("[SuperAdmin] getSuperAdminWaitlistKpis airlines:", airlineError.message);
+    return {
+      total: totalCount ?? 0,
+      newToday: newTodayCount ?? 0,
+      airlines: 0,
+    };
+  }
+
+  const airlineKeys = new Set<string>();
+  for (const row of airlineRows ?? []) {
+    const raw = row.airline;
+    if (raw == null) continue;
+    const normalized = String(raw).trim().toLowerCase();
+    if (normalized.length === 0) continue;
+    airlineKeys.add(normalized);
+  }
+
+  return {
+    total: totalCount ?? 0,
+    newToday: newTodayCount ?? 0,
+    airlines: airlineKeys.size,
   };
 }
 
@@ -507,9 +576,19 @@ export type StripeBillingMetrics = {
   paidProCount: number;
   monthlyCount: number;
   annualCount: number;
+  foundingAnnualCount: number;
   cancelAtPeriodEndCount: number;
   liveMRR: number;
   liveARR: number;
+  /** Sum of per-subscriber fee estimates for monthly-billed Pros (2.9% + $0.30 per charge). */
+  estimatedStripeFeesMonthly: number;
+  /** Sum of per-subscriber fee estimates for regular annual Pros (2.9% + $0.30 per charge). */
+  estimatedStripeFeesAnnual: number;
+  /** Sum of per-subscriber fee estimates for Founding Pilot annual Pros (2.9% + $0.30 per charge). */
+  estimatedStripeFeesFoundingAnnual: number;
+  estimatedStripeFeesTotal: number;
+  estimatedNetMRR: number;
+  estimatedNetARR: number;
 };
 
 export async function getStripeBillingMetrics(): Promise<StripeBillingMetrics> {
@@ -518,16 +597,25 @@ export async function getStripeBillingMetrics(): Promise<StripeBillingMetrics> {
 
   const { data: profiles, error } = await supabase
     .from("profiles")
-    .select("billing_source, subscription_status, subscription_tier, billing_interval, cancel_at_period_end");
+    .select(
+      "billing_source, subscription_status, subscription_tier, billing_interval, cancel_at_period_end, stripe_price_id"
+    );
 
   if (error) {
     return {
       paidProCount: 0,
       monthlyCount: 0,
       annualCount: 0,
+      foundingAnnualCount: 0,
       cancelAtPeriodEndCount: 0,
       liveMRR: 0,
       liveARR: 0,
+      estimatedStripeFeesMonthly: 0,
+      estimatedStripeFeesAnnual: 0,
+      estimatedStripeFeesFoundingAnnual: 0,
+      estimatedStripeFeesTotal: 0,
+      estimatedNetMRR: 0,
+      estimatedNetARR: 0,
     };
   }
 
@@ -543,22 +631,120 @@ export async function getStripeBillingMetrics(): Promise<StripeBillingMetrics> {
     );
   });
 
-  const monthlyCount = paidPro.filter((p) => (p.billing_interval ?? "") === "monthly").length;
-  const annualCount = paidPro.filter((p) => (p.billing_interval ?? "") === "annual").length;
+  const foundingPriceId = STRIPE_FOUNDING_PILOT_ANNUAL_PRICE_ID;
+  const regularAnnualPriceId = STRIPE_PRO_ANNUAL_PRICE_ID;
+  const monthlyPriceId = STRIPE_PRO_MONTHLY_PRICE_ID;
+
+  let monthlyCount = 0;
+  let annualCount = 0;
+  let foundingAnnualCount = 0;
+
+  for (const p of paidPro) {
+    const interval = (p.billing_interval ?? "") as string;
+    const priceId = (p as { stripe_price_id?: string | null }).stripe_price_id ?? "";
+
+    if (interval === "monthly") {
+      monthlyCount++;
+      continue;
+    }
+
+    if (interval === "annual") {
+      if (foundingPriceId && priceId === foundingPriceId) {
+        foundingAnnualCount++;
+      } else {
+        annualCount++;
+      }
+      continue;
+    }
+
+    if (foundingPriceId && priceId === foundingPriceId) {
+      foundingAnnualCount++;
+    } else if (regularAnnualPriceId && priceId === regularAnnualPriceId) {
+      annualCount++;
+    } else if (monthlyPriceId && priceId === monthlyPriceId) {
+      monthlyCount++;
+    } else {
+      annualCount++;
+    }
+  }
+
   const cancelAtPeriodEndCount = paidPro.filter((p) => p.cancel_at_period_end === true).length;
 
   const liveMRR =
     monthlyCount * STRIPE_PRO_MONTHLY_PRICE_USD +
-    annualCount * (STRIPE_PRO_ANNUAL_PRICE_USD / 12);
+    annualCount * (STRIPE_PRO_ANNUAL_PRICE_USD / 12) +
+    foundingAnnualCount * (STRIPE_FOUNDING_PILOT_ANNUAL_PRICE_USD / 12);
   const liveARR = liveMRR * 12;
+
+  const feePerMonthlySub = STRIPE_PRO_MONTHLY_PRICE_USD * 0.029 + 0.3;
+  const feePerAnnualSub = STRIPE_PRO_ANNUAL_PRICE_USD * 0.029 + 0.3;
+  const feePerFoundingAnnualSub = STRIPE_FOUNDING_PILOT_ANNUAL_PRICE_USD * 0.029 + 0.3;
+  const estimatedStripeFeesMonthly = monthlyCount * feePerMonthlySub;
+  const estimatedStripeFeesAnnual = annualCount * feePerAnnualSub;
+  const estimatedStripeFeesFoundingAnnual = foundingAnnualCount * feePerFoundingAnnualSub;
+  const estimatedStripeFeesTotal =
+    estimatedStripeFeesMonthly + estimatedStripeFeesAnnual + estimatedStripeFeesFoundingAnnual;
+  const estimatedNetARR = liveARR - estimatedStripeFeesTotal;
+  const estimatedNetMRR = estimatedNetARR / 12;
 
   return {
     paidProCount: paidPro.length,
     monthlyCount,
     annualCount,
+    foundingAnnualCount,
     cancelAtPeriodEndCount,
     liveMRR,
     liveARR,
+    estimatedStripeFeesMonthly,
+    estimatedStripeFeesAnnual,
+    estimatedStripeFeesFoundingAnnual,
+    estimatedStripeFeesTotal,
+    estimatedNetMRR,
+    estimatedNetARR,
+  };
+}
+
+/** All-time cash totals from `stripe_subscription_payments` (balance transaction amounts, USD). */
+export type StripeSubscriptionCashMetrics = {
+  collectedGrossAllTime: number;
+  stripeFeesAllTime: number;
+  netRevenueAllTime: number;
+  paymentCountAllTime: number;
+};
+
+export async function getStripeSubscriptionCashMetrics(): Promise<StripeSubscriptionCashMetrics> {
+  await ensureSuperAdmin();
+  const supabase = createAdminClient();
+
+  const { data: rows, error } = await supabase
+    .from("stripe_subscription_payments")
+    .select("amount_gross_cents, fee_cents, net_cents");
+
+  if (error || !rows?.length) {
+    return {
+      collectedGrossAllTime: 0,
+      stripeFeesAllTime: 0,
+      netRevenueAllTime: 0,
+      paymentCountAllTime: error ? 0 : rows?.length ?? 0,
+    };
+  }
+
+  let grossCents = 0;
+  let feeCents = 0;
+  let netCents = 0;
+  for (const r of rows) {
+    grossCents += Number(r.amount_gross_cents ?? 0);
+    feeCents += Number(r.fee_cents ?? 0);
+    netCents += Number(r.net_cents ?? 0);
+  }
+
+  const centsToUsd = (c: number) => c / 100;
+
+  return {
+    collectedGrossAllTime: centsToUsd(grossCents),
+    stripeFeesAllTime: centsToUsd(feeCents),
+    netRevenueAllTime: centsToUsd(netCents),
+    paymentCountAllTime: rows.length,
   };
 }
 

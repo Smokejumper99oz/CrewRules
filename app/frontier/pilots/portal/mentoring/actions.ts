@@ -653,15 +653,24 @@ export type MentorshipCheckInRow = {
   created_at: string;
 };
 
-/** Get mentee detail for a single assignment. Verifies current user is the mentor. */
+export type MenteeMilestoneUpdateRow = {
+  id: string;
+  milestone_type: "type_rating" | "oe_complete";
+  message: string;
+  created_at: string;
+};
+
+/** Get mentee detail for a single assignment. Verifies current user is the mentor or mentee. */
 export async function getMenteeDetail(assignmentId: string): Promise<{
   detail: MenteeDetailRow | null;
   milestones: MenteeMilestoneRow[];
   checkIns: MentorshipCheckInRow[];
+  menteeMilestoneUpdates: MenteeMilestoneUpdateRow[];
   error?: string;
 }> {
   const profile = await getProfile();
-  if (!profile) return { detail: null, milestones: [], checkIns: [], error: "Not signed in" };
+  if (!profile)
+    return { detail: null, milestones: [], checkIns: [], menteeMilestoneUpdates: [], error: "Not signed in" };
 
   await linkMenteeToAssignments(profile.id, profile.employee_number);
   if (profile.employee_number?.trim() && profile.tenant?.trim()) {
@@ -694,7 +703,13 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
       .single();
 
     if (assignmentError || !assignmentData) {
-      return { detail: null, milestones: [], checkIns: [], error: assignmentError?.message ?? "Not found" };
+      return {
+        detail: null,
+        milestones: [],
+        checkIns: [],
+        menteeMilestoneUpdates: [],
+        error: assignmentError?.message ?? "Not found",
+      };
     }
 
     const row = assignmentData as unknown as {
@@ -724,7 +739,7 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
       } | null;
     };
 
-    const [milestonesResInitial, interactionsRes, notesRes, checkInsRes] = await Promise.all([
+    const [milestonesResInitial, interactionsRes, notesRes, checkInsRes, menteeUpdatesRes] = await Promise.all([
       supabase
         .from("mentorship_milestones")
         .select("assignment_id, milestone_type, due_date, completed_date, completion_note, completed_at")
@@ -747,6 +762,12 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
         .select("id, occurred_on, note, created_at")
         .eq("assignment_id", assignmentId)
         .order("occurred_on", { ascending: true })
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("mentorship_mentee_milestone_updates")
+        .select("id, milestone_type, message, created_at")
+        .eq("assignment_id", assignmentId)
+        .in("milestone_type", ["type_rating", "oe_complete"])
         .order("created_at", { ascending: true }),
     ]);
 
@@ -789,6 +810,11 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
     const checkIns: MentorshipCheckInRow[] =
       !checkInsRes.error && checkInsRes.data
         ? (checkInsRes.data as MentorshipCheckInRow[])
+        : [];
+
+    const menteeMilestoneUpdates: MenteeMilestoneUpdateRow[] =
+      !menteeUpdatesRes.error && menteeUpdatesRes.data
+        ? (menteeUpdatesRes.data as MenteeMilestoneUpdateRow[])
         : [];
 
     const fromInteractions =
@@ -914,15 +940,126 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
       mentor_workspace_next_check_in_date: mentorWorkspaceNextCheckInDate,
     };
 
-    return { detail, milestones, checkIns };
+    return { detail, milestones, checkIns, menteeMilestoneUpdates };
   } catch (e) {
     return {
       detail: null,
       milestones: [],
       checkIns: [],
+      menteeMilestoneUpdates: [],
       error: e instanceof Error ? e.message : "Unknown error",
     };
   }
+}
+
+/** Short mentee milestone update copy — small cap so this stays a ping, not long-form notes. */
+const MENTEE_MILESTONE_UPDATE_MESSAGE_MAX_LEN = 500;
+
+export type MenteeMilestoneUpdateMilestoneType = "type_rating" | "oe_complete";
+
+export async function submitMenteeMilestoneUpdate(input: {
+  assignmentId: string;
+  milestoneType: MenteeMilestoneUpdateMilestoneType;
+  message: string;
+}): Promise<{ ok?: true; error?: string }> {
+  const aid = input.assignmentId.trim();
+  if (!aid) return { error: "Assignment not found." };
+
+  if (input.milestoneType !== "type_rating" && input.milestoneType !== "oe_complete") {
+    return { error: "Invalid milestone type." };
+  }
+
+  const trimmedMessage = input.message.trim();
+  if (!trimmedMessage) return { error: "Message cannot be empty." };
+  if (trimmedMessage.length > MENTEE_MILESTONE_UPDATE_MESSAGE_MAX_LEN) {
+    return { error: `Message is too long (max ${MENTEE_MILESTONE_UPDATE_MESSAGE_MAX_LEN} characters).` };
+  }
+
+  const profile = await getProfile();
+  if (!profile) return { error: "Not signed in" };
+
+  const supabase = await createClient();
+
+  const { data: row, error: fetchErr } = await supabase
+    .from("mentor_assignments")
+    .select("id, mentee_user_id")
+    .eq("id", aid)
+    .maybeSingle();
+
+  if (fetchErr) return { error: fetchErr.message };
+  if (!row?.id) return { error: "Assignment not found." };
+  if (row.mentee_user_id !== profile.id) {
+    return { error: "Only the assigned mentee can submit milestone updates." };
+  }
+
+  const { error: insErr } = await supabase.from("mentorship_mentee_milestone_updates").insert({
+    assignment_id: aid,
+    author_user_id: profile.id,
+    milestone_type: input.milestoneType,
+    message: trimmedMessage,
+  });
+
+  if (insErr) return { error: insErr.message };
+
+  revalidatePath("/frontier/pilots/portal/mentoring");
+  revalidatePath(`/frontier/pilots/portal/mentoring/${aid}`);
+  return { ok: true };
+}
+
+export async function deleteLatestMenteeMilestoneUpdate(input: {
+  assignmentId: string;
+  milestoneType: MenteeMilestoneUpdateMilestoneType;
+}): Promise<{ ok?: true; error?: string }> {
+  const aid = input.assignmentId.trim();
+  if (!aid) return { error: "Assignment not found." };
+
+  if (input.milestoneType !== "type_rating" && input.milestoneType !== "oe_complete") {
+    return { error: "Invalid milestone type." };
+  }
+
+  const profile = await getProfile();
+  if (!profile) return { error: "Not signed in" };
+
+  const supabase = await createClient();
+
+  const { data: row, error: fetchErr } = await supabase
+    .from("mentor_assignments")
+    .select("id, mentee_user_id")
+    .eq("id", aid)
+    .maybeSingle();
+
+  if (fetchErr) return { error: fetchErr.message };
+  if (!row?.id) return { error: "Assignment not found." };
+  if (row.mentee_user_id !== profile.id) {
+    return { error: "Only the assigned mentee can remove milestone updates." };
+  }
+
+  const { data: latest, error: latestErr } = await supabase
+    .from("mentorship_mentee_milestone_updates")
+    .select("id")
+    .eq("assignment_id", aid)
+    .eq("milestone_type", input.milestoneType)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestErr) return { error: latestErr.message };
+  if (!latest?.id) return { error: "No update to remove." };
+
+  const { data: deleted, error: delErr } = await supabase
+    .from("mentorship_mentee_milestone_updates")
+    .delete()
+    .eq("id", latest.id)
+    .select("id")
+    .maybeSingle();
+
+  if (delErr) return { error: delErr.message };
+  if (!deleted?.id) return { error: "Could not remove update." };
+
+  revalidatePath("/frontier/pilots/portal/mentoring");
+  revalidatePath(`/frontier/pilots/portal/mentoring/${aid}`);
+  return { ok: true };
 }
 
 export async function createMentorshipCheckIn(

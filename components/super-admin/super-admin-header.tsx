@@ -1,3 +1,4 @@
+import type { SuperAdminWaitlistKpiData } from "@/lib/super-admin/actions";
 import { SuperAdminLiveStatusStrip } from "./super-admin-live-status-strip";
 
 type SuperAdminHeaderProps = {
@@ -8,6 +9,7 @@ type SuperAdminHeaderProps = {
   onlineNow: number;
   peakToday: number;
   peakAllTime: number;
+  waitlistKpis: SuperAdminWaitlistKpiData;
 };
 
 export function SuperAdminHeader({
@@ -18,6 +20,7 @@ export function SuperAdminHeader({
   onlineNow,
   peakToday,
   peakAllTime,
+  waitlistKpis,
 }: SuperAdminHeaderProps) {
   return (
     <div className="pb-4 border-b border-slate-700/50">
@@ -29,6 +32,10 @@ export function SuperAdminHeader({
           onlineNow={onlineNow}
           peakToday={peakToday}
           peakAllTime={peakAllTime}
+          waitlistTotal={waitlistKpis.total}
+          waitlistNewToday={waitlistKpis.newToday}
+          waitlistAirlines={waitlistKpis.airlines}
+          showWaitlistKpi
         />
         <div className="text-xs text-slate-500">
           <span>Last Refresh: {lastRefresh}</span>

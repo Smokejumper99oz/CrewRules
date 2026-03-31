@@ -50,6 +50,117 @@ function getSubscriptionCurrentPeriodEnd(subscription: Stripe.Subscription): num
   return typeof fromSub.current_period_end === "number" ? fromSub.current_period_end : null;
 }
 
+/** Gross/fee/net from the same BalanceTransaction Stripe uses for the charge (cents). */
+function getChargeAndBalanceTransactionFromInvoice(
+  inv: Stripe.Invoice
+): { chargeId: string; balanceTransaction: Stripe.BalanceTransaction } | null {
+  const list = inv.payments?.data;
+  if (!list?.length) return null;
+
+  const paid =
+    list.find((p) => p.status === "paid" && (p.amount_paid ?? 0) > 0) ??
+    list.find((p) => p.status === "paid") ??
+    (list[0]?.is_default ? list[0] : null);
+
+  if (!paid?.payment) return null;
+
+  const { payment } = paid;
+  if (payment.type === "charge" && payment.charge && typeof payment.charge === "object") {
+    const charge = payment.charge as Stripe.Charge;
+    const bt = charge.balance_transaction;
+    if (bt && typeof bt === "object" && "amount" in bt) {
+      return { chargeId: charge.id, balanceTransaction: bt as Stripe.BalanceTransaction };
+    }
+  }
+
+  if (payment.type === "payment_intent" && payment.payment_intent && typeof payment.payment_intent === "object") {
+    const pi = payment.payment_intent as Stripe.PaymentIntent;
+    const lc = pi.latest_charge;
+    if (lc && typeof lc === "object" && "balance_transaction" in lc) {
+      const charge = lc as Stripe.Charge;
+      const bt = charge.balance_transaction;
+      if (bt && typeof bt === "object" && "amount" in bt) {
+        return { chargeId: charge.id, balanceTransaction: bt as Stripe.BalanceTransaction };
+      }
+    }
+  }
+
+  return null;
+}
+
+async function upsertStripeSubscriptionPaymentRow(
+  supabase: SupabaseAdmin,
+  stripe: Stripe,
+  invoice: Stripe.Invoice,
+  subscription: Stripe.Subscription,
+  profileId: string,
+  subscriptionId: string
+): Promise<void> {
+  if (invoice.status !== "paid" || invoice.amount_paid <= 0) {
+    return;
+  }
+
+  let fullInvoice: Stripe.Invoice;
+  try {
+    fullInvoice = await stripe.invoices.retrieve(invoice.id, {
+      expand: [
+        "payments.data.payment.charge.balance_transaction",
+        "payments.data.payment.payment_intent.latest_charge.balance_transaction",
+      ],
+    });
+  } catch (err) {
+    console.error("[handleInvoicePaid] Failed to retrieve invoice for payment row", invoice.id, err);
+    return;
+  }
+
+  const resolved = getChargeAndBalanceTransactionFromInvoice(fullInvoice);
+  if (!resolved) {
+    console.error(
+      "[handleInvoicePaid] No balance transaction for subscription invoice; skipping payment row",
+      invoice.id
+    );
+    return;
+  }
+
+  const { chargeId, balanceTransaction: bt } = resolved;
+
+  const customerRaw = fullInvoice.customer ?? subscription.customer;
+  const stripeCustomerId =
+    typeof customerRaw === "string" ? customerRaw : customerRaw?.id ?? null;
+
+  const priceRef = subscription.items?.data?.[0]?.price;
+  const stripePriceId = typeof priceRef === "string" ? priceRef : priceRef?.id ?? null;
+
+  const paidTs =
+    fullInvoice.status_transitions?.paid_at ??
+    (typeof bt.created === "number" ? bt.created : null);
+  const paidAt =
+    paidTs != null ? new Date(paidTs * 1000).toISOString() : new Date().toISOString();
+
+  const row = {
+    stripe_invoice_id: fullInvoice.id,
+    stripe_charge_id: chargeId,
+    stripe_balance_transaction_id: bt.id,
+    stripe_customer_id: stripeCustomerId,
+    stripe_subscription_id: subscriptionId,
+    stripe_price_id: stripePriceId,
+    profile_id: profileId,
+    amount_gross_cents: bt.amount,
+    fee_cents: bt.fee,
+    net_cents: bt.net,
+    currency: bt.currency,
+    paid_at: paidAt,
+  };
+
+  const { error } = await supabase.from("stripe_subscription_payments").upsert(row, {
+    onConflict: "stripe_invoice_id",
+  });
+
+  if (error) {
+    console.error("[handleInvoicePaid] stripe_subscription_payments upsert failed", fullInvoice.id, error);
+  }
+}
+
 async function syncSubscriptionToProfile(
   supabase: SupabaseAdmin,
   profileId: string,
@@ -226,6 +337,8 @@ export async function handleInvoicePaid(
       updated_at: new Date().toISOString(),
     })
     .eq("id", profileId);
+
+  await upsertStripeSubscriptionPaymentRow(supabase, stripe, invoice, subscription, profileId, subscriptionId);
 }
 
 export async function handleCheckoutSessionCompleted(

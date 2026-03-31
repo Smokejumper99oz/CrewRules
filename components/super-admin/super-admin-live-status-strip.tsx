@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Plane, Users } from "lucide-react";
+import { Activity, ClipboardList, Plane, Users } from "lucide-react";
 
 // Temporary approximation: treat all online as active until real presence exists
 const idleNow = 0;
@@ -13,6 +13,10 @@ type SuperAdminLiveStatusStripProps = {
   onlineNow: number;
   peakToday: number;
   peakAllTime: number;
+  waitlistTotal?: number;
+  waitlistNewToday?: number;
+  waitlistAirlines?: number;
+  showWaitlistKpi?: boolean;
 };
 
 export function SuperAdminLiveStatusStrip({
@@ -22,6 +26,10 @@ export function SuperAdminLiveStatusStrip({
   onlineNow,
   peakToday,
   peakAllTime,
+  waitlistTotal = 0,
+  waitlistNewToday = 0,
+  waitlistAirlines = 0,
+  showWaitlistKpi = false,
 }: SuperAdminLiveStatusStripProps) {
   const usersTodayLabel =
     usersTodayDelta > 0
@@ -79,6 +87,15 @@ export function SuperAdminLiveStatusStrip({
           </span>
         </span>
       </div>
+
+      {showWaitlistKpi ? (
+        <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600/40 bg-slate-800/40 px-2.5 py-1 text-xs whitespace-nowrap">
+          <ClipboardList className="size-4 text-slate-400 shrink-0" aria-hidden />
+          <span className="text-slate-200 tabular-nums">
+            {waitlistTotal} Waitlist · {waitlistNewToday} New Today · {waitlistAirlines} Airlines
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }
