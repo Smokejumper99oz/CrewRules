@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import { inferAirlineFromEmail } from "@/lib/supported-airlines";
 import { submitSignUp, verifyOtp, resendOtp } from "./actions";
+import { FRONTIER_PILOT_SIGNUP_USE_AIRLINE_EMAIL } from "./constants";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -64,6 +66,16 @@ export default function SignUpPage() {
     if (password !== confirmPassword) {
       e.preventDefault();
       setMatchError("Passwords do not match");
+      return;
+    }
+
+    if (
+      !isValidFrontierEmail(emailVal) &&
+      inferAirlineFromEmail(emailVal) === "unknown"
+    ) {
+      e.preventDefault();
+      setEmailError(FRONTIER_PILOT_SIGNUP_USE_AIRLINE_EMAIL);
+      submittedRef.current = false;
       return;
     }
 

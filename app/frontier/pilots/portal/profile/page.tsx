@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { FRONTIER_PILOTS_PORTAL_SETTINGS_DEFAULT_PATH } from "@/lib/frontier-pilots-portal-settings-default";
 
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -16,5 +17,5 @@ export default async function ProfilePage({ searchParams }: Props) {
     }
   }
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
-  redirect(`/frontier/pilots/portal/settings${suffix}`);
+  redirect(`${FRONTIER_PILOTS_PORTAL_SETTINGS_DEFAULT_PATH}${suffix}`);
 }

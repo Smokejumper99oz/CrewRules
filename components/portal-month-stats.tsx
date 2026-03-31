@@ -179,7 +179,7 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
               <p className="text-xs text-slate-500">See your projected monthly pay based on credit and guarantee.</p>
               <p className="text-xs text-slate-500">Start a 14-day PRO trial to unlock this feature.</p>
               <Link
-                href={`/${tenant}/${portal}/portal/settings`}
+                href={`/${tenant}/${portal}/portal/settings/pilot`}
                 className="inline-block text-sm font-medium text-[#75C043] hover:underline"
               >
                 Go to Profile →
@@ -233,7 +233,7 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
                   Add it in your Profile to calculate your pay scale year.
                 </p>
                 <Link
-                  href={`/${tenant}/${portal}/portal/settings`}
+                  href={`/${tenant}/${portal}/portal/settings/pilot`}
                   className="inline-block text-sm font-medium text-[#75C043] hover:underline"
                 >
                   Go to Profile →

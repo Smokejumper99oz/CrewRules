@@ -103,7 +103,7 @@ export function PortalNextDutyCommuteSection({
           </span>
           <p className="text-xs text-slate-600 dark:text-slate-500">Start a 14-day PRO trial to unlock this feature.</p>
           <Link
-            href={`/${tenant}/${portal}/portal/settings`}
+            href={`/${tenant}/${portal}/portal/settings/pilot`}
             className="inline-block text-sm font-medium text-[#75C043] hover:underline"
           >
             Go to Profile →

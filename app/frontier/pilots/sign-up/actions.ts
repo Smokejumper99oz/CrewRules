@@ -3,6 +3,8 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { inferAirlineFromEmail } from "@/lib/supported-airlines";
+import { FRONTIER_PILOT_SIGNUP_USE_AIRLINE_EMAIL } from "./constants";
 
 export type SignUpState =
   | { error?: string; success?: boolean; email?: string; waitlist?: boolean }
@@ -14,30 +16,10 @@ const FRONTIER_EMAIL_ERROR = "Use your Frontier company email (@flyfrontier.com)
 
 const COMPLETE_PROFILE_PATH = "/frontier/pilots/complete-profile";
 
-/** Known airline email domains (lowercase) -> airline name */
-const AIRLINE_DOMAIN_MAP: Record<string, string> = {
-  "flyfrontier.com": "frontier",
-  "delta.com": "delta",
-  "united.com": "united",
-  "southwest.com": "southwest",
-  "spirit.com": "spirit",
-  "americanairlines.com": "american",
-  "jetblue.com": "jetblue",
-  "alaskaair.com": "alaska",
-  "allegiantair.com": "allegiant",
-  "b6.com": "jetblue",
-  "aa.com": "american",
-};
-
 function isValidFrontierEmail(email: string): boolean {
   const trimmed = email.trim();
   const normalized = trimmed.toLowerCase();
   return normalized.endsWith("@flyfrontier.com");
-}
-
-function inferAirlineFromEmail(email: string): string {
-  const domain = email.trim().toLowerCase().split("@")[1] ?? "";
-  return AIRLINE_DOMAIN_MAP[domain] ?? "unknown";
 }
 
 export async function submitSignUp(_prev: SignUpState, formData: FormData): Promise<SignUpState> {
@@ -62,6 +44,10 @@ export async function submitSignUp(_prev: SignUpState, formData: FormData): Prom
   }
 
   if (!isFrontier) {
+    if (inferAirlineFromEmail(email) === "unknown") {
+      return { error: FRONTIER_PILOT_SIGNUP_USE_AIRLINE_EMAIL };
+    }
+
     const supabase = await createClient();
     const airline = inferAirlineFromEmail(email);
     const { error } = await supabase.from("waitlist").upsert(

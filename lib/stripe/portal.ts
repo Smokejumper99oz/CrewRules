@@ -3,6 +3,7 @@
  */
 
 import Stripe from "stripe";
+import { FRONTIER_PILOTS_PORTAL_SETTINGS_DEFAULT_PATH } from "@/lib/frontier-pilots-portal-settings-default";
 import { STRIPE_SECRET_KEY } from "./config";
 
 function getBaseUrl(): string {
@@ -21,7 +22,7 @@ export async function createPortalSession(stripeCustomerId: string): Promise<{ u
   }
 
   const stripe = new Stripe(STRIPE_SECRET_KEY);
-  const returnUrl = `${getBaseUrl()}/frontier/pilots/portal/settings`;
+  const returnUrl = `${getBaseUrl()}${FRONTIER_PILOTS_PORTAL_SETTINGS_DEFAULT_PATH}`;
 
   const session = await stripe.billingPortal.sessions.create({
     customer: stripeCustomerId,
