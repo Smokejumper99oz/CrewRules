@@ -44,7 +44,8 @@ export default function RootError({
         </pre>
       )}
       <button
-        onClick={reset}
+        type="button"
+        onClick={() => reset()}
         className="rounded-lg bg-[#75C043] px-4 py-2 text-sm font-medium text-slate-950 hover:bg-[#75C043]/90"
       >
         Try again

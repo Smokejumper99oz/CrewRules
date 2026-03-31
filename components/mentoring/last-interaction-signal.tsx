@@ -25,15 +25,20 @@ const RECENCY_STYLES: Record<
     dot: "bg-emerald-400",
     bubble: "border border-emerald-500/40 bg-emerald-500/[0.12]",
   },
-  warm: {
+  recent: {
+    text: "text-sky-200",
+    dot: "bg-sky-400",
+    bubble: "border border-sky-500/40 bg-sky-500/[0.12]",
+  },
+  aging: {
     text: "text-amber-200",
     dot: "bg-amber-400",
     bubble: "border border-amber-500/40 bg-amber-500/[0.12]",
   },
   stale: {
-    text: "text-slate-400",
-    dot: "bg-slate-500",
-    bubble: "border border-slate-600/45 bg-slate-800/45",
+    text: "text-red-200",
+    dot: "bg-red-400",
+    bubble: "border border-red-500/40 bg-red-500/[0.12]",
   },
 };
 

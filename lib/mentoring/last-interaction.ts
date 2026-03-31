@@ -1,6 +1,6 @@
 import { differenceInCalendarDays, format, isToday, isYesterday, startOfDay } from "date-fns";
 
-export type LastInteractionRecency = "none" | "fresh" | "warm" | "stale";
+export type LastInteractionRecency = "none" | "fresh" | "recent" | "aging" | "stale";
 
 /** Display string (Today, Yesterday, N days ago, full date, Never). */
 export function formatLastInteractionLabel(iso: string | null): string {
@@ -22,8 +22,8 @@ export function formatLastInteractionLabel(iso: string | null): string {
 
 /**
  * Calendar-aligned with `formatLastInteractionLabel` (local start-of-day):
- * fresh = today; warm = yesterday through 7 days ago; stale = older; none = missing/invalid.
- * Future calendar dates are treated as fresh.
+ * dayDiff = calendar days from interaction to today; none = missing/invalid.
+ * Negative dayDiff (future interaction timestamps) maps to fresh.
  */
 export function getLastInteractionRecency(iso: string | null): LastInteractionRecency {
   if (!iso?.trim()) return "none";
@@ -34,8 +34,8 @@ export function getLastInteractionRecency(iso: string | null): LastInteractionRe
   const today = startOfDay(new Date());
   const dayDiff = differenceInCalendarDays(today, interactionDay);
 
-  if (dayDiff <= 0) return "fresh";
-  if (dayDiff === 1) return "warm";
-  if (dayDiff >= 2 && dayDiff <= 7) return "warm";
+  if (dayDiff <= 6) return "fresh";
+  if (dayDiff <= 13) return "recent";
+  if (dayDiff <= 20) return "aging";
   return "stale";
 }
