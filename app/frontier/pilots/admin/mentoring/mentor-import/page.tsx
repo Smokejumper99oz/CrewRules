@@ -83,13 +83,57 @@ export default async function FrontierPilotAdminMentoringMentorImportPage() {
             Download template
           </a>
         </div>
-        <p className="mt-2 text-sm leading-snug text-slate-400">
-          Bulk import mentors using the template. Required columns: mentor_full_name, mentor_employee_number,
-          mentor_phone_number, mentor_email_@flyfrontier.com, and notes. Optional staging columns (when present in the
-          header row): mentor_position (captain, first_officer, flight_attendant) and mentor_base_airport (3-letter IATA).
-          Existing preload rows update automatically. Duplicate mentor_employee_number values in the same file are ignored
-          and flagged.
-        </p>
+        <div className="mt-2 text-sm leading-snug text-slate-400">
+          <p>Bulk import ALPA mentors using the template.</p>
+
+          <p className="mt-3 text-sm font-semibold text-slate-200">Required fields</p>
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+            <li>mentor_full_name</li>
+            <li>mentor_employee_number</li>
+            <li>mentor_phone_number</li>
+          </ul>
+
+          <p className="mt-3 text-sm font-semibold text-slate-200">Email (at least one required)</p>
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+            <li>mentor_email_@flyfrontier.com (company / work)</li>
+            <li>mentor_email_@for.mentoring (personal mentoring)</li>
+          </ul>
+
+          <p className="mt-3 text-sm font-semibold text-slate-200">
+            Recommended fields (improves setup &amp; avoids manual edits)
+          </p>
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+            <li>program — NH, CA, BOTH, COMPANY, POTENTIAL</li>
+            <li>status — ACTIVE, NON ACTIVE, FORMER</li>
+            <li>seat — CA, FO, FA</li>
+            <li>crew_base — 3-letter IATA (e.g. SJU)</li>
+            <li>notes — optional notes for admin context</li>
+          </ul>
+
+          <p className="mt-3 text-sm font-semibold text-slate-200">How it works</p>
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+            <li>Program sets the mentoring role (New Hire, Captain, or both)</li>
+            <li>Status controls mentor activity (active, non-active, former)</li>
+            <li>Seat defines CrewRules position (Captain, First Officer, Flight Attendant)</li>
+            <li>Missing fields will NOT overwrite existing data</li>
+            <li>Existing mentors update automatically by employee number</li>
+            <li>Profiles link automatically when the mentor signs in</li>
+          </ul>
+
+          <div className="mt-4 rounded-md border border-slate-700/60 bg-slate-900/40 p-3 text-xs text-slate-300">
+            <p className="mb-2 text-xs font-semibold text-slate-200">Example row</p>
+            <div className="space-y-0.5 font-mono text-[11px] leading-relaxed">
+              <div>mentor_full_name: Joe Test</div>
+              <div>mentor_employee_number: 400000</div>
+              <div>mentor_phone_number: 555-555-555</div>
+              <div>mentor_email_@for.mentoring: joetest@gmail.com</div>
+              <div>program: BOTH</div>
+              <div>status: ACTIVE</div>
+              <div>seat: CA</div>
+              <div>crew_base: SJU</div>
+            </div>
+          </div>
+        </div>
         <div className="mt-3">
           <FrontierPilotAdminMentorCsvUploadForm />
         </div>

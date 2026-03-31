@@ -32,9 +32,10 @@ import {
   normalizeMentorPreloadWorkEmailForAdmin,
 } from "@/lib/mentoring/mentor-preload-admin-field-normalize";
 import {
+  deriveLegacyMentorTypeForSync,
   isMentorRegistryStatusValue,
-  isMentorRegistryTypeValue,
   MENTOR_REGISTRY_ADMIN_NOTES_MAX_LEN,
+  sortMentorRegistryCategories,
 } from "@/lib/mentoring/mentor-registry-admin-options";
 import type { UpdateMentorAssignmentHireDateFormState } from "@/lib/super-admin/actions";
 
@@ -483,7 +484,7 @@ export async function upsertFrontierPilotAdminMentorRegistry(
 
   const rowKind = String(formData.get("rowKind") ?? "").trim();
   const rowId = String(formData.get("rowId") ?? "").trim();
-  const mentorType = String(formData.get("mentor_type") ?? "").trim();
+  const mentorCategories = sortMentorRegistryCategories(formData.getAll("mentor_category").map(String));
   const mentorStatus = String(formData.get("mentor_status") ?? "").trim();
   const adminNotesRaw = String(formData.get("admin_notes") ?? "");
   const adminNotesTrimmed = adminNotesRaw.trim();
@@ -494,9 +495,10 @@ export async function upsertFrontierPilotAdminMentorRegistry(
   if (!rowId) {
     return { error: "Invalid row." };
   }
-  if (!isMentorRegistryTypeValue(mentorType)) {
-    return { error: "Invalid mentor type." };
+  if (mentorCategories.length === 0) {
+    return { error: "Select at least one mentor category." };
   }
+  const mentorTypeSync = deriveLegacyMentorTypeForSync(mentorCategories);
   if (!isMentorRegistryStatusValue(mentorStatus)) {
     return { error: "Invalid mentor status." };
   }
@@ -542,7 +544,8 @@ export async function upsertFrontierPilotAdminMentorRegistry(
       const { error: uErr } = await admin
         .from("mentor_registry")
         .update({
-          mentor_type: mentorType,
+          mentor_categories: mentorCategories,
+          mentor_type: mentorTypeSync,
           mentor_status: mentorStatus,
           admin_notes: notesPayload,
           updated_at: nowIso,
@@ -555,7 +558,8 @@ export async function upsertFrontierPilotAdminMentorRegistry(
       const { error: iErr } = await admin.from("mentor_registry").insert({
         profile_id: rowId,
         preload_id: null,
-        mentor_type: mentorType,
+        mentor_categories: mentorCategories,
+        mentor_type: mentorTypeSync,
         mentor_status: mentorStatus,
         admin_notes: notesPayload,
         updated_at: nowIso,
@@ -592,7 +596,8 @@ export async function upsertFrontierPilotAdminMentorRegistry(
       const { error: uErr } = await admin
         .from("mentor_registry")
         .update({
-          mentor_type: mentorType,
+          mentor_categories: mentorCategories,
+          mentor_type: mentorTypeSync,
           mentor_status: mentorStatus,
           admin_notes: notesPayload,
           updated_at: nowIso,
@@ -605,7 +610,8 @@ export async function upsertFrontierPilotAdminMentorRegistry(
       const { error: iErr } = await admin.from("mentor_registry").insert({
         profile_id: null,
         preload_id: rowId,
-        mentor_type: mentorType,
+        mentor_categories: mentorCategories,
+        mentor_type: mentorTypeSync,
         mentor_status: mentorStatus,
         admin_notes: notesPayload,
         updated_at: nowIso,

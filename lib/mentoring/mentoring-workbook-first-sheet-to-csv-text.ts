@@ -11,8 +11,8 @@
 
 import * as XLSX from "xlsx";
 import {
-  MENTOR_PRELOAD_CSV_OPTIONAL_HEADERS,
-  MENTOR_PRELOAD_CSV_REQUIRED_HEADERS,
+  mentorPreloadImportHeaderValidationError,
+  mentorPreloadSheetOutputHeaderList,
 } from "@/lib/mentoring/mentor-preload-csv-import";
 import { FRONTIER_MENTORING_CSV_HEADERS } from "@/lib/mentoring/mentoring-csv-import";
 
@@ -107,11 +107,51 @@ export function frontierMentoringAssignXlsxToCsvText(
 export function mentorPreloadXlsxToCsvText(
   buffer: ArrayBuffer,
 ): { ok: true; csvText: string } | { ok: false; error: string } {
-  return mentoringAssignXlsxBufferToCsvText(
-    buffer,
-    MENTOR_PRELOAD_CSV_REQUIRED_HEADERS,
-    MENTOR_PRELOAD_CSV_OPTIONAL_HEADERS,
+  const aoa = workbookFirstSheetToAoA(buffer);
+  if (!aoa || aoa.length < 2) {
+    return { ok: false, error: "Workbook must have a first sheet with a header row and at least one data row." };
+  }
+
+  const headerRowRaw = aoa[0] as unknown[];
+  const headerCells = headerCellStrings(
+    headerRowRaw,
+    Math.max(headerRowRaw.length, 12),
   );
+  const headerIndex = new Map<string, number>();
+  headerCells.forEach((h, i) => {
+    const key = h.trim();
+    if (key && !headerIndex.has(key)) headerIndex.set(key, i);
+  });
+
+  const headerErr = mentorPreloadImportHeaderValidationError(headerIndex);
+  if (headerErr) {
+    return { ok: false, error: headerErr };
+  }
+
+  const outputHeaders = mentorPreloadSheetOutputHeaderList(headerIndex);
+  const maxCol =
+    Math.max(
+      0,
+      ...outputHeaders.map((h) => headerIndex.get(h)!),
+      ...headerIndex.values(),
+    ) + 1;
+
+  const lines: string[] = [];
+  lines.push(encodeCsvRow([...outputHeaders]));
+
+  for (let r = 1; r < aoa.length; r++) {
+    const raw = aoa[r] as unknown[];
+    const wide = rowStrings(raw, Math.max(raw?.length ?? 0, maxCol));
+    const values = outputHeaders.map((h) => wide[headerIndex.get(h)!] ?? "");
+    if (isRowAllBlank(values)) continue;
+    lines.push(encodeCsvRow(values));
+  }
+
+  if (lines.length < 2) {
+    return { ok: false, error: "No non-empty data rows found in the first worksheet." };
+  }
+
+  return { ok: true, csvText: lines.join("\n") };
 }
 
 function mentoringAssignXlsxBufferToCsvText(

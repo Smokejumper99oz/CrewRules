@@ -13,7 +13,14 @@ const FILTER_OPTIONS = [
   { value: "closed", label: "Closed" },
 ] as const;
 
-const SORTABLE_COLUMNS = ["email", "full_name", "airline", "status", "created_at"] as const;
+const SORTABLE_COLUMNS = [
+  "email",
+  "full_name",
+  "employee_number",
+  "airline",
+  "status",
+  "created_at",
+] as const;
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 25;
 type SortColumn = (typeof SORTABLE_COLUMNS)[number];
@@ -122,6 +129,7 @@ export function WaitlistTableWithFilter({ entries }: Props) {
         (e) =>
           (e.email?.toLowerCase().includes(q) ?? false) ||
           (e.full_name?.toLowerCase().includes(q) ?? false) ||
+          (e.employee_number?.toLowerCase().includes(q) ?? false) ||
           (e.airline?.toLowerCase().includes(q) ?? false) ||
           (formatRequestedPortal(e.requested_portal).toLowerCase().includes(q) ?? false)
       );
@@ -172,7 +180,7 @@ export function WaitlistTableWithFilter({ entries }: Props) {
   const hasActiveFilters = filter !== "all" || search.trim() !== "";
 
   function exportToCsv() {
-    const headers = ["email", "full_name", "airline", "role", "status", "created_at"];
+    const headers = ["full_name", "email", "airline", "role", "status", "created_at"];
     const escape = (v: string | null | undefined): string => {
       const s = String(v ?? "");
       if (s.includes(",") || s.includes('"') || s.includes("\n")) {
@@ -182,8 +190,9 @@ export function WaitlistTableWithFilter({ entries }: Props) {
     };
     const rows = sortedEntries.map((e) =>
       [
-        escape(e.email),
         escape(e.full_name),
+        escape(e.email),
+        escape(e.employee_number),
         escape(e.airline),
         escape(formatRequestedPortal(e.requested_portal)),
         escape(e.status),
@@ -223,7 +232,7 @@ export function WaitlistTableWithFilter({ entries }: Props) {
           <label className="text-sm text-slate-400">Search</label>
           <input
             type="search"
-            placeholder="Email, name, airline, or role..."
+            placeholder="Email, name, employee #, airline, or role..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40 min-w-[180px]"
@@ -244,6 +253,19 @@ export function WaitlistTableWithFilter({ entries }: Props) {
           <thead>
             <tr className="border-b border-white/10 text-left text-slate-400">
               <SortableTh
+                label="Full name"
+                column="full_name"
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={() => {
+                  if (sortBy === "full_name") setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+                  else {
+                    setSortBy("full_name");
+                    setSortDir("desc");
+                  }
+                }}
+              />
+              <SortableTh
                 label="Email"
                 column="email"
                 sortBy={sortBy}
@@ -257,14 +279,14 @@ export function WaitlistTableWithFilter({ entries }: Props) {
                 }}
               />
               <SortableTh
-                label="Full name"
-                column="full_name"
+                label="Employee #"
+                column="employee_number"
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSort={() => {
-                  if (sortBy === "full_name") setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+                  if (sortBy === "employee_number") setSortDir((d) => (d === "desc" ? "asc" : "desc"));
                   else {
-                    setSortBy("full_name");
+                    setSortBy("employee_number");
                     setSortDir("desc");
                   }
                 }}
@@ -315,7 +337,7 @@ export function WaitlistTableWithFilter({ entries }: Props) {
           <tbody>
             {paginatedEntries.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-slate-500">
+                <td colSpan={8} className="py-8 text-center text-slate-500">
                   {entries.length === 0
                     ? "No waitlist entries yet."
                     : hasActiveFilters
@@ -327,8 +349,11 @@ export function WaitlistTableWithFilter({ entries }: Props) {
             {paginatedEntries.map((row) => (
               <Fragment key={row.id}>
                 <tr className="border-b border-white/5 hover:bg-white/5">
+                  <td className="py-3 pr-4 text-slate-200">{row.full_name ?? "—"}</td>
                   <td className="py-3 pr-4 text-white">{row.email}</td>
-                  <td className="py-3 pr-4 text-slate-300">{row.full_name ?? "—"}</td>
+                  <td className="py-3 pr-4 font-mono text-slate-300 tabular-nums">
+                    {(row.employee_number ?? "").trim() || "—"}
+                  </td>
                   <td className="py-3 pr-4 text-slate-300">{row.airline}</td>
                   <td className="py-3 pr-4 text-slate-300">{formatRequestedPortal(row.requested_portal)}</td>
                   <td className="py-3 pr-4">
@@ -367,8 +392,12 @@ export function WaitlistTableWithFilter({ entries }: Props) {
                 </tr>
                 {expandedRowId === row.id && (
                   <tr key={`${row.id}-detail`} className="border-b border-white/5 bg-slate-950/60">
-                    <td colSpan={7} className="py-4 px-4">
+                    <td colSpan={8} className="py-4 px-4">
                       <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+                        <div>
+                          <span className="text-slate-500">Full name</span>
+                          <div className="text-slate-300">{row.full_name ?? "—"}</div>
+                        </div>
                         <div>
                           <span className="text-slate-500">Email</span>
                           <div className="flex items-center gap-2">
@@ -383,8 +412,10 @@ export function WaitlistTableWithFilter({ entries }: Props) {
                           </div>
                         </div>
                         <div>
-                          <span className="text-slate-500">Full name</span>
-                          <div className="text-slate-300">{row.full_name ?? "—"}</div>
+                          <span className="text-slate-500">Employee #</span>
+                          <div className="font-mono text-slate-300 tabular-nums">
+                            {(row.employee_number ?? "").trim() || "—"}
+                          </div>
                         </div>
                         <div>
                           <span className="text-slate-500">Airline</span>

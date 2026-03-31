@@ -20,6 +20,7 @@ function chunk<T>(arr: T[], size: number): T[][] {
 
 type MentorRegistryFields = {
   mentor_type: string | null;
+  mentor_categories: string[] | null;
   mentor_status: string | null;
   admin_notes: string | null;
 };
@@ -39,18 +40,20 @@ async function mentorRegistryByProfileIds(
   for (const part of chunk(profileIds, IN_CHUNK)) {
     const { data, error } = await admin
       .from("mentor_registry")
-      .select("profile_id, mentor_type, mentor_status, admin_notes")
+      .select("profile_id, mentor_type, mentor_categories, mentor_status, admin_notes")
       .in("profile_id", part);
     if (error) break;
     for (const raw of data ?? []) {
       const r = raw as {
         profile_id: string;
         mentor_type: string | null;
+        mentor_categories: string[] | null;
         mentor_status: string | null;
         admin_notes: string | null;
       };
       map.set(r.profile_id, {
         mentor_type: r.mentor_type,
+        mentor_categories: r.mentor_categories,
         mentor_status: r.mentor_status,
         admin_notes: r.admin_notes,
       });
@@ -68,18 +71,20 @@ async function mentorRegistryByPreloadIds(
   for (const part of chunk(preloadIds, IN_CHUNK)) {
     const { data, error } = await admin
       .from("mentor_registry")
-      .select("preload_id, mentor_type, mentor_status, admin_notes")
+      .select("preload_id, mentor_type, mentor_categories, mentor_status, admin_notes")
       .in("preload_id", part);
     if (error) break;
     for (const raw of data ?? []) {
       const r = raw as {
         preload_id: string;
         mentor_type: string | null;
+        mentor_categories: string[] | null;
         mentor_status: string | null;
         admin_notes: string | null;
       };
       map.set(r.preload_id, {
         mentor_type: r.mentor_type,
+        mentor_categories: r.mentor_categories,
         mentor_status: r.mentor_status,
         admin_notes: r.admin_notes,
       });
@@ -180,6 +185,7 @@ export default async function FrontierPilotAdminMentoringMentorRosterPage() {
       position: m.position ?? null,
       base_airport: m.base_airport ?? null,
       mentor_type: reg?.mentor_type ?? null,
+      mentor_categories: reg?.mentor_categories ?? null,
       mentor_status: reg?.mentor_status ?? null,
       admin_notes: reg?.admin_notes ?? null,
       mentee_count: menteeCountByMentor.get(m.id) ?? 0,
@@ -235,6 +241,7 @@ export default async function FrontierPilotAdminMentoringMentorRosterPage() {
       preload_notes: p.notes ?? null,
       preload_active: p.active,
       mentor_type: reg?.mentor_type ?? null,
+      mentor_categories: reg?.mentor_categories ?? null,
       mentor_status: reg?.mentor_status ?? null,
       admin_notes: reg?.admin_notes ?? null,
       mentee_count: 0,
@@ -248,10 +255,16 @@ export default async function FrontierPilotAdminMentoringMentorRosterPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight border-b border-white/5 pb-3 lg:pb-2">Mentor Roster</h1>
         <p className="mt-2 text-sm text-slate-400 leading-snug lg:mt-1.5">
-          CrewRules mentors (green CRA) and preloaded roster rows not yet matched to an account (amber CRA). Inactive
-          staging rows stay on the roster with a muted CRA and an Inactive staging badge. Mentee counts apply to matched
-          mentors with active assignments only. Position and base come from the pilot profile after signup; staging rows
-          use preload values until link.
+          ALPA mentors with an active CrewRules account are shown with a{" "}
+          <span className="inline font-medium text-emerald-300/90">green CRA</span>. Preloaded ALPA mentors who have not
+          yet activated a CrewRules account show an{" "}
+          <span className="inline font-medium text-amber-300/80">amber ✕</span> in the CRA column. Inactive staging rows
+          appear with a muted CRA and an{" "}
+          <span className="text-slate-400">&#8220;</span>
+          <span className="mx-px inline-flex items-center rounded-full border border-slate-600 bg-slate-800/80 px-1.5 py-0.5 align-middle text-[11px] font-medium text-slate-200">
+            Inactive
+          </span>
+          <span className="text-slate-400">&#8221;</span> badge.
         </p>
       </div>
 

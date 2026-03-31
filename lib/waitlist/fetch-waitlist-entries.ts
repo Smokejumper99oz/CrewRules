@@ -4,6 +4,8 @@ export type WaitlistEntryRow = {
   id: string;
   email: string | null;
   full_name: string | null;
+  /** Company employee / ID from request-access; optional. */
+  employee_number: string | null;
   airline: string | null;
   requested_portal: string | null;
   source: string | null;
@@ -18,7 +20,9 @@ export async function fetchWaitlistEntries(): Promise<{
   const supabase = await createClient();
   const { data: entries, error } = await supabase
     .from("waitlist")
-    .select("id, email, full_name, airline, requested_portal, source, status, created_at")
+    .select(
+      "id, email, full_name, employee_number, airline, requested_portal, source, status, created_at"
+    )
     .order("created_at", { ascending: false });
 
   return {

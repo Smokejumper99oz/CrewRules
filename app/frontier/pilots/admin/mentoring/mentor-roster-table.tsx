@@ -11,6 +11,9 @@ import {
   MENTOR_REGISTRY_TYPE_VALUES,
   isMentorRegistryStatusValue,
   isMentorRegistryTypeValue,
+  mentorCategoriesFromRow,
+  mentorProgramTypePillParts,
+  type MentorRegistryTypeValue,
 } from "@/lib/mentoring/mentor-registry-admin-options";
 
 export type MentorRosterRow = {
@@ -31,6 +34,8 @@ export type MentorRosterRow = {
   /** mentor_preload.active; preload rows only. */
   preload_active?: boolean;
   mentor_type: string | null;
+  /** mentor_registry.mentor_categories; source of truth for program categories. */
+  mentor_categories: string[] | null;
   mentor_status: string | null;
   admin_notes: string | null;
   mentee_count: number;
@@ -83,8 +88,18 @@ function shortenProgramTypeLabelForPill(mappedTypeLabel: string): string {
 }
 
 function programPillDisplay(m: MentorRosterRow): { text: string; title: string; pillClass: string } {
-  const typePart = programFieldLabel("type", m.mentor_type) || "—";
-  const typePillPart = shortenProgramTypeLabelForPill(typePart);
+  const cats = mentorCategoriesFromRow(m.mentor_categories, m.mentor_type);
+  let typePillPart: string;
+  let typeTitlePart: string;
+  if (cats.length > 0) {
+    const parts = mentorProgramTypePillParts(cats);
+    typePillPart = parts.pillPart;
+    typeTitlePart = parts.titlePart;
+  } else {
+    const typePart = programFieldLabel("type", m.mentor_type) || "—";
+    typeTitlePart = typePart;
+    typePillPart = shortenProgramTypeLabelForPill(typePart);
+  }
   const statusRaw = (m.mentor_status ?? "").trim();
   const statusPart = statusRaw
     ? isMentorRegistryStatusValue(statusRaw)
@@ -94,7 +109,7 @@ function programPillDisplay(m: MentorRosterRow): { text: string; title: string; 
   const text = `${typePillPart.toUpperCase()} • ${statusPart.toUpperCase()}`;
   return {
     text,
-    title: `${typePart} • ${statusPart}`,
+    title: `${typeTitlePart} • ${statusPart}`,
     pillClass: mentorProgramPillSurfaceClass(m.mentor_status),
   };
 }
@@ -175,15 +190,24 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
   const programTypeOptions = useMemo(() => {
     const entries: { value: string; label: string }[] = [];
     const seen = new Set<string>();
+    let sawEmpty = false;
     for (const m of rows) {
-      const raw = (m.mentor_type ?? "").trim();
-      const value = raw || PROGRAM_FILTER_EMPTY;
-      if (seen.has(value)) continue;
-      seen.add(value);
-      const label = raw
-        ? programFieldLabel("type", raw) || raw
-        : "(No type)";
-      entries.push({ value, label });
+      const cats = mentorCategoriesFromRow(m.mentor_categories, m.mentor_type);
+      if (cats.length === 0) {
+        sawEmpty = true;
+        continue;
+      }
+      for (const c of cats) {
+        if (seen.has(c)) continue;
+        seen.add(c);
+        entries.push({
+          value: c,
+          label: programFieldLabel("type", c) || c,
+        });
+      }
+    }
+    if (sawEmpty && !seen.has(PROGRAM_FILTER_EMPTY)) {
+      entries.push({ value: PROGRAM_FILTER_EMPTY, label: "(No type)" });
     }
     return entries.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
   }, [rows]);
@@ -199,7 +223,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
 
   function sortIndicator(key: ClientSortKey): string {
     if (sortKey !== key) return "";
-    return sortDir === "asc" ? " ↑" : " ↓";
+    return sortDir === "asc" ? "↑" : "↓";
   }
 
   const visibleRows = useMemo(() => {
@@ -227,9 +251,12 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
     }
     if (programFilter !== "all") {
       if (programFilter === PROGRAM_FILTER_EMPTY) {
-        list = list.filter((m) => !(m.mentor_type ?? "").trim());
+        list = list.filter((m) => mentorCategoriesFromRow(m.mentor_categories, m.mentor_type).length === 0);
       } else {
-        list = list.filter((m) => (m.mentor_type ?? "").trim() === programFilter);
+        list = list.filter((m) => {
+          const cats = mentorCategoriesFromRow(m.mentor_categories, m.mentor_type);
+          return cats.includes(programFilter as MentorRegistryTypeValue);
+        });
       }
     }
 
@@ -341,7 +368,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
             </label>
             <label className="min-w-0">
               <span className="mb-px block text-[8px] font-semibold uppercase leading-none tracking-wide text-slate-500">
-                Crew base
+                Crew Base
               </span>
               <select
                 value={baseFilter}
@@ -404,11 +431,11 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
       <div className="overflow-x-auto rounded-lg border border-white/5 lg:-mt-px">
         <table className="table-fixed w-full min-w-[980px] text-xs leading-tight">
           <colgroup>
-            <col className="w-[2.75rem]" />
-            <col className="min-w-0 w-[20%] lg:w-[19%]" />
-            <col className="w-[4.75rem]" />
+            <col className="w-10" />
+            <col className="min-w-[132px] w-[14%] lg:w-[13%]" />
+            <col className="w-[4.5rem]" />
             <col className="w-[2.5rem]" />
-            <col className="w-[3.75rem]" />
+            <col className="w-[5.25rem]" />
             <col className="w-[6.25rem]" />
             <col className="w-[7.5rem] lg:w-[8.25rem]" />
             <col className="min-w-0 lg:w-[18%]" />
@@ -417,23 +444,33 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
           </colgroup>
           <thead className="border-b border-white/5 bg-white/[0.03] text-[11px] font-medium uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="px-0.5 py-1.5 text-center">CRA</th>
-              <th className="px-1.5 py-1.5 text-left normal-case tracking-normal">
+              <th className="w-10 box-border px-0 py-1.5 text-center align-middle">CRA</th>
+              <th className="box-border pl-3 pr-1.5 py-1.5 text-left align-middle normal-case tracking-normal">
                 <button
                   type="button"
                   onClick={() => onSortHeaderClick("name")}
-                  className="max-w-full truncate text-left font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
+                  className="inline-flex max-w-full min-w-0 items-center gap-1 text-left font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
                 >
-                  Name{sortIndicator("name")}
+                  <span className="min-w-0 truncate">Name</span>
+                  {sortIndicator("name") ? (
+                    <span className="shrink-0 leading-none" aria-hidden>
+                      {sortIndicator("name")}
+                    </span>
+                  ) : null}
                 </button>
               </th>
-              <th className="px-1.5 py-1.5 text-left normal-case tracking-normal">
+              <th className="box-border pl-2 pr-1.5 py-1.5 text-left align-middle normal-case tracking-normal">
                 <button
                   type="button"
                   onClick={() => onSortHeaderClick("emp")}
-                  className="font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
+                  className="inline-flex items-center gap-1 whitespace-nowrap font-medium text-slate-500 hover:text-slate-200 touch-manipulation"
                 >
-                  Emp.#{sortIndicator("emp")}
+                  <span>Emp.#</span>
+                  {sortIndicator("emp") ? (
+                    <span className="shrink-0 leading-none" aria-hidden>
+                      {sortIndicator("emp")}
+                    </span>
+                  ) : null}
                 </button>
               </th>
               <th className="px-1.5 py-1.5 text-left normal-case tracking-normal">Role</th>
@@ -441,10 +478,15 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                 <button
                   type="button"
                   onClick={() => onSortHeaderClick("base")}
-                  className="font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
-                  title="Crew base"
+                  className="inline-flex items-center gap-1 whitespace-nowrap text-left font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
+                  title="Crew Base"
                 >
-                  Crew base{sortIndicator("base")}
+                  <span>Crew Base</span>
+                  {sortIndicator("base") ? (
+                    <span className="shrink-0 leading-none" aria-hidden>
+                      {sortIndicator("base")}
+                    </span>
+                  ) : null}
                 </button>
               </th>
               <th className="px-1.5 py-1.5 text-left normal-case tracking-normal">Phone</th>
@@ -454,9 +496,14 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                 <button
                   type="button"
                   onClick={() => onSortHeaderClick("mentees")}
-                  className="inline-block w-full text-right font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
+                  className="inline-flex w-full items-center justify-end gap-1 whitespace-nowrap text-right font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
                 >
-                  Mentees{sortIndicator("mentees")}
+                  <span>Mentees</span>
+                  {sortIndicator("mentees") ? (
+                    <span className="shrink-0 leading-none" aria-hidden>
+                      {sortIndicator("mentees")}
+                    </span>
+                  ) : null}
                 </button>
               </th>
               <th className="px-1 py-1.5 text-center normal-case tracking-normal">Edit</th>
@@ -477,8 +524,9 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
 
               const { preview: notesPreview, title: notesTitle } = rosterNotesForTable(m);
 
-              const typeDefault =
-                m.mentor_type && isMentorRegistryTypeValue(m.mentor_type) ? m.mentor_type : "";
+              const categoryChecked = new Set(
+                mentorCategoriesFromRow(m.mentor_categories, m.mentor_type),
+              );
               const statusDefault =
                 m.mentor_status && isMentorRegistryStatusValue(m.mentor_status)
                   ? m.mentor_status
@@ -546,8 +594,8 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-1.5 py-1.5 align-middle">
-                      <div className="truncate font-mono text-[11px] text-slate-400" title={emp}>
+                    <td className="box-border pl-2 pr-1.5 py-1.5 align-middle">
+                      <div className="truncate font-mono text-[11px] text-slate-500" title={emp}>
                         {emp}
                       </div>
                     </td>
@@ -732,25 +780,27 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                               <input type="hidden" name="rowKind" value={m.rowKind} />
                               <input type="hidden" name="rowId" value={m.id} />
                               <div className="grid gap-3 sm:grid-cols-2">
-                                <label className="block space-y-1">
-                                  <span className="text-xs text-slate-400">Mentor type</span>
-                                  <select
-                                    name="mentor_type"
-                                    required
-                                    defaultValue={typeDefault}
-                                    className="w-full rounded-md border border-white/10 bg-slate-950/80 px-2 py-2 text-sm text-slate-200"
-                                  >
-                                    <option value="" disabled>
-                                      Select type…
-                                    </option>
+                                <div className="space-y-2 sm:col-span-2">
+                                  <span className="block text-xs text-slate-400">Mentor categories</span>
+                                  <div className="grid gap-2 sm:grid-cols-2">
                                     {MENTOR_REGISTRY_TYPE_VALUES.map((v) => (
-                                      <option key={v} value={v}>
+                                      <label
+                                        key={v}
+                                        className="flex cursor-pointer items-center gap-2 rounded-md border border-white/5 bg-slate-950/50 px-2 py-1.5 text-sm text-slate-200"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          name="mentor_category"
+                                          value={v}
+                                          defaultChecked={categoryChecked.has(v)}
+                                          className="h-3.5 w-3.5 rounded border-white/20 bg-slate-900 text-[#75C043] focus:ring-[#75C043]/40"
+                                        />
                                         {MENTOR_REGISTRY_TYPE_LABELS[v]}
-                                      </option>
+                                      </label>
                                     ))}
-                                  </select>
-                                </label>
-                                <label className="block space-y-1">
+                                  </div>
+                                </div>
+                                <label className="block space-y-1 sm:col-span-2">
                                   <span className="text-xs text-slate-400">Mentor status</span>
                                   <select
                                     name="mentor_status"
@@ -895,7 +945,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                     </select>
                                   </label>
                                   <label className="block space-y-1">
-                                    <span className="text-xs text-slate-400">Crew base (3-letter IATA)</span>
+                                    <span className="text-xs text-slate-400">Crew Base (3-letter IATA)</span>
                                     <input
                                       name="base_airport"
                                       type="text"
