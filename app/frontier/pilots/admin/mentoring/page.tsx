@@ -73,16 +73,36 @@ export default async function FrontierPilotAdminMentoringPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <div className={statCard}>
-          <div className="text-xs text-slate-400 mb-1">Mentors</div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7">
+        <div
+          className={`${statCard} border-emerald-500/25 bg-emerald-500/[0.05] shadow-[inset_0_1px_0_0_rgba(16,185,129,0.07)]`}
+        >
+          <div className="text-xs text-slate-400 mb-1">Live Mentors</div>
           <div className="text-2xl font-semibold text-slate-200 tabular-nums">{stats.mentors}</div>
         </div>
-        <div className={statCard}>
-          <div className="text-xs text-slate-400 mb-1">Active Mentees</div>
+        <div
+          className={`${statCard} border-amber-500/25 bg-amber-500/[0.05] shadow-[inset_0_1px_0_0_rgba(245,158,11,0.07)]`}
+        >
+          <div className="text-xs text-slate-400 mb-1">Staged Mentors</div>
+          <div className="text-2xl font-semibold text-slate-200 tabular-nums">{stats.stagedMentors}</div>
+        </div>
+        <div
+          className={`${statCard} border-sky-500/25 bg-sky-500/[0.06] shadow-[inset_0_1px_0_0_rgba(14,165,233,0.08)]`}
+        >
+          <div className="text-xs text-slate-400 mb-1">Assigned Mentees</div>
           <div className="text-2xl font-semibold text-slate-200 tabular-nums">{stats.activeMentees}</div>
         </div>
-        <div className={`${statCard} ${stats.unmatchedMentees > 0 ? "border-amber-600/30" : ""}`}>
+        <div
+          className={`${statCard} border-emerald-500/20 bg-emerald-500/[0.04] shadow-[inset_0_1px_0_0_rgba(16,185,129,0.05)]`}
+        >
+          <div className="text-xs text-slate-400 mb-1">Live Mentees</div>
+          <div className="text-2xl font-semibold text-slate-200 tabular-nums">{stats.liveMentees}</div>
+        </div>
+        <div
+          className={`${statCard} border-amber-500/25 bg-amber-500/[0.05] shadow-[inset_0_1px_0_0_rgba(245,158,11,0.07)] ${
+            stats.unmatchedMentees > 0 ? "ring-1 ring-amber-400/20" : ""
+          }`}
+        >
           <div className="text-xs text-slate-400 mb-1">Unmatched Mentees</div>
           <div
             className={`text-2xl font-semibold tabular-nums ${stats.unmatchedMentees > 0 ? "text-amber-300" : "text-slate-200"}`}
@@ -90,18 +110,26 @@ export default async function FrontierPilotAdminMentoringPage() {
             {stats.unmatchedMentees}
           </div>
         </div>
-        <div className={`${statCard} ${stats.missingMentorContact > 0 ? "border-amber-600/30" : ""}`}>
+        <div
+          className={`${statCard} border-rose-500/25 bg-rose-500/[0.05] shadow-[inset_0_1px_0_0_rgba(244,63,94,0.07)] ${
+            stats.missingMentorContact > 0 ? "ring-1 ring-rose-400/20" : ""
+          }`}
+        >
           <div className="text-xs text-slate-400 mb-1">Missing Mentor Contacts</div>
           <div
-            className={`text-2xl font-semibold tabular-nums ${stats.missingMentorContact > 0 ? "text-amber-300" : "text-slate-200"}`}
+            className={`text-2xl font-semibold tabular-nums ${stats.missingMentorContact > 0 ? "text-rose-300" : "text-slate-200"}`}
           >
             {stats.missingMentorContact}
           </div>
         </div>
-        <div className={`${statCard} ${stats.openMentorshipProgramRequests > 0 ? "border-amber-600/30" : ""}`}>
+        <div
+          className={`${statCard} border-violet-500/25 bg-violet-500/[0.05] shadow-[inset_0_1px_0_0_rgba(139,92,246,0.07)] ${
+            stats.openMentorshipProgramRequests > 0 ? "ring-1 ring-violet-400/25" : ""
+          }`}
+        >
           <div className="text-xs text-slate-400 mb-1">Open Program Requests</div>
           <div
-            className={`text-2xl font-semibold tabular-nums ${stats.openMentorshipProgramRequests > 0 ? "text-amber-300" : "text-slate-200"}`}
+            className={`text-2xl font-semibold tabular-nums ${stats.openMentorshipProgramRequests > 0 ? "text-violet-200" : "text-slate-200"}`}
           >
             {stats.openMentorshipProgramRequests}
           </div>

@@ -50,9 +50,11 @@ export function MentoringOverviewCard({
         </div>
         <span className={ctaClass}>{manageCta}</span>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
-        <Stat label="Mentors" value={stats.mentors} />
-        <Stat label="Active Mentees" value={stats.activeMentees} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 sm:gap-4">
+        <Stat label="Live Mentors" value={stats.mentors} />
+        <Stat label="Staged Mentors" value={stats.stagedMentors} />
+        <Stat label="Assigned Mentees" value={stats.activeMentees} />
+        <Stat label="Live Mentees" value={stats.liveMentees} />
         <Stat label="Unmatched Mentees" value={stats.unmatchedMentees} warn={stats.unmatchedMentees > 0} />
         <Stat
           label="Missing Mentor Contacts"

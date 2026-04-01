@@ -5,8 +5,14 @@ import { useEffect, useRef } from "react";
 import type { MentorPreloadCsvImportActionResult } from "@/app/frontier/pilots/admin/mentoring/actions";
 import type { MentorPreloadCsvImportRowResult } from "@/lib/mentoring/run-mentor-preload-csv-import";
 
+/** Server action returns runner rows plus CSV identity fields from enrichment. */
+type MentorPreloadImportLiveRow = MentorPreloadCsvImportRowResult & {
+  fullName?: string | null;
+  employeeNumber?: string | null;
+};
+
 const rowGridClass =
-  "grid grid-cols-[2.25rem_5.5rem_minmax(10rem,1fr)] gap-x-3 gap-y-0 items-center";
+  "grid grid-cols-[2.25rem_4.5rem_minmax(0,1fr)_5rem_minmax(0,1.2fr)] gap-x-2 gap-y-0.5 items-center";
 
 function rowStatusClass(r: MentorPreloadCsvImportRowResult): string {
   return r.status === "success" ? "text-emerald-300/90" : "text-red-300/95";
@@ -92,11 +98,15 @@ export function MentoringMentorPreloadImportResults({
             >
               <span>Row</span>
               <span>Status</span>
+              <span>Name</span>
+              <span className="whitespace-nowrap">Emp #</span>
               <span>Message</span>
             </div>
             <ul className="space-y-0">
-              {state.rows.map((r, i) => {
+              {(state.rows as MentorPreloadImportLiveRow[]).map((r, i) => {
                 const lineCls = rowStatusClass(r);
+                const name = r.fullName?.trim() || "—";
+                const emp = r.employeeNumber?.trim() || "—";
                 return (
                   <li
                     key={`${r.rowNumber}-${i}`}
@@ -104,6 +114,12 @@ export function MentoringMentorPreloadImportResults({
                   >
                     <span className="tabular-nums">{r.rowNumber}</span>
                     <span className="truncate font-sans text-[11px] font-medium">{shortStatusLabel(r)}</span>
+                    <span className="truncate min-w-0" title={name !== "—" ? name : undefined}>
+                      {name}
+                    </span>
+                    <span className="truncate tabular-nums" title={emp !== "—" ? emp : undefined}>
+                      {emp}
+                    </span>
                     <span className="truncate min-w-0 text-left" title={r.message}>
                       {r.message}
                     </span>

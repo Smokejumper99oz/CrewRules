@@ -290,6 +290,7 @@ export async function importFrontierPilotAdminMentorCsv(
 
   const admin = createAdminClient();
   const result = await runMentorPreloadCsvImport(admin, TENANT, text);
+  const enrichedResult = buildMentorPreloadHistoryInsertResult(text, result);
 
   await linkExistingProfilesAfterMentorPreloadImport(admin, text, result);
 
@@ -318,7 +319,7 @@ export async function importFrontierPilotAdminMentorCsv(
   revalidatePath("/frontier/pilots/admin/mentoring/mentor-import");
   revalidatePath("/frontier/pilots/admin/mentoring/mentor-roster");
 
-  return { ...result, meta };
+  return { ...enrichedResult, meta };
 }
 
 /** Mentor on the assignment must be a Frontier pilots profile (tenant admin scope). */

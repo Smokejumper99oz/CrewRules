@@ -10,6 +10,10 @@ export type MentoringOverviewStats = {
   unmatchedMentees: number;
   missingMentorContact: number;
   openMentorshipProgramRequests: number;
+  /** mentor_preload rows with no linked profile yet (tenant-scoped when applicable). */
+  stagedMentors: number;
+  /** Active assignment rows whose mentee profile has completed welcome onboarding. */
+  liveMentees: number;
 };
 
 const IN_CHUNK = 120;
@@ -46,6 +50,8 @@ export async function getMentoringOverviewStats(
     unmatchedMentees: 0,
     missingMentorContact: 0,
     openMentorshipProgramRequests: 0,
+    stagedMentors: 0,
+    liveMentees: 0,
   };
 
   let mentorIdsInScope: string[] | null = null;
@@ -82,6 +88,60 @@ export async function getMentoringOverviewStats(
   const openMentorshipProgramRequests = programRequestsErr ? 0 : (programRequestsCount ?? 0);
 
   if (mentorsErr) return empty;
+
+  const fetchStagedMentors = async (): Promise<number> => {
+    let q = admin
+      .from("mentor_preload")
+      .select("id", { count: "exact", head: true })
+      .is("matched_profile_id", null);
+    if (scope.kind === "tenant") {
+      q = q.eq("tenant", scope.tenant);
+    }
+    const { count, error } = await q;
+    if (error) return 0;
+    return count ?? 0;
+  };
+
+  const fetchLiveMentees = async (): Promise<number> => {
+    type MenteeRow = { welcome_modal_version_seen?: number | null } | null;
+    const rowCountsAsLive = (row: { mentee?: MenteeRow }): boolean => {
+      const m = row.mentee;
+      return m != null && m.welcome_modal_version_seen != null;
+    };
+
+    if (scope.kind === "platform") {
+      const { data, error } = await admin
+        .from("mentor_assignments")
+        .select("mentee:profiles!mentor_assignments_mentee_user_id_fkey(welcome_modal_version_seen)")
+        .eq("active", true)
+        .not("mentee_user_id", "is", null);
+      if (error) return 0;
+      let n = 0;
+      for (const row of data ?? []) {
+        if (rowCountsAsLive(row as { mentee?: MenteeRow })) n += 1;
+      }
+      return n;
+    }
+
+    const ids = mentorIdsInScope ?? [];
+    if (ids.length === 0) return 0;
+    let total = 0;
+    for (const part of chunk(ids, IN_CHUNK)) {
+      const { data, error } = await admin
+        .from("mentor_assignments")
+        .select("mentee:profiles!mentor_assignments_mentee_user_id_fkey(welcome_modal_version_seen)")
+        .in("mentor_user_id", part)
+        .eq("active", true)
+        .not("mentee_user_id", "is", null);
+      if (error) return 0;
+      for (const row of data ?? []) {
+        if (rowCountsAsLive(row as { mentee?: MenteeRow })) total += 1;
+      }
+    }
+    return total;
+  };
+
+  const [stagedMentors, liveMentees] = await Promise.all([fetchStagedMentors(), fetchLiveMentees()]);
 
   const countAssignments = async (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase filter builder chain
@@ -130,6 +190,8 @@ export async function getMentoringOverviewStats(
         unmatchedMentees,
         missingMentorContact: 0,
         openMentorshipProgramRequests,
+        stagedMentors,
+        liveMentees,
       };
     }
     for (const r of data ?? []) {
@@ -144,6 +206,8 @@ export async function getMentoringOverviewStats(
         unmatchedMentees,
         missingMentorContact: 0,
         openMentorshipProgramRequests,
+        stagedMentors,
+        liveMentees,
       };
     }
     for (const part of chunk(ids, IN_CHUNK)) {
@@ -158,6 +222,8 @@ export async function getMentoringOverviewStats(
           unmatchedMentees,
           missingMentorContact: 0,
           openMentorshipProgramRequests,
+          stagedMentors,
+          liveMentees,
         };
       }
       for (const r of data ?? []) {
@@ -177,6 +243,8 @@ export async function getMentoringOverviewStats(
       unmatchedMentees,
       missingMentorContact: 0,
       openMentorshipProgramRequests,
+      stagedMentors,
+      liveMentees,
     };
   }
 
@@ -212,5 +280,7 @@ export async function getMentoringOverviewStats(
     unmatchedMentees,
     missingMentorContact,
     openMentorshipProgramRequests,
+    stagedMentors,
+    liveMentees,
   };
 }

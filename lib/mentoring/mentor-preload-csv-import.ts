@@ -86,7 +86,23 @@ export type MentorPreloadCsvHeaderPresence = {
   seat: boolean;
 };
 
+/**
+ * Collapses header keys to lowercase so canonical lookups match (first occurrence wins per key).
+ * Mutates the map so callers that use canonical constant names in `.get()` keep working.
+ */
+function normalizeHeaderIndexKeysInPlace(headerIndex: Map<string, number>): void {
+  const merged = new Map<string, number>();
+  for (const [k, v] of headerIndex) {
+    const lk = k.toLowerCase();
+    if (!lk) continue;
+    if (!merged.has(lk)) merged.set(lk, v);
+  }
+  headerIndex.clear();
+  for (const [k, v] of merged) headerIndex.set(k, v);
+}
+
 export function mentorPreloadImportHeaderValidationError(headerIndex: Map<string, number>): string | null {
+  normalizeHeaderIndexKeysInPlace(headerIndex);
   for (const required of MENTOR_PRELOAD_CSV_REQUIRED_HEADERS) {
     if (!headerIndex.has(required)) {
       return `Missing required column: ${required}`;
@@ -102,6 +118,7 @@ export function mentorPreloadImportHeaderValidationError(headerIndex: Map<string
 
 /** Column order for XLSX → CSV output (matches known headers present on the sheet). */
 export function mentorPreloadSheetOutputHeaderList(headerIndex: Map<string, number>): string[] {
+  normalizeHeaderIndexKeysInPlace(headerIndex);
   const out: string[] = [...MENTOR_PRELOAD_CSV_REQUIRED_HEADERS];
   if (headerIndex.has(MENTOR_PRELOAD_CSV_WORK_EMAIL_HEADER)) {
     out.push(MENTOR_PRELOAD_CSV_WORK_EMAIL_HEADER);
@@ -172,7 +189,9 @@ export function parseMentorPreloadCsv(text: string): ParsedMentorPreloadCsvResul
   const headerCells = parseCsvLine(lines[0]).map((h) => h.trim());
   const headerIndex = new Map<string, number>();
   headerCells.forEach((h, i) => {
-    if (h && !headerIndex.has(h)) headerIndex.set(h, i);
+    if (!h) return;
+    const lk = h.toLowerCase();
+    if (!headerIndex.has(lk)) headerIndex.set(lk, i);
   });
 
   const headerErr = mentorPreloadImportHeaderValidationError(headerIndex);

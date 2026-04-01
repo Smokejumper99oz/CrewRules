@@ -349,7 +349,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
             </label>
             <label className="min-w-0">
               <span className="mb-px block text-[8px] font-semibold uppercase leading-none tracking-wide text-slate-500">
-                Role
+                Seat
               </span>
               <select
                 value={roleFilter}
