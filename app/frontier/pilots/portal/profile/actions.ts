@@ -9,6 +9,10 @@ import { CURRENT_WELCOME_MODAL_VERSION } from "@/lib/welcome-modal";
 import { revalidatePath } from "next/cache";
 import { ensureInboundAliasIfMissing } from "@/lib/email/ensure-inbound-alias-if-missing";
 import { formatUsPhoneDisplay } from "@/lib/format-us-phone";
+import {
+  isProfileEmployeeNumberTaken,
+  PROFILE_EMPLOYEE_NUMBER_TAKEN_ERROR,
+} from "@/lib/profiles/employee-number-taken";
 
 // IANA format: Region/City or Region/Country/City (e.g. America/Puerto_Rico, America/Argentina/Buenos_Aires)
 const VALID_TZ = /^[A-Za-z0-9_+-]+(\/[A-Za-z0-9_+-]+)+$/;
@@ -254,6 +258,17 @@ export async function updateProfilePreferences(formData: FormData): Promise<Upda
   }
 
   const supabase = await createClient();
+  if (employeeNumber) {
+    const takenRes = await isProfileEmployeeNumberTaken(supabase, {
+      tenant: profile.tenant,
+      portal: profile.portal,
+      employeeNumberTrimmed: employeeNumber,
+      excludeProfileId: profile.id,
+    });
+    if (takenRes.error) return { error: takenRes.error };
+    if (takenRes.taken) return { error: PROFILE_EMPLOYEE_NUMBER_TAKEN_ERROR };
+  }
+
   const updatePayload: Record<string, unknown> = {
     full_name: fullName,
     employee_number: employeeNumber,

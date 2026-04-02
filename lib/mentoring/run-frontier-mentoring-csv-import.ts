@@ -8,6 +8,10 @@ import {
 } from "@/lib/mentoring/mentoring-csv-import";
 import { upsertMentorAssignmentFromSuperAdmin } from "@/lib/mentoring/super-admin-sync-assignment";
 import { createMilestonesForAssignment } from "@/lib/mentoring/create-milestones-for-assignment";
+import {
+  isProfileEmployeeNumberTaken,
+  PROFILE_EMPLOYEE_NUMBER_TAKEN_ERROR,
+} from "@/lib/profiles/employee-number-taken";
 
 export type MentoringCsvImportRowDisplay = {
   menteeName: string;
@@ -156,7 +160,7 @@ export async function runFrontierMentoringCsvImport(
     const privateNorm = privateNormResult.email;
     const companyNorm = normalizeMenteeCompanyEmail(companyRaw);
 
-    const { data: mentor, error: mentorErr } = await admin
+    const { data: mentorProfile, error: mentorErr } = await admin
       .from("profiles")
       .select("id")
       .eq("tenant", tenant)
@@ -173,14 +177,34 @@ export async function runFrontierMentoringCsvImport(
       });
       continue;
     }
-    if (!mentor?.id) {
-      results.push({
-        rowNumber,
-        success: false,
-        message: `No mentor profile with employee_number "${mentorEmp}" in this tenant.`,
-        display: rowDisplay(mentorEmp, menteeEmp, menteeName),
-      });
-      continue;
+
+    let mentorUserId: string | null = mentorProfile?.id ?? null;
+    if (!mentorUserId) {
+      const { data: preloadRow, error: preloadErr } = await admin
+        .from("mentor_preload")
+        .select("id")
+        .eq("tenant", tenant)
+        .eq("employee_number", mentorEmp)
+        .maybeSingle();
+
+      if (preloadErr) {
+        results.push({
+          rowNumber,
+          success: false,
+          message: preloadErr.message,
+          display: rowDisplay(mentorEmp, menteeEmp, menteeName),
+        });
+        continue;
+      }
+      if (!preloadRow?.id) {
+        results.push({
+          rowNumber,
+          success: false,
+          message: `No mentor with employee_number "${mentorEmp}" in this tenant (no live profile or mentor roster row).`,
+          display: rowDisplay(mentorEmp, menteeEmp, menteeName),
+        });
+        continue;
+      }
     }
 
     const { data: existingMentee, error: menteeLookupErr } = await admin
@@ -224,13 +248,37 @@ export async function runFrontierMentoringCsvImport(
         }
       }
     } else {
-      const authEmail = companyNorm ?? privateNorm;
-      if (!authEmail) {
+      const authEmail = companyNorm;
+      if (!authEmail || !authEmail.toLowerCase().endsWith("@flyfrontier.com")) {
         results.push({
           rowNumber,
           success: false,
-          message:
-            "Mentee profile not found; provide mentee_email@flyfrontier.com or a valid mentee_email@private to create an account.",
+          message: "Mentee must have a valid @flyfrontier.com email to create an account.",
+          display: rowDisplay(mentorEmp, menteeEmp, menteeName),
+        });
+        continue;
+      }
+
+      const takenRes = await isProfileEmployeeNumberTaken(admin, {
+        tenant,
+        portal: "pilots",
+        employeeNumberTrimmed: menteeEmp,
+        excludeProfileId: null,
+      });
+      if (takenRes.error) {
+        results.push({
+          rowNumber,
+          success: false,
+          message: takenRes.error,
+          display: rowDisplay(mentorEmp, menteeEmp, menteeName),
+        });
+        continue;
+      }
+      if (takenRes.taken) {
+        results.push({
+          rowNumber,
+          success: false,
+          message: PROFILE_EMPLOYEE_NUMBER_TAKEN_ERROR,
           display: rowDisplay(mentorEmp, menteeEmp, menteeName),
         });
         continue;
@@ -281,7 +329,7 @@ export async function runFrontierMentoringCsvImport(
       }
     }
 
-    if (mentor.id === menteeId) {
+    if (mentorUserId && menteeId === mentorUserId) {
       results.push({
         rowNumber,
         success: false,
@@ -290,9 +338,19 @@ export async function runFrontierMentoringCsvImport(
       });
       continue;
     }
+    if (!mentorUserId && mentorEmp === menteeEmp) {
+      results.push({
+        rowNumber,
+        success: false,
+        message: "Mentor and mentee cannot be the same employee number.",
+        display: rowDisplay(mentorEmp, menteeEmp, menteeName),
+      });
+      continue;
+    }
 
     const sync = await upsertMentorAssignmentFromSuperAdmin(admin, {
-      mentorUserId: mentor.id,
+      mentorUserId,
+      mentorEmployeeNumber: mentorEmp,
       menteeEmployeeNumber: menteeEmp,
       tenant,
       hireDate: hireDateNorm,
@@ -318,12 +376,22 @@ export async function runFrontierMentoringCsvImport(
         ? "Updated (filled missing data)"
         : "No changes (already up to date)";
 
-    const { data: assignmentRow, error: assignmentLookupErr } = await admin
-      .from("mentor_assignments")
-      .select("id")
-      .eq("mentor_user_id", mentor.id)
-      .eq("employee_number", menteeEmp)
-      .maybeSingle();
+    const assignmentLookup = mentorUserId
+      ? await admin
+          .from("mentor_assignments")
+          .select("id")
+          .eq("mentor_user_id", mentorUserId)
+          .eq("employee_number", menteeEmp)
+          .maybeSingle()
+      : await admin
+          .from("mentor_assignments")
+          .select("id")
+          .is("mentor_user_id", null)
+          .eq("mentor_employee_number", mentorEmp)
+          .eq("employee_number", menteeEmp)
+          .maybeSingle();
+
+    const { data: assignmentRow, error: assignmentLookupErr } = assignmentLookup;
 
     if (assignmentLookupErr || !assignmentRow?.id) {
       results.push({

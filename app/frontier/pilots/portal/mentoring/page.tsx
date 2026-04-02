@@ -320,9 +320,9 @@ export default async function MentoringPage({
   let emptyHeading: string;
   let emptyBody: string;
   if (isMentor) {
-    emptyHeading = "You're Ready to Mentor";
+    emptyHeading = "You're currently active as a mentor";
     emptyBody =
-      "You are active in the mentoring program, but no mentees have been assigned yet.";
+      "You do not have any assigned mentees at this time. Please contact the Program Manager if you need a new assignment.";
   } else if (isFirstYear) {
     emptyHeading = "Need a Mentor?";
     emptyBody =

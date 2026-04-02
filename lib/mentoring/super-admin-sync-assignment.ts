@@ -13,15 +13,37 @@ export type UpsertMentorAssignmentFromSuperAdminResult =
   | { error: string }
   | { created: boolean; updated: boolean };
 
+const EXISTING_SELECT =
+  "id, hire_date, notes, mentee_display_name, mentee_user_id, active, mentee_personal_email, mentee_phone, mentor_user_id, mentor_employee_number" as const;
+
+type MentorAssignmentExistingRow = {
+  id: string;
+  hire_date: string | null;
+  notes: string | null;
+  mentee_display_name: string | null;
+  mentee_user_id: string | null;
+  active: boolean | null;
+  mentee_personal_email: string | null;
+  mentee_phone: string | null;
+  mentor_user_id: string | null;
+  mentor_employee_number: string | null;
+};
+
 /**
  * Creates or updates mentor_assignments so the Mentoring portal (getMentorAssignments)
  * returns a row for this mentor. Uses mentee employee_number + tenant to resolve mentee profile.
  * Called from Super Admin user save when Mentor is enabled and mentee employee # is provided.
+ *
+ * When `mentorUserId` is null (staged mentor / import), `mentorEmployeeNumber` must be non-empty
+ * after trim. When `mentorUserId` is set, `mentorEmployeeNumber` is optional and falls back to
+ * the mentor profile's `employee_number`.
  */
 export async function upsertMentorAssignmentFromSuperAdmin(
   admin: SupabaseClient,
   params: {
-    mentorUserId: string;
+    mentorUserId: string | null;
+    /** Required when `mentorUserId` is null. Optional when live; falls back to profile.employee_number. */
+    mentorEmployeeNumber?: string | null;
     menteeEmployeeNumber: string;
     tenant: string;
     hireDate?: string | null;
@@ -52,27 +74,72 @@ export async function upsertMentorAssignmentFromSuperAdmin(
       error: `No profile in this tenant has employee number "${menteeEmp}".`,
     };
   }
-  if (mentee.id === params.mentorUserId) {
-    return { error: "Mentor and mentee cannot be the same user." };
+
+  const mentorUserId = params.mentorUserId;
+
+  let mentorEmpForRow: string | null = null;
+  if (mentorUserId) {
+    if (mentee.id === mentorUserId) {
+      return { error: "Mentor and mentee cannot be the same user." };
+    }
+    const fromParam =
+      params.mentorEmployeeNumber != null && String(params.mentorEmployeeNumber).trim() !== ""
+        ? String(params.mentorEmployeeNumber).trim()
+        : null;
+    if (fromParam) {
+      mentorEmpForRow = fromParam;
+    } else {
+      const { data: mp } = await admin
+        .from("profiles")
+        .select("employee_number")
+        .eq("id", mentorUserId)
+        .maybeSingle();
+      const raw = (mp?.employee_number as string | null | undefined) ?? null;
+      mentorEmpForRow = raw != null && String(raw).trim() !== "" ? String(raw).trim() : null;
+    }
+  } else {
+    const raw = params.mentorEmployeeNumber;
+    const me = raw != null ? String(raw).trim() : "";
+    if (!me) {
+      return { error: "Mentor employee number is required when the mentor does not have a live profile." };
+    }
+    mentorEmpForRow = me;
+    if (me === menteeEmp) {
+      return { error: "Mentor and mentee cannot be the same employee number." };
+    }
   }
 
   const assignedAt = new Date().toISOString();
 
-  const { data: existing, error: findErr } = await admin
-    .from("mentor_assignments")
-    .select(
-      "id, hire_date, notes, mentee_display_name, mentee_user_id, active, mentee_personal_email, mentee_phone"
-    )
-    .eq("mentor_user_id", params.mentorUserId)
-    .eq("employee_number", menteeEmp)
-    .maybeSingle();
+  let existing: MentorAssignmentExistingRow | null = null;
 
-  if (findErr) return { error: findErr.message };
+  if (mentorUserId) {
+    const { data, error: findErr } = await admin
+      .from("mentor_assignments")
+      .select(EXISTING_SELECT)
+      .eq("mentor_user_id", mentorUserId)
+      .eq("employee_number", menteeEmp)
+      .maybeSingle();
+    if (findErr) return { error: findErr.message };
+    existing = data as MentorAssignmentExistingRow | null;
+  } else {
+    const { data, error: findErr } = await admin
+      .from("mentor_assignments")
+      .select(EXISTING_SELECT)
+      .is("mentor_user_id", null)
+      .eq("mentor_employee_number", mentorEmpForRow)
+      .eq("employee_number", menteeEmp)
+      .maybeSingle();
+    if (findErr) return { error: findErr.message };
+    existing = data as MentorAssignmentExistingRow | null;
+  }
 
   const updatePayload: {
     mentee_user_id: string;
     active: boolean;
     assigned_at: string;
+    mentor_user_id: string | null;
+    mentor_employee_number: string | null;
     hire_date?: string | null;
     notes?: string | null;
     mentee_display_name?: string;
@@ -82,6 +149,8 @@ export async function upsertMentorAssignmentFromSuperAdmin(
     mentee_user_id: mentee.id,
     active: true,
     assigned_at: assignedAt,
+    mentor_user_id: mentorUserId,
+    mentor_employee_number: mentorEmpForRow,
   };
   if (params.hireDate !== undefined) {
     const h = params.hireDate ?? "";
@@ -104,7 +173,8 @@ export async function upsertMentorAssignmentFromSuperAdmin(
   }
 
   const insertPayload: {
-    mentor_user_id: string;
+    mentor_user_id: string | null;
+    mentor_employee_number: string | null;
     mentee_user_id: string;
     employee_number: string;
     active: boolean;
@@ -115,7 +185,8 @@ export async function upsertMentorAssignmentFromSuperAdmin(
     mentee_personal_email?: string | null;
     mentee_phone?: string | null;
   } = {
-    mentor_user_id: params.mentorUserId,
+    mentor_user_id: mentorUserId,
+    mentor_employee_number: mentorEmpForRow,
     mentee_user_id: mentee.id,
     employee_number: menteeEmp,
     active: true,
@@ -144,7 +215,10 @@ export async function upsertMentorAssignmentFromSuperAdmin(
 
   if (existing?.id) {
     let dataChanged =
-      existing.mentee_user_id !== mentee.id || existing.active !== true;
+      existing.mentee_user_id !== mentee.id ||
+      existing.active !== true ||
+      existing.mentor_user_id !== mentorUserId ||
+      !eqAssignmentField(existing.mentor_employee_number, mentorEmpForRow);
 
     if (!dataChanged) {
       if ("hire_date" in updatePayload && !eqAssignmentField(existing.hire_date, updatePayload.hire_date)) {

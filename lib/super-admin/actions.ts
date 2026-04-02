@@ -5,6 +5,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { gateSuperAdmin } from "./gate";
 import { upsertMentorAssignmentFromSuperAdmin } from "@/lib/mentoring/super-admin-sync-assignment";
 import {
+  isProfileEmployeeNumberTaken,
+  PROFILE_EMPLOYEE_NUMBER_TAKEN_ERROR,
+} from "@/lib/profiles/employee-number-taken";
+import {
   createMilestonesForAssignment,
   getMilestoneScheduleForHireDate,
   syncMentorshipMilestoneDueDatesFromHireForAssignment,
@@ -1295,12 +1299,13 @@ export async function updateSuperAdminUserAccess(
 
   const { data: target, error: fetchErr } = await admin
     .from("profiles")
-    .select("role, tenant")
+    .select("role, tenant, portal")
     .eq("id", userId)
     .single();
   if (fetchErr || !target) return { error: "User not found" };
 
   const mentorTenant = String(target.tenant ?? "frontier").trim() || "frontier";
+  const targetPortal = String(target.portal ?? "pilots").trim() || "pilots";
 
   const targetIsSuperAdmin = target.role === "super_admin";
   const canChangeSuperAdmin = data.super_admin !== undefined;
@@ -1325,6 +1330,21 @@ export async function updateSuperAdminUserAccess(
           ? "super_admin"
           : data.role;
   const is_admin = data.is_admin;
+
+  const empTrimmedForCheck =
+    data.employee_number != null && String(data.employee_number).trim() !== ""
+      ? String(data.employee_number).trim()
+      : null;
+  if (empTrimmedForCheck) {
+    const takenRes = await isProfileEmployeeNumberTaken(admin, {
+      tenant: mentorTenant,
+      portal: targetPortal,
+      employeeNumberTrimmed: empTrimmedForCheck,
+      excludeProfileId: userId,
+    });
+    if (takenRes.error) return { error: takenRes.error };
+    if (takenRes.taken) return { error: PROFILE_EMPLOYEE_NUMBER_TAKEN_ERROR };
+  }
 
   const { error } = await admin
     .from("profiles")

@@ -8,6 +8,7 @@ import { getProfile, type Profile } from "@/lib/profile";
 import { fetchAuthLastSignInAtByUserId } from "@/lib/super-admin/auth-last-sign-in-map";
 import { ROLES, type Role } from "@/lib/rbac";
 import { linkMenteeToAssignments } from "@/lib/mentoring/link-mentee-to-assignments";
+import { linkMentorToAssignments } from "@/lib/mentoring/link-mentor-to-assignments";
 import { linkMentorToPreload } from "@/lib/mentoring/link-mentor-to-preload";
 import { isMentorWorkspaceStatus } from "@/lib/mentoring/mentor-workspace-status";
 import { isValidMentorNextCheckInYmd } from "@/lib/mentoring/mentor-next-check-in-date";
@@ -331,6 +332,7 @@ export async function getMentorAssignments(): Promise<{
   if (!profile) return { assignments: [], error: "Not signed in" };
 
   await linkMenteeToAssignments(profile.id, profile.employee_number);
+  await linkMentorToAssignments(profile.id, profile.employee_number);
   if (profile.employee_number?.trim() && profile.tenant?.trim()) {
     await linkMentorToPreload(profile.id, profile.employee_number, profile.tenant);
   }
@@ -673,6 +675,7 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
     return { detail: null, milestones: [], checkIns: [], menteeMilestoneUpdates: [], error: "Not signed in" };
 
   await linkMenteeToAssignments(profile.id, profile.employee_number);
+  await linkMentorToAssignments(profile.id, profile.employee_number);
   if (profile.employee_number?.trim() && profile.tenant?.trim()) {
     await linkMentorToPreload(profile.id, profile.employee_number, profile.tenant);
   }
@@ -1305,6 +1308,7 @@ export async function completeMentorshipMilestone(
   if (!profile) return { error: "Not signed in" };
 
   await linkMenteeToAssignments(profile.id, profile.employee_number);
+  await linkMentorToAssignments(profile.id, profile.employee_number);
   if (profile.employee_number?.trim() && profile.tenant?.trim()) {
     await linkMentorToPreload(profile.id, profile.employee_number, profile.tenant);
   }
@@ -1349,6 +1353,7 @@ export async function updateCompletedMentorshipMilestone(
   if (!profile) return { error: "Not signed in" };
 
   await linkMenteeToAssignments(profile.id, profile.employee_number);
+  await linkMentorToAssignments(profile.id, profile.employee_number);
   if (profile.employee_number?.trim() && profile.tenant?.trim()) {
     await linkMentorToPreload(profile.id, profile.employee_number, profile.tenant);
   }

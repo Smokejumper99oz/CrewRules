@@ -12,6 +12,10 @@ import type {
   SuperAdminUserRow,
   UpdateSuperAdminUserAccessInput,
 } from "@/lib/super-admin/actions";
+import {
+  isProfileEmployeeNumberTaken,
+  PROFILE_EMPLOYEE_NUMBER_TAKEN_ERROR,
+} from "@/lib/profiles/employee-number-taken";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -34,6 +38,7 @@ export async function getFrontierPilotAdminUsers(): Promise<SuperAdminUserRow[]>
     .eq("tenant", TENANT)
     .eq("portal", PORTAL)
     .neq("role", "super_admin")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -44,15 +49,21 @@ export async function getFrontierPilotAdminUsers(): Promise<SuperAdminUserRow[]>
 
   const { data: assignRows } = await admin
     .from("mentor_assignments")
-    .select("mentee_user_id, mentor_user_id")
+    .select("mentee_user_id, mentor_user_id, mentor_employee_number")
     .eq("active", true)
     .not("mentee_user_id", "is", null);
 
   const isMenteeIds = new Set<string>();
   for (const r of assignRows ?? []) {
     const mid = (r as { mentee_user_id: string | null }).mentee_user_id;
-    const mur = (r as { mentor_user_id: string }).mentor_user_id;
-    if (mid && userIds.has(mid) && userIds.has(mur)) {
+    const mur = (r as { mentor_user_id: string | null }).mentor_user_id;
+    const mentorEmp = String(
+      (r as { mentor_employee_number?: string | null }).mentor_employee_number ?? ""
+    ).trim();
+    if (!mid || !userIds.has(mid)) continue;
+    const hasLiveMentorInTenant = Boolean(mur && userIds.has(mur));
+    const hasStagedMentor = mentorEmp.length > 0;
+    if (hasLiveMentorInTenant || hasStagedMentor) {
       isMenteeIds.add(mid);
     }
   }
@@ -137,6 +148,21 @@ export async function updateFrontierPilotAdminUserAccess(
     effectiveRole = "tenant_admin";
   } else {
     effectiveRole = data.role;
+  }
+
+  const empTrimmedForCheck =
+    data.employee_number != null && String(data.employee_number).trim() !== ""
+      ? String(data.employee_number).trim()
+      : null;
+  if (empTrimmedForCheck) {
+    const takenRes = await isProfileEmployeeNumberTaken(admin, {
+      tenant: TENANT,
+      portal: PORTAL,
+      employeeNumberTrimmed: empTrimmedForCheck,
+      excludeProfileId: userId,
+    });
+    if (takenRes.error) return { error: takenRes.error };
+    if (takenRes.taken) return { error: PROFILE_EMPLOYEE_NUMBER_TAKEN_ERROR };
   }
 
   const { error } = await admin
