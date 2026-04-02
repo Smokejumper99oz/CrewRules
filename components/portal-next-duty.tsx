@@ -240,86 +240,10 @@ export async function PortalNextDuty({
             dutyDate = displayDateStr ?? nowFallback;
           }
 
-          const nextDutyDate = addDay(dutyDate);
           const reportTimeIso = buildReportTimeIso(reportTimeLocal, dutyDate, baseTimezone);
           if (!reportTimeIso) return null;
 
           const legsForDutyDate = getLegsForDate(event.legs ?? [], dutyDate, tripDates, baseTimezone);
-          const legsForNextDutyDate = getLegsForDate(event.legs ?? [], nextDutyDate, tripDates, baseTimezone);
-
-          const overnightCrossing = legsForDutyDate.some((leg) => {
-            const ld = legDates.find(
-              (x) => x.leg.origin === leg.origin && x.leg.destination === leg.destination
-            );
-            return ld?.arrivalDate === nextDutyDate;
-          });
-
-          const MAX_GAP_MINUTES = 6 * 60;
-          let overnightAnchorLeg: (typeof legsForDutyDate)[0] | null = null;
-          let continuationLegs: typeof legsForNextDutyDate = [];
-
-          if (overnightCrossing && legsForNextDutyDate.length > 0) {
-            const overnightCandidates = legsForDutyDate
-              .map((leg) => {
-                const ld = legDates.find(
-                  (x) => x.leg.origin === leg.origin && x.leg.destination === leg.destination
-                );
-                return ld?.arrivalDate === nextDutyDate ? { leg, ld } : null;
-              })
-              .filter((x): x is { leg: (typeof legsForDutyDate)[0]; ld: { leg: (typeof legsForDutyDate)[0]; departureDate: string | null; arrivalDate: string | null } } => x != null);
-            overnightAnchorLeg =
-              overnightCandidates.length > 0
-                ? overnightCandidates
-                    .sort((a, b) => {
-                      const aTime = (a.leg.arrTime ?? "").replace(":", "").padStart(4, "0");
-                      const bTime = (b.leg.arrTime ?? "").replace(":", "").padStart(4, "0");
-                      return (bTime || "0000").localeCompare(aTime || "0000");
-                    })[0].leg
-                : null;
-
-            if (overnightAnchorLeg) {
-              const anchorLd = legDates.find(
-                (x) =>
-                  x.leg.origin === overnightAnchorLeg!.origin &&
-                  x.leg.destination === overnightAnchorLeg!.destination
-              );
-              const anchorArrRaw = (overnightAnchorLeg.arrTime ?? "00:00").replace(":", "").padStart(4, "0");
-              const anchorArrNorm = `${anchorArrRaw.slice(0, 2)}:${anchorArrRaw.slice(-2)}`;
-              let lastArrIso = fromZonedTime(
-                `${anchorLd?.arrivalDate ?? nextDutyDate}T${anchorArrNorm}:00`,
-                baseTimezone
-              ).getTime();
-
-              const nextDayWithDates = legsForNextDutyDate
-                .map((leg) => {
-                  const ld = legDates.find(
-                    (x) => x.leg.origin === leg.origin && x.leg.destination === leg.destination
-                  );
-                  return ld ? { leg, departureDate: ld.departureDate, arrivalDate: ld.arrivalDate } : null;
-                })
-                .filter((x): x is { leg: (typeof legsForNextDutyDate)[0]; departureDate: string; arrivalDate: string | null } => x != null)
-                .sort((a, b) => {
-                  if (a.departureDate !== b.departureDate) return a.departureDate.localeCompare(b.departureDate);
-                  const aTime = (a.leg.depTime ?? "").replace(":", "").padStart(4, "0");
-                  const bTime = (b.leg.depTime ?? "").replace(":", "").padStart(4, "0");
-                  return (aTime || "0000").localeCompare(bTime || "0000");
-                });
-
-              for (const { leg, departureDate, arrivalDate } of nextDayWithDates) {
-                const depRaw = (leg.depTime ?? "00:00").replace(":", "").padStart(4, "0");
-                const depNorm = `${depRaw.slice(0, 2)}:${depRaw.slice(-2)}`;
-                const depIso = fromZonedTime(`${departureDate}T${depNorm}:00`, baseTimezone).getTime();
-                const gapMinutes = (depIso - lastArrIso) / 60_000;
-                if (gapMinutes > MAX_GAP_MINUTES) break;
-                continuationLegs.push(leg);
-                if (arrivalDate) {
-                  const arrRaw = (leg.arrTime ?? "00:00").replace(":", "").padStart(4, "0");
-                  const arrNorm = `${arrRaw.slice(0, 2)}:${arrRaw.slice(-2)}`;
-                  lastArrIso = fromZonedTime(`${arrivalDate}T${arrNorm}:00`, baseTimezone).getTime();
-                }
-              }
-            }
-          }
 
           const reportTimeMs = new Date(reportTimeIso).getTime();
           const filteredLegsForDutyDate = legsForDutyDate.filter((leg) => {
@@ -332,7 +256,7 @@ export async function PortalNextDuty({
           });
 
           const seenKeys = new Set<string>();
-          const dutyPeriodLegs = [...filteredLegsForDutyDate, ...continuationLegs].filter((leg) => {
+          const dutyPeriodLegs = filteredLegsForDutyDate.filter((leg) => {
             const key = `${leg.origin}-${leg.destination}-${leg.depTime ?? ""}-${leg.arrTime ?? ""}`;
             if (seenKeys.has(key)) return false;
             seenKeys.add(key);
