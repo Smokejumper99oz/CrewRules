@@ -272,7 +272,8 @@ export default async function MenteeDetailPage({ params }: PageProps) {
 
             if (!detail.isMentorView && m.milestone_type === "initial_assignment") {
               const initialComplete = Boolean(m.completed_date?.trim());
-              const hasMentor = Boolean(detail.mentor_user_id?.trim());
+              const hasMentor =
+                Boolean(detail.mentor_user_id?.trim()) || Boolean(detail.staged_mentor_account_pending);
               if (initialComplete) {
                 return {
                   ...base,

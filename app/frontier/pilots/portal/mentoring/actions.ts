@@ -64,7 +64,7 @@ export async function submitMentorshipProgramRequest(
 
 export type MentorAssignmentRow = {
   id: string;
-  mentor_user_id: string;
+  mentor_user_id: string | null;
   mentee_user_id: string;
   isMentorView: boolean;
   mentee_full_name: string | null;
@@ -91,6 +91,15 @@ export type MentorAssignmentRow = {
   mentor_workspace_next_check_in_date: string | null;
   /** Active mentee rows only: mentor `Profile` fields for `SharedMentoringCardPreview` (same shape as settings preview). */
   mentor_shared_card_profile: Profile | null;
+  /**
+   * Staged mentor (assignment by `mentor_employee_number` before mentor has a CrewRules account).
+   * Populated only for active mentee-view rows with null `mentor_user_id` and non-empty `mentor_employee_number`.
+   */
+  staged_mentor_full_name: string | null;
+  staged_mentor_phone: string | null;
+  staged_mentor_contact_email: string | null;
+  /** True when this row is an active mentee assignment with a staged mentor (no linked `mentor_user_id` yet). */
+  staged_mentor_account_pending: boolean;
 };
 
 const TODAY_STR = new Date().toISOString().slice(0, 10);
@@ -135,6 +144,56 @@ function mentorProfileForSharedMentoringCard(
     created_at: "1970-01-01T00:00:00.000Z",
     updated_at: "1970-01-01T00:00:00.000Z",
   };
+}
+
+type StagedMentorPreloadFields = {
+  full_name: string | null;
+  phone: string | null;
+  contact_email: string | null;
+};
+
+/**
+ * Service-role read of `mentor_preload` for mentee display only.
+ * Callers must pass employee numbers taken from assignments already authorized for the current user as mentee.
+ */
+async function fetchStagedMentorPreloadByEmployeeNumbers(
+  tenant: string,
+  employeeNumbers: string[]
+): Promise<Map<string, StagedMentorPreloadFields>> {
+  const ten = tenant.trim();
+  const nums = [...new Set(employeeNumbers.map((e) => e.trim()).filter(Boolean))];
+  if (!ten || nums.length === 0) return new Map();
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("mentor_preload")
+    .select("employee_number, full_name, phone, personal_email, work_email")
+    .eq("tenant", ten)
+    .in("employee_number", nums);
+
+  const map = new Map<string, StagedMentorPreloadFields>();
+  if (error || !data) return map;
+
+  for (const raw of data) {
+    const row = raw as {
+      employee_number: string | null;
+      full_name: string | null;
+      phone: string | null;
+      personal_email: string | null;
+      work_email: string | null;
+    };
+    const emp = row.employee_number?.trim();
+    if (!emp) continue;
+    const personal = row.personal_email?.trim() ?? "";
+    const work = row.work_email?.trim() ?? "";
+    const contact_email = personal || work || null;
+    map.set(emp, {
+      full_name: row.full_name?.trim() || null,
+      phone: row.phone?.trim() || null,
+      contact_email,
+    });
+  }
+  return map;
 }
 
 /** Parses `get_mentor_profile_for_mentee_card` JSON when PostgREST mentor embed is null for mentees. */
@@ -347,6 +406,7 @@ export async function getMentorAssignments(): Promise<{
         `
         id,
         mentor_user_id,
+        mentor_employee_number,
         mentee_user_id,
         hire_date,
         active,
@@ -363,7 +423,8 @@ export async function getMentorAssignments(): Promise<{
     if (assignmentsError) return { assignments: [], error: assignmentsError.message };
     const rows = (assignmentsData ?? []) as unknown as Array<{
       id: string;
-      mentor_user_id: string;
+      mentor_user_id: string | null;
+      mentor_employee_number: string | null;
       mentee_user_id: string;
       hire_date: string | null;
       active: boolean | null;
@@ -407,8 +468,9 @@ export async function getMentorAssignments(): Promise<{
       const isMentorViewRow = row.mentor_user_id === profile.id;
       const mentorLooksMissing =
         row.mentor == null || !String(row.mentor.full_name ?? "").trim();
-      if (!isMentorViewRow && row.active === true && row.mentor_user_id && mentorLooksMissing) {
-        mentorIdsNeedingRpc.add(row.mentor_user_id);
+      const mur = row.mentor_user_id?.trim();
+      if (!isMentorViewRow && row.active === true && mur && mentorLooksMissing) {
+        mentorIdsNeedingRpc.add(mur);
       }
     }
     for (const mentorId of mentorIdsNeedingRpc) {
@@ -419,6 +481,24 @@ export async function getMentorAssignments(): Promise<{
       const parsed = mentorProfileFromMenteeCardRpc(rpcData);
       if (parsed) rpcMentorByUserId.set(mentorId, parsed);
     }
+
+    const stagedMentorEmpNums: string[] = [];
+    for (const row of rows) {
+      const isMentorViewRow = row.mentor_user_id === profile.id;
+      if (
+        !isMentorViewRow &&
+        row.active === true &&
+        row.mentee_user_id === profile.id &&
+        !row.mentor_user_id?.trim() &&
+        row.mentor_employee_number?.trim()
+      ) {
+        stagedMentorEmpNums.push(row.mentor_employee_number.trim());
+      }
+    }
+    const stagedPreloadByEmp = await fetchStagedMentorPreloadByEmployeeNumbers(
+      profile.tenant?.trim() ?? "",
+      stagedMentorEmpNums
+    );
 
     // Query 2: next upcoming milestone (milestone_type + due_date where completed_date is null)
     const { data: milestonesData } = await supabase
@@ -545,7 +625,8 @@ export async function getMentorAssignments(): Promise<{
         latestCheckInByAssignment.get(row.id)
       );
       const embedM = row.mentor;
-      const rpcM = rpcMentorByUserId.get(row.mentor_user_id) ?? null;
+      const mid = row.mentor_user_id?.trim() || null;
+      const rpcM = mid ? rpcMentorByUserId.get(mid) ?? null : null;
       const m =
         embedM && String(embedM.full_name ?? "").trim()
           ? embedM
@@ -555,9 +636,17 @@ export async function getMentorAssignments(): Promise<{
       const mentorPhone = mp || p || null;
       const mentorEmail = m?.mentor_contact_email?.trim() || null;
       const ws = isMentorView ? workspaceByAssignment.get(row.id) : undefined;
+      const mentorEmp = row.mentor_employee_number?.trim() ?? null;
+      const isStagedMenteeAssignment =
+        !isMentorView &&
+        row.active === true &&
+        row.mentee_user_id === profile.id &&
+        !mid &&
+        Boolean(mentorEmp);
+      const stagedPreload = mentorEmp ? stagedPreloadByEmp.get(mentorEmp) ?? null : null;
       const mentor_shared_card_profile =
-        !isMentorView && row.active === true && row.mentor_user_id && m
-          ? mentorProfileForSharedMentoringCard(row.mentor_user_id, m, profile.portal)
+        !isMentorView && row.active === true && mid && m
+          ? mentorProfileForSharedMentoringCard(mid, m, profile.portal)
           : null;
       return {
         id: row.id,
@@ -582,6 +671,10 @@ export async function getMentorAssignments(): Promise<{
         mentor_workspace_private_note: ws ? ws.private_note : null,
         mentor_workspace_next_check_in_date: ws?.next_check_in_date ?? null,
         mentor_shared_card_profile,
+        staged_mentor_full_name: isStagedMenteeAssignment ? stagedPreload?.full_name ?? null : null,
+        staged_mentor_phone: isStagedMenteeAssignment ? stagedPreload?.phone ?? null : null,
+        staged_mentor_contact_email: isStagedMenteeAssignment ? stagedPreload?.contact_email ?? null : null,
+        staged_mentor_account_pending: isStagedMenteeAssignment,
       };
     });
 
@@ -612,7 +705,9 @@ export async function getMentorAssignments(): Promise<{
 
 export type MenteeDetailRow = {
   id: string;
-  mentor_user_id: string;
+  mentor_user_id: string | null;
+  /** Staged mentor org id when `mentor_user_id` is null. */
+  mentor_employee_number: string | null;
   mentee_user_id: string;
   isMentorView: boolean;
   mentee_full_name: string | null;
@@ -637,6 +732,10 @@ export type MenteeDetailRow = {
   /** Mentor-only workspace; null for mentee view or when row missing. */
   mentor_workspace_mentoring_status: string | null;
   mentor_workspace_next_check_in_date: string | null;
+  staged_mentor_full_name: string | null;
+  staged_mentor_phone: string | null;
+  staged_mentor_contact_email: string | null;
+  staged_mentor_account_pending: boolean;
 };
 
 export type MenteeMilestoneRow = {
@@ -689,6 +788,7 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
         `
         id,
         mentor_user_id,
+        mentor_employee_number,
         mentee_user_id,
         hire_date,
         active,
@@ -717,7 +817,8 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
 
     const row = assignmentData as unknown as {
       id: string;
-      mentor_user_id: string;
+      mentor_user_id: string | null;
+      mentor_employee_number: string | null;
       mentee_user_id: string;
       hire_date: string | null;
       active: boolean | null;
@@ -853,7 +954,7 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
 
     const nextUpcoming = milestones.find((m) => !m.completed_date);
 
-    const isMentorView = row.mentor_user_id === profile.id;
+    const isMentorView = row.mentor_user_id != null && row.mentor_user_id === profile.id;
 
     let mentorWorkspaceMentoringStatus: string | null = null;
     let mentorWorkspaceNextCheckInDate: string | null = null;
@@ -918,9 +1019,26 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
       }
     }
 
+    const mentorEmpDetail = row.mentor_employee_number?.trim() ?? null;
+    const isStagedMenteeDetail =
+      !isMentorView && row.active === true && !row.mentor_user_id?.trim() && Boolean(mentorEmpDetail);
+    let stagedFull: string | null = null;
+    let stagedPhone: string | null = null;
+    let stagedEmail: string | null = null;
+    if (isStagedMenteeDetail && mentorEmpDetail && profile.tenant?.trim()) {
+      const pre = await fetchStagedMentorPreloadByEmployeeNumbers(profile.tenant.trim(), [mentorEmpDetail]);
+      const hit = pre.get(mentorEmpDetail);
+      if (hit) {
+        stagedFull = hit.full_name;
+        stagedPhone = hit.phone;
+        stagedEmail = hit.contact_email;
+      }
+    }
+
     const detail: MenteeDetailRow = {
       id: row.id,
       mentor_user_id: row.mentor_user_id,
+      mentor_employee_number: mentorEmpDetail,
       mentee_user_id: row.mentee_user_id,
       isMentorView,
       mentee_full_name:
@@ -941,6 +1059,10 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
       mentee_base_airport: menteeBaseAirport,
       mentor_workspace_mentoring_status: mentorWorkspaceMentoringStatus,
       mentor_workspace_next_check_in_date: mentorWorkspaceNextCheckInDate,
+      staged_mentor_full_name: isStagedMenteeDetail ? stagedFull : null,
+      staged_mentor_phone: isStagedMenteeDetail ? stagedPhone : null,
+      staged_mentor_contact_email: isStagedMenteeDetail ? stagedEmail : null,
+      staged_mentor_account_pending: isStagedMenteeDetail,
     };
 
     return { detail, milestones, checkIns, menteeMilestoneUpdates };

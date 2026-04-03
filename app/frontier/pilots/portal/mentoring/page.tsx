@@ -9,6 +9,7 @@ import {
   MentorMenteeWorkspaceNotesButton,
   MentorWorkspaceStatusPill,
 } from "@/components/mentoring/mentor-mentee-card-workspace";
+import { formatUsPhoneStored } from "@/lib/format-us-phone";
 
 const SECTION_CLASS =
   "rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]";
@@ -178,6 +179,45 @@ function AssignmentStatusPill({ a }: { a: MentorAssignmentRow }) {
   );
 }
 
+/** Staged mentor: assignment by employee number before mentor has a CrewRules profile. */
+function StagedMentorPlaceholderCard({ a }: { a: MentorAssignmentRow }) {
+  const title = a.staged_mentor_full_name?.trim() || "Assigned mentor";
+  const phone = formatUsPhoneStored(a.staged_mentor_phone);
+  const email = a.staged_mentor_contact_email?.trim() || null;
+  return (
+    <div
+      className={`${CARD_CLASS} border-l-[3px] border-l-amber-400/45 p-4 sm:p-5 flex flex-col gap-3`}
+    >
+      <div>
+        <h3 className="text-base font-semibold text-white">{title}</h3>
+        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-amber-200/90">Assigned mentor</p>
+      </div>
+      <p className="text-sm text-slate-300 leading-relaxed">
+        Your mentor has been assigned, but they have not created a CrewRules account yet.
+      </p>
+      {phone || email ? (
+        <div className="space-y-1.5 text-sm text-slate-400">
+          {phone ? (
+            <p>
+              <span className="text-slate-500">Phone: </span>
+              <span className="text-slate-200 tabular-nums">{phone}</span>
+            </p>
+          ) : null}
+          {email ? (
+            <p className="break-all">
+              <span className="text-slate-500">Contact: </span>
+              <span className="text-slate-200">{email}</span>
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      <p className="text-xs text-slate-500 leading-relaxed">
+        You will see their full mentoring profile here once they join CrewRules.
+      </p>
+    </div>
+  );
+}
+
 /** First-year mentee with no assignment: matches mentee card chrome without inventing mentor contact. */
 function UnassignedMentorPlaceholderCard() {
   return (
@@ -211,6 +251,8 @@ function MenteeCard({ a }: { a: MentorAssignmentRow }) {
       <div className={`${CARD_CLASS} p-4 sm:p-5 flex flex-col gap-4`}>
         {a.mentor_shared_card_profile ? (
           <SharedMentoringCardPreview profile={a.mentor_shared_card_profile} variant="portal-mentee" />
+        ) : a.staged_mentor_account_pending ? (
+          <StagedMentorPlaceholderCard a={a} />
         ) : a.mentee_status === "active" ? (
           <p className="text-sm text-slate-400">No mentor assigned yet.</p>
         ) : null}

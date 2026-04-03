@@ -13,8 +13,44 @@ import type { CommuteFlight } from "@/lib/aviationstack";
 /** Cache version for commute_flight_cache. Bump to purge old entries (e.g. 3-flight cache). */
 const CACHE_VERSION = "v3";
 
+/** Shown when AviationStack fails but AeroDataBox still returns flights (both API paths). Never replaces AS `notice` when `asRes.ok`. */
+const COMMUTE_PRIMARY_PROVIDER_FALLBACK_NOTICE =
+  "Primary flight provider unavailable; showing backup schedules.";
+
 /** Derived operationalStatus logic version. Bump when deriveOperationalStatus rules change. Cache read always re-derives; this documents the current rule set. */
 const DERIVED_STATUS_VERSION = 1;
+
+/**
+ * `commute_flight_cache.data` jsonb: historically a bare `CommuteFlight[]`; now `{ flights, notice }`
+ * so provider notices survive cache reads. Legacy rows remain a top-level array until refreshed.
+ */
+function readCommuteFlightCachePayload(data: unknown): { flights: CommuteFlight[]; notice: string | undefined } {
+  if (data == null) return { flights: [], notice: undefined };
+  if (Array.isArray(data)) {
+    return { flights: data as CommuteFlight[], notice: undefined };
+  }
+  if (typeof data === "object" && data !== null) {
+    const flightsRaw = (data as { flights?: unknown }).flights;
+    if (Array.isArray(flightsRaw)) {
+      const n = (data as { notice?: string | null }).notice;
+      return {
+        flights: flightsRaw as CommuteFlight[],
+        notice: n != null && String(n).trim() !== "" ? String(n) : undefined,
+      };
+    }
+  }
+  return { flights: [], notice: undefined };
+}
+
+function buildCommuteFlightCachePayload(
+  flights: CommuteFlight[],
+  notice: string | undefined
+): { flights: CommuteFlight[]; notice: string | null } {
+  return {
+    flights,
+    notice: notice != null && notice.trim() !== "" ? notice : null,
+  };
+}
 
 /** When Refresh is pressed, reuse DB cache if fetched within this window. Reduces API usage. */
 const REFRESH_CACHE_FRESHNESS_MS = 10 * 60 * 1000; // 10 minutes
@@ -401,10 +437,16 @@ export async function getCommuteFlights(input: {
         }
       }
 
+      const commuteDedupeNotice = asRes.ok
+        ? asRes.data.notice
+        : aerodataboxFlights.length > 0
+          ? COMMUTE_PRIMARY_PROVIDER_FALLBACK_NOTICE
+          : undefined;
+
       const merged = dedupeFlights(
         aviationstackFlights,
         aerodataboxFlights,
-        asRes.ok ? asRes.data.notice : undefined,
+        commuteDedupeNotice,
         origin,
         destination
       );
@@ -482,7 +524,7 @@ export async function getCommuteFlights(input: {
         destination,
         commute_date: input.date,
         cache_version: CACHE_VERSION,
-        data: flights,
+        data: buildCommuteFlightCachePayload(flights, notice),
         fetched_at: now.toISOString(),
       };
       const { error: upsertErr } = await admin
@@ -548,9 +590,10 @@ export async function getCommuteFlights(input: {
     console.error("Commute cache lookup failed", cacheErr);
   }
 
-  if (cached?.data && !input.forceRefresh) {
+  if (cached?.data != null && !input.forceRefresh) {
     const { originTz, destTz } = await getRouteTzs(origin, destination);
-    const cachedFlights = filterCodeShareFlights(cached.data as CommuteFlight[]);
+    const { flights: payloadFlights, notice: cachedNotice } = readCommuteFlightCachePayload(cached.data);
+    const cachedFlights = filterCodeShareFlights(payloadFlights);
     // Re-derive operationalStatus on cache read; do not trust cached value (DERIVED_STATUS_VERSION).
     const flights = cachedFlights.map((f) => {
       const normalized = normalizeFlightTiming(f, originTz, destTz);
@@ -639,7 +682,7 @@ export async function getCommuteFlights(input: {
       source: "cache" as const,
       flights,
       fetchedAt: cached.fetched_at ?? null,
-      notice: undefined,
+      notice: cachedNotice,
       originTz,
       destTz,
       debug:
@@ -719,10 +762,16 @@ export async function getCommuteFlights(input: {
         (adbRes as { ok: false; error: unknown }).error
       );
 
+    const commuteDedupeNotice = asRes.ok
+      ? asRes.data.notice
+      : aerodataboxFlights.length > 0
+        ? COMMUTE_PRIMARY_PROVIDER_FALLBACK_NOTICE
+        : undefined;
+
     const merged = dedupeFlights(
       aviationstackFlights,
       aerodataboxFlights,
-      asRes.ok ? asRes.data.notice : undefined,
+      commuteDedupeNotice,
       origin,
       destination
     );
@@ -801,7 +850,7 @@ export async function getCommuteFlights(input: {
       destination,
       commute_date: input.date,
       cache_version: CACHE_VERSION,
-      data: flights,
+      data: buildCommuteFlightCachePayload(flights, notice),
       fetched_at: now.toISOString(),
     };
     const { error: upsertErr } = await admin

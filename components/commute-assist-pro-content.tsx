@@ -2027,7 +2027,7 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
           )}
           {!homeList.length && !alternateList.length && !twoLegOptions.length && !(commuteTwoLegEnabled && twoLegFirstLegRoutes.length > 0) ? (
             <p className="text-xs text-slate-500">
-              {notice ? "Flight data temporarily unavailable. Use Refresh to try again." : "No commute options found in this window."}
+              {notice ? "No matching flights in this window." : "No commute options found in this window."}
             </p>
           ) : (
             <div ref={cardsTopRef} className="min-w-0 space-y-6">

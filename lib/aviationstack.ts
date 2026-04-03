@@ -46,6 +46,41 @@ export type FetchFlightsResult = {
   notice?: string;
 };
 
+/** Shown when AviationStack returns access/subscription blocks (avoid crashing dashboard / SSR). */
+const AVIATIONSTACK_UNAVAILABLE_NOTICE =
+  "Live flight data is temporarily unavailable. Commute assist and schedule details may be limited until service is restored.";
+
+/**
+ * When the provider blocks access (quota, subscription, disabled key), return empty flights + notice
+ * instead of throwing. Returns null if the response should be handled elsewhere (e.g. validation_error).
+ */
+function tryAviationStackUnavailableResult(status: number, body: string): FetchFlightsResult | null {
+  if (status === 401 || status === 403) {
+    return { flights: [], notice: AVIATIONSTACK_UNAVAILABLE_NOTICE };
+  }
+  if (status !== 400 && status !== 402) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(body) as { error?: { code?: string; message?: string } };
+    const code = String(parsed?.error?.code ?? "").toLowerCase();
+    const msg = String(parsed?.error?.message ?? "").toLowerCase();
+    if (
+      code === "api_access_blocked" ||
+      code.includes("access_restricted") ||
+      code.includes("function_access") ||
+      (msg.includes("subscription") && (msg.includes("upgrade") || msg.includes("plan"))) ||
+      (msg.includes("api access") && msg.includes("disabled")) ||
+      msg.includes("temporarily disabled")
+    ) {
+      return { flights: [], notice: AVIATIONSTACK_UNAVAILABLE_NOTICE };
+    }
+  } catch {
+    /* not JSON */
+  }
+  return null;
+}
+
 /** Strip timezone offset from AviationStack timestamp (scheduled times are airport-local). */
 function stripOffset(s: string): string {
   return s.replace(/[+-]\d{2}:\d{2}$|Z$/i, "").trim();
@@ -280,6 +315,11 @@ async function fetchTimetable(
 
     if (!res.ok) {
       const body = await res.text();
+      if (res.status === 429) {
+        return { flights: [], notice: "Flight data temporarily unavailable. Try again in a few minutes." };
+      }
+      const unavailable = tryAviationStackUnavailableResult(res.status, body);
+      if (unavailable) return unavailable;
       throw new Error(`AviationStack timetable failed: ${res.status} - ${body.slice(0, 200)}`);
     }
 
@@ -389,6 +429,8 @@ async function fetchFlightsSameDay(
           notice: "Flight data temporarily unavailable. Try again in a few minutes.",
         };
       }
+      const unavailable = tryAviationStackUnavailableResult(res.status, body);
+      if (unavailable) return unavailable;
       throw new Error(`AviationStack flights (same-day) failed: ${res.status} - ${body.slice(0, 200)}`);
     }
 
@@ -585,6 +627,9 @@ async function fetchFlightsFuture(
       };
     }
 
+    const unavailable = tryAviationStackUnavailableResult(res.status, body);
+    if (unavailable) return unavailable;
+
     // Gracefully handle Aviationstack future-date validation:
     // {"error":{"code":"validation_error","message":"Request failed with validation error","context":{"date":[{"key":"invalid_future_date","message":"The date must be above 2026-03-10"}]}}}
     if (res.status === 400) {
@@ -716,16 +761,18 @@ async function fetchFlightsHistorical(
       notice: "Flight data temporarily unavailable. Please try again later.",
     };
   }
-  if (!res.ok) {
-    const body = await res.text();
-    if (res.status === 429) {
-      return {
-        flights: [],
-        notice: "Flight data temporarily unavailable. Try again in a few minutes.",
-      };
+    if (!res.ok) {
+      const body = await res.text();
+      if (res.status === 429) {
+        return {
+          flights: [],
+          notice: "Flight data temporarily unavailable. Try again in a few minutes.",
+        };
+      }
+      const unavailable = tryAviationStackUnavailableResult(res.status, body);
+      if (unavailable) return unavailable;
+      throw new Error(`AviationStack flights failed: ${res.status} - ${body.slice(0, 200)}`);
     }
-    throw new Error(`AviationStack flights failed: ${res.status} - ${body.slice(0, 200)}`);
-  }
 
   const json = await res.json();
   if (!json.data) return { flights: [] };
