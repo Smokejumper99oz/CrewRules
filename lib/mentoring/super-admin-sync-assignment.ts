@@ -34,9 +34,12 @@ type MentorAssignmentExistingRow = {
  * returns a row for this mentor. Uses mentee employee_number + tenant to resolve mentee profile.
  * Called from Super Admin user save when Mentor is enabled and mentee employee # is provided.
  *
- * When `mentorUserId` is null (staged mentor / import), `mentorEmployeeNumber` must be non-empty
- * after trim. When `mentorUserId` is set, `mentorEmployeeNumber` is optional and falls back to
- * the mentor profile's `employee_number`.
+ * When `mentorUserId` is null and `mentorEmployeeNumber` is empty after trim, the assignment is **unassigned** (no mentor).
+ * When `mentorUserId` is null and `mentorEmployeeNumber` is non-empty, staged mentor rules apply.
+ * When `mentorUserId` is set, `mentorEmployeeNumber` is optional and falls back to the mentor profile's `employee_number`.
+ *
+ * `allowMenteeWithoutProfile` (default false): when true, allows `mentee_user_id` null if no profile exists yet (CSV preload);
+ * callers that must require a live mentee (admin user save) must omit this flag.
  */
 export async function upsertMentorAssignmentFromSuperAdmin(
   admin: SupabaseClient,
@@ -54,12 +57,16 @@ export async function upsertMentorAssignmentFromSuperAdmin(
     menteePersonalEmail?: string | null;
     /** When defined, persisted on assignment (trimmed; empty string → null). Omitted when undefined. */
     menteePhone?: string | null;
+    /** CSV / preload: allow assignment without a profiles row; mentee links on signup. */
+    allowMenteeWithoutProfile?: boolean;
   }
 ): Promise<UpsertMentorAssignmentFromSuperAdminResult> {
   const menteeEmp = params.menteeEmployeeNumber.trim();
   if (!menteeEmp) {
     return { error: "Mentee employee number is required to create a mentoring assignment." };
   }
+
+  const allowMenteeWithoutProfile = params.allowMenteeWithoutProfile === true;
 
   const { data: mentee, error: menteeErr } = await admin
     .from("profiles")
@@ -69,7 +76,8 @@ export async function upsertMentorAssignmentFromSuperAdmin(
     .maybeSingle();
 
   if (menteeErr) return { error: menteeErr.message };
-  if (!mentee?.id) {
+  const menteeIdResolved = mentee?.id ?? null;
+  if (!menteeIdResolved && !allowMenteeWithoutProfile) {
     return {
       error: `No profile in this tenant has employee number "${menteeEmp}".`,
     };
@@ -79,7 +87,7 @@ export async function upsertMentorAssignmentFromSuperAdmin(
 
   let mentorEmpForRow: string | null = null;
   if (mentorUserId) {
-    if (mentee.id === mentorUserId) {
+    if (menteeIdResolved && menteeIdResolved === mentorUserId) {
       return { error: "Mentor and mentee cannot be the same user." };
     }
     const fromParam =
@@ -101,11 +109,12 @@ export async function upsertMentorAssignmentFromSuperAdmin(
     const raw = params.mentorEmployeeNumber;
     const me = raw != null ? String(raw).trim() : "";
     if (!me) {
-      return { error: "Mentor employee number is required when the mentor does not have a live profile." };
-    }
-    mentorEmpForRow = me;
-    if (me === menteeEmp) {
-      return { error: "Mentor and mentee cannot be the same employee number." };
+      mentorEmpForRow = null;
+    } else {
+      mentorEmpForRow = me;
+      if (me === menteeEmp) {
+        return { error: "Mentor and mentee cannot be the same employee number." };
+      }
     }
   }
 
@@ -122,7 +131,7 @@ export async function upsertMentorAssignmentFromSuperAdmin(
       .maybeSingle();
     if (findErr) return { error: findErr.message };
     existing = data as MentorAssignmentExistingRow | null;
-  } else {
+  } else if (mentorEmpForRow) {
     const { data, error: findErr } = await admin
       .from("mentor_assignments")
       .select(EXISTING_SELECT)
@@ -132,10 +141,20 @@ export async function upsertMentorAssignmentFromSuperAdmin(
       .maybeSingle();
     if (findErr) return { error: findErr.message };
     existing = data as MentorAssignmentExistingRow | null;
+  } else {
+    const { data, error: findErr } = await admin
+      .from("mentor_assignments")
+      .select(EXISTING_SELECT)
+      .is("mentor_user_id", null)
+      .is("mentor_employee_number", null)
+      .eq("employee_number", menteeEmp)
+      .maybeSingle();
+    if (findErr) return { error: findErr.message };
+    existing = data as MentorAssignmentExistingRow | null;
   }
 
   const updatePayload: {
-    mentee_user_id: string;
+    mentee_user_id: string | null;
     active: boolean;
     assigned_at: string;
     mentor_user_id: string | null;
@@ -146,7 +165,7 @@ export async function upsertMentorAssignmentFromSuperAdmin(
     mentee_personal_email?: string | null;
     mentee_phone?: string | null;
   } = {
-    mentee_user_id: mentee.id,
+    mentee_user_id: menteeIdResolved,
     active: true,
     assigned_at: assignedAt,
     mentor_user_id: mentorUserId,
@@ -175,7 +194,7 @@ export async function upsertMentorAssignmentFromSuperAdmin(
   const insertPayload: {
     mentor_user_id: string | null;
     mentor_employee_number: string | null;
-    mentee_user_id: string;
+    mentee_user_id: string | null;
     employee_number: string;
     active: boolean;
     assigned_at: string;
@@ -187,7 +206,7 @@ export async function upsertMentorAssignmentFromSuperAdmin(
   } = {
     mentor_user_id: mentorUserId,
     mentor_employee_number: mentorEmpForRow,
-    mentee_user_id: mentee.id,
+    mentee_user_id: menteeIdResolved,
     employee_number: menteeEmp,
     active: true,
     assigned_at: assignedAt,
@@ -215,7 +234,7 @@ export async function upsertMentorAssignmentFromSuperAdmin(
 
   if (existing?.id) {
     let dataChanged =
-      existing.mentee_user_id !== mentee.id ||
+      (existing.mentee_user_id ?? null) !== (menteeIdResolved ?? null) ||
       existing.active !== true ||
       existing.mentor_user_id !== mentorUserId ||
       !eqAssignmentField(existing.mentor_employee_number, mentorEmpForRow);

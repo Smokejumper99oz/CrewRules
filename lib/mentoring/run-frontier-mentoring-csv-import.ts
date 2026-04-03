@@ -1,22 +1,18 @@
-import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   normalizeHireDate,
-  normalizeMenteeCompanyEmail,
   normalizeOptionalPersonalEmail,
   parseFrontierMentoringCsv,
 } from "@/lib/mentoring/mentoring-csv-import";
 import { upsertMentorAssignmentFromSuperAdmin } from "@/lib/mentoring/super-admin-sync-assignment";
 import { createMilestonesForAssignment } from "@/lib/mentoring/create-milestones-for-assignment";
-import {
-  isProfileEmployeeNumberTaken,
-  PROFILE_EMPLOYEE_NUMBER_TAKEN_ERROR,
-} from "@/lib/profiles/employee-number-taken";
 
 export type MentoringCsvImportRowDisplay = {
   menteeName: string;
   menteeEmployeeNumber: string;
   mentorEmployeeNumber: string;
+  /** From `profiles.full_name` (live mentor) or `mentor_preload.full_name` when resolved during import. */
+  mentorFullName?: string | null;
 };
 
 export type MentoringCsvImportRowResult = {
@@ -31,12 +27,16 @@ function rowDisplay(
   mentorEmployeeNumber: string,
   menteeEmployeeNumber: string,
   menteeFullName: string,
+  mentorFullName?: string | null,
 ): MentoringCsvImportRowDisplay {
-  return {
+  const out: MentoringCsvImportRowDisplay = {
     menteeName: menteeFullName,
     menteeEmployeeNumber,
     mentorEmployeeNumber,
   };
+  const m = mentorFullName?.trim();
+  if (m) out.mentorFullName = m;
+  return out;
 }
 
 /** Optional UI/meta: populated by server actions after file upload; runners return rows only. */
@@ -60,6 +60,8 @@ export type MentoringCsvImportResult = {
 /**
  * Shared CSV import body: parses Frontier mentoring template, resolves mentors/mentees
  * by employee number within `tenant`, upserts assignments and milestones.
+ * Mentees may exist without a CrewRules profile or airline email; linking uses `employee_number` on signup.
+ * Blank `mentor_employee_number` imports as unassigned (no mentor on the assignment row).
  */
 export async function runFrontierMentoringCsvImport(
   admin: SupabaseClient,
@@ -81,7 +83,6 @@ export async function runFrontierMentoringCsvImport(
     const menteeEmp = values.mentee_employee_number.trim();
     const phoneRaw = values.mentee_phone.trim();
     const notesRaw = values.notes.trim();
-    const companyRaw = values["mentee_email@flyfrontier.com"];
     const privateRaw = values["mentee_email@private"];
 
     const allRequiredBlank = !mentorEmp && !hireRaw && !menteeName && !menteeEmp;
@@ -89,15 +90,6 @@ export async function runFrontierMentoringCsvImport(
       continue;
     }
 
-    if (!mentorEmp) {
-      results.push({
-        rowNumber,
-        success: false,
-        message: "mentor_employee_number is required.",
-        display: rowDisplay(mentorEmp, menteeEmp, menteeName),
-      });
-      continue;
-    }
     if (!hireRaw) {
       results.push({
         rowNumber,
@@ -158,52 +150,58 @@ export async function runFrontierMentoringCsvImport(
       continue;
     }
     const privateNorm = privateNormResult.email;
-    const companyNorm = normalizeMenteeCompanyEmail(companyRaw);
 
-    const { data: mentorProfile, error: mentorErr } = await admin
-      .from("profiles")
-      .select("id")
-      .eq("tenant", tenant)
-      .eq("employee_number", mentorEmp)
-      .is("deleted_at", null)
-      .maybeSingle();
-
-    if (mentorErr) {
-      results.push({
-        rowNumber,
-        success: false,
-        message: mentorErr.message,
-        display: rowDisplay(mentorEmp, menteeEmp, menteeName),
-      });
-      continue;
-    }
-
-    let mentorUserId: string | null = mentorProfile?.id ?? null;
-    if (!mentorUserId) {
-      const { data: preloadRow, error: preloadErr } = await admin
-        .from("mentor_preload")
-        .select("id")
+    let mentorUserId: string | null = null;
+    let mentorFullNameForDisplay: string | null = null;
+    if (mentorEmp) {
+      const { data: mentorProfile, error: mentorErr } = await admin
+        .from("profiles")
+        .select("id, full_name")
         .eq("tenant", tenant)
         .eq("employee_number", mentorEmp)
+        .is("deleted_at", null)
         .maybeSingle();
 
-      if (preloadErr) {
+      if (mentorErr) {
         results.push({
           rowNumber,
           success: false,
-          message: preloadErr.message,
+          message: mentorErr.message,
           display: rowDisplay(mentorEmp, menteeEmp, menteeName),
         });
         continue;
       }
-      if (!preloadRow?.id) {
-        results.push({
-          rowNumber,
-          success: false,
-          message: `No mentor with employee_number "${mentorEmp}" in this tenant (no live profile or mentor roster row).`,
-          display: rowDisplay(mentorEmp, menteeEmp, menteeName),
-        });
-        continue;
+
+      mentorUserId = mentorProfile?.id ?? null;
+      if (mentorUserId) {
+        mentorFullNameForDisplay = (mentorProfile?.full_name ?? "").trim() || null;
+      } else {
+        const { data: preloadRow, error: preloadErr } = await admin
+          .from("mentor_preload")
+          .select("id, full_name")
+          .eq("tenant", tenant)
+          .eq("employee_number", mentorEmp)
+          .maybeSingle();
+
+        if (preloadErr) {
+          results.push({
+            rowNumber,
+            success: false,
+            message: preloadErr.message,
+            display: rowDisplay(mentorEmp, menteeEmp, menteeName),
+          });
+          continue;
+        }
+        if (!preloadRow?.id) {
+          results.push({
+            rowNumber,
+            success: false,
+            message: `No mentor with employee_number "${mentorEmp}" in this tenant (no live profile or mentor roster row).`,
+            display: rowDisplay(mentorEmp, menteeEmp, menteeName),
+          });
+          continue;
+        }
+        mentorFullNameForDisplay = (preloadRow.full_name ?? "").trim() || null;
       }
     }
 
@@ -225,111 +223,32 @@ export async function runFrontierMentoringCsvImport(
       continue;
     }
 
-    let menteeId: string;
+    let menteeId: string | null = existingMentee?.id ?? null;
 
     if (existingMentee?.id) {
-      menteeId = existingMentee.id;
-
       const profilePatch: Record<string, unknown> = {};
       if (menteeName) profilePatch.full_name = menteeName;
       if (phoneRaw) profilePatch.phone = phoneRaw;
       if (privateNorm) profilePatch.personal_email = privateNorm;
 
       if (Object.keys(profilePatch).length > 0) {
-        const { error: updProfErr } = await admin.from("profiles").update(profilePatch).eq("id", menteeId);
+        const { error: updProfErr } = await admin
+          .from("profiles")
+          .update(profilePatch)
+          .eq("id", existingMentee.id);
         if (updProfErr) {
           results.push({
             rowNumber,
             success: false,
             message: updProfErr.message,
-            display: rowDisplay(mentorEmp, menteeEmp, menteeName),
+            display: rowDisplay(mentorEmp, menteeEmp, menteeName, mentorFullNameForDisplay),
           });
           continue;
         }
       }
-    } else {
-      const authEmail = companyNorm;
-      if (!authEmail || !authEmail.toLowerCase().endsWith("@flyfrontier.com")) {
-        results.push({
-          rowNumber,
-          success: false,
-          message: "Mentee must have a valid @flyfrontier.com email to create an account.",
-          display: rowDisplay(mentorEmp, menteeEmp, menteeName),
-        });
-        continue;
-      }
-
-      const takenRes = await isProfileEmployeeNumberTaken(admin, {
-        tenant,
-        portal: "pilots",
-        employeeNumberTrimmed: menteeEmp,
-        excludeProfileId: null,
-      });
-      if (takenRes.error) {
-        results.push({
-          rowNumber,
-          success: false,
-          message: takenRes.error,
-          display: rowDisplay(mentorEmp, menteeEmp, menteeName),
-        });
-        continue;
-      }
-      if (takenRes.taken) {
-        results.push({
-          rowNumber,
-          success: false,
-          message: PROFILE_EMPLOYEE_NUMBER_TAKEN_ERROR,
-          display: rowDisplay(mentorEmp, menteeEmp, menteeName),
-        });
-        continue;
-      }
-
-      const tempPassword = randomBytes(24).toString("base64url");
-      const { data: created, error: createErr } = await admin.auth.admin.createUser({
-        email: authEmail,
-        password: tempPassword,
-        email_confirm: true,
-        user_metadata: {
-          full_name: menteeName,
-          employee_number: menteeEmp,
-          tenant,
-          portal: "pilots",
-          role: "pilot",
-        },
-      });
-
-      if (createErr || !created.user?.id) {
-        results.push({
-          rowNumber,
-          success: false,
-          message: createErr?.message ?? "Failed to create user for mentee.",
-          display: rowDisplay(mentorEmp, menteeEmp, menteeName),
-        });
-        continue;
-      }
-
-      menteeId = created.user.id;
-
-      const profilePatch: Record<string, unknown> = {
-        full_name: menteeName,
-        employee_number: menteeEmp,
-      };
-      if (phoneRaw) profilePatch.phone = phoneRaw;
-      if (privateNorm) profilePatch.personal_email = privateNorm;
-
-      const { error: updProfErr } = await admin.from("profiles").update(profilePatch).eq("id", menteeId);
-      if (updProfErr) {
-        results.push({
-          rowNumber,
-          success: false,
-          message: updProfErr.message,
-          display: rowDisplay(mentorEmp, menteeEmp, menteeName),
-        });
-        continue;
-      }
     }
 
-    if (mentorUserId && menteeId === mentorUserId) {
+    if (mentorUserId && menteeId && menteeId === mentorUserId) {
       results.push({
         rowNumber,
         success: false,
@@ -338,7 +257,7 @@ export async function runFrontierMentoringCsvImport(
       });
       continue;
     }
-    if (!mentorUserId && mentorEmp === menteeEmp) {
+    if (!mentorUserId && mentorEmp && mentorEmp === menteeEmp) {
       results.push({
         rowNumber,
         success: false,
@@ -350,7 +269,7 @@ export async function runFrontierMentoringCsvImport(
 
     const sync = await upsertMentorAssignmentFromSuperAdmin(admin, {
       mentorUserId,
-      mentorEmployeeNumber: mentorEmp,
+      mentorEmployeeNumber: mentorEmp || null,
       menteeEmployeeNumber: menteeEmp,
       tenant,
       hireDate: hireDateNorm,
@@ -358,6 +277,7 @@ export async function runFrontierMentoringCsvImport(
       menteeDisplayName: menteeName,
       menteePersonalEmail: privateNorm,
       menteePhone: (phoneRaw ?? "").trim() || null,
+      allowMenteeWithoutProfile: true,
     });
 
     if ("error" in sync) {
@@ -365,7 +285,7 @@ export async function runFrontierMentoringCsvImport(
         rowNumber,
         success: false,
         message: sync.error,
-        display: rowDisplay(mentorEmp, menteeEmp, menteeName),
+        display: rowDisplay(mentorEmp, menteeEmp, menteeName, mentorFullNameForDisplay),
       });
       continue;
     }
@@ -383,13 +303,21 @@ export async function runFrontierMentoringCsvImport(
           .eq("mentor_user_id", mentorUserId)
           .eq("employee_number", menteeEmp)
           .maybeSingle()
-      : await admin
-          .from("mentor_assignments")
-          .select("id")
-          .is("mentor_user_id", null)
-          .eq("mentor_employee_number", mentorEmp)
-          .eq("employee_number", menteeEmp)
-          .maybeSingle();
+      : mentorEmp
+        ? await admin
+            .from("mentor_assignments")
+            .select("id")
+            .is("mentor_user_id", null)
+            .eq("mentor_employee_number", mentorEmp)
+            .eq("employee_number", menteeEmp)
+            .maybeSingle()
+        : await admin
+            .from("mentor_assignments")
+            .select("id")
+            .is("mentor_user_id", null)
+            .is("mentor_employee_number", null)
+            .eq("employee_number", menteeEmp)
+            .maybeSingle();
 
     const { data: assignmentRow, error: assignmentLookupErr } = assignmentLookup;
 
@@ -400,7 +328,7 @@ export async function runFrontierMentoringCsvImport(
         message:
           assignmentLookupErr?.message ??
           "Assignment saved but could not resolve assignment id for milestones.",
-        display: rowDisplay(mentorEmp, menteeEmp, menteeName),
+        display: rowDisplay(mentorEmp, menteeEmp, menteeName, mentorFullNameForDisplay),
       });
       continue;
     }
@@ -411,7 +339,7 @@ export async function runFrontierMentoringCsvImport(
         rowNumber,
         success: false,
         message: milestoneResult.error,
-        display: rowDisplay(mentorEmp, menteeEmp, menteeName),
+        display: rowDisplay(mentorEmp, menteeEmp, menteeName, mentorFullNameForDisplay),
       });
       continue;
     }
@@ -420,7 +348,7 @@ export async function runFrontierMentoringCsvImport(
       rowNumber,
       success: true,
       message: rowMessage,
-      display: rowDisplay(mentorEmp, menteeEmp, menteeName),
+      display: rowDisplay(mentorEmp, menteeEmp, menteeName, mentorFullNameForDisplay),
     });
   }
 
