@@ -11,6 +11,8 @@ type Props = {
   departureReason?: string;
   arrivalReason?: string;
   hasAdvisories?: boolean;
+  /** When flight categories and headline risk disagree — short factual explanation. */
+  categoryAlignmentNote?: string;
 };
 
 const LEVEL_STYLES: Record<DelayRiskLevel, string> = {
@@ -20,9 +22,9 @@ const LEVEL_STYLES: Record<DelayRiskLevel, string> = {
 };
 
 const LEVEL_LABELS: Record<DelayRiskLevel, string> = {
-  LOW: "Low operational weather risk",
-  MODERATE: "Moderate operational weather risk",
-  HIGH: "HIGH OPERATIONAL WEATHER RISK",
+  LOW: "No Significant Operational Impact",
+  MODERATE: "Operational Watch",
+  HIGH: "Operational Impact Likely",
 };
 
 function isSignificant(r: string | undefined): boolean {
@@ -50,6 +52,7 @@ export function RiskSummary({
   departureReason,
   arrivalReason,
   hasAdvisories,
+  categoryAlignmentNote,
 }: Props) {
   const style = LEVEL_STYLES[level] ?? LEVEL_STYLES.LOW;
   const label = LEVEL_LABELS[level] ?? level;
@@ -67,6 +70,11 @@ export function RiskSummary({
       <p className="mt-1 text-sm opacity-90">
         {reason || "Not available"}
       </p>
+      {categoryAlignmentNote?.trim() && (
+        <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-snug text-amber-100/95">
+          {categoryAlignmentNote}
+        </p>
+      )}
       {showDrivers && (
         <>
           <p className="mt-2 text-sm opacity-90">Key weather drivers</p>

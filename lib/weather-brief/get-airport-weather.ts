@@ -5,6 +5,7 @@
 
 import { formatInTimeZone } from "date-fns-tz";
 import type { AirportWeather, DecodedWeather } from "./types";
+import { lowestOperationalCeilingFt } from "./operational-ceiling";
 import { resolveStationCode } from "./resolve-station-code";
 
 const AWC_BASE = "https://aviationweather.gov/api/data";
@@ -245,6 +246,7 @@ function decodeMetarToWeather(metar: MetarRecord | null): DecodedWeather | null 
   const visib = decodeVisibility(metar.visib);
   const clouds = metar.clouds ?? [];
   const skyCeiling = formatSkyCeiling(clouds);
+  const operationalCeilingFt = lowestOperationalCeilingFt(clouds);
   const altimeter =
     metar.altim != null ? `${(metar.altim / 33.8639).toFixed(2)} inHg` : "—";
   const temp = metar.temp != null ? Math.round(metar.temp) : null;
@@ -263,6 +265,7 @@ function decodeMetarToWeather(metar: MetarRecord | null): DecodedWeather | null 
     tempDew,
     weather,
     flightCategory: flightCategory as DecodedWeather["flightCategory"],
+    operationalCeilingFt,
   };
 }
 
@@ -281,6 +284,7 @@ function decodeTafPeriodToWeather(
   const visib = decodeVisibility(period.visib);
   const clouds = period.clouds ?? [];
   const skyCeiling = formatSkyCeiling(clouds);
+  const operationalCeilingFt = lowestOperationalCeilingFt(clouds);
   const altimeter =
     period.altim != null ? `${(period.altim / 33.8639).toFixed(2)} inHg` : "—";
   const tempDew = "—";
@@ -299,6 +303,7 @@ function decodeTafPeriodToWeather(
     tempDew,
     weather,
     flightCategory: flightCategory as DecodedWeather["flightCategory"],
+    operationalCeilingFt,
   };
 }
 
@@ -473,6 +478,8 @@ export async function getAirportWeather(
     decodedCurrent: decodedCurrent ?? undefined,
     decodedForecast: decodedForecast ?? undefined,
     forecastWindowLabel: forecastWindowLabel ?? undefined,
+    tafSelectedPeriodRawLine: tafPick?.period.rawLine ?? null,
+    tafSelectedPeriodWxString: tafPick?.period.wxString ?? null,
     sourceLinks: {
       metarTaf: `${baseUrl}/metar?ids=${ids}`,
       airportStatus: "https://nasstatus.faa.gov",

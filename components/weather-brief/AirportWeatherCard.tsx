@@ -138,7 +138,10 @@ export function AirportWeatherCard({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <span className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-medium ${catStyle}`}>
+            <span
+              title="Category from latest METAR when available, else from TAF window below."
+              className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-medium ${catStyle}`}
+            >
               {fc}
             </span>
             <button
@@ -160,7 +163,7 @@ export function AirportWeatherCard({
         {/* Block 1: Current conditions */}
         <div className="mt-5">
           <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
-            Current
+            Observed now (METAR)
           </p>
           <WeatherGrid decoded={decodedCurrent} />
           {operationalNoteCurrent?.trim() && (
@@ -171,7 +174,10 @@ export function AirportWeatherCard({
         {/* Block 2: Expected near event */}
         <div className="mt-6 border-t border-white/5 pt-5">
           <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
-            {station} — {forecastWindowLabel || "Expected near event"}
+            At {context === "arrival" ? "arrival" : "departure"} time (TAF)
+          </p>
+          <p className="mb-2 text-xs text-slate-500">
+            {forecastWindowLabel || "Selected TAF period for your scheduled time"} — compare to observed block above.
           </p>
           <WeatherGrid decoded={decodedForecast} />
           {operationalNoteForecast?.trim() && (

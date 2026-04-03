@@ -7,9 +7,11 @@ import { getEnrouteAdvisories } from "@/lib/weather-brief/get-enroute-advisories
 import { getFiledRoute } from "@/lib/weather-brief/get-filed-route";
 import { cacheFiledRoute } from "@/lib/weather-brief/cache-filed-route";
 import { computeDelayRisk, computeOperationalWatch, computeRiskSummary } from "@/lib/weather-brief/compute-risks";
+import { buildPilotSummary } from "@/lib/weather-brief/pilot-summary";
 import FiledRouteCard from "@/components/weather/filed-route-card";
 import { FlightHeader } from "@/components/weather-brief/FlightHeader";
 import { RiskSummary } from "@/components/weather-brief/RiskSummary";
+import { PilotSummary } from "@/components/weather-brief/PilotSummary";
 import { AirportWeatherCard } from "@/components/weather-brief/AirportWeatherCard";
 import { DelayRiskCard } from "@/components/weather-brief/DelayRiskCard";
 import { EnrouteWeatherCard } from "@/components/weather-brief/EnrouteWeatherCard";
@@ -99,9 +101,22 @@ export default async function WeatherBriefPage() {
   const riskSummary = computeRiskSummary(
     delayRisks.departure.level,
     delayRisks.arrival.level,
+    delayRisks.departure.reason,
+    delayRisks.arrival.reason,
     advisories,
     watchItems
   );
+  const pilotSummary = buildPilotSummary({
+    departureAirport,
+    arrivalAirport,
+    departureWeather: depWeather,
+    arrivalWeather: arrWeather,
+    departureRisk: delayRisks.departure.level,
+    arrivalRisk: delayRisks.arrival.level,
+    advisories,
+    watchItems,
+    summaryLevel: riskSummary.level,
+  });
 
   console.log("[weather-brief-debug] nextFlight before FlightHeader:", {
     flightNumber: flightWithLiveStatus.status === "flight" ? flightWithLiveStatus.flightNumber : null,
@@ -120,6 +135,7 @@ export default async function WeatherBriefPage() {
       {nextFlight.status === "flight" && (
         <FiledRouteCard flight={nextFlight} routeText={filedRoute} />
       )}
+      <PilotSummary lines={pilotSummary.lines} />
       <RiskSummary
         level={riskSummary.level}
         reason={riskSummary.reason}
@@ -128,6 +144,7 @@ export default async function WeatherBriefPage() {
         departureReason={delayRisks.departure.reason}
         arrivalReason={delayRisks.arrival.reason}
         hasAdvisories={advisories.length > 0}
+        categoryAlignmentNote={pilotSummary.categoryAlignmentNote}
       />
 
       <section>

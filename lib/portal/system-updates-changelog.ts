@@ -13,6 +13,16 @@ export type SystemUpdateEntry = {
  */
 export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   {
+    date: "2026-04-03",
+    title: "Weather Brief clarity and trust",
+    type: "improvement",
+    bullets: [
+      "Pilot summary and clearer METAR vs TAF-at-your-time labeling on airport cards.",
+      "Safer TS detection (selected TAF period only) and enroute advisories scoped to station text matches.",
+      "Risk headline copy tied to real drivers; note when VFR badges differ from the summary.",
+    ],
+  },
+  {
     date: "2026-03-30",
     title: "Mentoring dashboard snapshot cards",
     type: "new_feature",

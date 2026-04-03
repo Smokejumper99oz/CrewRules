@@ -56,6 +56,11 @@ export type DecodedWeather = {
   weather: string;
   flightCategory: "VFR" | "MVFR" | "IFR" | "LIFR" | "UNKNOWN";
   operationalNote?: string | null;
+  /**
+   * Lowest BKN/OVC/VV/OVX base (ft) from structured layers — used for ceiling risk only.
+   * Null when no ceiling-driving layer or base missing (do not infer from display string).
+   */
+  operationalCeilingFt?: number | null;
 };
 
 export type AirportWeather = {
@@ -69,11 +74,24 @@ export type AirportWeather = {
   decodedCurrent?: DecodedWeather | null;
   decodedForecast?: DecodedWeather | null;
   forecastWindowLabel?: string | null;
+  /** Same TAF period as decodedForecast — used for TS logic (not whole bulletin). */
+  tafSelectedPeriodRawLine?: string | null;
+  tafSelectedPeriodWxString?: string | null;
   sourceLinks: {
     metarTaf: string;
     airportStatus?: string;
     notams?: string;
   };
+};
+
+/**
+ * Placeholder for a future supplemental layer (e.g. hourly precip/vis).
+ * Not fetched; keeps extension point without coupling imports.
+ */
+export type SupplementalWeatherLayer = {
+  provider?: "weatherstack" | string;
+  /** When wired, ISO fetch time for cache/UI */
+  fetchedAt?: string;
 };
 
 export type DelayRiskLevel = "LOW" | "MODERATE" | "HIGH";

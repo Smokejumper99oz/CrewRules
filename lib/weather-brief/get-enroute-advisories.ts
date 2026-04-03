@@ -1,9 +1,14 @@
 /**
  * Fetch enroute aviation advisories from official Aviation Weather Center.
  * SIGMETs, AIRMETs, Convective SIGMETs - corridor/region awareness for route.
+ *
+ * Only returns advisories whose raw text mentions departure or arrival station IDs
+ * (resolved ICAO). The AWC feed is not geometry-filtered; this avoids treating
+ * unrelated areas as "your route" when we cannot do true spatial intersection.
  */
 
 import type { EnrouteAdvisory } from "./types";
+import { resolveStationCode } from "./resolve-station-code";
 
 const AWC_BASE = "https://aviationweather.gov/api/data";
 const FETCH_OPTS: RequestInit = {
@@ -26,10 +31,14 @@ type AirSigmetRecord = {
  * Uses airport-pair corridor awareness when exact route is not available.
  */
 export async function getEnrouteAdvisories(
-  _departureIcao: string,
-  _arrivalIcao: string
+  departureIcao: string,
+  arrivalIcao: string
 ): Promise<EnrouteAdvisory[]> {
   const advisories: EnrouteAdvisory[] = [];
+
+  const depId = resolveStationCode(departureIcao).toUpperCase();
+  const arrId = resolveStationCode(arrivalIcao).toUpperCase();
+  const stationIds = depId === arrId ? [depId] : [depId, arrId];
 
   try {
     const url = `${AWC_BASE}/airsigmet?format=json`;
@@ -42,6 +51,10 @@ export async function getEnrouteAdvisories(
         if (advisories.length >= 6) break;
         if (!r.rawSigmet && !r.rawAirmet) continue;
         const raw = r.rawSigmet ?? r.rawAirmet ?? "";
+        const rawUpper = raw.toUpperCase();
+        const mentionsRoute = stationIds.some((id) => id.length >= 3 && rawUpper.includes(id));
+        if (!mentionsRoute) continue;
+
         const hazard = r.hazard?.type ?? "Advisory";
         const isConvective = (r.icaoId ?? "").toString().startsWith("W");
         const type = r.airmetId ? "AIRMET" : isConvective ? "CONVECTIVE_SIGMET" : "SIGMET";

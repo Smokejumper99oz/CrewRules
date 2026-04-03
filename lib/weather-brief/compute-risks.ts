@@ -9,6 +9,24 @@ import type {
   EnrouteAdvisory,
   OperationalWatchItem,
 } from "./types";
+import { thunderstormClassFromTafPeriod } from "./taf-period-thunderstorm";
+
+function maxDelayLevel(a: DelayRiskLevel, b: DelayRiskLevel): DelayRiskLevel {
+  const rank: Record<DelayRiskLevel, number> = { LOW: 0, MODERATE: 1, HIGH: 2 };
+  return rank[a] >= rank[b] ? a : b;
+}
+
+function dedupeTriggers(triggers: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const t of triggers) {
+    if (!seen.has(t)) {
+      seen.add(t);
+      out.push(t);
+    }
+  }
+  return out;
+}
 
 function riskFromDecoded(
   d: DecodedWeather | null | undefined,
@@ -20,17 +38,17 @@ function riskFromDecoded(
   triggers?: string[];
 } {
   if (!d) {
-    return {
-      level: "LOW",
-      reason: "Weather data not available.",
-    };
+    return { level: "LOW", reason: "", triggers: [] };
   }
 
   const triggers: string[] = [];
   let level: DelayRiskLevel = "LOW";
 
-  const ceilingMatch = /([\d,]+)\s*ft/.exec(d.skyCeiling ?? "");
-  const ceilingFt = ceilingMatch ? parseInt(ceilingMatch[1].replace(/,/g, ""), 10) : null;
+  const ceilingFt =
+    d.operationalCeilingFt != null && Number.isFinite(d.operationalCeilingFt)
+      ? d.operationalCeilingFt
+      : null;
+  // Thresholds unchanged: <1000 => HIGH, 1000–2999 => MODERATE; ceiling from BKN/OVC/VV/OVX bases only.
   if (ceilingFt != null && ceilingFt < 1000) {
     triggers.push(`ceiling ${ceilingFt} ft`);
     level = "HIGH";
@@ -67,6 +85,29 @@ function riskFromDecoded(
   return { level, reason, triggers: contextualTriggers };
 }
 
+function mergeEndpointRisks(
+  current: { level: DelayRiskLevel; reason: string; triggers?: string[] },
+  forecast: { level: DelayRiskLevel; reason: string; triggers?: string[] },
+  context: "departure" | "arrival"
+): { level: DelayRiskLevel; reason: string; triggers?: string[] } {
+  const level = maxDelayLevel(current.level, forecast.level);
+  const triggers = dedupeTriggers([...(current.triggers ?? []), ...(forecast.triggers ?? [])]);
+
+  if (level === "LOW" && triggers.length === 0) {
+    return {
+      level: "LOW",
+      reason:
+        context === "departure"
+          ? "No significant ceiling, visibility, or wind drivers at departure (METAR vs TAF for your time)."
+          : "No significant ceiling, visibility, or wind drivers at arrival (METAR vs TAF for your time).",
+      triggers: [],
+    };
+  }
+
+  const reason = formatDelayReason(triggers, level, context);
+  return { level, reason, triggers };
+}
+
 function formatTriggerForDisplay(trigger: string): string {
   let formatted = trigger.replace(/\b(\d{4,})\b/g, (m) =>
     parseInt(m, 10).toLocaleString()
@@ -85,14 +126,23 @@ function formatDelayReason(
     return "No significant weather-related operational impacts identified.";
   }
   if (level === "HIGH") {
-    return "Weather conditions and active advisories may significantly affect operations.";
+    if (triggers.some((t) => t.includes("ceiling"))) {
+      return context === "departure"
+        ? "Ceiling below 1,000 ft (METAR and/or TAF window) at departure — high operational impact possible."
+        : "Ceiling below 1,000 ft (METAR and/or TAF window) at arrival — high operational impact possible.";
+    }
+    if (triggers.some((t) => t.includes("visibility"))) {
+      return context === "departure"
+        ? "Visibility below 3 SM at departure — check both observed and forecast blocks."
+        : "Visibility below 3 SM at arrival — check both observed and forecast blocks.";
+    }
+    return context === "departure"
+      ? "Departure meets existing high-impact thresholds — review drivers below."
+      : "Arrival meets existing high-impact thresholds — review drivers below.";
   }
   const hasIfr = triggers.some((t) => /IFR|LIFR/i.test(t));
   if (context === "departure" && hasIfr) {
-    return "IFR conditions at departure may increase delay potential.";
-  }
-  if (context === "arrival") {
-    return "Arrival weather may reduce operational flexibility near ETA.";
+    return "IFR/LIFR category at departure — may increase delay or complexity.";
   }
   return triggers.map(formatTriggerForDisplay).join("; ") + ".";
 }
@@ -104,16 +154,30 @@ export function computeDelayRisk(
   departure: { level: DelayRiskLevel; reason: string; triggers?: string[] };
   arrival: { level: DelayRiskLevel; reason: string; triggers?: string[] };
 } {
-  const dep = riskFromDecoded(
-    departureWeather.decodedCurrent ?? departureWeather.decodedForecast,
+  const depCurrent = riskFromDecoded(
+    departureWeather.decodedCurrent,
     departureWeather.airport,
     "departure"
   );
-  const arr = riskFromDecoded(
-    arrivalWeather.decodedCurrent ?? arrivalWeather.decodedForecast,
+  const depForecast = riskFromDecoded(
+    departureWeather.decodedForecast,
+    departureWeather.airport,
+    "departure"
+  );
+  const dep = mergeEndpointRisks(depCurrent, depForecast, "departure");
+
+  const arrCurrent = riskFromDecoded(
+    arrivalWeather.decodedCurrent,
     arrivalWeather.airport,
     "arrival"
   );
+  const arrForecast = riskFromDecoded(
+    arrivalWeather.decodedForecast,
+    arrivalWeather.airport,
+    "arrival"
+  );
+  const arr = mergeEndpointRisks(arrCurrent, arrForecast, "arrival");
+
   return {
     departure: { level: dep.level, reason: dep.reason, triggers: dep.triggers },
     arrival: { level: arr.level, reason: arr.reason, triggers: arr.triggers },
@@ -133,7 +197,6 @@ export function computeOperationalWatch(
   const depAirport = departureWeather.airport?.trim();
   const arrAirport = arrivalWeather.airport?.trim();
 
-  // Departure airport items first
   if (dep?.flightCategory === "IFR" || dep?.flightCategory === "LIFR") {
     items.push({
       severity: "caution",
@@ -142,12 +205,22 @@ export function computeOperationalWatch(
     });
   }
 
-  const depTaf = (departureWeather.tafRaw ?? "").toUpperCase();
-  if (/TS|THUNDER/.test(depTaf)) {
+  const depTs = thunderstormClassFromTafPeriod(
+    departureWeather.tafSelectedPeriodRawLine,
+    departureWeather.tafSelectedPeriodWxString
+  );
+  if (depTs === "warning") {
     items.push({
       severity: "warning",
-      title: depAirport ? `Thunderstorms Forecast at Departure Airport (${depAirport})` : "Thunderstorms Forecast at Departure Airport",
-      detail: "Thunderstorms possible during the departure window. Expect delays or routing deviations.",
+      title: depAirport ? `Thunderstorms in TAF window (${depAirport})` : "Thunderstorms in TAF window (departure)",
+      detail:
+        "The selected TAF period for your departure time includes TS/CB/TSRA-class weather. Review the TAF block and RAW.",
+    });
+  } else if (depTs === "vicinity") {
+    items.push({
+      severity: "caution",
+      title: depAirport ? `Convection in vicinity (${depAirport})` : "Convection in vicinity (departure)",
+      detail: "TAF includes VCTS or similar — not the same as airport TS; stay alert for building cells.",
     });
   }
 
@@ -159,7 +232,6 @@ export function computeOperationalWatch(
     });
   }
 
-  // Arrival airport items next
   if (arr?.flightCategory === "IFR" || arr?.flightCategory === "LIFR") {
     items.push({
       severity: "caution",
@@ -168,12 +240,22 @@ export function computeOperationalWatch(
     });
   }
 
-  const tafRaw = (arrivalWeather.tafRaw ?? "").toUpperCase();
-  if (/TS|THUNDER/.test(tafRaw)) {
+  const arrTs = thunderstormClassFromTafPeriod(
+    arrivalWeather.tafSelectedPeriodRawLine,
+    arrivalWeather.tafSelectedPeriodWxString
+  );
+  if (arrTs === "warning") {
     items.push({
       severity: "warning",
-      title: arrAirport ? `Thunderstorms Forecast at Arrival Airport (${arrAirport})` : "Thunderstorms Forecast at Arrival Airport",
-      detail: "Thunderstorms possible during the arrival window. Expect holding or routing deviations.",
+      title: arrAirport ? `Thunderstorms in TAF window (${arrAirport})` : "Thunderstorms in TAF window (arrival)",
+      detail:
+        "The selected TAF period for your arrival time includes TS/CB/TSRA-class weather. Review the TAF block and RAW.",
+    });
+  } else if (arrTs === "vicinity") {
+    items.push({
+      severity: "caution",
+      title: arrAirport ? `Convection in vicinity (${arrAirport})` : "Convection in vicinity (arrival)",
+      detail: "TAF includes VCTS or similar — not the same as airport TS; stay alert for building cells.",
     });
   }
 
@@ -196,8 +278,11 @@ export function computeOperationalWatch(
   if (convSigmet) {
     items.push({
       severity: "warning",
-      title: "Convective SIGMET Affecting Route",
-      detail: advisoryDetail(convSigmet, "Embedded thunderstorms or severe convection may affect the planned route."),
+      title: "Convective SIGMET (station mentioned in text)",
+      detail: advisoryDetail(
+        convSigmet,
+        "Text references your departure or arrival station — verify polygon and validity."
+      ),
     });
   }
 
@@ -205,8 +290,8 @@ export function computeOperationalWatch(
   if (sigmet) {
     items.push({
       severity: "caution",
-      title: "SIGMET affecting route",
-      detail: advisoryDetail(sigmet, "Significant meteorological hazards may affect the planned route."),
+      title: "SIGMET (station mentioned in text)",
+      detail: advisoryDetail(sigmet, "Review raw text — station matched only by text search, not geometry."),
     });
   }
 
@@ -214,8 +299,8 @@ export function computeOperationalWatch(
   if (airmet) {
     items.push({
       severity: "info",
-      title: "AIRMET Affecting Route",
-      detail: advisoryDetail(airmet, "Moderate hazards such as IFR conditions, turbulence, or icing may affect the planned route."),
+      title: "AIRMET (station mentioned in text)",
+      detail: advisoryDetail(airmet, "Moderate hazards — confirm relevance to your route."),
     });
   }
 
@@ -225,6 +310,8 @@ export function computeOperationalWatch(
 export function computeRiskSummary(
   departureRisk: DelayRiskLevel,
   arrivalRisk: DelayRiskLevel,
+  departureDetail: string,
+  arrivalDetail: string,
   advisories: EnrouteAdvisory[],
   watchItems: OperationalWatchItem[]
 ): { level: DelayRiskLevel; reason: string } {
@@ -234,14 +321,29 @@ export function computeRiskSummary(
   const hasWarnings = watchItems.some((w) => w.severity === "warning");
 
   let level: DelayRiskLevel = "LOW";
-  let reason = "No significant weather-related operational impacts identified.";
+  let reason =
+    "Ceiling, visibility, and wind heuristics look benign for observed + TAF times, and no station-matching advisories were returned.";
 
   if (hasHigh || hasWarnings) {
     level = "HIGH";
-    reason = "Weather conditions and active advisories may significantly affect operations.";
+    const parts: string[] = [];
+    if (departureRisk === "HIGH") parts.push(`Departure: ${departureDetail}`);
+    if (arrivalRisk === "HIGH") parts.push(`Arrival: ${arrivalDetail}`);
+    if (hasWarnings) {
+      parts.push("Operational Watch includes a warning-level item (TS in TAF window or convective SIGMET text hit).");
+    }
+    reason = parts.filter((p) => p.trim().length > 0).join(" ") || "High-impact thresholds or warnings — see cards below.";
   } else if (hasMod || hasAdvisories) {
     level = "MODERATE";
-    reason = "Arrival weather and active advisories may affect timing or operational flexibility.";
+    const parts: string[] = [];
+    if (departureRisk === "MODERATE") parts.push(`Departure: ${departureDetail}`);
+    if (arrivalRisk === "MODERATE") parts.push(`Arrival: ${arrivalDetail}`);
+    if (hasAdvisories) {
+      parts.push(
+        "SIGMET/AIRMET raw text mentions your departure or arrival station — open Enroute Advisories to confirm hazard type and area."
+      );
+    }
+    reason = parts.filter((p) => p.trim().length > 0).join(" ") || "Monitor METAR/TAF and enroute products.";
   }
 
   return { level, reason };

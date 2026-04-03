@@ -31,7 +31,7 @@ export function EnrouteWeatherCard({ advisories }: Props) {
               className="rounded-xl border border-white/10 bg-white/5 p-4"
             >
               <div className="mb-1 text-xs tracking-wide text-sky-400">
-                SIGMET
+                {(adv.type ?? "ADVISORY").replace(/_/g, " ")}
               </div>
 
               <div className="font-medium">
