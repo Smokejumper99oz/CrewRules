@@ -459,11 +459,11 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                   ) : null}
                 </button>
               </th>
-              <th className="box-border pl-2 pr-1.5 py-1.5 text-left align-middle normal-case tracking-normal">
+              <th className="box-border pl-2 pr-1.5 py-1.5 text-center align-middle normal-case tracking-normal">
                 <button
                   type="button"
                   onClick={() => onSortHeaderClick("emp")}
-                  className="inline-flex items-center gap-1 whitespace-nowrap font-medium text-slate-500 hover:text-slate-200 touch-manipulation"
+                  className="inline-flex w-full items-center justify-center gap-1 whitespace-nowrap font-medium text-slate-500 hover:text-slate-200 touch-manipulation"
                 >
                   <span>Emp.#</span>
                   {sortIndicator("emp") ? (
@@ -473,12 +473,12 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                   ) : null}
                 </button>
               </th>
-              <th className="px-1.5 py-1.5 text-left normal-case tracking-normal">Role</th>
-              <th className="px-1.5 py-1.5 text-left normal-case tracking-normal">
+              <th className="px-1.5 py-1.5 text-center normal-case tracking-normal">Role</th>
+              <th className="px-1.5 py-1.5 text-center normal-case tracking-normal">
                 <button
                   type="button"
                   onClick={() => onSortHeaderClick("base")}
-                  className="inline-flex items-center gap-1 whitespace-nowrap text-left font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
+                  className="inline-flex w-full items-center justify-center gap-1 whitespace-nowrap font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
                   title="Crew Base"
                 >
                   <span>Crew Base</span>
@@ -489,14 +489,14 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                   ) : null}
                 </button>
               </th>
-              <th className="px-1.5 py-1.5 text-left normal-case tracking-normal">Phone</th>
-              <th className="px-1.5 py-1.5 text-left normal-case tracking-normal">Program</th>
-              <th className="px-1.5 py-1.5 text-left normal-case tracking-normal">Notes</th>
-              <th className="px-1.5 py-1.5 text-right normal-case tracking-normal">
+              <th className="px-1.5 py-1.5 text-center normal-case tracking-normal">Phone</th>
+              <th className="px-1.5 py-1.5 text-center normal-case tracking-normal">Program</th>
+              <th className="px-1.5 py-1.5 text-center normal-case tracking-normal">Notes</th>
+              <th className="px-1.5 py-1.5 text-center normal-case tracking-normal">
                 <button
                   type="button"
                   onClick={() => onSortHeaderClick("mentees")}
-                  className="inline-flex w-full items-center justify-end gap-1 whitespace-nowrap text-right font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
+                  className="inline-flex w-full items-center justify-center gap-1 whitespace-nowrap font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
                 >
                   <span>Mentees</span>
                   {sortIndicator("mentees") ? (
@@ -594,23 +594,29 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                         ) : null}
                       </div>
                     </td>
-                    <td className="box-border pl-2 pr-1.5 py-1.5 align-middle">
-                      <div className="truncate font-mono text-[11px] text-slate-500" title={emp}>
+                    <td className="box-border pl-2 pr-1.5 py-1.5 align-middle text-center">
+                      <div
+                        className="truncate font-mono text-[11px] text-slate-500 text-center"
+                        title={emp}
+                      >
                         {emp}
                       </div>
                     </td>
                     <td className="px-1.5 py-1.5 align-middle text-center text-slate-400">{posLabel}</td>
-                    <td className="px-1.5 py-1.5 align-middle font-mono text-[11px] text-slate-400">
-                      <div className="truncate" title={baseLabel}>
+                    <td className="px-1.5 py-1.5 align-middle text-center font-mono text-[11px] text-slate-400">
+                      <div className="truncate text-center" title={baseLabel}>
                         {baseLabel}
                       </div>
                     </td>
-                    <td className="max-w-0 px-1.5 py-1.5 align-middle text-slate-400">
-                      <div className="truncate font-mono text-[11px]" title={phoneFormatted || undefined}>
+                    <td className="max-w-0 px-1.5 py-1.5 align-middle text-center text-slate-400">
+                      <div
+                        className="truncate font-mono text-[11px] text-center"
+                        title={phoneFormatted || undefined}
+                      >
                         {phoneFormatted || "—"}
                       </div>
                     </td>
-                    <td className="max-w-0 px-1.5 py-1.5 align-middle">
+                    <td className="max-w-0 px-1.5 py-1.5 align-middle text-center">
                       <span
                         className={[PROGRAM_PILL_CELL_CLASS, programPill.pillClass].join(" ")}
                         title={programPill.title}
@@ -618,16 +624,19 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                         {programPill.text}
                       </span>
                     </td>
-                    <td className="max-w-0 px-1.5 py-1.5 align-middle text-slate-500">
+                    <td className="max-w-0 px-1.5 py-1.5 align-middle text-center text-slate-500">
                       {notesPreview ? (
-                        <p className="truncate text-[11px] leading-tight text-slate-500" title={notesTitle}>
+                        <p
+                          className="truncate text-[11px] leading-tight text-slate-500 text-center"
+                          title={notesTitle}
+                        >
                           {notesPreview}
                         </p>
                       ) : (
                         <span className="text-slate-600">—</span>
                       )}
                     </td>
-                    <td className="px-1.5 py-1.5 text-right tabular-nums text-slate-400">{count}</td>
+                    <td className="px-1.5 py-1.5 text-center tabular-nums text-slate-400">{count}</td>
                     <td className="px-1 py-1.5 text-center align-middle">
                       <button
                         type="button"

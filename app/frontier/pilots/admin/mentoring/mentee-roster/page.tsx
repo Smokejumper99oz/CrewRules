@@ -360,12 +360,17 @@ export default async function FrontierPilotAdminMentoringMenteeRosterPage() {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 lg:space-y-3">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight border-b border-white/5 pb-3">Mentee Roster</h1>
-        <p className="mt-2 text-sm text-slate-400 leading-snug">
-          First-year pilots in this tenant, including assignment rows (assigned or pending link) and anyone without a
-          mentoring assignment by employee number.
+        <h1 className="text-xl font-semibold tracking-tight border-b border-white/5 pb-3 lg:pb-2">Mentee Roster</h1>
+        <p className="mt-2 text-sm text-slate-400 leading-snug lg:mt-1.5">
+          First-year pilots in this tenant, including assigned and pending mentorship relationships. Left CRA indicates
+          mentee CrewRules activation. Right CRA indicates mentor CrewRules activation. Staged mentors may appear without an
+          active account.
+        </p>
+        <p className="mt-1.5 text-xs text-slate-500">
+          Assigned = mentee linked to a CrewRules account · Pending = assignment created but not yet linked · Unassigned =
+          no mentor assigned · Right CRA reflects mentor account status
         </p>
       </div>
 
