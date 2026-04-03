@@ -15,6 +15,22 @@ function formatDohCell(value: string | null | undefined): string {
 const ROSTER_FILTER_SELECT_CLASS =
   "h-6 w-full min-w-0 cursor-pointer rounded border border-white/[0.07] bg-white/[0.03] px-1 py-0 pr-5 text-[10px] leading-none text-slate-300 transition-colors [color-scheme:dark] hover:border-white/11 hover:bg-white/[0.055] focus:border-[#75C043]/35 focus:outline-none focus:ring-1 focus:ring-[#75C043]/18 lg:bg-[length:0.5rem] lg:bg-[position:right_0.28rem_center] lg:bg-no-repeat lg:[background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2364748b'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.24 4.5a.75.75 0 01-1.08 0l-4.24-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E\")] lg:appearance-none";
 
+type MenteeRosterStatus = "live" | "not_live" | "unassigned";
+
+/** Single source for filter, counts, and Status cell (handles missing/invalid `status` after RSC serialize). */
+function statusFromRow(r: MenteeRosterRow): MenteeRosterStatus {
+  if (r.status === "live" || r.status === "not_live" || r.status === "unassigned") {
+    return r.status;
+  }
+  const hasMentor =
+    (r.mentor_name != null && r.mentor_name.trim() !== "") ||
+    r.mentor_account === "active" ||
+    r.mentor_account === "not_joined";
+  if (!hasMentor) return "unassigned";
+  if (r.mentee_account === "active" && r.mentor_account === "active") return "live";
+  return "not_live";
+}
+
 export type MenteeRosterRow = {
   key: string;
   name: string;
@@ -25,7 +41,7 @@ export type MenteeRosterRow = {
   next_milestone: string | null;
   mentor_account: "active" | "not_joined" | null;
   mentee_account: "active" | "not_joined" | null;
-  status: "assigned" | "pending" | "unassigned";
+  status: MenteeRosterStatus;
   mentee_email: string | null;
   mentee_phone: string | null;
   mentor_email: string | null;
@@ -34,21 +50,35 @@ export type MenteeRosterRow = {
 
 type Props = {
   roster: MenteeRosterRow[];
-  counts: { assigned: number; pending: number; unassigned: number };
+  counts: { live: number; not_live: number; unassigned: number };
 };
 
-type MenteeStatusFilter = "all" | "assigned" | "pending" | "unassigned";
+type MenteeStatusFilter = "all" | MenteeRosterStatus;
 
-export function MenteeRosterTable({ roster, counts }: Props) {
+export function MenteeRosterTable({ roster, counts: _countsFromServer }: Props) {
+  void _countsFromServer;
   const [openContactId, setOpenContactId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<MenteeStatusFilter>("all");
+
+  const displayCounts = useMemo(() => {
+    let live = 0;
+    let not_live = 0;
+    let unassigned = 0;
+    for (const r of roster) {
+      const s = statusFromRow(r);
+      if (s === "live") live++;
+      else if (s === "not_live") not_live++;
+      else unassigned++;
+    }
+    return { live, not_live, unassigned };
+  }, [roster]);
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = roster;
     if (statusFilter !== "all") {
-      list = list.filter((r) => r.status === statusFilter);
+      list = list.filter((r) => statusFromRow(r) === statusFilter);
     }
     if (q) {
       list = list.filter((r) => {
@@ -92,8 +122,8 @@ export function MenteeRosterTable({ roster, counts }: Props) {
                 className={ROSTER_FILTER_SELECT_CLASS}
               >
                 <option value="all">All</option>
-                <option value="assigned">Assigned</option>
-                <option value="pending">Pending</option>
+                <option value="live">Live</option>
+                <option value="not_live">Not Live</option>
                 <option value="unassigned">Unassigned</option>
               </select>
             </label>
@@ -110,9 +140,9 @@ export function MenteeRosterTable({ roster, counts }: Props) {
         </div>
       </div>
       <div className="flex gap-4 text-sm pb-2">
-        <span className="text-emerald-400">Assigned: {counts.assigned}</span>
-        <span className="text-amber-400">Pending: {counts.pending}</span>
-        <span className="text-slate-400">Unassigned: {counts.unassigned}</span>
+        <span className="text-emerald-400">Live: {displayCounts.live}</span>
+        <span className="text-amber-400">Not Live: {displayCounts.not_live}</span>
+        <span className="text-slate-400">Unassigned: {displayCounts.unassigned}</span>
       </div>
       <div className="overflow-x-auto rounded-lg border border-white/5">
         <table className="w-full text-sm min-w-[820px]">
@@ -131,6 +161,7 @@ export function MenteeRosterTable({ roster, counts }: Props) {
           </thead>
           <tbody>
             {filteredRows.map((r) => {
+              const rowStatus = statusFromRow(r);
               const menteePhoneFmt = formatUsPhoneStored(r.mentee_phone);
               const mentorPhoneFmt = formatUsPhoneStored(r.mentor_phone);
               return (
@@ -195,10 +226,10 @@ export function MenteeRosterTable({ roster, counts }: Props) {
                   )}
                 </td>
                 <td className="py-2 px-2 text-center">
-                  {r.status === "assigned" ? (
-                    <span className="text-emerald-400">Assigned</span>
-                  ) : r.status === "pending" ? (
-                    <span className="text-amber-400">Pending</span>
+                  {rowStatus === "live" ? (
+                    <span className="text-emerald-400">Live</span>
+                  ) : rowStatus === "not_live" ? (
+                    <span className="text-amber-400">Not Live</span>
                   ) : (
                     <span className="text-slate-400">Unassigned</span>
                   )}

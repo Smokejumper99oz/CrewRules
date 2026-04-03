@@ -180,6 +180,41 @@ export default async function FrontierPilotAdminMentoringMenteeRosterPage() {
     }
   }
 
+  const tenantStagedMentorEmps: string[] = [];
+  {
+    const { data: preloadEmpRows, error: preloadEmpErr } = await admin
+      .from("mentor_preload")
+      .select("employee_number")
+      .eq("tenant", TENANT);
+    if (!preloadEmpErr && preloadEmpRows?.length) {
+      for (const raw of preloadEmpRows) {
+        const e = normalize((raw as { employee_number: string | null }).employee_number);
+        if (e) tenantStagedMentorEmps.push(e);
+      }
+    }
+  }
+  const tenantStagedMentorEmpChunks = [...new Set(tenantStagedMentorEmps)];
+  if (tenantStagedMentorEmpChunks.length > 0) {
+    for (const part of chunk(tenantStagedMentorEmpChunks, IN_CHUNK)) {
+      const { data, error } = await admin
+        .from("mentor_assignments")
+        .select(ASSIGNMENT_SELECT)
+        .is("mentor_user_id", null)
+        .not("mentor_employee_number", "is", null)
+        .is("mentee_user_id", null)
+        .eq("active", true)
+        .in("mentor_employee_number", part);
+      if (error) break;
+      for (const r of data ?? []) {
+        const row = r as unknown as AssignmentRosterRow;
+        if (assignmentIds.has(row.id)) continue;
+        if (!normalize(row.employee_number)) continue;
+        assignmentIds.add(row.id);
+        assignments.push(row);
+      }
+    }
+  }
+
   const { data: unassignedMentorRows, error: unassignedErr } = await admin
     .from("mentor_assignments")
     .select(ASSIGNMENT_SELECT)
@@ -322,12 +357,16 @@ export default async function FrontierPilotAdminMentoringMenteeRosterPage() {
           ? "not_joined"
           : "active";
     const hasMentorOnAssignment =
-      normalize(a.mentor_user_id) !== "" || normalize(a.mentor_employee_number) !== "";
-    const rowStatus: "assigned" | "pending" | "unassigned" = !hasMentorOnAssignment
+      normalize(a.mentor_user_id) !== "" ||
+      normalize(a.mentor_employee_number) !== "" ||
+      (mentor_name.trim() !== "" && mentor_name !== "—");
+    const mentee_account: "active" | "not_joined" =
+      menteeProfile?.welcome_modal_version_seen == null ? "not_joined" : "active";
+    const rowStatus: "live" | "not_live" | "unassigned" = !hasMentorOnAssignment
       ? "unassigned"
-      : a.mentee_user_id
-        ? "assigned"
-        : "pending";
+      : mentee_account === "active" && mentor_account === "active"
+        ? "live"
+        : "not_live";
     roster.push({
       key: a.id,
       name,
@@ -337,7 +376,7 @@ export default async function FrontierPilotAdminMentoringMenteeRosterPage() {
       mentorship_status: workspaceRow?.mentoring_status ?? "Active",
       next_milestone: nextMilestoneLabel,
       mentor_account,
-      mentee_account: menteeProfile?.welcome_modal_version_seen == null ? "not_joined" : "active",
+      mentee_account,
       status: rowStatus,
       mentee_email:
         menteeProfile?.personal_email?.trim() || (a.mentee_personal_email?.trim() ?? null) || null,
@@ -378,15 +417,15 @@ export default async function FrontierPilotAdminMentoringMenteeRosterPage() {
   }
 
   const counts = {
-    assigned: roster.filter((r) => r.status === "assigned").length,
-    pending: roster.filter((r) => r.status === "pending").length,
+    live: roster.filter((r) => r.status === "live").length,
+    not_live: roster.filter((r) => r.status === "not_live").length,
     unassigned: roster.filter((r) => r.status === "unassigned").length,
   };
 
   const statusOrder = {
     unassigned: 0,
-    pending: 1,
-    assigned: 2,
+    not_live: 1,
+    live: 2,
   };
 
   roster.sort((a, b) => {
@@ -400,13 +439,13 @@ export default async function FrontierPilotAdminMentoringMenteeRosterPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight border-b border-white/5 pb-3 lg:pb-2">Mentee Roster</h1>
         <p className="mt-2 text-sm text-slate-400 leading-snug lg:mt-1.5">
-          Frontier Airlines first-year pilots, including assigned and pending mentorship relationships. Left CRA indicates
-          mentee CrewRules activation. Right CRA indicates mentor CrewRules activation. Staged mentors may appear without an
-          active account.
+          Frontier Airlines first-year pilots and mentoring assignment rows. Left CRA shows mentee CrewRules activation.
+          Right CRA shows mentor CrewRules activation. Staged mentors may appear without a live account.
         </p>
         <p className="mt-1.5 text-xs text-slate-500">
-          Assigned = mentee linked to a CrewRules account · Pending = assignment created but not yet linked · Unassigned =
-          no mentor assigned · Right CRA reflects mentor account status
+          Live = mentor and mentee are both active in CrewRules · Not Live = mentor assigned but one or both have not
+          activated CrewRules yet · Unassigned = no mentor assigned · Left CRA shows mentee activation · Right CRA shows
+          mentor activation
         </p>
       </div>
 
