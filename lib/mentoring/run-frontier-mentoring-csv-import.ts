@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ParsedMentoringCsvOk } from "@/lib/mentoring/mentoring-csv-import";
 import {
   normalizeHireDate,
   normalizeOptionalPersonalEmail,
@@ -22,6 +23,30 @@ export type MentoringCsvImportRowResult = {
   /** Present for all rows from this runner; optional for older `row_results` JSON in history. */
   display?: MentoringCsvImportRowDisplay;
 };
+
+/** Tenant for single shared hire_date preflight (Frontier class uploads only). */
+const FRONTIER_SINGLE_CLASS_HIRE_DATE_TENANT = "frontier";
+
+/**
+ * Rows that look like real class data: same gates as the import loop before per-row DB work
+ * (blank rows skipped; hire + mentee name + mentee emp required; normalized hire_date required).
+ */
+function distinctNormalizedHireDatesForPreflight(rows: ParsedMentoringCsvOk["rows"]): Set<string> {
+  const distinct = new Set<string>();
+  for (const { values } of rows) {
+    const mentorEmp = values.mentor_employee_number.trim();
+    const hireRaw = values.hire_date.trim();
+    const menteeName = values.mentee_full_name.trim();
+    const menteeEmp = values.mentee_employee_number.trim();
+    const allRequiredBlank = !mentorEmp && !hireRaw && !menteeName && !menteeEmp;
+    if (allRequiredBlank) continue;
+    if (!hireRaw || !menteeName || !menteeEmp) continue;
+    const hireDateNorm = normalizeHireDate(hireRaw);
+    if (!hireDateNorm) continue;
+    distinct.add(hireDateNorm);
+  }
+  return distinct;
+}
 
 function rowDisplay(
   mentorEmployeeNumber: string,
@@ -71,6 +96,17 @@ export async function runFrontierMentoringCsvImport(
   const parsed = parseFrontierMentoringCsv(csvText);
   if (!parsed.ok) {
     return { rows: [], fatalError: parsed.error };
+  }
+
+  if (tenant === FRONTIER_SINGLE_CLASS_HIRE_DATE_TENANT) {
+    const distinctHire = distinctNormalizedHireDatesForPreflight(parsed.data.rows);
+    if (distinctHire.size > 1) {
+      const sorted = [...distinctHire].sort();
+      return {
+        rows: [],
+        fatalError: `Frontier class imports must use one shared Hire Date for every row in the file. This upload has ${distinctHire.size} different dates: ${sorted.join(", ")}. Fix the spreadsheet so all rows use the same date, then try again.`,
+      };
+    }
   }
 
   const results: MentoringCsvImportRowResult[] = [];

@@ -95,6 +95,8 @@ export default async function FrontierPilotAdminMentoringMenteeImportPage() {
 
           <p className="mt-3 text-sm font-semibold text-slate-200">How it works</p>
           <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+            <li>All rows in one mentee class upload must use the same Hire Date</li>
+            <li>If multiple hire dates are detected, the import will stop (no partial writes)</li>
             <li>Employee number is the source of truth for matching mentees</li>
             <li>Mentor employee number is optional; blank imports as Unassigned</li>
             <li>Existing assignments update automatically by employee number</li>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { formatUsPhoneStored } from "@/lib/format-us-phone";
 
 /** Admin table: show DOH as YYYY/MM/DD when stored as YYYY-MM-DD. */
@@ -9,6 +9,30 @@ function formatDohCell(value: string | null | undefined): string {
   const s = String(value).trim().slice(0, 10);
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.replace(/-/g, "/");
   return s;
+}
+
+/** Normalize hire_date / DOH to YYYY-MM-DD for cohort key; null if unparseable or empty. */
+function hireDateToYyyyMmDd(value: string | null | undefined): string | null {
+  if (value == null || !String(value).trim()) return null;
+  const raw = String(value).trim();
+  const head = raw.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(head)) return head;
+  const mdY = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw);
+  if (mdY) {
+    const m = Number(mdY[1]);
+    const d = Number(mdY[2]);
+    const y = Number(mdY[3]);
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+  return null;
+}
+
+/** Readable label for class filter (hire date cohort). */
+function formatClassOptionLabel(ymd: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd;
+  const [ys, ms, ds] = ymd.split("-");
+  const dt = new Date(Number(ys), Number(ms) - 1, Number(ds));
+  return dt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 /** Compact toolbar selects — same visual family as Mentor Roster. */
@@ -55,11 +79,28 @@ type Props = {
 
 type MenteeStatusFilter = "all" | MenteeRosterStatus;
 
+const ROSTER_FILTER_INPUT_CLASS =
+  "h-6 w-full max-w-full min-w-0 rounded border border-white/[0.07] bg-white/[0.03] px-1.5 text-[10px] leading-none text-slate-300 placeholder:text-slate-600 transition-colors hover:border-white/11 hover:bg-white/[0.055] focus:border-[#75C043]/35 focus:outline-none focus:ring-1 focus:ring-[#75C043]/18";
+
 export function MenteeRosterTable({ roster, counts: _countsFromServer }: Props) {
   void _countsFromServer;
+  const searchFieldId = useId();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [openContactId, setOpenContactId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [classFilter, setClassFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<MenteeStatusFilter>("all");
+
+  /** Native `input` listener: keeps filter state in sync when typed value and React state diverge (e.g. change not applied). */
+  useEffect(() => {
+    const el = searchInputRef.current;
+    if (!el) return;
+    const onNativeInput = () => {
+      setSearch(el.value);
+    };
+    el.addEventListener("input", onNativeInput);
+    return () => el.removeEventListener("input", onNativeInput);
+  }, []);
 
   const displayCounts = useMemo(() => {
     let live = 0;
@@ -74,12 +115,24 @@ export function MenteeRosterTable({ roster, counts: _countsFromServer }: Props) 
     return { live, not_live, unassigned };
   }, [roster]);
 
+  const classOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of roster) {
+      const k = hireDateToYyyyMmDd(r.hire_date);
+      if (k) set.add(k);
+    }
+    return [...set].sort();
+  }, [roster]);
+
+  useEffect(() => {
+    if (classFilter === "all") return;
+    if (classOptions.includes(classFilter)) return;
+    setClassFilter("all");
+  }, [classOptions, classFilter]);
+
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = roster;
-    if (statusFilter !== "all") {
-      list = list.filter((r) => statusFromRow(r) === statusFilter);
-    }
     if (q) {
       list = list.filter((r) => {
         const name = (r.name ?? "").toLowerCase();
@@ -88,29 +141,61 @@ export function MenteeRosterTable({ roster, counts: _countsFromServer }: Props) 
         return name.includes(q) || emp.includes(q) || mentor.includes(q);
       });
     }
+    if (classFilter !== "all") {
+      list = list.filter((r) => hireDateToYyyyMmDd(r.hire_date) === classFilter);
+    }
+    if (statusFilter !== "all") {
+      list = list.filter((r) => statusFromRow(r) === statusFilter);
+    }
     return list;
-  }, [roster, search, statusFilter]);
+  }, [roster, search, classFilter, statusFilter]);
 
   const toggleContactId = (id: string) => {
     setOpenContactId((prev) => (prev === id ? null : id));
   };
 
   return (
-    <div>
+    <div className="min-w-0">
       <div className="mb-3 rounded-lg border border-white/5 bg-slate-950/35 px-2.5 py-1.5 lg:mb-2 lg:px-3 lg:py-1">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-3">
-          <div className="grid min-w-0 flex-1 grid-cols-1 gap-x-1.5 gap-y-1 sm:grid-cols-2 sm:items-end">
-            <label className="min-w-0 sm:max-w-[15rem]">
-              <span className="mb-px block text-[8px] font-semibold uppercase leading-none tracking-wide text-slate-500">
-                Search
-              </span>
+          <div className="grid min-w-0 flex-1 grid-cols-1 gap-x-1.5 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3 sm:items-end">
+            <div className="min-w-0 sm:max-w-[16rem] lg:max-w-[14rem]">
+              <label htmlFor={searchFieldId} className="block">
+                <span className="mb-px block text-[8px] font-semibold uppercase leading-none tracking-wide text-slate-500">
+                  Search
+                </span>
+              </label>
               <input
-                type="search"
+                ref={searchInputRef}
+                id={searchFieldId}
+                type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Name, emp #, mentor..."
-                className="h-6 w-full max-w-full rounded border border-white/[0.07] bg-white/[0.03] px-1.5 text-[10px] leading-none text-slate-300 placeholder:text-slate-600 transition-colors hover:border-white/11 hover:bg-white/[0.055] focus:border-[#75C043]/35 focus:outline-none focus:ring-1 focus:ring-[#75C043]/18"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                className={ROSTER_FILTER_INPUT_CLASS}
               />
+            </div>
+            <label className="min-w-0">
+              <span className="mb-px block text-[8px] font-semibold uppercase leading-none tracking-wide text-slate-500">
+                Class
+              </span>
+              <select
+                value={classFilter}
+                onChange={(e) => setClassFilter(e.target.value)}
+                className={ROSTER_FILTER_SELECT_CLASS}
+                title="Hire date cohort (DOH)"
+              >
+                <option value="all">All classes</option>
+                {classOptions.map((ymd) => (
+                  <option key={ymd} value={ymd}>
+                    {formatClassOptionLabel(ymd)}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="min-w-0">
               <span className="mb-px block text-[8px] font-semibold uppercase leading-none tracking-wide text-slate-500">
@@ -144,19 +229,38 @@ export function MenteeRosterTable({ roster, counts: _countsFromServer }: Props) 
         <span className="text-amber-400">Not Live: {displayCounts.not_live}</span>
         <span className="text-slate-400">Unassigned: {displayCounts.unassigned}</span>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-white/5">
-        <table className="w-full text-sm min-w-[820px]">
+      <div className="min-w-0 max-w-full overflow-hidden rounded-lg border border-white/5">
+        <table className="table-fixed w-full max-w-full text-sm">
+          <colgroup>
+            <col className="w-[5%]" />
+            <col className="w-[16%]" />
+            <col className="w-[10%]" />
+            <col className="w-[10%]" />
+            <col className="w-[12%]" />
+            <col className="w-[16%]" />
+            <col className="w-[11%]" />
+            <col className="w-[5%]" />
+            <col className="w-[15%]" />
+          </colgroup>
           <thead className="border-b border-white/5 bg-white/[0.03] text-slate-400">
             <tr>
-              <th className="text-center py-2 w-[60px]">CRA</th>
-              <th className="py-2 pl-3 pr-2 text-left font-medium">Mentee Name</th>
+              <th className="py-2 text-center">CRA</th>
+              <th className="min-w-0 overflow-hidden whitespace-nowrap text-left truncate py-2 pl-3 pr-2 font-medium">
+                Mentee Name
+              </th>
               <th className="py-2 px-2 text-center font-medium">Emp.#</th>
               <th className="py-2 px-2 text-center font-medium">DOH</th>
-              <th className="py-2 px-2 text-center font-medium">Mentorship</th>
-              <th className="py-2 px-2 text-center font-medium">Next Milestone</th>
+              <th className="min-w-0 overflow-hidden whitespace-nowrap truncate py-2 px-2 text-center font-medium">
+                Mentorship
+              </th>
+              <th className="min-w-0 overflow-hidden whitespace-nowrap truncate py-2 px-2 text-center font-medium">
+                Next Milestone
+              </th>
               <th className="py-2 px-2 text-center font-medium">Status</th>
-              <th className="text-center py-2 w-[60px]">CRA</th>
-              <th className="text-left py-2 pl-2 pr-3 font-medium">Mentor</th>
+              <th className="py-2 text-center">CRA</th>
+              <th className="min-w-0 overflow-hidden whitespace-nowrap truncate py-2 pl-2 pr-3 text-left font-medium">
+                Mentor
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -174,12 +278,12 @@ export function MenteeRosterTable({ roster, counts: _countsFromServer }: Props) 
                     <span className="text-amber-400 font-semibold">✕</span>
                   )}
                 </td>
-                <td className="py-2 pl-3 pr-2 text-slate-200">
-                  <div className="flex flex-col gap-0.5">
+                <td className="min-w-0 overflow-hidden py-2 pl-3 pr-2 text-slate-200">
+                  <div className="flex min-w-0 flex-col gap-0.5">
                     <button
                       type="button"
                       onClick={() => toggleContactId(`${r.key}:mentee`)}
-                      className="text-left text-slate-200 hover:underline"
+                      className="block w-full min-w-0 truncate text-left text-slate-200 hover:underline"
                     >
                       {r.name}
                     </button>
@@ -204,25 +308,25 @@ export function MenteeRosterTable({ roster, counts: _countsFromServer }: Props) 
                 </td>
                 <td className="py-2 px-2 text-center font-mono tabular-nums text-slate-300">{r.employee_number}</td>
                 <td className="py-2 px-2 text-center tabular-nums text-slate-300">{formatDohCell(r.hire_date)}</td>
-                <td className="py-2 px-2 text-center">
+                <td className="min-w-0 overflow-hidden whitespace-nowrap px-2 py-2 text-center">
                   {r.mentorship_status === "Military Leave" && (
-                    <span className="text-amber-400">Military Leave</span>
+                    <span className="block truncate text-amber-400">Military Leave</span>
                   )}
                   {r.mentorship_status === "Active" && (
-                    <span className="text-emerald-400">Active</span>
+                    <span className="block truncate text-emerald-400">Active</span>
                   )}
-                  {!r.mentorship_status && "—"}
+                  {!r.mentorship_status && <span className="block truncate">—</span>}
                   {r.mentorship_status &&
                     r.mentorship_status !== "Military Leave" &&
                     r.mentorship_status !== "Active" && (
-                      <span className="text-slate-300">{r.mentorship_status}</span>
+                      <span className="block truncate text-slate-300">{r.mentorship_status}</span>
                     )}
                 </td>
-                <td className="py-2 px-2 text-center text-slate-200">
+                <td className="min-w-0 overflow-hidden whitespace-nowrap px-2 py-2 text-center text-slate-200">
                   {r.next_milestone === "Paused" ? (
-                    <span className="text-amber-400">Paused</span>
+                    <span className="block truncate text-amber-400">Paused</span>
                   ) : (
-                    (r.next_milestone ?? "—")
+                    <span className="block truncate">{r.next_milestone ?? "—"}</span>
                   )}
                 </td>
                 <td className="py-2 px-2 text-center">
@@ -243,13 +347,13 @@ export function MenteeRosterTable({ roster, counts: _countsFromServer }: Props) 
                   )}
                   {r.mentor_account !== "active" && r.mentor_account !== "not_joined" && "—"}
                 </td>
-                <td className="py-2 pl-2 pr-3 text-slate-200">
+                <td className="min-w-0 overflow-hidden py-2 pl-2 pr-3 text-slate-200">
                   {r.mentor_name && r.mentor_name !== "—" ? (
-                    <div className="flex flex-col gap-0.5">
+                    <div className="flex min-w-0 flex-col gap-0.5">
                       <button
                         type="button"
                         onClick={() => toggleContactId(`${r.key}:mentor`)}
-                        className="text-left text-slate-200 hover:underline"
+                        className="block w-full min-w-0 truncate text-left text-slate-200 hover:underline"
                       >
                         {r.mentor_name}
                       </button>
