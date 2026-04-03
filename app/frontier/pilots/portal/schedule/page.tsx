@@ -14,7 +14,6 @@ import {
 } from "./actions";
 import { InboundEmailDisplay } from "@/components/inbound-email-display";
 import { FlicaIcsHelperModal } from "@/components/flica-ics-helper-modal";
-import { formatLegLine } from "@/lib/trips/detect-trip-changes";
 import type { TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { formatMinutesToHhMm } from "@/lib/schedule-time";
 import { ScheduleStatusChip, formatLastImport } from "@/components/schedule-status-chip";
@@ -364,7 +363,7 @@ export default function SchedulePage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importTechnicalError, setImportTechnicalError] = useState<string | null>(null);
-  const [tripChangeSummaries, setTripChangeSummaries] = useState<TripChangeSummary[] | null>(null);
+  const [, setTripChangeSummaries] = useState<TripChangeSummary[] | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [status, setStatus] = useState<{ count: number; lastImportedAt: string | null; status: "no_schedule" | "up_to_date" | "outdated" } | null>(null);
@@ -534,7 +533,7 @@ export default function SchedulePage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".ics,.vcs,text/calendar"
+            accept=".vcs,text/calendar"
             className="hidden"
             onChange={handleFileChange}
             disabled={importing}
@@ -549,7 +548,7 @@ export default function SchedulePage() {
                 disabled={importing}
                 className="rounded-lg bg-[#75C043] px-4 py-1.5 text-sm font-semibold text-slate-950 hover:opacity-95 transition disabled:opacity-50"
               >
-                {importing ? "Uploading…" : "Upload FLICA Schedule (.ICS)"}
+                {importing ? "Uploading…" : "Upload FLICA schedule (.VCS)"}
               </button>
               {status != null && status.count > 0 && (
                 <button
@@ -566,14 +565,10 @@ export default function SchedulePage() {
         {status != null && status.lastImportedAt && status.status !== "no_schedule" && (
           <p className="mt-2 text-right text-xs text-slate-400">Last Import: {formatLastImport(status.lastImportedAt)}</p>
         )}
-        <p className="mt-1 text-sm text-slate-400">
-          Import your schedule into CrewRules™ using one of these methods:
-        </p>
-        <ul className="mt-1 text-sm text-slate-400 list-disc list-inside space-y-0.5">
-          <li>Automatic updates — Add your CrewRules™ import email to ELP</li>
-          <li>Email import — Send your schedule from FLICA to your CrewRules™ import email</li>
+        <h2 className="mt-2 text-base font-semibold text-slate-200">Import your schedule into CrewRules™</h2>
+        <ul className="mt-2 list-disc space-y-2 pl-5 text-sm text-slate-400 marker:text-slate-400">
           <li>
-            Manual upload — Upload your FLICA .ics file{" "}
+            Upload your FLICA vCalendar v1.0 (.VCS) file to import your full schedule.{" "}
             <button
               type="button"
               onClick={() => setShowFlicaIcsGuide(true)}
@@ -582,43 +577,20 @@ export default function SchedulePage() {
               View guide
             </button>
           </li>
+          <li>
+            Optional: Add your CrewRules™ import email to ELP to receive reserve updates when sent by Crew
+            Scheduling.
+          </li>
         </ul>
+        <p className="mt-2 text-xs text-slate-500">
+          If you previously uploaded a schedule using the .ICS format, tap Clear schedule once and upload your
+          latest .VCS file.
+        </p>
       </div>
 
       {importEmail && (
         <div className="px-4 sm:px-6">
           <InboundEmailDisplay email={importEmail} variant="schedule" />
-        </div>
-      )}
-
-      {tripChangeSummaries && tripChangeSummaries.length > 0 && (
-        <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-slate-200">Trip updated</h3>
-          {tripChangeSummaries.map((s, i) => (
-            <div key={i} className="space-y-2 text-xs">
-              <p className="font-mono text-slate-300">{s.pairing}</p>
-              {s.removedLegs.length > 0 && (
-                <p className="text-slate-400">
-                  Removed: {s.removedLegs.map((l) => formatLegLine(l, false)).join("; ")}
-                </p>
-              )}
-              {s.addedLegs.length > 0 && (
-                <p className="text-slate-400">
-                  Added: {s.addedLegs.map((l) => formatLegLine(l, true)).join("; ")}
-                </p>
-              )}
-              {s.reportChanged && (
-                <p className="text-slate-400">
-                  Report: {s.reportChanged.before} → {s.reportChanged.after}
-                </p>
-              )}
-              {s.creditChanged && (
-                <p className="text-slate-400">
-                  Credit: {formatMinutesToHhMm(s.creditChanged.before)} → {formatMinutesToHhMm(s.creditChanged.after)}
-                </p>
-              )}
-            </div>
-          ))}
         </div>
       )}
 

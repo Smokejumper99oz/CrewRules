@@ -55,7 +55,7 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
     title: "Schedule import reliability",
     type: "fix",
     bullets: [
-      "More resilient handling of repeated ICS imports.",
+      "More resilient handling of repeated schedule imports.",
       "Fewer duplicate trip rows when re-syncing from email.",
     ],
   },

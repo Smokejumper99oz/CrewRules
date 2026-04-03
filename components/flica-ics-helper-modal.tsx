@@ -25,7 +25,7 @@ export function FlicaIcsHelperModal({ open, onClose }: Props) {
       >
         <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
           <h2 id="flica-helper-modal-title" className="text-lg font-semibold text-white">
-            FLICA ICS Import Guide
+            FLICA schedule import guide
           </h2>
           <button
             type="button"

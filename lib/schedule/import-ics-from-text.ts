@@ -95,7 +95,7 @@ export async function importIcsFromText(
   try {
     parsed = parseIcs(icsText, { sourceTimezone });
   } catch {
-    return { error: "Invalid ICS file. Could not parse calendar." };
+    return { error: "Could not read this schedule file. Check that it is a valid FLICA vCalendar (.VCS) export." };
   }
 
   const now = new Date();
@@ -130,6 +130,12 @@ export async function importIcsFromText(
 
   if (events.length === 0) {
     return { error: "No calendar events found in the file" };
+  }
+
+  const uidCounts = new Map<string, number>();
+  for (const ev of events) {
+    const u = ev.externalUid?.trim() ?? "";
+    if (u.length > 0) uidCounts.set(u, (uidCounts.get(u) ?? 0) + 1);
   }
 
   const sortedByStart = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
@@ -188,15 +194,24 @@ export async function importIcsFromText(
   };
 
   let rows = events.map((e) => {
-    const baseUid =
-      e.externalUid?.trim() ||
-      `anon-${createHash("sha256").update(`${e.start.toISOString()}|${e.end.toISOString()}|${e.title}`).digest("hex").slice(0, 24)}`;
-    const externalUid = `${baseUid}-${e.start.toISOString()}`;
+    const trimmedUid = e.externalUid?.trim() ?? "";
+    const hashPart = createHash("sha256")
+      .update(`${e.start.toISOString()}|${e.end.toISOString()}|${e.title}`)
+      .digest("hex")
+      .slice(0, 24);
+    let externalUid: string;
+    if (trimmedUid.length === 0) {
+      externalUid = `anon-${hashPart}`;
+    } else if ((uidCounts.get(trimmedUid) ?? 0) > 1) {
+      externalUid = `cr-ics-dup-${hashPart}`;
+    } else {
+      externalUid = trimmedUid;
+    }
     return toRow({ ...e, externalUid });
   });
 
-  // Prevents duplicate trip rows when the same trip is re-imported from email updates or retries.
-  // 1. Dedupe within incoming rows (keep first by title, start_time, end_time, source)
+  // Dedupe within the incoming file only. Rows already in DB must still be upserted so that after the
+  // bid-window mute step they are re-written with is_muted: false (avoids "Previous" stale rows).
   const seenInBatch = new Set<string>();
   rows = rows.filter((r) => {
     const key = `${r.title ?? ""}|${r.start_time}|${r.end_time}|${r.source}`;
@@ -204,23 +219,6 @@ export async function importIcsFromText(
     seenInBatch.add(key);
     return true;
   });
-
-  // 2. Skip rows that already exist (user_id, title, start_time, end_time, source)
-  if (rows.length > 0) {
-    const minStartTime = rows.reduce((a, r) => (r.start_time < a ? r.start_time : a), rows[0].start_time);
-    const maxStartTime = rows.reduce((a, r) => (r.start_time > a ? r.start_time : a), rows[0].start_time);
-    const { data: existingRows } = await supabase
-      .from("schedule_events")
-      .select("title, start_time, end_time")
-      .eq("user_id", userId)
-      .eq("source", FLICA_SOURCE)
-      .gte("start_time", minStartTime)
-      .lte("start_time", maxStartTime);
-    const existingKeys = new Set(
-      (existingRows ?? []).map((e) => `${(e as { title: string | null }).title ?? ""}|${(e as { start_time: string }).start_time}|${(e as { end_time: string }).end_time}|${FLICA_SOURCE}`)
-    );
-    rows = rows.filter((r) => !existingKeys.has(`${r.title ?? ""}|${r.start_time}|${r.end_time}|${r.source}`));
-  }
 
   if (rows.length === 0) {
     return {

@@ -242,6 +242,7 @@ export async function getNextDuty(): Promise<{
       .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
+      .or("is_muted.eq.false,is_muted.is.null")
       .lte("start_time", nowIso)
       .gt("end_time", nowIso)
       .order("start_time", { ascending: true })
@@ -304,6 +305,7 @@ export async function getNextDuty(): Promise<{
       .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
+      .or("is_muted.eq.false,is_muted.is.null")
       .gte("start_time", nowIso)
       .order("start_time", { ascending: true })
       .limit(50);
@@ -356,6 +358,7 @@ async function findNextEventForDate(
     .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
     .eq("user_id", userId)
     .eq("source", FLICA_SOURCE)
+    .or("is_muted.eq.false,is_muted.is.null")
     .lte("start_time", dayEnd)
     .gte("end_time", dayStart)
     .order("start_time", { ascending: true })
@@ -476,6 +479,7 @@ export async function getUpcomingEvents(limit = 8): Promise<{ events: ScheduleEv
       .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
+      .or("is_muted.eq.false,is_muted.is.null")
       .gte("start_time", nowIso)
       .order("start_time", { ascending: true })
       .limit(limit);
@@ -541,6 +545,8 @@ export type MonthStats = {
   rawCreditMinutes: number;
   guaranteeMinutes: number;
   creditAfterGuaranteeMinutes: number;
+  /** Line credit after reserve guarantee floor, plus pickup / non-line trip credit (pre-premium). */
+  finalCreditedMinutes: number;
   paidMinutes: number;
   /** Credit minutes for display (always equals paidMinutes) */
   creditMinutes: number;
@@ -594,6 +600,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
     rawCreditMinutes: 0,
     guaranteeMinutes: 0,
     creditAfterGuaranteeMinutes: 0,
+    finalCreditedMinutes: 0,
     paidMinutes: 0,
     creditMinutes: 0,
   };
@@ -617,7 +624,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("start_time, end_time, event_type, title, credit_hours, credit_minutes, baseline_credit_minutes, pairing_days, block_minutes, is_muted")
+      .select("start_time, end_time, event_type, title, credit_hours, credit_minutes, baseline_credit_minutes, pairing_days, block_minutes, is_reserve_assignment, is_muted")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", endStr)
@@ -670,6 +677,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
       baseline_credit_minutes: number | null;
       pairing_days: number | null;
       block_minutes: number | null;
+      is_reserve_assignment: boolean | null;
       is_muted: boolean | null;
     }[];
 
@@ -763,6 +771,10 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
           blockHrs = ev.block_minutes / 60;
           creditHrs = evCreditHrs;
           extraHrs = Math.max(0, evCreditHrs - ev.block_minutes / 60);
+        } else if (ev.is_reserve_assignment === true && evCreditHrs != null && evCreditHrs > 0) {
+          creditHrs = evCreditHrs;
+          blockHrs = 0;
+          extraHrs = 0;
         } else if (ev.pairing_days != null || ev.block_minutes != null) {
           const { blockMinutes, creditMinutes, extraCreditMinutes } = computeTripCredit(
             ev.pairing_days,
@@ -859,6 +871,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
       rawCreditMinutes,
       guaranteeMinutes,
       creditAfterGuaranteeMinutes,
+      finalCreditedMinutes,
       paidMinutes,
       creditMinutes: paidMinutes,
       creditDeltaMinutes: totalCreditDeltaMinutes,
