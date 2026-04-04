@@ -186,7 +186,7 @@ export type ScheduleEvent = {
   legs?: ScheduleEventLeg[] | null;
 };
 
-export type NextDutyLabel = "on_duty" | "later_today" | "next_duty";
+export type NextDutyLabel = "on_duty" | "later_today" | "next_duty" | "post_duty_release";
 
 /** True if title is a vacation code (e.g. V35, V15). Trim + uppercase, match /^V\d+$/. */
 function isVacationCode(title: string | null | undefined): boolean {
@@ -202,6 +202,10 @@ export async function getNextDuty(): Promise<{
   displayDateStr?: string | null;
   /** True when event overlaps now (start <= now < end); Commute Assist uses for to_home vs to_base. */
   isInPairing?: boolean;
+  /** When set, Commute Assist uses this direction instead of inferring from isInPairing / label. */
+  commuteAssistDirection?: "to_home" | "to_base";
+  /** True on last reserve day when now is within 4h before scheduled reserve end (overlapping reserve row only). */
+  commuteAssistReserveEarlyReleaseWindow?: boolean;
   error?: string;
 }> {
   const profile = await getProfile();
@@ -253,6 +257,22 @@ export async function getNextDuty(): Promise<{
     if (onDutyData) {
       const ev = onDutyData as ScheduleEvent;
       if (!isVacationCode(ev.title)) {
+      const reserveEarlyReleaseCommuteFields =
+        ev.event_type === "reserve"
+          ? (() => {
+              const endMs = new Date(ev.end_time).getTime();
+              if (Number.isNaN(endMs)) return {};
+              const nowMs = Date.now();
+              const fourH = 4 * 60 * 60 * 1000;
+              if (nowMs < endMs - fourH || nowMs >= endMs) return {};
+              const endDateStr = formatInTimeZone(new Date(ev.end_time), baseTimezone, "yyyy-MM-dd");
+              if (endDateStr !== today) return {};
+              return {
+                commuteAssistDirection: "to_home" as const,
+                commuteAssistReserveEarlyReleaseWindow: true as const,
+              };
+            })()
+          : {};
       const legs = ev.legs ?? [];
       const tripDates = getTripDateStrings(ev.start_time, ev.end_time, baseTimezone);
 
@@ -267,6 +287,7 @@ export async function getNextDuty(): Promise<{
               legsToShow: legsForTomorrow,
               displayDateStr: tomorrow,
               isInPairing: true,
+              ...reserveEarlyReleaseCommuteFields,
             };
           }
           const nextEvent = await findNextEventForDate(supabase, profile.id, tomorrow, baseTimezone);
@@ -280,6 +301,7 @@ export async function getNextDuty(): Promise<{
               legsToShow: nextLegs,
               displayDateStr: tomorrow,
               isInPairing: true,
+              ...reserveEarlyReleaseCommuteFields,
             };
           }
         }
@@ -292,10 +314,11 @@ export async function getNextDuty(): Promise<{
             legsToShow: [nextLeg],
             displayDateStr: today,
             isInPairing: true,
+            ...reserveEarlyReleaseCommuteFields,
           };
         }
       }
-      return { event: ev, label: "on_duty", hasSchedule, isInPairing: true };
+      return { event: ev, label: "on_duty", hasSchedule, isInPairing: true, ...reserveEarlyReleaseCommuteFields };
       }
     }
 
@@ -313,6 +336,34 @@ export async function getNextDuty(): Promise<{
     if (upcomingError) return { event: null, label: null, hasSchedule, error: upcomingError.message };
 
     const upcoming = (upcomingData ?? []) as ScheduleEvent[];
+
+    const { data: lastEndedData, error: lastEndedError } = await supabase
+      .from("schedule_events")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
+      .eq("user_id", profile.id)
+      .eq("source", FLICA_SOURCE)
+      .or("is_muted.eq.false,is_muted.is.null")
+      .lt("end_time", nowIso)
+      .order("end_time", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!lastEndedError && lastEndedData) {
+      const lastEndedEvent = lastEndedData as ScheduleEvent;
+      if (!isVacationCode(lastEndedEvent.title)) {
+        const endDate = formatInTimeZone(new Date(lastEndedEvent.end_time), baseTimezone, "yyyy-MM-dd");
+        const nextStartsLater =
+          upcoming.length === 0 || nowIso < upcoming[0].start_time;
+        if (endDate === today && nextStartsLater) {
+          const legDates = { getTripDateStrings, getLegsForDate, todayStr };
+          return {
+            ...withLegsToShow(lastEndedEvent, today, baseTimezone, "post_duty_release", hasSchedule, legDates),
+            commuteAssistDirection: "to_home",
+          };
+        }
+      }
+    }
+
     if (upcoming.length === 0) {
       return { event: null, label: null, hasSchedule };
     }

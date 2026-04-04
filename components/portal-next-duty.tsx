@@ -72,6 +72,7 @@ const DUTY_LABELS: Record<string, string> = {
   on_duty: "On Duty",
   later_today: "Later today",
   next_duty: "Next Duty",
+  post_duty_release: "Trip Complete",
 };
 
 /** Normalize report_time (HH:MM or HHMM) to HH:MM for FAR 117 lookup. */
@@ -110,7 +111,7 @@ export async function PortalNextDuty({
   activeTrip?: ActiveTrip | null;
   tripChangeSummaries?: TripChangeSummary[];
 }) {
-  const [{ event, label, hasSchedule, legsToShow, displayDateStr, isInPairing }, statusData, displaySettings, profile] = await Promise.all([
+  const [{ event, label, hasSchedule, legsToShow, displayDateStr, isInPairing, commuteAssistDirection, commuteAssistReserveEarlyReleaseWindow }, statusData, displaySettings, profile] = await Promise.all([
     getNextDuty(),
     getScheduleImportStatus(),
     getScheduleDisplaySettings(),
@@ -136,7 +137,7 @@ export async function PortalNextDuty({
     baseAirport: displaySettings.baseAirport,
   };
   let scheduleEventCardLegsToShow = legsToShow;
-  if (event && event.event_type === "trip") {
+  if (label !== "post_duty_release" && event && event.event_type === "trip") {
     const reportNightMeta = getTripReportNightMeta(event, scheduleCardTimeOpts);
     const reportNightAppliesToThisCard =
       reportNightMeta.isReportNight &&
@@ -591,6 +592,7 @@ export async function PortalNextDuty({
               legsToShow={scheduleEventCardLegsToShow}
               displayDateStr={displayDateStr}
               reportTimeOverride={reportTimeOverride}
+              postDutyRelease={label === "post_duty_release"}
             />
           )}
           {far117Result && !activeTrip && (
@@ -614,6 +616,8 @@ export async function PortalNextDuty({
             proActive={proActive}
             displayDateStr={displayDateStr}
             isInPairing={isInPairing}
+            commuteAssistDirection={commuteAssistDirection}
+            commuteAssistReserveEarlyReleaseWindow={commuteAssistReserveEarlyReleaseWindow}
             dutyStartAirportOverride={legsToShow?.[0]?.origin}
             dutyEndAirportOverride={legsToShow?.[legsToShow.length - 1]?.destination}
             reportTimeOverride={reportTimeOverride}

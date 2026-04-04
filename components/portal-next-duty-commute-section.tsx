@@ -11,7 +11,7 @@ import { getPlanBadgeLabel, getPlanBadgeVariant } from "@/lib/profile-badge";
 
 type Props = {
   event: { start_time: string; end_time?: string; report_time?: string | null; route?: string | null };
-  label?: "on_duty" | "later_today" | "next_duty";
+  label?: "on_duty" | "later_today" | "next_duty" | "post_duty_release";
   profile: Profile | null;
   displaySettings: ScheduleDisplaySettings;
   tenant: string;
@@ -19,6 +19,8 @@ type Props = {
   proActive: boolean;
   displayDateStr?: string | null;
   isInPairing?: boolean;
+  commuteAssistDirection?: "to_home" | "to_base";
+  commuteAssistReserveEarlyReleaseWindow?: boolean;
   dutyStartAirportOverride?: string | null;
   dutyEndAirportOverride?: string | null;
   reportTimeOverride?: string | null;
@@ -35,6 +37,8 @@ export function PortalNextDutyCommuteSection({
   proActive,
   displayDateStr,
   isInPairing,
+  commuteAssistDirection,
+  commuteAssistReserveEarlyReleaseWindow,
   dutyStartAirportOverride,
   dutyEndAirportOverride,
   reportTimeOverride,
@@ -123,6 +127,8 @@ export function PortalNextDutyCommuteSection({
             portal={portal}
             displayDateStr={displayDateStr}
             isInPairing={isInPairing}
+            commuteAssistDirection={commuteAssistDirection}
+            commuteAssistReserveEarlyReleaseWindow={commuteAssistReserveEarlyReleaseWindow}
             dutyStartAirportOverride={dutyStartAirportOverride}
             dutyEndAirportOverride={dutyEndAirportOverride}
             reportTimeOverride={reportTimeOverride}

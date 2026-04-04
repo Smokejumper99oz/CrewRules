@@ -268,7 +268,7 @@ function convertRawFlightsToLegOptions(
 
 type Props = {
   event: { start_time: string; end_time?: string; report_time?: string | null; route?: string | null };
-  label?: "on_duty" | "later_today" | "next_duty";
+  label?: "on_duty" | "later_today" | "next_duty" | "post_duty_release";
   profile: NonNullable<Profile>;
   displaySettings: ScheduleDisplaySettings;
   tenant: string;
@@ -277,6 +277,10 @@ type Props = {
   displayDateStr?: string | null;
   /** When true, show to_home (return when pairing ends); when false, show to_base (commute to duty). */
   isInPairing?: boolean;
+  /** When set, overrides direction inferred from isInPairing / label. */
+  commuteAssistDirection?: "to_home" | "to_base";
+  /** Reserve: last-day window before scheduled end — show conditional commute messaging. */
+  commuteAssistReserveEarlyReleaseWindow?: boolean;
   /** When set (e.g. from legsToShow[0].origin), use as duty start airport for to_base. */
   dutyStartAirportOverride?: string | null;
   /** When set (e.g. from legsToShow[last].destination), use as duty end airport for to_home. */
@@ -910,7 +914,7 @@ function CommuteFlightRow({
   );
 }
 
-export function CommuteAssistProContent({ event, label, profile, displaySettings, tenant, portal, displayDateStr, isInPairing, dutyStartAirportOverride, dutyEndAirportOverride, reportTimeOverride }: Props) {
+export function CommuteAssistProContent({ event, label, profile, displaySettings, tenant, portal, displayDateStr, isInPairing, commuteAssistDirection, commuteAssistReserveEarlyReleaseWindow, dutyStartAirportOverride, dutyEndAirportOverride, reportTimeOverride }: Props) {
   const [commuteError, setCommuteError] = useState<string | null>(null);
   const [commuteGroups, setCommuteGroups] = useState<Record<"home" | "alternate", CommuteFlightOption[]>>({
     home: [],
@@ -954,9 +958,11 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   const hasValidBase = !!baseAirport && baseAirport.length === 3;
   const canUseCommute = hasValidHome && hasValidBase;
 
-  const direction = isInPairing !== undefined
-    ? (isInPairing ? "to_home" : "to_base")
-    : (label === "on_duty" ? "to_home" : "to_base");
+  const direction = commuteAssistDirection
+    ? commuteAssistDirection
+    : isInPairing !== undefined
+      ? (isInPairing ? "to_home" : "to_base")
+      : (label === "on_duty" ? "to_home" : "to_base");
   const dutyStart = new Date(event.start_time);
   const dutyOk = !Number.isNaN(dutyStart.getTime());
 
@@ -2017,6 +2023,11 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
         </>
       ) : (
         <p className="text-xs text-slate-400">Commute timing unavailable for this event.</p>
+      )}
+      {commuteAssistReserveEarlyReleaseWindow && (
+        <p className="text-xs text-amber-200/90 mt-1">
+          Possible commute home if released early or on schedule — actual release time may differ.
+        </p>
       )}
       {dutyOk && (
         <div className="mt-6 space-y-4">

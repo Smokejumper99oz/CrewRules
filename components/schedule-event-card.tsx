@@ -59,6 +59,8 @@ type Props = {
   headerTitleOverride?: string | null;
   /** Compact only: replaces the "Report" prefix before reportPart (e.g. FIRST LEG for continuation days). */
   compactTimeLabelOverride?: string | null;
+  /** Next-duty post-release: compact summary instead of full leg list. */
+  postDutyRelease?: boolean;
 };
 
 export function ScheduleEventCard({
@@ -71,6 +73,7 @@ export function ScheduleEventCard({
   reportTimeOverride,
   headerTitleOverride,
   compactTimeLabelOverride,
+  postDutyRelease,
 }: Props) {
   if (isRdPlaceholderEvent(event)) return null;
 
@@ -153,6 +156,46 @@ export function ScheduleEventCard({
     : displayDateStr
       ? formatDayLabel(`${displayDateStr}T12:00:00.000Z`, displaySettings.baseTimezone)
       : formatDayLabel(event.start_time, displaySettings.baseTimezone);
+
+  if (postDutyRelease) {
+    const eventLegs = event.legs ?? [];
+    const destFromEventLegs =
+      eventLegs.length > 0
+        ? eventLegs[eventLegs.length - 1]?.destination?.trim() || null
+        : null;
+    const slice = legsToShow ?? [];
+    const destFromSlice =
+      slice.length > 0 ? slice[slice.length - 1]?.destination?.trim() || null : null;
+    const routeFinalAirport = (() => {
+      const r = event.route?.trim();
+      if (!r) return null;
+      const codes = r.toUpperCase().match(/[A-Z]{3}/g);
+      if (!codes?.length) return null;
+      return codes[codes.length - 1] ?? null;
+    })();
+    const arrivalAirport = destFromEventLegs || destFromSlice || routeFinalAirport || "—";
+    const dutyEndFormatted = formatScheduleTime(event.end_time, timeOpts);
+    const releaseBorderStyle = EVENT_STYLES[event.event_type] ?? EVENT_STYLES.other;
+    const summaryClass = compact ? "text-xs text-slate-400" : "text-sm text-slate-400";
+    if (compact) {
+      return (
+        <div className={`flex flex-col gap-1 rounded-xl border px-3 py-2 ${releaseBorderStyle} bg-white dark:bg-slate-950/40`}>
+          <span className="text-xs font-medium text-slate-500">{dateLabel}</span>
+          <span className="font-medium text-white">{displayHeader}</span>
+          <span className={summaryClass}>Duty end {dutyEndFormatted}</span>
+          <span className={summaryClass}>Trip completed in {arrivalAirport}</span>
+        </div>
+      );
+    }
+    return (
+      <div className={`flex flex-col gap-1 rounded-xl border px-4 py-3 ${releaseBorderStyle} bg-white dark:bg-slate-950/40`}>
+        <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{dateLabel}</span>
+        <span className="text-lg font-medium text-white">{displayHeader}</span>
+        <span className={summaryClass}>Duty end {dutyEndFormatted}</span>
+        <span className={summaryClass}>Trip completed in {arrivalAirport}</span>
+      </div>
+    );
+  }
 
   const tz = displaySettings.baseTimezone;
   const tripPairingLabel =

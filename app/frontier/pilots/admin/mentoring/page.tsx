@@ -103,7 +103,10 @@ export default async function FrontierPilotAdminMentoringPage() {
             stats.unmatchedMentees > 0 ? "ring-1 ring-amber-400/20" : ""
           }`}
         >
-          <div className="text-xs text-slate-400 mb-1">Unmatched Mentees</div>
+          <div className="text-xs text-slate-400 mb-1">Unlinked Mentees</div>
+          <p className="mb-1 text-[10px] leading-snug text-slate-500">
+            Unlinked = assignment with no linked portal user yet
+          </p>
           <div
             className={`text-2xl font-semibold tabular-nums ${stats.unmatchedMentees > 0 ? "text-amber-300" : "text-slate-200"}`}
           >
@@ -115,7 +118,7 @@ export default async function FrontierPilotAdminMentoringPage() {
             stats.missingMentorContact > 0 ? "ring-1 ring-rose-400/20" : ""
           }`}
         >
-          <div className="text-xs text-slate-400 mb-1">Missing Mentor Contacts</div>
+          <div className="text-xs text-slate-400 mb-1">Mentor Contact Incomplete</div>
           <div
             className={`text-2xl font-semibold tabular-nums ${stats.missingMentorContact > 0 ? "text-rose-300" : "text-slate-200"}`}
           >
