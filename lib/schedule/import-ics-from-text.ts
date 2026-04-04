@@ -5,40 +5,28 @@
 
 import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { formatInTimeZone } from "date-fns-tz";
 import { parseIcs } from "@/lib/ics-parse";
-import { computeTripCredit } from "@/lib/schedule-time";
+import { computeTripCredit, expandEventToDaySegmentsInRange } from "@/lib/schedule-time";
 import { getReserveCreditPerDay } from "@/lib/tenant-config";
 import { detectTripChanges, type TripChangeSummary } from "@/lib/trips/detect-trip-changes";
-import { formatInTimeZone } from "date-fns-tz";
-import { getBidPeriodForTimestamp, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
+import { getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
+import {
+  inferScheduleEventTypeHeuristic,
+  isReserveAssignmentByTitle,
+  loadScheduleImportProtectedCodes,
+  normalizeScheduleImportTitle,
+  resolveScheduleEventType,
+  type ScheduleImportEventType,
+} from "@/lib/schedule/schedule-import-protected";
 
 const FLICA_SOURCE = "flica_import";
-
-/** Reserve codes: RSA, RSB, RSC, RSD, RSE, RSL. */
-const RESERVE_CODE = /\b(RSA|RSB|RSC|RSD|RSE|RSL)\b/i;
-
-/** True if title indicates a trip assigned from reserve (e.g. "RSA Trip S3019"). */
-function isReserveAssignmentByTitle(title: string): boolean {
-  return RESERVE_CODE.test(title ?? "") && (/\bTrip\b/i.test(title ?? "") || /\bS\d{4}\b/i.test(title ?? ""));
-}
-
-/**
- * Infer event_type from ICS summary/title (FLICA-style labels).
- */
-function inferEventType(summary: string): "trip" | "reserve" | "vacation" | "off" | "pay" {
-  const s = summary ?? "";
-  if (/\bVAC\b|Vacation|\bV\d+\b/i.test(s)) return "vacation";
-  if (/\bOFF\b|\bOff\b|Off Duty|DAY OFF/i.test(s)) return "off";
-  if (/\bPAY\b/i.test(s)) return "pay";
-  if (isReserveAssignmentByTitle(s)) return "trip";
-  if (/\b(RES|RSA|RSB|RSC|RSD|RDE|RSE|RSL)\b|Reserve/i.test(s)) return "reserve";
-  return "trip";
-}
 
 /** True if trip immediately follows a reserve event (short call → pairing). */
 function tripFollowsReserve(
   tripStart: Date,
-  allEvents: Array<{ start: Date; end: Date; title: string }>
+  allEvents: Array<{ start: Date; end: Date; title: string }>,
+  resolveEventType: (title: string) => ScheduleImportEventType
 ): boolean {
   const tripStartMs = tripStart.getTime();
   const preceding = allEvents
@@ -46,8 +34,7 @@ function tripFollowsReserve(
     .sort((a, b) => b.end.getTime() - a.end.getTime());
   const lastBefore = preceding[0];
   if (!lastBefore) return false;
-  const type = inferEventType(lastBefore.title);
-  if (type !== "reserve") return false;
+  if (resolveEventType(lastBefore.title) !== "reserve") return false;
   const gapMs = tripStartMs - lastBefore.end.getTime();
   return gapMs <= 48 * 60 * 60 * 1000;
 }
@@ -66,8 +53,10 @@ export type ImportIcsFromTextParams = {
   portal?: string;
 };
 
+const DELETE_ID_CHUNK = 200;
+
 /**
- * Parse ICS text, map to schedule_events rows, and upsert.
+ * Parse ICS text, map to schedule_events rows, replace prior baseline in covered range, upsert.
  * Shared by manual upload and inbound email auto-import.
  */
 export async function importIcsFromText(
@@ -114,6 +103,7 @@ export async function importIcsFromText(
       pairingDays: ev.pairingDays ?? null,
       blockMinutes: ev.blockMinutes ?? null,
       legs: ev.legs ?? null,
+      isTraining: ev.isTraining === true,
     }));
 
   if (process.env.NODE_ENV === "development") {
@@ -132,6 +122,10 @@ export async function importIcsFromText(
     return { error: "No calendar events found in the file" };
   }
 
+  const protectedCodes = await loadScheduleImportProtectedCodes(supabase, tenant);
+  const resolveEventType = (title: string) =>
+    resolveScheduleEventType(title, protectedCodes.classification, inferScheduleEventTypeHeuristic);
+
   const uidCounts = new Map<string, number>();
   for (const ev of events) {
     const u = ev.externalUid?.trim() ?? "";
@@ -141,21 +135,32 @@ export async function importIcsFromText(
   const sortedByStart = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
 
   const toRow = (e: (typeof events)[0] & { externalUid: string }) => {
-    const eventType = inferEventType(e.title);
+    const eventType =
+      e.isTraining === true ? ("training" as const) : resolveEventType(e.title);
     let creditMinutes: number | null = null;
-    let blockMinutes: number | null = e.blockMinutes ?? null;
-    let pairingDays: number | null = e.pairingDays ?? null;
+    let blockMinutes: number | null = null;
+    let pairingDays: number | null = null;
     let isReserveAssignment = false;
 
-    if (eventType === "trip") {
-      const followsReserve = tripFollowsReserve(e.start, sortedByStart);
+    if (eventType === "training") {
+      creditMinutes = null;
+      blockMinutes = null;
+      pairingDays = null;
+      isReserveAssignment = false;
+    } else if (eventType === "trip") {
+      blockMinutes = e.blockMinutes ?? null;
+      pairingDays = e.pairingDays ?? null;
+      const followsReserve = tripFollowsReserve(e.start, sortedByStart, resolveEventType);
       const titleIndicatesReserveAssign = isReserveAssignmentByTitle(e.title);
       isReserveAssignment = titleIndicatesReserveAssign || followsReserve;
 
       if (isReserveAssignment) {
         const days = e.pairingDays ?? 1;
         creditMinutes = RESERVE_CREDIT_PER_DAY_MINUTES * days;
-        blockMinutes = null;
+        blockMinutes =
+          e.blockMinutes != null && Number.isFinite(e.blockMinutes) && e.blockMinutes > 0
+            ? e.blockMinutes
+            : null;
       } else if (e.creditMinutes != null && e.creditMinutes > 0) {
         creditMinutes = e.creditMinutes;
         blockMinutes = e.blockMinutes ?? blockMinutes ?? creditMinutes;
@@ -164,7 +169,12 @@ export async function importIcsFromText(
         creditMinutes = computed;
       }
     } else if (eventType === "reserve") {
+      blockMinutes = e.blockMinutes ?? null;
+      pairingDays = e.pairingDays ?? null;
       creditMinutes = RESERVE_CREDIT_PER_DAY_MINUTES;
+    } else {
+      blockMinutes = e.blockMinutes ?? null;
+      pairingDays = e.pairingDays ?? null;
     }
 
     return {
@@ -210,8 +220,6 @@ export async function importIcsFromText(
     return toRow({ ...e, externalUid });
   });
 
-  // Dedupe within the incoming file only. Rows already in DB must still be upserted so that after the
-  // bid-window mute step they are re-written with is_muted: false (avoids "Previous" stale rows).
   const seenInBatch = new Set<string>();
   rows = rows.filter((r) => {
     const key = `${r.title ?? ""}|${r.start_time}|${r.end_time}|${r.source}`;
@@ -242,7 +250,6 @@ export async function importIcsFromText(
     }
   }
 
-  // Trip change detection: compare with existing before overwrite
   const tripChangeSummaries: TripChangeSummary[] = [];
   const tripRows = rows.filter((r) => r.event_type === "trip" && r.external_uid);
   if (tripRows.length > 0) {
@@ -264,49 +271,112 @@ export async function importIcsFromText(
     }
   }
 
-  if (rows.length > 0) {
-    const tz = sourceTimezone;
-    const countByBidPeriod = new Map<string, { startStr: string; endStr: string; count: number }>();
-    for (const r of rows) {
-      const period = getBidPeriodForTimestamp(r.start_time, tz);
-      if (period) {
-        const key = `${period.startStr.slice(0, 4)}-${period.bidMonthIndex}`;
-        const existing = countByBidPeriod.get(key);
-        if (!existing) {
-          countByBidPeriod.set(key, { startStr: period.startStr, endStr: period.endStr, count: 1 });
-        } else {
-          existing.count += 1;
-        }
-        if (process.env.NODE_ENV === "development") {
-          console.log("[bid-period-check]", {
-            title: r.title ?? null,
-            start_time: r.start_time ?? null,
-            timezone: tz,
-            resolvedLocalDateTime: formatInTimeZone(new Date(r.start_time), tz, "yyyy-MM-dd HH:mm"),
-            bidPeriod: period?.name ?? null,
-            bidMonthIndex: period?.bidMonthIndex ?? null,
-          });
-        }
+  let rangeMin = rows[0]!.start_time;
+  let rangeMax = rows[0]!.start_time;
+  for (const r of rows) {
+    if (r.start_time < rangeMin) rangeMin = r.start_time;
+    if (r.start_time > rangeMax) rangeMax = r.start_time;
+  }
+
+  const { data: candidates, error: selectDelError } = await supabase
+    .from("schedule_events")
+    .select("id, title, event_type, start_time, end_time")
+    .eq("user_id", userId)
+    .eq("source", FLICA_SOURCE)
+    .gte("start_time", rangeMin)
+    .lte("start_time", rangeMax);
+
+  if (selectDelError) {
+    return {
+      error: `Failed to import: ${selectDelError.message}`,
+      technicalError: selectDelError.message,
+    };
+  }
+
+  const preserve = protectedCodes.preservationNormalizedTitles;
+  const nonProtected = (candidates ?? []).filter(
+    (c) => !preserve.has(normalizeScheduleImportTitle(c.title))
+  ) as Array<{
+    id: string;
+    title: string | null;
+    event_type: string | null;
+    start_time: string;
+    end_time: string;
+  }>;
+
+  let envelopeIsoMin = rows[0]!.start_time;
+  let envelopeIsoMax = rows[0]!.end_time;
+  for (const r of rows) {
+    if (r.start_time < envelopeIsoMin) envelopeIsoMin = r.start_time;
+    if (r.end_time > envelopeIsoMax) envelopeIsoMax = r.end_time;
+  }
+  for (const c of nonProtected) {
+    if (c.start_time < envelopeIsoMin) envelopeIsoMin = c.start_time;
+    if (c.end_time > envelopeIsoMax) envelopeIsoMax = c.end_time;
+  }
+  let rangeStartStr = formatInTimeZone(new Date(envelopeIsoMin), sourceTimezone, "yyyy-MM-dd");
+  let rangeEndStr = formatInTimeZone(new Date(envelopeIsoMax), sourceTimezone, "yyyy-MM-dd");
+  if (rangeStartStr > rangeEndStr) {
+    const t = rangeStartStr;
+    rangeStartStr = rangeEndStr;
+    rangeEndStr = t;
+  }
+
+  const tripLocalDays = new Set<string>();
+  for (const r of rows) {
+    if (r.event_type !== "trip") continue;
+    const segs = expandEventToDaySegmentsInRange(
+      r.start_time,
+      r.end_time,
+      rangeStartStr,
+      rangeEndStr,
+      sourceTimezone
+    );
+    for (const s of segs) tripLocalDays.add(s.dateStr);
+  }
+
+  const muteIds: string[] = [];
+  const deleteIds: string[] = [];
+  for (const c of nonProtected) {
+    if (c.event_type === "reserve" && tripLocalDays.size > 0) {
+      const reserveSegs = expandEventToDaySegmentsInRange(
+        c.start_time,
+        c.end_time,
+        rangeStartStr,
+        rangeEndStr,
+        sourceTimezone
+      );
+      const overlapsTripDay = reserveSegs.some((s) => tripLocalDays.has(s.dateStr));
+      if (overlapsTripDay) {
+        muteIds.push(c.id);
+        continue;
       }
     }
-    let primary: { startStr: string; endStr: string } | null = null;
-    let maxCount = 0;
-    for (const v of countByBidPeriod.values()) {
-      if (v.count > maxCount) {
-        maxCount = v.count;
-        primary = { startStr: v.startStr, endStr: v.endStr };
-      }
+    deleteIds.push(c.id);
+  }
+
+  for (let i = 0; i < muteIds.length; i += DELETE_ID_CHUNK) {
+    const chunk = muteIds.slice(i, i + DELETE_ID_CHUNK);
+    const { error: muteError } = await supabase
+      .from("schedule_events")
+      .update({ is_muted: true })
+      .in("id", chunk);
+    if (muteError) {
+      return {
+        error: `Failed to import: ${muteError.message}`,
+        technicalError: muteError.message,
+      };
     }
-    if (primary) {
-      const rangeStart = `${primary.startStr}T00:00:00.000Z`;
-      const rangeEnd = `${primary.endStr}T23:59:59.999Z`;
-      await supabase
-        .from("schedule_events")
-        .update({ is_muted: true })
-        .eq("user_id", userId)
-        .eq("source", FLICA_SOURCE)
-        .gte("start_time", rangeStart)
-        .lte("start_time", rangeEnd);
+  }
+
+  for (let i = 0; i < deleteIds.length; i += DELETE_ID_CHUNK) {
+    const chunk = deleteIds.slice(i, i + DELETE_ID_CHUNK);
+    const { error: delError } = await supabase.from("schedule_events").delete().in("id", chunk);
+    if (delError) {
+      return {
+        error: `Failed to import: ${delError.message}`,
+        technicalError: delError.message,
+      };
     }
   }
 
@@ -332,7 +402,6 @@ export async function importIcsFromText(
     return { error: technicalMsg };
   }
 
-  // Persist trip change summaries for dashboard (Current Trip card)
   if (tripChangeSummaries.length > 0) {
     await supabase.from("trip_change_summaries").delete().eq("user_id", userId);
     await supabase.from("trip_change_summaries").insert(

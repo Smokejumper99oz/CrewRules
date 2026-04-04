@@ -33,6 +33,8 @@ const EVENT_STYLES: Record<string, string> = {
   reserve: "bg-blue-500/20 border-blue-500/40 text-blue-200",
   vacation: "bg-slate-500/20 border-slate-500/40 text-slate-300",
   off: "bg-slate-500/20 border-slate-500/40 text-slate-300",
+  sick: "bg-amber-500/15 border-amber-500/35 text-amber-100",
+  training: "bg-violet-500/15 border-violet-500/35 text-violet-100",
   other: "bg-slate-500/20 border-slate-500/40 text-slate-300",
 };
 
@@ -56,14 +58,20 @@ function eventPillStyle(ev: ScheduleEvent): string {
   return ev.is_muted === true ? MUTED_EVENT_STYLE : eventStyle(ev.event_type);
 }
 
+/** Display-only; DB title unchanged. */
+function scheduleEventDisplayTitle(ev: ScheduleEvent): string {
+  const base = ev.title?.trim() || "Untitled";
+  return ev.event_type === "training" ? `${base} - Recurrent` : base;
+}
+
 function getCalendarPillLabel(ev: ScheduleEvent, dayEvents: ScheduleEvent[]): string {
   const isPay = ev.title?.trim().toUpperCase() === "PAY" || ev.event_type === "pay";
-  if (!isPay) return ev.title || "Untitled";
+  if (!isPay) return scheduleEventDisplayTitle(ev);
   const tripOnDay = dayEvents.find((e) => {
     const t = (e.title ?? "").trim().toUpperCase();
     return e.event_type === "trip" && t !== "PAY";
   });
-  return tripOnDay ? `PAY for ${tripOnDay.title || "Untitled"}` : ev.title || "Untitled";
+  return tripOnDay ? `PAY for ${scheduleEventDisplayTitle(tripOnDay)}` : scheduleEventDisplayTitle(ev);
 }
 
 /** Calendar tile only: dim trip when day has PAY event. */
@@ -290,7 +298,7 @@ function EventDetailPopover({
       className="fixed z-50 min-w-[200px] max-w-[320px] rounded-xl border border-white/10 bg-slate-900 shadow-xl p-4"
       style={{ left: popoverPos.left, top: popoverPos.top }}
     >
-      <p className="font-medium text-white">{event.title || "Untitled"}</p>
+      <p className="font-medium text-white">{scheduleEventDisplayTitle(event)}</p>
       <p className="mt-2 text-sm text-slate-400">
         {dateLabel}
         {" • "}
@@ -705,7 +713,7 @@ export default function SchedulePage() {
                                 >
                                   {isReportNightTile ? (
                                     <>
-                                      <span className="min-w-0 truncate font-medium">{ev.title || "Untitled"}</span>
+                                      <span className="min-w-0 truncate font-medium">{scheduleEventDisplayTitle(ev)}</span>
                                       {rn.reportDisplay && rn.reportLocalDate && (
                                         <span className="text-[10px] leading-tight">
                                           <span className="font-semibold">REPORT</span> {rn.reportDisplay} •{" "}

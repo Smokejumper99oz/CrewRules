@@ -108,9 +108,6 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
 
   if (!stats || availableMonths.length === 0) return null;
 
-  const showReserveGuaranteeCredit =
-    stats.guaranteeMinutes > 0 && stats.finalCreditedMinutes !== stats.rawCreditMinutes;
-
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-emerald-400/30 dark:border-white/5 dark:bg-slate-950 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03)] dark:hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] dark:hover:border-emerald-400/20">
       <div className="flex flex-col gap-3 border-b border-slate-200 pb-2 dark:border-white/5 sm:flex-row sm:items-center sm:justify-between">
@@ -156,21 +153,10 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
             <div className="space-y-2">
               <div className="min-w-0">
                 <p className="tabular-nums text-2xl font-normal leading-tight text-amber-800 dark:text-amber-300">
-                  {formatMinutesToHhMm(stats.rawCreditMinutes ?? 0)}
+                  {formatMinutesToHhMm(stats.displayCreditMinutes ?? 0)}
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-300">Credit</p>
               </div>
-              {showReserveGuaranteeCredit && (
-                <div className="min-w-0 space-y-0.5 pt-2">
-                  <p className="tabular-nums text-base font-normal leading-tight text-amber-800 dark:text-amber-300">
-                    {formatMinutesToHhMm(stats.finalCreditedMinutes ?? 0)}
-                  </p>
-                  <p className="text-xs font-medium text-slate-600 dark:text-slate-300">Credit (with reserve guarantee)</p>
-                  <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400">
-                    Includes reserve guarantee when it applies, plus pickup flying.
-                  </p>
-                </div>
-              )}
               <div className="min-w-0 border-t border-slate-200 pt-2 dark:border-white/10">
                 <p className="tabular-nums text-base font-normal leading-tight text-amber-800 dark:text-amber-300">
                   {formatMinutesToHhMm(Math.round((stats.totalBlock ?? 0) * 60))}

@@ -594,6 +594,8 @@ export type MonthStats = {
   reserveCreditMinutes: number;
   vacationCreditMinutes: number;
   rawCreditMinutes: number;
+  /** Month Overview + pay estimate: floor at 75:00 when reserve guarantee applies (temporary reserve-line fallback). */
+  displayCreditMinutes: number;
   guaranteeMinutes: number;
   creditAfterGuaranteeMinutes: number;
   /** Line credit after reserve guarantee floor, plus pickup / non-line trip credit (pre-premium). */
@@ -649,6 +651,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
     reserveCreditMinutes: 0,
     vacationCreditMinutes: 0,
     rawCreditMinutes: 0,
+    displayCreditMinutes: 0,
     guaranteeMinutes: 0,
     creditAfterGuaranteeMinutes: 0,
     finalCreditedMinutes: 0,
@@ -735,6 +738,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
     const reserveDays = new Set<string>();
     const rslDays = new Set<string>();
     const tripDays = new Set<string>();
+    const trainingDays = new Set<string>();
     const seenTripKeys = new Set<string>();
     let totalBlock = 0;
     let totalExtraCredit = 0;
@@ -747,6 +751,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
       blockMinutes: number;
       extraMinutes: number;
       credit_delta_minutes: number;
+      isReserveAssignment: boolean;
     }> = [];
     let vacationCreditMinutes = 0;
     let tripEvents = 0;
@@ -789,6 +794,8 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
         } else if (ev.event_type === "reserve") {
           reserveDays.add(seg.dateStr);
           if (/\bRSL\b/i.test(ev.title ?? "")) rslDays.add(seg.dateStr);
+        } else if (ev.event_type === "training") {
+          trainingDays.add(seg.dateStr);
         }
       }
       if (ev.event_type === "vacation") {
@@ -809,6 +816,17 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
         reserveEvents += 1;
       } else if (ev.event_type === "trip") {
         tripEvents += 1;
+
+        // Flown block: independent of credit/pay stubs (reserve-assignment trips still count real block_minutes)
+        if (segments.length > 0) {
+          const bm = ev.block_minutes;
+          if (bm != null && Number.isFinite(bm) && bm > 0) {
+            const pairingDaysForBlock = ev.pairing_days ?? 1;
+            const blockRatio =
+              pairingDaysForBlock > 0 ? Math.min(1, segments.length / pairingDaysForBlock) : 1;
+            totalBlock += Math.round(bm * blockRatio) / 60;
+          }
+        }
 
         const evCreditMinutes = ev.credit_minutes != null ? ev.credit_minutes : (ev.credit_hours != null ? Math.round(ev.credit_hours * 60) : null);
         const effectiveCreditMinutes = ev.baseline_credit_minutes != null && evCreditMinutes != null
@@ -847,17 +865,24 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
           const creditMinutes = Math.round(creditHrs * 60);
           const baselineMinutes = ev.baseline_credit_minutes ?? creditMinutes;
           const credit_delta_minutes = creditMinutes - baselineMinutes;
-          tripStubs.push({ segments, payMinutes, blockMinutes, extraMinutes, credit_delta_minutes });
+          tripStubs.push({
+            segments,
+            payMinutes,
+            blockMinutes,
+            extraMinutes,
+            credit_delta_minutes,
+            isReserveAssignment: ev.is_reserve_assignment === true,
+          });
         }
       }
     }
 
     // Classify trips: line (touches reserve) vs extra (pickup)
     for (const t of tripStubs) {
-      const touchesReserve = t.segments.some((s) => reserveDays.has(s.dateStr));
+      const touchesReserve =
+        t.isReserveAssignment === true || t.segments.some((s) => reserveDays.has(s.dateStr));
       if (touchesReserve) tripCreditMinutesLine += t.payMinutes;
       else tripCreditMinutesExtra += t.payMinutes;
-      totalBlock += t.blockMinutes / 60;
       totalExtraCredit += t.extraMinutes / 60;
     }
     tripCreditMinutes = tripCreditMinutesLine + tripCreditMinutesExtra;
@@ -895,6 +920,9 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
 
     const rawCreditMinutes = tripCreditMinutes + vacationCreditMinutes + reserveCreditMinutes;
 
+    const displayCreditMinutes =
+      guaranteeMinutes > 0 ? Math.max(rawCreditMinutes, 4500) : rawCreditMinutes;
+
     const paidMinutes =
       finalCreditedMinutes <= PREMIUM_THRESHOLD_MIN
         ? finalCreditedMinutes
@@ -908,7 +936,9 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
     }
 
     const reserve = reserveOnlyDays.length;
-    const vacationOff = [...allMonthDays].filter((d) => !reserveDays.has(d) && !tripDays.has(d)).length;
+    const vacationOff = [...allMonthDays].filter(
+      (d) => !reserveDays.has(d) && !tripDays.has(d) && !trainingDays.has(d)
+    ).length;
 
     const stats: MonthStats = {
       trip: seenTripKeys.size,
@@ -920,6 +950,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
       reserveCreditMinutes,
       vacationCreditMinutes,
       rawCreditMinutes,
+      displayCreditMinutes,
       guaranteeMinutes,
       creditAfterGuaranteeMinutes,
       finalCreditedMinutes,
@@ -978,12 +1009,12 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
         console.log("[getMonthStats] pay calc:", {
           year,
           rate,
-          rawCreditMinutes,
-          creditHours: rawCreditMinutes / 60,
+          displayCreditMinutes: stats.displayCreditMinutes,
+          creditHours: stats.displayCreditMinutes / 60,
         });
 
-        // Pay estimate derived from raw credit (trip + vacation + reserve), not premium-adjusted paid
-        const creditHours = rawCreditMinutes / 60;
+        // Pay estimate uses display credit (includes temporary 75:00 reserve-line floor when guarantee applies)
+        const creditHours = stats.displayCreditMinutes / 60;
         const estimatedMonthlyPay = creditHours * rate;
         const pay20thHours = Math.min(35, creditHours);
         const pay5thHours = Math.max(0, creditHours - 35);

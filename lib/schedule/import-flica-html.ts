@@ -11,27 +11,20 @@ import { getReserveCreditPerDay } from "@/lib/tenant-config";
 import { detectTripChanges, type TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { formatInTimeZone } from "date-fns-tz";
 import { getBidPeriodForTimestamp, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
+import {
+  inferScheduleEventTypeHeuristic,
+  isReserveAssignmentByTitle,
+  loadScheduleImportProtectedCodes,
+  resolveScheduleEventType,
+  type ScheduleImportEventType,
+} from "@/lib/schedule/schedule-import-protected";
 
 const FLICA_SOURCE = "flica_import";
 
-const RESERVE_CODE = /\b(RSA|RSB|RSC|RSD|RSE|RSL)\b/i;
-
-function isReserveAssignmentByTitle(title: string): boolean {
-  return RESERVE_CODE.test(title ?? "") && (/\bTrip\b/i.test(title ?? "") || /\bS\d{4}\b/i.test(title ?? ""));
-}
-
-function inferEventType(summary: string): "trip" | "reserve" | "vacation" | "off" {
-  const s = summary ?? "";
-  if (/\bVAC\b|Vacation|\bV\d+\b/i.test(s)) return "vacation";
-  if (/\bOFF\b|\bOff\b|Off Duty|DAY OFF/i.test(s)) return "off";
-  if (isReserveAssignmentByTitle(s)) return "trip";
-  if (/\b(RES|RSA|RSB|RSC|RSD|RDE|RSE|RSL)\b|Reserve/i.test(s)) return "reserve";
-  return "trip";
-}
-
 function tripFollowsReserve(
   tripStart: Date,
-  allEvents: Array<{ start: Date; end: Date; title: string }>
+  allEvents: Array<{ start: Date; end: Date; title: string }>,
+  resolveEventType: (title: string) => ScheduleImportEventType
 ): boolean {
   const tripStartMs = tripStart.getTime();
   const preceding = allEvents
@@ -39,8 +32,7 @@ function tripFollowsReserve(
     .sort((a, b) => b.end.getTime() - a.end.getTime());
   const lastBefore = preceding[0];
   if (!lastBefore) return false;
-  const type = inferEventType(lastBefore.title);
-  if (type !== "reserve") return false;
+  if (resolveEventType(lastBefore.title) !== "reserve") return false;
   const gapMs = tripStartMs - lastBefore.end.getTime();
   return gapMs <= 48 * 60 * 60 * 1000;
 }
@@ -128,17 +120,21 @@ export async function importFlicaHtmlFromText(
     return { error: "No calendar events found in the FLICA HTML" };
   }
 
+  const protectedCodes = await loadScheduleImportProtectedCodes(supabase, tenant);
+  const resolveEventType = (title: string) =>
+    resolveScheduleEventType(title, protectedCodes.classification, inferScheduleEventTypeHeuristic);
+
   const sortedByStart = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
 
   const toRow = (e: (typeof events)[0] & { externalUid: string }) => {
-    const eventType = inferEventType(e.title);
+    const eventType = resolveEventType(e.title);
     let creditMinutes: number | null = null;
     let blockMinutes: number | null = e.blockMinutes ?? null;
     let pairingDays: number | null = e.pairingDays ?? null;
     let isReserveAssignment = false;
 
     if (eventType === "trip") {
-      const followsReserve = tripFollowsReserve(e.start, sortedByStart);
+      const followsReserve = tripFollowsReserve(e.start, sortedByStart, resolveEventType);
       const titleIndicatesReserveAssign = isReserveAssignmentByTitle(e.title);
       isReserveAssignment = titleIndicatesReserveAssign || followsReserve;
 

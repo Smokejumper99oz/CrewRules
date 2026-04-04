@@ -32,6 +32,11 @@ export type ParsedEvent = {
   pairingDays?: number;
   blockMinutes?: number;
   legs?: ParsedLeg[];
+  /**
+   * True when DESCRIPTION contains recurrent-training markers (SIM / NTR / RGS).
+   * Title alone does not set this; DH alone does not.
+   */
+  isTraining?: boolean;
 };
 
 export type ParseIcsOptions = {
@@ -136,6 +141,15 @@ function parseIcsDateToUtc(
 
 function hasRrule(block: string): boolean {
   return /^RRULE(?:;[^:]*)?:/im.test(block);
+}
+
+/**
+ * Reserve-line recurrent training from VEVENT DESCRIPTION only (case-insensitive whole tokens).
+ * Not triggered by SUMMARY/title. "DH" alone is not sufficient.
+ */
+export function isRecurrentTrainingDescription(description: string | null | undefined): boolean {
+  const d = description ?? "";
+  return /\bSIM\b/i.test(d) || /\bNTR\b/i.test(d) || /\bRGS\b/i.test(d);
 }
 
 /** Parse DESCRIPTION for Report time, Credit, route, pairing_days, block, legs. FLICA/airline ICS. */
@@ -499,6 +513,7 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
           pairingDays: pairingDays ?? undefined,
           blockMinutes: blockMinutes ?? undefined,
           legs: legs ?? undefined,
+          isTraining: isRecurrentTrainingDescription(description ?? "") || undefined,
         });
       }
     }

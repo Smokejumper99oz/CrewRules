@@ -30,6 +30,8 @@ const EVENT_STYLES: Record<string, string> = {
   reserve: "border-blue-500/40 text-blue-200",
   vacation: "border-slate-500/40 text-slate-300",
   off: "border-slate-500/40 text-slate-300",
+  sick: "border-amber-500/40 text-amber-100",
+  training: "border-violet-500/40 text-violet-100",
   other: "border-slate-500/40 text-slate-300",
 };
 
@@ -88,8 +90,13 @@ export function ScheduleEventCard({
 
   const pos = positionLabel(position);
   const rawTitle = event.title?.trim() || "Untitled";
-  const titlePart = event.event_type === "reserve" ? rawTitle.replace(/^Trip\s+/i, "") : rawTitle;
-  const typePrefix = event.event_type === "reserve" ? "" : `${typeLabel(event.event_type)} `;
+  const displayTitle = event.event_type === "training" ? `${rawTitle} - Recurrent` : rawTitle;
+  const titlePart =
+    event.event_type === "reserve" ? displayTitle.replace(/^Trip\s+/i, "") : displayTitle;
+  const typePrefix =
+    event.event_type === "reserve" || event.event_type === "training"
+      ? ""
+      : `${typeLabel(event.event_type)} `;
   const headerLine = pos ? `${typePrefix}${titlePart} • ${pos}` : `${typePrefix}${titlePart}`;
   const displayHeader = (headerTitleOverride?.trim() ? headerTitleOverride.trim() : null) ?? headerLine;
   const effectiveLegs = legsToShow ?? event.legs;
