@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -39,6 +40,20 @@ export async function GET(request: Request) {
   }
 
   if (isEmailConfirmation) {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user?.id) {
+        const admin = createAdminClient();
+        await admin
+          .from("pending_signups")
+          .update({ confirmed_at: new Date().toISOString() })
+          .eq("user_id", user.id);
+      }
+    } catch (pendingErr) {
+      console.warn("[Auth callback] pending_signups confirmed_at update failed:", pendingErr);
+    }
     return NextResponse.redirect(
       new URL("/frontier/pilots/login?confirmed=1", request.url)
     );

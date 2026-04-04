@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { inferAirlineFromEmail } from "@/lib/supported-airlines";
 import { FRONTIER_PILOT_SIGNUP_USE_AIRLINE_EMAIL } from "./constants";
 
@@ -76,7 +77,7 @@ export async function submitSignUp(_prev: SignUpState, formData: FormData): Prom
   const origin = `${protocol}://${host}`;
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({
+  const { data: signUpData, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -90,6 +91,28 @@ export async function submitSignUp(_prev: SignUpState, formData: FormData): Prom
 
   if (error) {
     return { error: error.message };
+  }
+
+  const newUserId = signUpData?.user?.id;
+  if (newUserId) {
+    try {
+      const admin = createAdminClient();
+      const metaEmp = signUpData.user?.user_metadata?.employee_number;
+      const employeeNum =
+        typeof metaEmp === "string" && metaEmp.trim() !== "" ? metaEmp.trim() : null;
+      await admin.from("pending_signups").upsert(
+        {
+          user_id: newUserId,
+          tenant: "frontier",
+          portal: "pilots",
+          email_normalized: email.toLowerCase().trim(),
+          employee_number: employeeNum,
+        },
+        { onConflict: "user_id", ignoreDuplicates: true }
+      );
+    } catch (trackErr) {
+      console.error("[submitSignUp] pending_signups upsert failed:", trackErr);
+    }
   }
 
   return { success: true, email };
@@ -116,7 +139,7 @@ export async function verifyOtp(_prev: VerifyOtpState, formData: FormData): Prom
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.verifyOtp({
+  const { data: otpData, error } = await supabase.auth.verifyOtp({
     email,
     token,
     type: "email",
@@ -124,6 +147,19 @@ export async function verifyOtp(_prev: VerifyOtpState, formData: FormData): Prom
 
   if (error) {
     return { error: error.message };
+  }
+
+  const confirmedUserId = otpData?.user?.id ?? otpData?.session?.user?.id;
+  if (confirmedUserId) {
+    try {
+      const admin = createAdminClient();
+      await admin
+        .from("pending_signups")
+        .update({ confirmed_at: new Date().toISOString() })
+        .eq("user_id", confirmedUserId);
+    } catch (confirmErr) {
+      console.warn("[verifyOtp] pending_signups confirmed_at update failed:", confirmErr);
+    }
   }
 
   redirect(COMPLETE_PROFILE_PATH);
