@@ -281,6 +281,8 @@ type Props = {
   commuteAssistDirection?: "to_home" | "to_base";
   /** Reserve: last-day window before scheduled end — show conditional commute messaging. */
   commuteAssistReserveEarlyReleaseWindow?: boolean;
+  /** Overlapping reserve duty outside early-release window — skip flight API fetches. */
+  commuteAssistSuppressFlightSearch?: boolean;
   /** When set (e.g. from legsToShow[0].origin), use as duty start airport for to_base. */
   dutyStartAirportOverride?: string | null;
   /** When set (e.g. from legsToShow[last].destination), use as duty end airport for to_home. */
@@ -914,7 +916,22 @@ function CommuteFlightRow({
   );
 }
 
-export function CommuteAssistProContent({ event, label, profile, displaySettings, tenant, portal, displayDateStr, isInPairing, commuteAssistDirection, commuteAssistReserveEarlyReleaseWindow, dutyStartAirportOverride, dutyEndAirportOverride, reportTimeOverride }: Props) {
+export function CommuteAssistProContent({
+  event,
+  label,
+  profile,
+  displaySettings,
+  tenant,
+  portal,
+  displayDateStr,
+  isInPairing,
+  commuteAssistDirection,
+  commuteAssistReserveEarlyReleaseWindow,
+  commuteAssistSuppressFlightSearch,
+  dutyStartAirportOverride,
+  dutyEndAirportOverride,
+  reportTimeOverride,
+}: Props) {
   const [commuteError, setCommuteError] = useState<string | null>(null);
   const [commuteGroups, setCommuteGroups] = useState<Record<"home" | "alternate", CommuteFlightOption[]>>({
     home: [],
@@ -1644,14 +1661,14 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   );
 
   useEffect(() => {
-    if (canUseCommute && !noCommuteNeeded) {
+    if (canUseCommute && !noCommuteNeeded && !commuteAssistSuppressFlightSearch) {
       loadFlights().catch((err) => {
         console.error("Commute Assist loadFlights failed", err);
         setCommuteError("Commute Assist temporarily unavailable.");
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadFlights omitted to avoid infinite loop; we re-run when routes change
-  }, [routes, direction, canUseCommute, noCommuteNeeded]);
+  }, [routes, direction, canUseCommute, noCommuteNeeded, commuteAssistSuppressFlightSearch]);
 
   useEffect(() => {
     if (commuteTwoLegEnabled && dutyOk && !commuteMeta) {
@@ -1662,21 +1679,50 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
   }, [commuteTwoLegEnabled, dutyOk, commuteMeta, event.start_time, arrivalBuffer, baseTz]);
 
   useEffect(() => {
-    if (canUseCommute && !noCommuteNeeded && commuteTwoLegEnabled && twoLegFirstLegRoutes.length > 0) {
+    if (
+      canUseCommute &&
+      !noCommuteNeeded &&
+      !commuteAssistSuppressFlightSearch &&
+      commuteTwoLegEnabled &&
+      twoLegFirstLegRoutes.length > 0
+    ) {
       loadTwoLegFirstLegFlights().catch((err) => {
         console.error("Commute Assist loadTwoLegFirstLegFlights failed", err);
       });
     }
-  }, [canUseCommute, noCommuteNeeded, commuteTwoLegEnabled, twoLegFirstLegRoutes, loadTwoLegFirstLegFlights]);
+  }, [
+    canUseCommute,
+    noCommuteNeeded,
+    commuteAssistSuppressFlightSearch,
+    commuteTwoLegEnabled,
+    twoLegFirstLegRoutes,
+    loadTwoLegFirstLegFlights,
+  ]);
 
   useEffect(() => {
     const hasDutyInfo = commuteMeta || (commuteTwoLegEnabled && dutyOk);
-    if (canUseCommute && !noCommuteNeeded && hasDutyInfo && twoLegRoutes.length > 0 && commuteTwoLegEnabled) {
+    if (
+      canUseCommute &&
+      !noCommuteNeeded &&
+      !commuteAssistSuppressFlightSearch &&
+      hasDutyInfo &&
+      twoLegRoutes.length > 0 &&
+      commuteTwoLegEnabled
+    ) {
       loadTwoLegFlights().catch((err) => {
         console.error("Commute Assist loadTwoLegFlights failed", err);
       });
     }
-  }, [commuteMeta, commuteTwoLegEnabled, dutyOk, canUseCommute, noCommuteNeeded, twoLegRoutes, loadTwoLegFlights]);
+  }, [
+    commuteMeta,
+    commuteTwoLegEnabled,
+    dutyOk,
+    canUseCommute,
+    noCommuteNeeded,
+    commuteAssistSuppressFlightSearch,
+    twoLegRoutes,
+    loadTwoLegFlights,
+  ]);
 
   // Tick every 60s when we have lastFetchedAt, so "Updated just now" transitions to timestamp
   useEffect(() => {
@@ -1847,6 +1893,14 @@ export function CommuteAssistProContent({ event, label, profile, displaySettings
     return (
       <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200/90">
         No flight commute needed — Next Duty Report starts at your home airport.
+      </div>
+    );
+  }
+
+  if (commuteAssistSuppressFlightSearch) {
+    return (
+      <div className="mt-3 rounded-xl border border-slate-600/40 bg-slate-800/40 px-3 py-2 text-sm text-slate-200">
+        You are currently on duty assignment — No commute search needed.
       </div>
     );
   }

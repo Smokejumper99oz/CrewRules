@@ -21,6 +21,7 @@ type Props = {
   isInPairing?: boolean;
   commuteAssistDirection?: "to_home" | "to_base";
   commuteAssistReserveEarlyReleaseWindow?: boolean;
+  commuteAssistSuppressFlightSearch?: boolean;
   dutyStartAirportOverride?: string | null;
   dutyEndAirportOverride?: string | null;
   reportTimeOverride?: string | null;
@@ -39,6 +40,7 @@ export function PortalNextDutyCommuteSection({
   isInPairing,
   commuteAssistDirection,
   commuteAssistReserveEarlyReleaseWindow,
+  commuteAssistSuppressFlightSearch,
   dutyStartAirportOverride,
   dutyEndAirportOverride,
   reportTimeOverride,
@@ -129,6 +131,7 @@ export function PortalNextDutyCommuteSection({
             isInPairing={isInPairing}
             commuteAssistDirection={commuteAssistDirection}
             commuteAssistReserveEarlyReleaseWindow={commuteAssistReserveEarlyReleaseWindow}
+            commuteAssistSuppressFlightSearch={commuteAssistSuppressFlightSearch}
             dutyStartAirportOverride={dutyStartAirportOverride}
             dutyEndAirportOverride={dutyEndAirportOverride}
             reportTimeOverride={reportTimeOverride}

@@ -206,6 +206,8 @@ export async function getNextDuty(): Promise<{
   commuteAssistDirection?: "to_home" | "to_base";
   /** True on last reserve day when now is within 4h before scheduled reserve end (overlapping reserve row only). */
   commuteAssistReserveEarlyReleaseWindow?: boolean;
+  /** True when on overlapping reserve duty but outside the last-day early-release window — skip Commute Assist flight fetches. */
+  commuteAssistSuppressFlightSearch?: boolean;
   error?: string;
 }> {
   const profile = await getProfile();
@@ -273,6 +275,8 @@ export async function getNextDuty(): Promise<{
               };
             })()
           : {};
+      const reserveEarlyReleaseActive =
+        reserveEarlyReleaseCommuteFields.commuteAssistReserveEarlyReleaseWindow === true;
       const legs = ev.legs ?? [];
       const tripDates = getTripDateStrings(ev.start_time, ev.end_time, baseTimezone);
 
@@ -287,6 +291,7 @@ export async function getNextDuty(): Promise<{
               legsToShow: legsForTomorrow,
               displayDateStr: tomorrow,
               isInPairing: true,
+              commuteAssistSuppressFlightSearch: ev.event_type === "reserve" && !reserveEarlyReleaseActive,
               ...reserveEarlyReleaseCommuteFields,
             };
           }
@@ -301,6 +306,8 @@ export async function getNextDuty(): Promise<{
               legsToShow: nextLegs,
               displayDateStr: tomorrow,
               isInPairing: true,
+              commuteAssistSuppressFlightSearch:
+                nextEvent.event_type === "reserve" && !reserveEarlyReleaseActive,
               ...reserveEarlyReleaseCommuteFields,
             };
           }
@@ -314,11 +321,19 @@ export async function getNextDuty(): Promise<{
             legsToShow: [nextLeg],
             displayDateStr: today,
             isInPairing: true,
+            commuteAssistSuppressFlightSearch: ev.event_type === "reserve" && !reserveEarlyReleaseActive,
             ...reserveEarlyReleaseCommuteFields,
           };
         }
       }
-      return { event: ev, label: "on_duty", hasSchedule, isInPairing: true, ...reserveEarlyReleaseCommuteFields };
+      return {
+        event: ev,
+        label: "on_duty",
+        hasSchedule,
+        isInPairing: true,
+        commuteAssistSuppressFlightSearch: ev.event_type === "reserve" && !reserveEarlyReleaseActive,
+        ...reserveEarlyReleaseCommuteFields,
+      };
       }
     }
 

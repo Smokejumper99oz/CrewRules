@@ -111,7 +111,22 @@ export async function PortalNextDuty({
   activeTrip?: ActiveTrip | null;
   tripChangeSummaries?: TripChangeSummary[];
 }) {
-  const [{ event, label, hasSchedule, legsToShow, displayDateStr, isInPairing, commuteAssistDirection, commuteAssistReserveEarlyReleaseWindow }, statusData, displaySettings, profile] = await Promise.all([
+  const [
+    {
+      event,
+      label,
+      hasSchedule,
+      legsToShow,
+      displayDateStr,
+      isInPairing,
+      commuteAssistDirection,
+      commuteAssistReserveEarlyReleaseWindow,
+      commuteAssistSuppressFlightSearch,
+    },
+    statusData,
+    displaySettings,
+    profile,
+  ] = await Promise.all([
     getNextDuty(),
     getScheduleImportStatus(),
     getScheduleDisplaySettings(),
@@ -618,6 +633,7 @@ export async function PortalNextDuty({
             isInPairing={isInPairing}
             commuteAssistDirection={commuteAssistDirection}
             commuteAssistReserveEarlyReleaseWindow={commuteAssistReserveEarlyReleaseWindow}
+            commuteAssistSuppressFlightSearch={commuteAssistSuppressFlightSearch}
             dutyStartAirportOverride={legsToShow?.[0]?.origin}
             dutyEndAirportOverride={legsToShow?.[legsToShow.length - 1]?.destination}
             reportTimeOverride={reportTimeOverride}
