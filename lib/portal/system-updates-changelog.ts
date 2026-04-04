@@ -13,6 +13,16 @@ export type SystemUpdateEntry = {
  */
 export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   {
+    date: "2026-04-04",
+    title: "Post-Duty Release + Reserve Commute Enhancements",
+    type: "improvement",
+    bullets: [
+      "Added a new Trip Complete state with a clear post-duty summary showing duty end time and the actual final airport of release.",
+      "Commute Assist now correctly switches to flights home after trip completion instead of continuing to show commute-to-duty results.",
+      "On the last day of reserve, Commute Assist now begins showing possible flights home within 4 hours of scheduled release for pilots who may be released early by Crew Scheduling.",
+    ],
+  },
+  {
     date: "2026-04-03",
     title: "Weather Brief clarity and trust",
     type: "improvement",

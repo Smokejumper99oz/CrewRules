@@ -158,14 +158,16 @@ export function ScheduleEventCard({
       : formatDayLabel(event.start_time, displaySettings.baseTimezone);
 
   if (postDutyRelease) {
-    const eventLegs = event.legs ?? [];
-    const destFromEventLegs =
-      eventLegs.length > 0
-        ? eventLegs[eventLegs.length - 1]?.destination?.trim() || null
-        : null;
-    const slice = legsToShow ?? [];
-    const destFromSlice =
-      slice.length > 0 ? slice[slice.length - 1]?.destination?.trim() || null : null;
+    const lastDestFromLegs = (legs: ScheduleEventLeg[] | null | undefined): string | null => {
+      const list = legs ?? [];
+      for (let i = list.length - 1; i >= 0; i--) {
+        const d = list[i]?.destination?.trim();
+        if (d) return d;
+      }
+      return null;
+    };
+    const destFromEventLegs = lastDestFromLegs(event.legs);
+    const destFromSlice = lastDestFromLegs(legsToShow ?? []);
     const routeFinalAirport = (() => {
       const r = event.route?.trim();
       if (!r) return null;

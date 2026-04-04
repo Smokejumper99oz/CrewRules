@@ -1,5 +1,5 @@
-import type { HTMLAttributes } from "react";
 import type { SystemUpdateEntry, SystemUpdateType } from "@/lib/portal/system-updates-changelog";
+import { SystemUpdatesChangelogMonthDetails } from "@/components/portal/system-updates-changelog-month-details";
 
 const CARD =
   "rounded-3xl border border-white/5 bg-gradient-to-b from-slate-900/60 to-slate-950/80 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]";
@@ -116,15 +116,11 @@ export function SystemUpdatesChangelog(props: Props) {
       <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Update history</h2>
       <div className="mt-4 space-y-10 sm:space-y-12">
         {groups.map((group) => (
-          <details
+          <SystemUpdatesChangelogMonthDetails
             key={group.monthKey}
-            {...({
-              defaultOpen: group.monthKey === currentMonthKey,
-            } as HTMLAttributes<HTMLDetailsElement>)}
+            initialOpen={group.monthKey === currentMonthKey}
+            summaryLabel={monthSummaryLine(group.heading, group.entries.length)}
           >
-            <summary className="cursor-pointer text-lg font-semibold tracking-tight text-white border-b border-white/10 pb-2">
-              {monthSummaryLine(group.heading, group.entries.length)}
-            </summary>
             <ul className="mt-4 space-y-4 sm:space-y-5 list-none p-0 m-0">
               {group.entries.map((entry) => (
                 <li key={`${entry.date}-${entry.title}`}>
@@ -147,7 +143,7 @@ export function SystemUpdatesChangelog(props: Props) {
                 </li>
               ))}
             </ul>
-          </details>
+          </SystemUpdatesChangelogMonthDetails>
         ))}
       </div>
     </section>
