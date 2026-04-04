@@ -277,6 +277,26 @@ export async function getNextDuty(): Promise<{
           : {};
       const reserveEarlyReleaseActive =
         reserveEarlyReleaseCommuteFields.commuteAssistReserveEarlyReleaseWindow === true;
+      const commuteAssistReserveEarlyReleaseWindow =
+        reserveEarlyReleaseCommuteFields.commuteAssistReserveEarlyReleaseWindow === true;
+      const logCommuteSuppressDebug = (
+        returnedLabel: string,
+        returnedEvent: ScheduleEvent,
+        commuteAssistSuppressFlightSearch: boolean
+      ) => {
+        console.log("[COMMUTE_SUPPRESS_DEBUG]", {
+          userId: profile.id,
+          evTitle: ev.title,
+          evEventType: ev.event_type,
+          evStartTime: ev.start_time,
+          evEndTime: ev.end_time,
+          reserveEarlyReleaseActive,
+          commuteAssistReserveEarlyReleaseWindow,
+          returnedLabel,
+          returnedEventType: returnedEvent.event_type,
+          commuteAssistSuppressFlightSearch,
+        });
+      };
       const legs = ev.legs ?? [];
       const tripDates = getTripDateStrings(ev.start_time, ev.end_time, baseTimezone);
 
@@ -284,6 +304,9 @@ export async function getNextDuty(): Promise<{
         if (isDateFullyComplete(legs, today, tripDates, baseTimezone)) {
           const legsForTomorrow = getLegsForDate(legs, tomorrow, tripDates, baseTimezone);
           if (legsForTomorrow.length > 0) {
+            const commuteAssistSuppressFlightSearch =
+              ev.event_type === "reserve" && !reserveEarlyReleaseActive;
+            logCommuteSuppressDebug("next_duty", ev, commuteAssistSuppressFlightSearch);
             return {
               event: ev,
               label: "next_duty",
@@ -291,7 +314,7 @@ export async function getNextDuty(): Promise<{
               legsToShow: legsForTomorrow,
               displayDateStr: tomorrow,
               isInPairing: true,
-              commuteAssistSuppressFlightSearch: ev.event_type === "reserve" && !reserveEarlyReleaseActive,
+              commuteAssistSuppressFlightSearch,
               ...reserveEarlyReleaseCommuteFields,
             };
           }
@@ -299,6 +322,9 @@ export async function getNextDuty(): Promise<{
           if (nextEvent) {
             const nextTripDates = getTripDateStrings(nextEvent.start_time, nextEvent.end_time, baseTimezone);
             const nextLegs = getLegsForDate(nextEvent.legs ?? [], tomorrow, nextTripDates, baseTimezone);
+            const commuteAssistSuppressFlightSearch =
+              nextEvent.event_type === "reserve" && !reserveEarlyReleaseActive;
+            logCommuteSuppressDebug("next_duty", nextEvent, commuteAssistSuppressFlightSearch);
             return {
               event: nextEvent,
               label: "next_duty",
@@ -306,14 +332,16 @@ export async function getNextDuty(): Promise<{
               legsToShow: nextLegs,
               displayDateStr: tomorrow,
               isInPairing: true,
-              commuteAssistSuppressFlightSearch:
-                nextEvent.event_type === "reserve" && !reserveEarlyReleaseActive,
+              commuteAssistSuppressFlightSearch,
               ...reserveEarlyReleaseCommuteFields,
             };
           }
         }
         const nextLeg = getNextLegForDate(legs, today, tripDates, baseTimezone);
         if (nextLeg) {
+          const commuteAssistSuppressFlightSearch =
+            ev.event_type === "reserve" && !reserveEarlyReleaseActive;
+          logCommuteSuppressDebug("on_duty", ev, commuteAssistSuppressFlightSearch);
           return {
             event: ev,
             label: "on_duty",
@@ -321,17 +349,20 @@ export async function getNextDuty(): Promise<{
             legsToShow: [nextLeg],
             displayDateStr: today,
             isInPairing: true,
-            commuteAssistSuppressFlightSearch: ev.event_type === "reserve" && !reserveEarlyReleaseActive,
+            commuteAssistSuppressFlightSearch,
             ...reserveEarlyReleaseCommuteFields,
           };
         }
       }
+      const commuteAssistSuppressFlightSearch =
+        ev.event_type === "reserve" && !reserveEarlyReleaseActive;
+      logCommuteSuppressDebug("on_duty", ev, commuteAssistSuppressFlightSearch);
       return {
         event: ev,
         label: "on_duty",
         hasSchedule,
         isInPairing: true,
-        commuteAssistSuppressFlightSearch: ev.event_type === "reserve" && !reserveEarlyReleaseActive,
+        commuteAssistSuppressFlightSearch,
         ...reserveEarlyReleaseCommuteFields,
       };
       }
