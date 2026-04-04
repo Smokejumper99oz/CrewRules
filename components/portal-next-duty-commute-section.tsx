@@ -57,7 +57,8 @@ export function PortalNextDutyCommuteSection({
       : null;
 
   const shouldAutoShow =
-    daysUntilDuty !== null && daysUntilDuty <= 1 && daysUntilDuty >= -1;
+    (daysUntilDuty !== null && daysUntilDuty <= 1 && daysUntilDuty >= -1) ||
+    label === "post_duty_release";
 
   const [showFlights, setShowFlights] = useState(shouldAutoShow);
   const handleShowFlights = () => setShowFlights(true);

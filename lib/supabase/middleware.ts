@@ -64,8 +64,21 @@ export async function updateSession(request: NextRequest) {
       }
     );
 
-    const { data } = await supabase.auth.getUser();
+    const { data, error: getUserError } = await supabase.auth.getUser();
     user = data?.user ?? null;
+    // Stale or revoked refresh token leaves broken cookies; clear session so user is not half-authenticated.
+    if (
+      getUserError &&
+      "code" in getUserError &&
+      getUserError.code === "refresh_token_not_found"
+    ) {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        /* ignore signOut errors */
+      }
+      user = null;
+    }
 
     if (user && (isAdminRoute || isSuperAdminRoute || redirectLoggedInToPortal || isPortalRoot)) {
       const { data: profile } = await supabase
