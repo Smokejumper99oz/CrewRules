@@ -18,9 +18,11 @@ import {
   getAviationStackUsageMetrics,
   getMentoringMilestoneIntegritySignals,
   getSuperAdminWaitlistKpis,
+  getSuperAdminNewFeedbackCount,
 } from "@/lib/super-admin/actions";
 import { SuperAdminHeader } from "@/components/super-admin/super-admin-header";
 import { SuperAdminNeedsAttention } from "@/components/super-admin/super-admin-needs-attention";
+import { SuperAdminNewFeedbackAlert } from "@/components/super-admin/super-admin-new-feedback-alert";
 import { SuperAdminKpiCards } from "@/components/super-admin/super-admin-kpi-cards";
 import { SuperAdminTrialMetrics } from "@/components/super-admin/super-admin-trial-metrics";
 import { SuperAdminCostMonetization } from "@/components/super-admin/super-admin-cost-monetization";
@@ -54,6 +56,7 @@ export default async function SuperAdminPage() {
     flightAwareMetrics,
     aviationStackMetrics,
     waitlistKpis,
+    newFeedbackCount,
   ] = await Promise.all([
     getSuperAdminKpis(),
     getOnlineUserCount(),
@@ -70,6 +73,7 @@ export default async function SuperAdminPage() {
     getFlightAwareUsageMetrics(),
     getAviationStackUsageMetrics(),
     getSuperAdminWaitlistKpis(),
+    getSuperAdminNewFeedbackCount(),
   ]);
 
   const [peakToday, peakAllTime] = await Promise.all([
@@ -100,6 +104,8 @@ export default async function SuperAdminPage() {
           peakAllTime={peakAllTime}
           waitlistKpis={waitlistKpis}
         />
+
+        <SuperAdminNewFeedbackAlert count={newFeedbackCount} />
 
       <section>
         <SuperAdminNeedsAttention

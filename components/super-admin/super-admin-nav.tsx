@@ -20,6 +20,7 @@ import {
   ToggleLeft,
   Settings,
   CalendarClock,
+  MessageSquare,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -123,6 +124,13 @@ export function SuperAdminNav() {
           >
             <List className="h-4 w-4 shrink-0" />
             Waitlist
+          </Link>
+          <Link
+            href="/super-admin/feedback"
+            className={`${linkBase} ${pathname?.startsWith("/super-admin/feedback") ? activeLink : inactiveLink} flex items-center gap-2`}
+          >
+            <MessageSquare className="h-4 w-4 shrink-0" />
+            Feedback
           </Link>
           <NavItem
             href="/super-admin/mentoring"

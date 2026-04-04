@@ -995,6 +995,255 @@ export async function getFoundingMembersForSuperAdmin(): Promise<FoundingMemberR
   });
 }
 
+/** Signed GET URL for Super Admin feedback screenshot preview (short-lived). */
+export type SuperAdminFeedbackAttachmentView = {
+  sort_order: number | null;
+  preview_url: string;
+};
+
+export type FeedbackSubmissionStatus = "new" | "in_progress" | "closed";
+
+export type SuperAdminFeedbackSubmissionRow = {
+  id: string;
+  created_at: string;
+  feedback_type: string;
+  message: string;
+  submitter_full_name: string | null;
+  submitter_email: string | null;
+  tenant: string;
+  portal: string;
+  route_path: string | null;
+  status: string;
+  status_updated_at: string | null;
+  attachments: SuperAdminFeedbackAttachmentView[];
+  attachment_count: number;
+};
+
+const FEEDBACK_SCREENSHOT_SIGNED_URL_TTL_SEC = 3600;
+
+/** In-app feedback list + signed screenshot URLs. Uses service role after Super Admin gate so allowlisted operators without `profiles.role = super_admin` still see rows (RLS select matches waitlist-style policies only). */
+export async function getFeedbackSubmissionsForSuperAdmin(): Promise<
+  SuperAdminFeedbackSubmissionRow[]
+> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("feedback_submissions")
+    .select(
+      "id, created_at, feedback_type, message, submitter_full_name, submitter_email, tenant, portal, route_path, status, status_updated_at"
+    )
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[SuperAdmin] getFeedbackSubmissionsForSuperAdmin:", error.message);
+    return [];
+  }
+
+  const submissionsRaw = (data ?? []) as Omit<
+    SuperAdminFeedbackSubmissionRow,
+    "attachments" | "attachment_count"
+  >[];
+  const submissions = submissionsRaw.map((sub) => ({
+    ...sub,
+    status:
+      sub.status === "in_progress" || sub.status === "closed" || sub.status === "new"
+        ? sub.status
+        : "new",
+    status_updated_at: sub.status_updated_at ?? null,
+  }));
+
+  if (submissions.length === 0) {
+    return [];
+  }
+
+  const submissionIds = submissions.map((s) => s.id);
+  const { data: attachmentRows, error: attachError } = await admin
+    .from("feedback_submission_attachments")
+    .select("feedback_submission_id, storage_bucket, storage_path, sort_order")
+    .in("feedback_submission_id", submissionIds);
+
+  if (attachError) {
+    console.error("[SuperAdmin] getFeedbackSubmissionsForSuperAdmin attachments:", attachError.message);
+  }
+
+  const bySubmission = new Map<
+    string,
+    { storage_bucket: string; storage_path: string; sort_order: number | null }[]
+  >();
+  for (const row of attachmentRows ?? []) {
+    const sid = row.feedback_submission_id as string;
+    const bucket = String(row.storage_bucket ?? "").trim();
+    const path = String(row.storage_path ?? "").trim();
+    if (!sid || !bucket || !path) continue;
+    const list = bySubmission.get(sid) ?? [];
+    list.push({
+      storage_bucket: bucket,
+      storage_path: path,
+      sort_order: row.sort_order as number | null,
+    });
+    bySubmission.set(sid, list);
+  }
+
+  const out: SuperAdminFeedbackSubmissionRow[] = [];
+
+  for (const sub of submissions) {
+    const rawList = bySubmission.get(sub.id) ?? [];
+    rawList.sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
+
+    const attachments: SuperAdminFeedbackAttachmentView[] = [];
+    for (const a of rawList) {
+      const { data: signed, error: signErr } = await admin.storage
+        .from(a.storage_bucket)
+        .createSignedUrl(a.storage_path, FEEDBACK_SCREENSHOT_SIGNED_URL_TTL_SEC);
+      if (signErr || !signed?.signedUrl) {
+        console.error(
+          "[SuperAdmin] feedback screenshot signed URL failed:",
+          a.storage_bucket,
+          signErr?.message ?? "no url"
+        );
+        continue;
+      }
+      attachments.push({
+        sort_order: a.sort_order,
+        preview_url: signed.signedUrl,
+      });
+    }
+
+    out.push({
+      ...sub,
+      attachments,
+      attachment_count: attachments.length,
+    });
+  }
+
+  return out;
+}
+
+const FEEDBACK_SUBMISSION_STATUSES = new Set<FeedbackSubmissionStatus>([
+  "new",
+  "in_progress",
+  "closed",
+]);
+
+export async function updateFeedbackSubmissionStatusForSuperAdmin(
+  submissionId: string,
+  status: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await ensureSuperAdmin();
+  const id = String(submissionId ?? "").trim();
+  if (!id) return { ok: false, error: "Missing submission" };
+  const s = String(status ?? "").trim() as FeedbackSubmissionStatus;
+  if (!FEEDBACK_SUBMISSION_STATUSES.has(s)) {
+    return { ok: false, error: "Invalid status" };
+  }
+  const admin = createAdminClient();
+  const now = new Date().toISOString();
+  const { error } = await admin
+    .from("feedback_submissions")
+    .update({ status: s, status_updated_at: now })
+    .eq("id", id);
+  if (error) {
+    console.error("[SuperAdmin] updateFeedbackSubmissionStatusForSuperAdmin:", error.message);
+    return { ok: false, error: "Could not update status" };
+  }
+  revalidatePath("/super-admin/feedback");
+  revalidatePath("/super-admin");
+  return { ok: true };
+}
+
+/** Permanently delete a feedback submission (storage first best-effort, then DB; attachment rows cascade). */
+export async function deleteFeedbackSubmissionForSuperAdmin(
+  submissionId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await ensureSuperAdmin();
+  const id = String(submissionId ?? "").trim();
+  if (!id) return { ok: false, error: "Missing submission" };
+
+  const admin = createAdminClient();
+
+  const { data: existing, error: fetchErr } = await admin
+    .from("feedback_submissions")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fetchErr) {
+    console.error("[SuperAdmin] deleteFeedbackSubmissionForSuperAdmin lookup:", fetchErr.message);
+    return { ok: false, error: "Could not load submission" };
+  }
+  if (!existing) {
+    return { ok: false, error: "Submission not found" };
+  }
+
+  const { data: attachmentRows, error: attachErr } = await admin
+    .from("feedback_submission_attachments")
+    .select("storage_bucket, storage_path")
+    .eq("feedback_submission_id", id);
+
+  if (attachErr) {
+    console.error("[SuperAdmin] deleteFeedbackSubmissionForSuperAdmin attachments:", attachErr.message);
+    return { ok: false, error: "Could not load attachments" };
+  }
+
+  const pathsByBucket = new Map<string, string[]>();
+  for (const row of attachmentRows ?? []) {
+    const bucket = String(row.storage_bucket ?? "").trim();
+    const path = String(row.storage_path ?? "").trim();
+    if (!bucket || !path) continue;
+    const list = pathsByBucket.get(bucket) ?? [];
+    list.push(path);
+    pathsByBucket.set(bucket, list);
+  }
+
+  for (const [bucket, paths] of pathsByBucket) {
+    const { error: remErr } = await admin.storage.from(bucket).remove(paths);
+    if (remErr) {
+      console.error(
+        "[SuperAdmin] deleteFeedbackSubmissionForSuperAdmin storage remove:",
+        bucket,
+        paths.length,
+        remErr.message
+      );
+      // Best-effort cleanup (same spirit as portal screenshot rollback `.catch(() => {})`); still delete DB row below.
+    }
+  }
+
+  const { data: deletedRows, error: delErr } = await admin
+    .from("feedback_submissions")
+    .delete()
+    .eq("id", id)
+    .select("id");
+
+  if (delErr) {
+    console.error("[SuperAdmin] deleteFeedbackSubmissionForSuperAdmin delete:", delErr.message);
+    return { ok: false, error: "Could not delete submission" };
+  }
+  if (!deletedRows?.length) {
+    return { ok: false, error: "Could not delete submission" };
+  }
+
+  revalidatePath("/super-admin/feedback");
+  revalidatePath("/super-admin");
+  return { ok: true };
+}
+
+/** Count of feedback rows in `new` status (all types). Service role after Super Admin gate. */
+export async function getSuperAdminNewFeedbackCount(): Promise<number> {
+  await ensureSuperAdmin();
+  const admin = createAdminClient();
+  const { count, error } = await admin
+    .from("feedback_submissions")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "new");
+
+  if (error) {
+    console.error("[SuperAdmin] getSuperAdminNewFeedbackCount:", error.message);
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
 export type ProductUsageData = {
   scheduleImportsLast30d: number | null;
   aiSearchLast30d: number | null;

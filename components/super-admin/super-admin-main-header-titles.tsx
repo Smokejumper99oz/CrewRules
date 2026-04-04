@@ -1,13 +1,23 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Users as UsersIcon, List, Activity, GraduationCap, Award, Skull, CalendarClock } from "lucide-react";
+import {
+  Users as UsersIcon,
+  List,
+  Activity,
+  GraduationCap,
+  Award,
+  Skull,
+  CalendarClock,
+  MessageSquare,
+} from "lucide-react";
 
 export function SuperAdminMainHeaderTitles() {
   const pathname = usePathname();
   const isUsers = pathname?.startsWith("/super-admin/users");
   const isMentoring = pathname?.startsWith("/super-admin/mentoring");
   const isWaitlist = pathname?.startsWith("/super-admin/waitlist");
+  const isFeedback = pathname?.startsWith("/super-admin/feedback");
   const isFoundingMembers = pathname?.startsWith("/super-admin/founding-members");
   const isSystemHealth = pathname?.startsWith("/super-admin/system-health");
   const isAccountDeletionFinalize = pathname?.startsWith("/super-admin/account-deletion-finalize");
@@ -96,6 +106,18 @@ export function SuperAdminMainHeaderTitles() {
       <div className="flex min-w-0 items-center gap-2">
         <List className="h-5 w-5 shrink-0 text-slate-400" aria-hidden />
         <h1 className="text-xl font-semibold tracking-tight truncate text-slate-100">Waitlist</h1>
+      </div>
+    );
+  }
+
+  if (isFeedback) {
+    return (
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <MessageSquare className="h-5 w-5 shrink-0 text-[#75C043]" aria-hidden />
+          <h1 className="min-w-0 truncate text-xl font-semibold tracking-tight text-slate-100">Feedback</h1>
+        </div>
+        <p className="mt-1 text-sm leading-snug text-slate-400">In-app submissions from portal users</p>
       </div>
     );
   }

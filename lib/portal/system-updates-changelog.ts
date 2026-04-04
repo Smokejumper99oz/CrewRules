@@ -14,6 +14,16 @@ export type SystemUpdateEntry = {
 export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   {
     date: "2026-04-04",
+    title: "In-App Feedback & Bug Reporting",
+    type: "new_feature",
+    bullets: [
+      "Submit bug reports, feature requests, and feedback directly inside CrewRules™",
+      "Helps us fix issues faster and improve the platform based on real pilot input",
+      "Optional screenshot uploads with a clean, reliable file picker experience",
+    ],
+  },
+  {
+    date: "2026-04-04",
     title: "Post-Duty Release + Reserve Commute Enhancements",
     type: "improvement",
     bullets: [

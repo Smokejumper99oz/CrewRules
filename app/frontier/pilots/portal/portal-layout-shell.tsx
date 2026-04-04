@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
+import { MessageSquare } from "lucide-react";
 import { PortalMobileNav } from "@/components/portal-mobile-nav";
 import { PortalUserMenu } from "@/components/portal-user-menu";
 import { PortalSidebarContent } from "@/components/portal-sidebar-content";
@@ -11,6 +12,22 @@ import { PortalDebugLine } from "@/components/portal-debug-line";
 import { PortalFadeIn } from "@/components/portal-fade-in";
 import { PortalTrialUpgradeBanner } from "@/components/portal-trial-upgrade-banner";
 import { PortalWelcomeModal } from "@/components/portal-welcome-modal";
+import { PortalFeedbackModal, type FeedbackType } from "@/components/portal-feedback-modal";
+
+function portalFeedbackSuccessMessage(kind: FeedbackType): string {
+  switch (kind) {
+    case "bug":
+      return "Thank you! — We really appreciate the report. We're on it and will follow up if needed.";
+    case "feature":
+      return "Thank you! — We really appreciate the idea. We're on it.";
+    case "feedback":
+      return "Thank you! — We really appreciate the feedback. We're on it and will follow up if needed.";
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
+  }
+}
 import { CURRENT_WELCOME_MODAL_VERSION } from "@/lib/welcome-modal";
 
 const NAV_GROUPS = [
@@ -85,6 +102,14 @@ export function PortalLayoutShell({
 }: Props) {
   const [tabletNavOpen, setTabletNavOpen] = useState(false);
   const [welcomeModalDismissed, setWelcomeModalDismissed] = useState(false);
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
+  const [feedbackSuccessKind, setFeedbackSuccessKind] = useState<FeedbackType | null>(null);
+
+  useEffect(() => {
+    if (feedbackSuccessKind === null) return;
+    const t = window.setTimeout(() => setFeedbackSuccessKind(null), 5000);
+    return () => window.clearTimeout(t);
+  }, [feedbackSuccessKind]);
 
   const shouldShowWelcomeModal =
     !welcomeModalDismissed &&
@@ -100,6 +125,11 @@ export function PortalLayoutShell({
           onDismiss={() => setWelcomeModalDismissed(true)}
         />
       )}
+      <PortalFeedbackModal
+        open={feedbackModalOpen}
+        onClose={() => setFeedbackModalOpen(false)}
+        onSubmitted={(kind) => setFeedbackSuccessKind(kind)}
+      />
       <DesktopIdleLogout />
       <main className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
         <div className="flex h-screen overflow-hidden">
@@ -184,7 +214,16 @@ export function PortalLayoutShell({
                   <PageTitle portalDisplayName={cfg.portal.displayName} isAdmin={false} />
                 </div>
 
-                <div className="flex shrink-0 items-center">
+                <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFeedbackModalOpen(true)}
+                    className="flex touch-manipulation items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10 sm:px-3 min-h-[44px]"
+                    aria-label="Send feedback"
+                  >
+                    <MessageSquare className="h-4 w-4 shrink-0 text-[#75C043]" aria-hidden />
+                    <span className="hidden sm:inline">Feedback</span>
+                  </button>
                   <PortalUserMenu
                     email={profile.email ?? user.email ?? null}
                     roleLabel={roleLabel}
@@ -198,6 +237,14 @@ export function PortalLayoutShell({
 
             <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
               <div className="mx-auto w-full min-w-0 max-w-7xl px-4 py-6 sm:px-6 lg:px-8 pb-[env(safe-area-inset-bottom)]">
+                {feedbackSuccessKind !== null && (
+                  <div
+                    role="status"
+                    className="mb-4 rounded-xl border border-[#75C043]/35 bg-[#75C043]/10 px-4 py-3 text-sm text-slate-800 dark:text-slate-100"
+                  >
+                    {portalFeedbackSuccessMessage(feedbackSuccessKind)}
+                  </div>
+                )}
                 {trialBannerStatus && trialBannerFoundingPilot && (
                   <PortalTrialUpgradeBanner
                     displayName={displayName}
