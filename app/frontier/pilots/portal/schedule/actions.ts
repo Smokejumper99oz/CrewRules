@@ -259,22 +259,45 @@ export async function getNextDuty(): Promise<{
     if (onDutyData) {
       const ev = onDutyData as ScheduleEvent;
       if (!isVacationCode(ev.title)) {
-      const reserveEarlyReleaseCommuteFields =
-        ev.event_type === "reserve"
-          ? (() => {
-              const endMs = new Date(ev.end_time).getTime();
-              if (Number.isNaN(endMs)) return {};
-              const nowMs = Date.now();
-              const fourH = 4 * 60 * 60 * 1000;
-              if (nowMs < endMs - fourH || nowMs >= endMs) return {};
+      type ReserveEarlyReleaseCommuteFields = {
+        commuteAssistDirection?: "to_home";
+        commuteAssistReserveEarlyReleaseWindow?: true;
+      };
+
+      let reserveEarlyReleaseCommuteFields: ReserveEarlyReleaseCommuteFields = {};
+
+      if (ev.event_type === "reserve") {
+        const { data: futureReserveRows, error: futureReserveError } = await supabase
+          .from("schedule_events")
+          .select("id")
+          .eq("user_id", profile.id)
+          .eq("source", FLICA_SOURCE)
+          .eq("event_type", "reserve")
+          .or("is_muted.eq.false,is_muted.is.null")
+          .gt("start_time", ev.end_time)
+          .limit(1);
+
+        const futureReserveBlocksEarlyRelease =
+          !!futureReserveError ||
+          (Array.isArray(futureReserveRows) && futureReserveRows.length > 0);
+
+        if (!futureReserveBlocksEarlyRelease) {
+          const endMs = new Date(ev.end_time).getTime();
+          if (!Number.isNaN(endMs)) {
+            const nowMs = Date.now();
+            const fourH = 4 * 60 * 60 * 1000;
+            if (nowMs >= endMs - fourH && nowMs < endMs) {
               const endDateStr = formatInTimeZone(new Date(ev.end_time), baseTimezone, "yyyy-MM-dd");
-              if (endDateStr !== today) return {};
-              return {
-                commuteAssistDirection: "to_home" as const,
-                commuteAssistReserveEarlyReleaseWindow: true as const,
-              };
-            })()
-          : {};
+              if (endDateStr === today) {
+                reserveEarlyReleaseCommuteFields = {
+                  commuteAssistDirection: "to_home",
+                  commuteAssistReserveEarlyReleaseWindow: true,
+                };
+              }
+            }
+          }
+        }
+      }
       const reserveEarlyReleaseActive =
         reserveEarlyReleaseCommuteFields.commuteAssistReserveEarlyReleaseWindow === true;
       const commuteAssistReserveEarlyReleaseWindow =
