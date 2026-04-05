@@ -662,16 +662,16 @@ export default function SchedulePage() {
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-400 mb-2">
+            <div className="grid grid-cols-7 gap-0.5 sm:gap-1 text-center text-[10px] sm:text-xs text-slate-400 mb-1.5 sm:mb-2">
               {weekDays.map((d) => (
                 <div key={d} className="py-1">{d}</div>
               ))}
             </div>
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
               {calendarDays.map((day, i) => (
                 <div
                   key={i}
-                  className={`min-h-[72px] rounded-lg border p-1 ${
+                  className={`min-h-[60px] sm:min-h-[72px] rounded-lg border p-0.5 sm:p-1 ${
                     !day
                       ? "border-transparent"
                       : isSameDay(day, today)
@@ -705,9 +705,9 @@ export default function SchedulePage() {
                                   key={`${ev.id}-${toYyyyMmDd(day)}`}
                                   type="button"
                                   onClick={(e) => handleEventClick(ev, e.clientX, e.clientY, day)}
-                                  className={`flex w-full rounded border px-1.5 py-0.5 text-left text-xs ${
+                                  className={`flex w-full rounded border px-1 py-px sm:px-1.5 sm:py-0.5 text-left text-[10px] sm:text-xs ${
                                     isReportNightTile
-                                      ? `flex-col items-stretch gap-0.5 ${REPORT_NIGHT_TILE_CLASS}`
+                                      ? `flex-col items-stretch gap-px sm:gap-0.5 ${REPORT_NIGHT_TILE_CLASS}`
                                       : `items-center ${getCalendarTileStyle(ev, visibleDayEvents)}`
                                   }`}
                                 >
@@ -715,13 +715,13 @@ export default function SchedulePage() {
                                     <>
                                       <span className="min-w-0 truncate font-medium">{scheduleEventDisplayTitle(ev)}</span>
                                       {rn.reportDisplay && rn.reportLocalDate && (
-                                        <span className="text-[10px] leading-tight">
+                                        <span className="text-[9px] leading-tight sm:text-[10px]">
                                           <span className="font-semibold">REPORT</span> {rn.reportDisplay} •{" "}
                                           {formatReportNightEeeD(rn.reportLocalDate, displaySettings.baseTimezone)}
                                         </span>
                                       )}
                                       {rn.firstDepDisplay && rn.firstDepartureLocalDate && (
-                                        <span className="text-[10px] leading-tight">
+                                        <span className="text-[9px] leading-tight sm:text-[10px]">
                                           DEPARTURE {rn.firstDepDisplay} •{" "}
                                           {formatReportNightEeeD(
                                             rn.firstDepartureLocalDate,
