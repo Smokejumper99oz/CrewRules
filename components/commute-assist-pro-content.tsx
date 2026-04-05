@@ -16,6 +16,38 @@ import {
   type OperationalStatus,
 } from "@/lib/commute/operational-status-types";
 import { deriveOperationalStatus } from "@/lib/commute/derive-operational-status";
+import {
+  COMMUTE_COVERAGE_UI_MESSAGE,
+  COMMUTE_COVERAGE_UI_TITLE,
+  type CommuteCoverageForClient,
+} from "@/lib/commute/commute-coverage-public";
+
+type CommuteFlightsOk = Extract<Awaited<ReturnType<typeof getCommuteFlights>>, { ok: true }>;
+
+function pickCoverageFromCommuteResponse(res: CommuteFlightsOk): CommuteCoverageForClient | null {
+  if (!res.coverageWarning) return null;
+  return {
+    coverageWarning: true,
+    coverageWarningReasons: res.coverageWarningReasons ?? [],
+    coverageWarningTitle: res.coverageWarningTitle ?? COMMUTE_COVERAGE_UI_TITLE,
+    coverageWarningMessage: res.coverageWarningMessage ?? COMMUTE_COVERAGE_UI_MESSAGE,
+  };
+}
+
+function mergeCoverageWarnings(
+  a: CommuteCoverageForClient | null,
+  b: CommuteCoverageForClient | null
+): CommuteCoverageForClient | null {
+  if (!a?.coverageWarning && !b?.coverageWarning) return null;
+  if (!a?.coverageWarning) return b;
+  if (!b?.coverageWarning) return a;
+  return {
+    coverageWarning: true,
+    coverageWarningReasons: [...new Set([...a.coverageWarningReasons, ...b.coverageWarningReasons])],
+    coverageWarningTitle: COMMUTE_COVERAGE_UI_TITLE,
+    coverageWarningMessage: COMMUTE_COVERAGE_UI_MESSAGE,
+  };
+}
 
 function fmtHM(totalMinutes: number) {
   const h = Math.floor(totalMinutes / 60);
@@ -401,28 +433,52 @@ const COMMUTE_CACHE_TTL_MS = 15 * 60 * 1000;
 const COMMUTE_CACHE_PREFIX = "crewrules_commute_";
 
 /** Bump when Commute Assist logic changes (times, status derivation). Invalidates stale sessionStorage. */
-const COMMUTE_CLIENT_CACHE_VERSION = 2;
+const COMMUTE_CLIENT_CACHE_VERSION = 3;
 
 function getCommuteCacheKey(origin: string, destination: string, date: string, direction: string): string {
   return `${COMMUTE_CACHE_PREFIX}${origin}_${destination}_${date}_${direction}`;
 }
 
-function getCommuteCache(key: string): { flights: CommuteFlight[]; originTz: string; destTz: string; fetchedAt: string | null; notice: string | null } | null {
+function getCommuteCache(key: string): {
+  flights: CommuteFlight[];
+  originTz: string;
+  destTz: string;
+  fetchedAt: string | null;
+  notice: string | null;
+  coverage: CommuteCoverageForClient | null;
+} | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    const { flights, originTz, destTz, fetchedAt, notice, cachedAt, version } = parsed;
+    const { flights, originTz, destTz, fetchedAt, notice, coverage, cachedAt, version } = parsed;
     if (version !== COMMUTE_CLIENT_CACHE_VERSION) return null;
     if (Date.now() - (cachedAt ?? 0) > COMMUTE_CACHE_TTL_MS) return null;
-    return { flights, originTz, destTz, fetchedAt, notice };
+    const cov =
+      coverage &&
+      typeof coverage === "object" &&
+      coverage.coverageWarning === true &&
+      Array.isArray(coverage.coverageWarningReasons)
+        ? (coverage as CommuteCoverageForClient)
+        : null;
+    return { flights, originTz, destTz, fetchedAt, notice, coverage: cov };
   } catch {
     return null;
   }
 }
 
-function setCommuteCache(key: string, data: { flights: CommuteFlight[]; originTz: string; destTz: string; fetchedAt: string | null; notice: string | null }) {
+function setCommuteCache(
+  key: string,
+  data: {
+    flights: CommuteFlight[];
+    originTz: string;
+    destTz: string;
+    fetchedAt: string | null;
+    notice: string | null;
+    coverage: CommuteCoverageForClient | null;
+  }
+) {
   if (typeof window === "undefined") return;
   try {
     sessionStorage.setItem(
@@ -946,6 +1002,8 @@ export function CommuteAssistProContent({
   const [lastFetchedAt, setLastFetchedAt] = useState<string | null>(null);
   const [, setLastUpdateTick] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
+  /** Merged across home/alternate routes: subtle coverage sanity banner only. */
+  const [commuteCoverageBanner, setCommuteCoverageBanner] = useState<CommuteCoverageForClient | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [homePage, setHomePage] = useState(1);
   const [alternatePage, setAlternatePage] = useState(1);
@@ -1015,6 +1073,23 @@ export function CommuteAssistProContent({
     dutyOk && arriveBy
       ? formatInTimeZone(arriveBy, baseTz, "yyyy-MM-dd")
       : new Date().toISOString().slice(0, 10);
+
+  const [commuteExpiryTick, setCommuteExpiryTick] = useState(0);
+  const arriveByTimeForExpiry = arriveBy?.getTime();
+  useEffect(() => {
+    if (direction !== "to_base" || arriveByTimeForExpiry == null || Number.isNaN(arriveByTimeForExpiry)) return;
+    const id = window.setInterval(() => setCommuteExpiryTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, [direction, arriveByTimeForExpiry]);
+
+  const isCommuteWindowExpired = useMemo(
+    () =>
+      direction === "to_base" &&
+      arriveByTimeForExpiry != null &&
+      !Number.isNaN(arriveByTimeForExpiry) &&
+      Date.now() > arriveByTimeForExpiry,
+    [direction, arriveByTimeForExpiry, commuteExpiryTick]
+  );
 
   const dutyStartAirport = dutyStartAirportOverride?.trim() || parseDutyStartAirport(event.route);
   const dutyEndAirport = (dutyEndAirportOverride?.trim() || baseAirport) ?? null;
@@ -1260,12 +1335,17 @@ export function CommuteAssistProContent({
       try {
         setCommuteError(null);
         setNotice(null);
+        setCommuteCoverageBanner(null);
         if (opts?.forceRefresh) {
           setRefreshing(true);
           setCommuteGroups({ home: [], alternate: [] });
         }
 
-        const fetchOne = async (route: (typeof routes)[0]) => {
+        type FetchLegCoverage = {
+          flights: CommuteFlight[] | null;
+          coverage: CommuteCoverageForClient | null;
+        };
+        const fetchOne = async (route: (typeof routes)[0]): Promise<FetchLegCoverage> => {
           const cacheKey = getCommuteCacheKey(route.origin, route.destination, route.commuteDate, direction);
           if (!opts?.forceRefresh) {
             const cached = getCommuteCache(cacheKey);
@@ -1278,7 +1358,7 @@ export function CommuteAssistProContent({
                 });
               }
               applyFlightsToState(cached.flights, cached.originTz, cached.destTz, cached.fetchedAt, cached.notice, route.label);
-              return cached.flights;
+              return { flights: cached.flights, coverage: cached.coverage };
             }
           }
           const res = await getCommuteFlights({
@@ -1296,6 +1376,7 @@ export function CommuteAssistProContent({
               });
             }
             const displayFetchedAt = opts?.forceRefresh ? new Date().toISOString() : (res.fetchedAt ?? null);
+            const cov = pickCoverageFromCommuteResponse(res);
             applyFlightsToState(res.flights, res.originTz, res.destTz, displayFetchedAt, res.notice ?? null, route.label);
             setCommuteCache(cacheKey, {
               flights: res.flights,
@@ -1303,18 +1384,24 @@ export function CommuteAssistProContent({
               destTz: res.destTz,
               fetchedAt: res.fetchedAt ?? null,
               notice: res.notice ?? null,
+              coverage: cov,
             });
-            return res.flights;
+            return { flights: res.flights, coverage: cov };
           }
           setNotice(res.message);
-          return null;
+          return { flights: null, coverage: null };
         };
 
         const results = await Promise.all(routes.map(fetchOne));
+        const mergedBanner = results.reduce<CommuteCoverageForClient | null>(
+          (acc, row) => mergeCoverageWarnings(acc, row.coverage),
+          null
+        );
+        setCommuteCoverageBanner(mergedBanner);
         const dutyStart = new Date(event.start_time);
         const arriveByFormatted = dutyOk ? formatInTimeZone(subMinutes(dutyStart, arrivalBuffer), baseTz, "HH:mm") : "";
         setCommuteMeta({ showInfo: dutyOk, arriveByFormatted, dutyOk });
-        if (results.every((r) => r === null) && routes.length > 0) {
+        if (results.every((r) => r.flights === null) && routes.length > 0) {
           setSource(null);
           setLastFetchedAt(null);
         }
@@ -1402,6 +1489,7 @@ export function CommuteAssistProContent({
             destTz: res.destTz,
             fetchedAt: res.fetchedAt ?? null,
             notice: res.notice ?? null,
+            coverage: pickCoverageFromCommuteResponse(res),
           });
         }
         const leg1Opts = convertRawFlightsToLegOptions(leg1Flights, leg1OriginTz, leg1DestTz, `2leg-${route.routeKey}`);
@@ -1438,6 +1526,7 @@ export function CommuteAssistProContent({
             destTz: res2.destTz,
             fetchedAt: res2.fetchedAt ?? null,
             notice: res2.notice ?? null,
+            coverage: pickCoverageFromCommuteResponse(res2),
           });
         }
         const leg2Opts = convertRawFlightsToLegOptions(leg2Flights, leg2OriginTz, leg2DestTz, `2leg-${route.routeKey}-leg2`);
@@ -1529,6 +1618,7 @@ export function CommuteAssistProContent({
             destTz: res.destTz,
             fetchedAt: res.fetchedAt ?? null,
             notice: res.notice ?? null,
+            coverage: pickCoverageFromCommuteResponse(res),
           });
           return { flights: res.flights, originTz: res.originTz, destTz: res.destTz };
         };
@@ -1552,6 +1642,7 @@ export function CommuteAssistProContent({
             destTz: res.destTz,
             fetchedAt: res.fetchedAt ?? null,
             notice: res.notice ?? null,
+            coverage: pickCoverageFromCommuteResponse(res),
           });
           return { flights: res.flights, originTz: res.originTz, destTz: res.destTz };
         };
@@ -1983,71 +2074,75 @@ export function CommuteAssistProContent({
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded border border-slate-700/60 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setViewMode("cards")}
-              className={`touch-target touch-pad px-2 py-1 text-[11px] ${viewMode === "cards" ? "bg-slate-600 text-white" : "text-slate-400 hover:bg-slate-800/60"}`}
-            >
-              Cards
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("board")}
-              className={`touch-target touch-pad px-2 py-1 text-[11px] ${viewMode === "board" ? "bg-slate-600 text-white" : "text-slate-400 hover:bg-slate-800/60"}`}
-            >
-              Board
-            </button>
-          </div>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as "arrAsc" | "arrDesc" | "durAsc" | "durDesc")}
-            className="touch-input rounded border border-slate-700/60 bg-slate-900/60 text-xs text-slate-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-slate-500"
-          >
-            <option value="arrAsc">Earliest arrival</option>
-            <option value="arrDesc">Latest arrival</option>
-            <option value="durAsc">Shortest flight</option>
-            <option value="durDesc">Longest flight</option>
-          </select>
-          {source && (
-            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-200">
-              {source === "live" ? "Live" : "Scheduled"}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              routes.forEach((r) => clearCommuteCache(getCommuteCacheKey(r.origin, r.destination, r.commuteDate, direction)));
-              twoLegFirstLegRoutes.forEach((r) => {
-                clearCommuteCache(getCommuteCacheKey(r.origin, r.destination, r.commuteDate, direction));
-                const [labelPart] = r.routeKey.split("-");
-                const leg2Dest = direction === "to_base"
-                  ? (dutyStartAirport ?? baseAirport)?.toUpperCase() ?? ""
-                  : (labelPart === "home" ? homeAirport : alternateHomeAirport)?.toUpperCase() ?? "";
-                if (leg2Dest.length === 3) {
-                  clearCommuteCache(getCommuteCacheKey(r.destination, leg2Dest, r.commuteDate, direction));
-                }
-              });
-              twoLegRoutes.forEach((r) => {
-                clearCommuteCache(getCommuteCacheKey(r.origin, r.stop, r.commuteDate, direction));
-                clearCommuteCache(getCommuteCacheKey(r.stop, r.destination, r.commuteDate, direction));
-              });
-              loadFlights({ forceRefresh: true }).catch((err) => { console.error("Commute Assist refresh failed", err); setCommuteError("Refresh failed."); });
-              if (commuteTwoLegEnabled && twoLegFirstLegRoutes.length > 0) {
-                loadTwoLegFirstLegFlights({ forceRefresh: true }).catch((err) => { console.error("Commute Assist 2-leg first-leg refresh failed", err); setCommuteError("Refresh failed."); });
-              } else if (twoLegRoutes.length > 0) {
-                loadTwoLegFlights({ forceRefresh: true }).catch((err) => { console.error("Commute Assist 2-leg refresh failed", err); setCommuteError("Refresh failed."); });
-              }
-            }}
-            disabled={refreshing}
-            className="touch-target touch-pad rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1 text-[11px] text-slate-200 hover:bg-slate-900/70 disabled:opacity-50"
-          >
-            {refreshing ? "Refreshing…" : "Refresh"}
-          </button>
-          {lastFetchedAt && (
-            <span className="text-[11px] text-slate-500">
-              {formatLastUpdate(lastFetchedAt, baseTz)}
-            </span>
+          {!isCommuteWindowExpired && (
+            <>
+              <div className="flex rounded border border-slate-700/60 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("cards")}
+                  className={`touch-target touch-pad px-2 py-1 text-[11px] ${viewMode === "cards" ? "bg-slate-600 text-white" : "text-slate-400 hover:bg-slate-800/60"}`}
+                >
+                  Cards
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("board")}
+                  className={`touch-target touch-pad px-2 py-1 text-[11px] ${viewMode === "board" ? "bg-slate-600 text-white" : "text-slate-400 hover:bg-slate-800/60"}`}
+                >
+                  Board
+                </button>
+              </div>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as "arrAsc" | "arrDesc" | "durAsc" | "durDesc")}
+                className="touch-input rounded border border-slate-700/60 bg-slate-900/60 text-xs text-slate-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              >
+                <option value="arrAsc">Earliest arrival</option>
+                <option value="arrDesc">Latest arrival</option>
+                <option value="durAsc">Shortest flight</option>
+                <option value="durDesc">Longest flight</option>
+              </select>
+              {source && (
+                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-200">
+                  {source === "live" ? "Live" : "Scheduled"}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  routes.forEach((r) => clearCommuteCache(getCommuteCacheKey(r.origin, r.destination, r.commuteDate, direction)));
+                  twoLegFirstLegRoutes.forEach((r) => {
+                    clearCommuteCache(getCommuteCacheKey(r.origin, r.destination, r.commuteDate, direction));
+                    const [labelPart] = r.routeKey.split("-");
+                    const leg2Dest = direction === "to_base"
+                      ? (dutyStartAirport ?? baseAirport)?.toUpperCase() ?? ""
+                      : (labelPart === "home" ? homeAirport : alternateHomeAirport)?.toUpperCase() ?? "";
+                    if (leg2Dest.length === 3) {
+                      clearCommuteCache(getCommuteCacheKey(r.destination, leg2Dest, r.commuteDate, direction));
+                    }
+                  });
+                  twoLegRoutes.forEach((r) => {
+                    clearCommuteCache(getCommuteCacheKey(r.origin, r.stop, r.commuteDate, direction));
+                    clearCommuteCache(getCommuteCacheKey(r.stop, r.destination, r.commuteDate, direction));
+                  });
+                  loadFlights({ forceRefresh: true }).catch((err) => { console.error("Commute Assist refresh failed", err); setCommuteError("Refresh failed."); });
+                  if (commuteTwoLegEnabled && twoLegFirstLegRoutes.length > 0) {
+                    loadTwoLegFirstLegFlights({ forceRefresh: true }).catch((err) => { console.error("Commute Assist 2-leg first-leg refresh failed", err); setCommuteError("Refresh failed."); });
+                  } else if (twoLegRoutes.length > 0) {
+                    loadTwoLegFlights({ forceRefresh: true }).catch((err) => { console.error("Commute Assist 2-leg refresh failed", err); setCommuteError("Refresh failed."); });
+                  }
+                }}
+                disabled={refreshing}
+                className="touch-target touch-pad rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1 text-[11px] text-slate-200 hover:bg-slate-900/70 disabled:opacity-50"
+              >
+                {refreshing ? "Refreshing…" : "Refresh"}
+              </button>
+              {lastFetchedAt && (
+                <span className="text-[11px] text-slate-500">
+                  {formatLastUpdate(lastFetchedAt, baseTz)}
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -2056,7 +2151,7 @@ export function CommuteAssistProContent({
           {notice}
         </div>
       )}
-      {(twoLegRoutes.length > 0 || twoLegOptions.length > 0) && (
+      {!isCommuteWindowExpired && (twoLegRoutes.length > 0 || twoLegOptions.length > 0) && (
         <p className="text-xs text-slate-500">
           2-Leg Debug • Routes: {twoLegRoutes.length} • Options: {twoLegOptions.length}
         </p>
@@ -2083,8 +2178,28 @@ export function CommuteAssistProContent({
           Possible commute home if released early or on schedule — actual release time may differ.
         </p>
       )}
+      {commuteCoverageBanner?.coverageWarning && !isCommuteWindowExpired && (
+        <div
+          className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.07] px-3 py-2.5"
+          role="status"
+        >
+          <p className="text-xs font-medium text-amber-100/90">{commuteCoverageBanner.coverageWarningTitle}</p>
+          <p className="mt-1 text-[11px] leading-snug text-slate-400">
+            {commuteCoverageBanner.coverageWarningMessage}
+          </p>
+        </div>
+      )}
       {dutyOk && (
         <div className="mt-6 space-y-4">
+          {isCommuteWindowExpired ? (
+            <div className="rounded-xl border border-slate-600/50 bg-slate-900/40 px-4 py-4">
+              <p className="text-sm font-semibold text-slate-200">Commute window closed</p>
+              <p className="mt-2 text-xs text-slate-400">
+                This commute needed arrival by {arriveByFormatted} ({(baseAirport ?? "base").toUpperCase()}).
+              </p>
+            </div>
+          ) : (
+            <>
           {tzMissing && (
             <div className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
               Timezone data missing for route. Ask an admin to add it in Airports.
@@ -2466,6 +2581,8 @@ export function CommuteAssistProContent({
               Colors reflect schedule buffer / reliability vs duty window — not seat availability.
             </p>
           </div>
+            </>
+          )}
         </div>
       )}
     </div>

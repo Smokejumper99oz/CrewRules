@@ -8,7 +8,14 @@ import { fetchFlightsFromAerodataBox } from "@/lib/aerodatabox";
 import { getRouteTzs } from "@/lib/airports";
 import { normalizeFlightTiming } from "@/lib/commute/normalize-flight-timing";
 import { deriveOperationalStatus } from "@/lib/commute/derive-operational-status";
+import type { CommuteCoverageForClient } from "@/lib/commute/commute-coverage-public";
+import {
+  getCommuteCoverageForCacheFallback,
+  getCommuteCoverageForClient,
+  maybeLogCommuteIntegritySignals,
+} from "@/lib/commute/evaluate-commute-integrity-signals";
 import type { CommuteFlight } from "@/lib/aviationstack";
+import { formatInTimeZone } from "date-fns-tz";
 
 /** Cache version for commute_flight_cache. Bump to purge old entries (e.g. 3-flight cache). */
 const CACHE_VERSION = "v3";
@@ -21,10 +28,14 @@ const COMMUTE_PRIMARY_PROVIDER_FALLBACK_NOTICE =
 const DERIVED_STATUS_VERSION = 1;
 
 /**
- * `commute_flight_cache.data` jsonb: historically a bare `CommuteFlight[]`; now `{ flights, notice }`
+ * `commute_flight_cache.data` jsonb: historically a bare `CommuteFlight[]`; now `{ flights, notice, coverage? }`
  * so provider notices survive cache reads. Legacy rows remain a top-level array until refreshed.
  */
-function readCommuteFlightCachePayload(data: unknown): { flights: CommuteFlight[]; notice: string | undefined } {
+function readCommuteFlightCachePayload(data: unknown): {
+  flights: CommuteFlight[];
+  notice: string | undefined;
+  coverage?: CommuteCoverageForClient;
+} {
   if (data == null) return { flights: [], notice: undefined };
   if (Array.isArray(data)) {
     return { flights: data as CommuteFlight[], notice: undefined };
@@ -33,9 +44,16 @@ function readCommuteFlightCachePayload(data: unknown): { flights: CommuteFlight[
     const flightsRaw = (data as { flights?: unknown }).flights;
     if (Array.isArray(flightsRaw)) {
       const n = (data as { notice?: string | null }).notice;
+      const cov = (data as { coverage?: CommuteCoverageForClient }).coverage;
       return {
         flights: flightsRaw as CommuteFlight[],
         notice: n != null && String(n).trim() !== "" ? String(n) : undefined,
+        coverage:
+          cov &&
+          typeof cov === "object" &&
+          typeof (cov as CommuteCoverageForClient).coverageWarning === "boolean"
+            ? cov
+            : undefined,
       };
     }
   }
@@ -44,11 +62,13 @@ function readCommuteFlightCachePayload(data: unknown): { flights: CommuteFlight[
 
 function buildCommuteFlightCachePayload(
   flights: CommuteFlight[],
-  notice: string | undefined
-): { flights: CommuteFlight[]; notice: string | null } {
+  notice: string | undefined,
+  coverage: CommuteCoverageForClient
+): { flights: CommuteFlight[]; notice: string | null; coverage: CommuteCoverageForClient } {
   return {
     flights,
     notice: notice != null && notice.trim() !== "" ? notice : null,
+    coverage,
   };
 }
 
@@ -487,6 +507,42 @@ export async function getCommuteFlights(input: {
         );
         return { ...normalized, operationalStatus };
       });
+
+      const sameDayInOriginForce = formatInTimeZone(now, originTz, "yyyy-MM-dd") === input.date;
+      void maybeLogCommuteIntegritySignals({
+        tenant,
+        userId,
+        origin,
+        destination,
+        commuteDate: input.date,
+        aviationstackCount: aviationstackFlights.length,
+        aerodataboxCount: aerodataboxFlights.length,
+        finalFlightCount: flights.length,
+        mergedFlightsForLiveScan: deduped,
+        providers: {
+          aviationstackFailed,
+          aerodataboxFailed,
+          aerodataboxSkipped,
+        },
+        sameDayInOrigin: sameDayInOriginForce,
+      });
+
+      const coverageClient = getCommuteCoverageForClient({
+        origin,
+        destination,
+        commuteDate: input.date,
+        aviationstackCount: aviationstackFlights.length,
+        aerodataboxCount: aerodataboxFlights.length,
+        finalFlightCount: flights.length,
+        mergedFlightsForLiveScan: deduped,
+        providers: {
+          aviationstackFailed,
+          aerodataboxFailed,
+          aerodataboxSkipped,
+        },
+        sameDayInOrigin: sameDayInOriginForce,
+      });
+
       const aa1352Final = flights.find(
         (f) =>
           (f.carrier === "AA" && /1352/.test(f.flightNumber ?? "") && f.origin === "SAV" && f.destination === "CLT")
@@ -524,7 +580,7 @@ export async function getCommuteFlights(input: {
         destination,
         commute_date: input.date,
         cache_version: CACHE_VERSION,
-        data: buildCommuteFlightCachePayload(flights, notice),
+        data: buildCommuteFlightCachePayload(flights, notice, coverageClient),
         fetched_at: now.toISOString(),
       };
       const { error: upsertErr } = await admin
@@ -567,7 +623,17 @@ export async function getCommuteFlights(input: {
             }
           : undefined;
 
-      return { ok: true as const, source: "api" as const, flights, fetchedAt: now.toISOString(), notice, originTz, destTz, debug };
+      return {
+        ok: true as const,
+        source: "api" as const,
+        flights,
+        fetchedAt: now.toISOString(),
+        notice,
+        originTz,
+        destTz,
+        debug,
+        ...coverageClient,
+      };
     } catch (err) {
       console.error("Commute Assist failed", err);
       return { ok: false as const, reason: "unavailable" as const, message: "Commute Assist temporarily unavailable." };
@@ -592,8 +658,12 @@ export async function getCommuteFlights(input: {
 
   if (cached?.data != null && !input.forceRefresh) {
     const { originTz, destTz } = await getRouteTzs(origin, destination);
-    const { flights: payloadFlights, notice: cachedNotice } = readCommuteFlightCachePayload(cached.data);
+    const { flights: payloadFlights, notice: cachedNotice, coverage: cachedCoverage } =
+      readCommuteFlightCachePayload(cached.data);
     const cachedFlights = filterCodeShareFlights(payloadFlights);
+    const sameDayInOriginCache = formatInTimeZone(now, originTz, "yyyy-MM-dd") === input.date;
+    const coverageClient =
+      cachedCoverage ?? getCommuteCoverageForCacheFallback(cachedFlights, sameDayInOriginCache);
     // Re-derive operationalStatus on cache read; do not trust cached value (DERIVED_STATUS_VERSION).
     const flights = cachedFlights.map((f) => {
       const normalized = normalizeFlightTiming(f, originTz, destTz);
@@ -692,6 +762,7 @@ export async function getCommuteFlights(input: {
               fetchedAt: cached.fetched_at ?? null,
             }
           : undefined,
+      ...coverageClient,
     };
   }
 
@@ -812,6 +883,42 @@ export async function getCommuteFlights(input: {
       );
       return { ...normalized, operationalStatus };
     });
+
+    const sameDayInOriginMiss = formatInTimeZone(now, originTz, "yyyy-MM-dd") === input.date;
+    void maybeLogCommuteIntegritySignals({
+      tenant,
+      userId,
+      origin,
+      destination,
+      commuteDate: input.date,
+      aviationstackCount: aviationstackFlights.length,
+      aerodataboxCount: aerodataboxFlights.length,
+      finalFlightCount: flights.length,
+      mergedFlightsForLiveScan: deduped,
+      providers: {
+        aviationstackFailed,
+        aerodataboxFailed,
+        aerodataboxSkipped,
+      },
+      sameDayInOrigin: sameDayInOriginMiss,
+    });
+
+    const coverageClient = getCommuteCoverageForClient({
+      origin,
+      destination,
+      commuteDate: input.date,
+      aviationstackCount: aviationstackFlights.length,
+      aerodataboxCount: aerodataboxFlights.length,
+      finalFlightCount: flights.length,
+      mergedFlightsForLiveScan: deduped,
+      providers: {
+        aviationstackFailed,
+        aerodataboxFailed,
+        aerodataboxSkipped,
+      },
+      sameDayInOrigin: sameDayInOriginMiss,
+    });
+
     const aa1352FinalMiss = flights.find(
       (f) =>
         (f.carrier === "AA" && /1352/.test(f.flightNumber ?? "") && f.origin === "SAV" && f.destination === "CLT")
@@ -850,7 +957,7 @@ export async function getCommuteFlights(input: {
       destination,
       commute_date: input.date,
       cache_version: CACHE_VERSION,
-      data: buildCommuteFlightCachePayload(flights, notice),
+      data: buildCommuteFlightCachePayload(flights, notice, coverageClient),
       fetched_at: now.toISOString(),
     };
     const { error: upsertErr } = await admin
@@ -894,7 +1001,17 @@ export async function getCommuteFlights(input: {
           }
         : undefined;
 
-    return { ok: true as const, source: "api" as const, flights, fetchedAt: now.toISOString(), notice, originTz, destTz, debug };
+    return {
+      ok: true as const,
+      source: "api" as const,
+      flights,
+      fetchedAt: now.toISOString(),
+      notice,
+      originTz,
+      destTz,
+      debug,
+      ...coverageClient,
+    };
   } catch (err) {
     console.error("Commute Assist failed", err);
     return { ok: false as const, reason: "unavailable" as const, message: "Commute Assist temporarily unavailable." };

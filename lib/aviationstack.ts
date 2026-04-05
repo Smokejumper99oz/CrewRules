@@ -461,16 +461,17 @@ async function fetchFlightsSameDay(
         droppedMissingArrTs++;
         return false;
       }
-      const depClean = stripOffset(depTime);
-      const arrClean = stripOffset(arrTime);
-      const depDateStr = depClean.slice(0, 10);
-      if (depDateStr !== date) {
-        droppedBadDate++;
-        return false;
-      }
+      const depTzFilter = f?.departure?.timezone ?? originTz;
+      const arrTzFilter = originTz === destTz ? originTz : (f?.arrival?.timezone ?? destTz);
       try {
-        const depTzFilter = f?.departure?.timezone ?? originTz;
-        const arrTzFilter = originTz === destTz ? originTz : (f?.arrival?.timezone ?? destTz);
+        const depUtcForDate = scheduledToUtcIso(depTime, depTzFilter);
+        const depLocalDateStr = formatInTimeZone(new Date(depUtcForDate), originTz, "yyyy-MM-dd");
+        if (depLocalDateStr !== date) {
+          droppedBadDate++;
+          return false;
+        }
+        const depClean = stripOffset(depTime);
+        const arrClean = stripOffset(arrTime);
         fromZonedTime(depClean, depTzFilter);
         fromZonedTime(arrClean, arrTzFilter);
       } catch {
@@ -829,8 +830,10 @@ async function fetchFlightsHistorical(
   const filtered = mapped
     .filter((f) => {
       if (!f.departureTime) return false;
-      const depClean = stripOffset(f.dep_scheduled_raw ?? f.departureTime ?? "");
-      return depClean.slice(0, 10) === date;
+      const depMs = new Date(f.departureTime).getTime();
+      if (Number.isNaN(depMs)) return false;
+      const depLocalDateStr = formatInTimeZone(new Date(f.departureTime), originTz, "yyyy-MM-dd");
+      return depLocalDateStr === date;
     })
     .sort((a, b) => new Date(a.arrivalTime).getTime() - new Date(b.arrivalTime).getTime());
 

@@ -251,8 +251,8 @@ async function fetchFlightsFromAerodataBoxImpl(
       const depTime = getTimeAsUtc(getDep(f), originTz);
       const arrTime = getTimeAsUtc(getArr(f), destTz);
       if (!depTime || !arrTime) return false;
-      const depDateStr = depTime.slice(0, 10);
-      return depDateStr === dateStr;
+      const depLocalDateStr = formatInTimeZone(new Date(depTime), originTz, "yyyy-MM-dd");
+      return depLocalDateStr === dateStr;
     })
     .map((f) => {
       const dep = getDep(f);
