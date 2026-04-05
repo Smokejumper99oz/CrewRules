@@ -67,7 +67,7 @@ export default function HomePage() {
                   <span className="align-super text-base">™</span> —
                 </span>
                 <br className="hidden md:block" />
-                <span className="md:whitespace-nowrap">The Smart Platform</span>
+                <span className="md:whitespace-nowrap">The Smart Platform</span>{" "}
                 <br className="hidden md:block" />
                 <span className="text-slate-300 md:whitespace-nowrap">for Airline Crew</span>
               </h1>

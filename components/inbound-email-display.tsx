@@ -29,8 +29,8 @@ export function InboundEmailDisplay({ email, variant = "default", suffix }: Prop
         <div>
           <span className="text-xs font-bold uppercase text-white">Schedule Import Email</span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center rounded-lg border border-slate-600 bg-slate-800/50 px-3 py-2 text-sm font-mono text-slate-200">
+        <div className="flex w-full min-w-0 flex-wrap items-start gap-2 sm:items-center">
+          <span className="inline-flex w-full min-w-0 max-w-full break-all items-center rounded-lg border border-slate-600 bg-slate-800/50 px-3 py-2 text-sm font-mono text-slate-200 sm:w-auto">
             {email}
           </span>
           <button

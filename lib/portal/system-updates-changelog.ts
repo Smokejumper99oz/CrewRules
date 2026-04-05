@@ -13,6 +13,17 @@ export type SystemUpdateEntry = {
  */
 export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   {
+    date: "2026-04-05",
+    title: "Onboarding clarity, public feedback, and signup UX",
+    type: "improvement",
+    bullets: [
+      "Improved onboarding clarity (Login / Create Account / Waitlist)",
+      "Added public feedback system",
+      "Refined signup eligibility messaging",
+      "Improved modal UX and card consistency",
+    ],
+  },
+  {
     date: "2026-04-04",
     title: "In-App Feedback & Bug Reporting",
     type: "new_feature",
