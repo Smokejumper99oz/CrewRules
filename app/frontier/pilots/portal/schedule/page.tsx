@@ -707,23 +707,24 @@ export default function SchedulePage() {
                                   onClick={(e) => handleEventClick(ev, e.clientX, e.clientY, day)}
                                   className={
                                     isReportNightTile
-                                      ? `flex w-full flex-col items-stretch gap-0 rounded border px-0.5 py-0 text-left text-[10px] sm:gap-0.5 sm:px-1.5 sm:py-0.5 sm:text-xs ${REPORT_NIGHT_TILE_CLASS}`
+                                      ? `flex w-full flex-col items-stretch gap-0 rounded border px-1 py-px text-left text-[10px] sm:gap-0.5 sm:px-1.5 sm:py-0.5 sm:text-xs ${REPORT_NIGHT_TILE_CLASS}`
                                       : `flex w-full items-center rounded border px-1 py-px text-left text-[10px] sm:px-1.5 sm:py-0.5 sm:text-xs ${getCalendarTileStyle(ev, visibleDayEvents)}`
                                   }
                                 >
                                   {isReportNightTile ? (
                                     <>
-                                      <span className="min-w-0 truncate font-medium leading-none sm:leading-normal">
+                                      <span className="min-w-0 truncate font-semibold leading-none sm:font-medium sm:leading-normal">
                                         {scheduleEventDisplayTitle(ev)}
                                       </span>
                                       {rn.reportDisplay && rn.reportLocalDate && (
-                                        <span className="text-[8px] leading-none sm:text-[10px] sm:leading-tight">
-                                          <span className="font-semibold">REPORT</span> {rn.reportDisplay} •{" "}
+                                        <span className="text-[8px] leading-none opacity-80 sm:text-[10px] sm:leading-tight sm:opacity-100">
+                                          <span className="font-medium sm:font-semibold">REPORT</span>{" "}
+                                          {rn.reportDisplay} •{" "}
                                           {formatReportNightEeeD(rn.reportLocalDate, displaySettings.baseTimezone)}
                                         </span>
                                       )}
                                       {rn.firstDepDisplay && rn.firstDepartureLocalDate && (
-                                        <span className="text-[8px] leading-none sm:text-[10px] sm:leading-tight">
+                                        <span className="text-[8px] leading-none opacity-80 sm:text-[10px] sm:leading-tight sm:opacity-100">
                                           DEPARTURE {rn.firstDepDisplay} •{" "}
                                           {formatReportNightEeeD(
                                             rn.firstDepartureLocalDate,
