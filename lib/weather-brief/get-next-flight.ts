@@ -21,6 +21,7 @@ import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getTenantSourceTimezone } from "@/lib/tenant-config";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import type { NextFlightResult } from "./types";
+import { briefOpenTripsInPriorityOrder } from "./open-trips-brief-order";
 
 const FLICA_SOURCE = "flica_import";
 
@@ -252,8 +253,12 @@ export async function getNextFlight(): Promise<NextFlightResult> {
   if (openTripsError || !openTrips?.length) return weatherBriefNonFlightState(isOnReserve);
 
   const rows = openTrips as ScheduleEventRow[];
-  const chosen = rows.find((r) => r.start_time <= nowIso) ?? rows[0];
-  const brief = tryFlightFromEvent(chosen, timezone);
+  /**
+   * CrewRules Weather Brief: try ALL open trips in priority order before empty state.
+   * In-progress first (each row start_time <= now), then future rows, both orderings preserve
+   * the query’s ascending start_time. Never stop after the first row when tryFlightFromEvent is null.
+   */
+  const brief = briefOpenTripsInPriorityOrder(rows, nowIso, timezone, tryFlightFromEvent);
   if (brief) return brief;
 
   return weatherBriefNonFlightState(isOnReserve);
