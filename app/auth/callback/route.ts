@@ -22,14 +22,6 @@ export async function GET(request: Request) {
     );
   }
 
-  const rawNext = searchParams.get("next");
-  const next =
-    rawNext != null && rawNext.trim() !== ""
-      ? rawNext.trim()
-      : isRecovery
-        ? "/frontier/pilots/reset-password"
-        : "/frontier/pilots/login";
-
   const supabase = await createClient();
   const { error } = await supabase.auth.verifyOtp({
     token_hash,
@@ -66,5 +58,7 @@ export async function GET(request: Request) {
     );
   }
 
-  return NextResponse.redirect(new URL(next, request.url));
+  return NextResponse.redirect(
+    new URL("/frontier/pilots/reset-password", request.url)
+  );
 }
