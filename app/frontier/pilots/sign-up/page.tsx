@@ -176,21 +176,30 @@ export default function SignUpPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="mx-auto max-w-lg px-6 py-16">
-        <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-8 shadow-lg shadow-black/30">
-          <div className="text-xs uppercase tracking-widest text-slate-400">
-            Frontier Airline Pilots
-          </div>
+        <div className="rounded-3xl border border-white/5 bg-gradient-to-b from-slate-900/60 to-slate-950/80 p-8 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] shadow-lg shadow-black/30 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-400/20 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)]">
+            <h1 className="text-3xl font-bold tracking-tight">
+              Crew<span className="text-[#75C043]">Rules</span>
+              <span className="align-super text-sm">™</span> Create account
+            </h1>
 
-          <h1 className="mt-3 text-3xl font-bold tracking-tight">
-            Crew<span className="text-[#75C043]">Rules</span>
-            <span className="align-super text-sm">™</span> Create account
-          </h1>
+            <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-100">
+              <span className="text-[#75C043]">Currently Live:</span> Frontier Airlines (Pilots)
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-400">
+              F9 Flight Attendants or other airlines:{" "}
+              <Link
+                href="/request-access"
+                className="font-normal text-slate-300 underline decoration-slate-500/50 underline-offset-2 transition hover:text-slate-200 hover:decoration-slate-400"
+              >
+                Join the waitlist
+              </Link>
+            </p>
 
-          <p className="mt-3 text-slate-300">
-            Create your CrewRules™ portal account.
-            <br />
-            You must use your company email.
-          </p>
+            <p className="mt-4 text-slate-300">
+              Create your CrewRules™ portal account.
+              <br />
+              You must use your company email.
+            </p>
 
           <form action={formAction} onSubmit={handleSubmit} className="mt-8 space-y-4">
             <div>

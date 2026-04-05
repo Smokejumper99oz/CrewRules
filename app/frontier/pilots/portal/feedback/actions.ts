@@ -24,6 +24,11 @@ const PORTAL_TENANT = "frontier";
 
 const PORTAL = "pilots";
 
+/** When no session; aligns with product line for ops filtering (route_path shows exact page). */
+const PUBLIC_SITE_FEEDBACK_TENANT = PORTAL_TENANT;
+
+const PUBLIC_SITE_FEEDBACK_PORTAL = PORTAL;
+
 
 
 /** Same roles as `PORTAL_ALLOWED_ROLES.pilots` in `lib/portal-gate.ts`. */
@@ -122,6 +127,40 @@ function sanitizeTenantForPath(tenant: string): string {
   const t = tenant.trim().replace(/[^a-zA-Z0-9._-]/g, "_");
 
   return t.length > 0 ? t.slice(0, 64) : "tenant";
+
+}
+
+
+
+const MAX_CONTACT_EMAIL_LENGTH = 320;
+
+
+
+/** Optional public contact email; empty -> null. Only used when submitter is anonymous. */
+
+function parseOptionalContactEmail(raw: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
+
+  if (raw == null || String(raw).trim() === "") {
+
+    return { ok: true, value: null };
+
+  }
+
+  const s = String(raw).trim();
+
+  if (s.length > MAX_CONTACT_EMAIL_LENGTH) {
+
+    return { ok: false, error: "Email is too long" };
+
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) {
+
+    return { ok: false, error: "Please enter a valid email address" };
+
+  }
+
+  return { ok: true, value: s };
 
 }
 
@@ -240,7 +279,8 @@ function validateScreenshotFiles(raw: unknown): { ok: true; files: File[] } | { 
 
  * Persists one row to `public.feedback_submissions` using the service role.
 
- * Caller must be signed in with a profile authorized for the Frontier pilot portal (or platform super admin / allowlist).
+ * Signed-in: profile must be authorized for the Frontier pilot portal (or platform super admin / allowlist).
+ * Unsigned: allowed for public marketing pages; stored with null submitter and default tenant/portal.
 
  */
 
@@ -258,6 +298,10 @@ export async function submitFeedback(params: {
 
   screenshots?: File[] | null;
 
+  /** Logged-out submissions only; ignored when a session exists. */
+
+  contact_email?: string | null;
+
 }): Promise<SubmitFeedbackResult> {
 
   const supabase = await createClient();
@@ -267,32 +311,6 @@ export async function submitFeedback(params: {
     data: { user },
 
   } = await supabase.auth.getUser();
-
-  if (!user) {
-
-    return { success: false, error: "Not signed in" };
-
-  }
-
-
-
-  const profile = await getProfile();
-
-  if (!profile) {
-
-    return { success: false, error: "Profile not found" };
-
-  }
-
-
-
-  if (!isAuthorizedToSubmitFeedback(profile, user.email)) {
-
-    return { success: false, error: "Not allowed to submit feedback" };
-
-  }
-
-
 
   const screenshotsCheck = validateScreenshotFiles(params.screenshots ?? null);
 
@@ -360,27 +378,93 @@ export async function submitFeedback(params: {
 
 
 
-  const submitterEmail =
+  let contactEmailForRow: string | null = null;
 
-    (profile.email != null && String(profile.email).trim() !== ""
+  if (!user) {
 
-      ? String(profile.email).trim()
+    const contactParsed = parseOptionalContactEmail(params.contact_email ?? null);
 
-      : null) ??
+    if (!contactParsed.ok) {
 
-    (user.email != null && user.email.trim() !== "" ? user.email.trim() : null);
+      return { success: false, error: contactParsed.error };
 
+    }
 
+    contactEmailForRow = contactParsed.value;
 
-  const submitterFullName =
-
-    profile.full_name != null && String(profile.full_name).trim() !== ""
-
-      ? String(profile.full_name).trim()
-
-      : null;
+  }
 
 
+
+  let submitterUserId: string | null;
+
+  let profileId: string | null;
+
+  let submitterEmail: string | null;
+
+  let submitterFullName: string | null;
+
+  let tenant: string;
+
+  let portal: string;
+
+  if (user) {
+
+    const profile = await getProfile();
+
+    if (!profile) {
+
+      return { success: false, error: "Profile not found" };
+
+    }
+
+    if (!isAuthorizedToSubmitFeedback(profile, user.email)) {
+
+      return { success: false, error: "Not allowed to submit feedback" };
+
+    }
+
+    submitterUserId = user.id;
+
+    profileId = profile.id;
+
+    submitterEmail =
+
+      (profile.email != null && String(profile.email).trim() !== ""
+
+        ? String(profile.email).trim()
+
+        : null) ??
+
+      (user.email != null && user.email.trim() !== "" ? user.email.trim() : null);
+
+    submitterFullName =
+
+      profile.full_name != null && String(profile.full_name).trim() !== ""
+
+        ? String(profile.full_name).trim()
+
+        : null;
+
+    tenant = profile.tenant;
+
+    portal = profile.portal;
+
+  } else {
+
+    submitterUserId = null;
+
+    profileId = null;
+
+    submitterEmail = null;
+
+    submitterFullName = null;
+
+    tenant = PUBLIC_SITE_FEEDBACK_TENANT;
+
+    portal = PUBLIC_SITE_FEEDBACK_PORTAL;
+
+  }
 
   const admin = createAdminClient();
 
@@ -394,21 +478,23 @@ export async function submitFeedback(params: {
 
       message,
 
-      submitter_user_id: user.id,
+      submitter_user_id: submitterUserId,
 
-      profile_id: profile.id,
+      profile_id: profileId,
 
       submitter_email: submitterEmail,
 
       submitter_full_name: submitterFullName,
 
-      tenant: profile.tenant,
+      tenant,
 
-      portal: profile.portal,
+      portal,
 
       route_path: routePath,
 
       client_context: ctxParsed.value ?? null,
+
+      contact_email: contactEmailForRow,
 
     })
 
@@ -442,7 +528,7 @@ export async function submitFeedback(params: {
 
   const createdAt = inserted?.created_at ?? new Date().toISOString();
 
-  const tenantSlug = sanitizeTenantForPath(profile.tenant);
+  const tenantSlug = sanitizeTenantForPath(tenant);
 
 
 
@@ -544,9 +630,11 @@ export async function submitFeedback(params: {
 
     submitter_email: submitterEmail,
 
-    tenant: profile.tenant,
+    contact_email: contactEmailForRow,
 
-    portal: profile.portal,
+    tenant,
+
+    portal,
 
     route_path: routePath,
 

@@ -1,12 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { submitFeedback } from "@/app/frontier/pilots/portal/feedback/actions";
+import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const MAX_SCREENSHOTS = 4;
 const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024;
+const MAX_PUBLIC_CONTACT_EMAIL_LENGTH = 320;
+
+function isValidOptionalEmailFormat(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
 
 /** MIME types browsers may report for PNG / JPEG / WebP screenshots (incl. progressive JPEG). */
 const ALLOWED_SCREENSHOT_TYPES = new Set([
@@ -26,14 +33,14 @@ function isAllowedScreenshotFile(file: File): boolean {
 
 function validateScreenshotList(files: File[]): string | null {
   if (files.length > MAX_SCREENSHOTS) {
-    return `At most ${MAX_SCREENSHOTS} screenshots`;
+    return `At most ${MAX_SCREENSHOTS} Screenshots`;
   }
   for (const f of files) {
     if (f.size === 0) {
       return "Screenshot file is empty";
     }
     if (f.size > MAX_SCREENSHOT_BYTES) {
-      return "Each screenshot must be 10 MB or smaller";
+      return "Each Screenshot must be 10 MB or smaller";
     }
     if (!isAllowedScreenshotFile(f)) {
       return "Screenshots must be PNG, JPEG, or WebP (.png, .jpg, .jpeg, .webp).";
@@ -48,6 +55,8 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onSubmitted: (feedbackType: FeedbackType) => void;
+  /** Public marketing header only: optional reply email for logged-out visitors. Portal shell omits this. */
+  optionalPublicContactEmail?: boolean;
 };
 
 const TYPE_OPTIONS: { value: FeedbackType; label: string }[] = [
@@ -56,20 +65,67 @@ const TYPE_OPTIONS: { value: FeedbackType; label: string }[] = [
   { value: "feedback", label: "Feedback" },
 ];
 
-export function PortalFeedbackModal({ open, onClose, onSubmitted }: Props) {
+export function PortalFeedbackModal({
+  open,
+  onClose,
+  onSubmitted,
+  optionalPublicContactEmail = false,
+}: Props) {
   const pathname = usePathname();
   const screenshotInputRef = useRef<HTMLInputElement>(null);
+  const [mounted, setMounted] = useState(false);
   const [type, setType] = useState<FeedbackType>("feedback");
   const [message, setMessage] = useState("");
   const [screenshots, setScreenshots] = useState<File[]>([]);
+  const [publicContactEmail, setPublicContactEmail] = useState("");
+  const [contactEmailError, setContactEmailError] = useState<string | null>(null);
+  /** When marketing modal is open: null until session checked; then true only if no session. */
+  const [publicVisitorLoggedOut, setPublicVisitorLoggedOut] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const showPublicContactEmailField =
+    optionalPublicContactEmail && publicVisitorLoggedOut === true;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!optionalPublicContactEmail) {
+      setPublicVisitorLoggedOut(null);
+      return;
+    }
+    if (!open) {
+      setPublicVisitorLoggedOut(null);
+      return;
+    }
+    let cancelled = false;
+    setPublicVisitorLoggedOut(null);
+    const sb = createSupabaseBrowserClient();
+    void sb.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      setPublicVisitorLoggedOut(!session?.user);
+    });
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
+      setPublicVisitorLoggedOut(!session?.user);
+    });
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [optionalPublicContactEmail, open]);
 
   useEffect(() => {
     if (open) {
       setType("feedback");
       setMessage("");
       setScreenshots([]);
+      setPublicContactEmail("");
+      setContactEmailError(null);
       setError(null);
       setPending(false);
     }
@@ -92,8 +148,6 @@ export function PortalFeedbackModal({ open, onClose, onSubmitted }: Props) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, pending, handleClose]);
 
-  if (!open) return null;
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (pending) return;
     const picked = Array.from(e.target.files ?? []);
@@ -104,7 +158,7 @@ export function PortalFeedbackModal({ open, onClose, onSubmitted }: Props) {
 
     if (screenshots.length + picked.length > MAX_SCREENSHOTS) {
       setError(
-        `You can add at most ${MAX_SCREENSHOTS} screenshots total. Remove one or choose fewer files.`
+        `You can add at most ${MAX_SCREENSHOTS} Screenshots total. Remove one or choose fewer files.`
       );
       return;
     }
@@ -135,6 +189,21 @@ export function PortalFeedbackModal({ open, onClose, onSubmitted }: Props) {
       return;
     }
 
+    if (showPublicContactEmailField) {
+      const ce = publicContactEmail.trim();
+      if (ce) {
+        if (ce.length > MAX_PUBLIC_CONTACT_EMAIL_LENGTH) {
+          setContactEmailError("Email is too long");
+          return;
+        }
+        if (!isValidOptionalEmailFormat(ce)) {
+          setContactEmailError("Please enter a valid email address");
+          return;
+        }
+      }
+      setContactEmailError(null);
+    }
+
     setPending(true);
     setError(null);
 
@@ -154,6 +223,9 @@ export function PortalFeedbackModal({ open, onClose, onSubmitted }: Props) {
       route_path: routePath || null,
       client_context: clientContext,
       screenshots: screenshots.length > 0 ? screenshots : undefined,
+      ...(showPublicContactEmailField
+        ? { contact_email: publicContactEmail.trim() || null }
+        : {}),
     });
 
     setPending(false);
@@ -173,12 +245,17 @@ export function PortalFeedbackModal({ open, onClose, onSubmitted }: Props) {
 
   const screenshotPickerSummary =
     screenshots.length === 0
-      ? "No screenshots selected"
+      ? "No Screenshots selected"
       : screenshots.length === 1
-        ? "1 screenshot selected"
-        : `${screenshots.length} screenshots selected`;
+        ? "1 Screenshot selected"
+        : `${screenshots.length} Screenshots selected`;
 
-  return (
+  if (!open) return null;
+
+  /** Portal to document.body so position:fixed is not trapped by ancestors (e.g. header backdrop-filter). */
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 backdrop-blur-sm pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-[max(1rem,env(safe-area-inset-top,0px))] pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
       role="dialog"
@@ -208,16 +285,27 @@ export function PortalFeedbackModal({ open, onClose, onSubmitted }: Props) {
 
         <form
           onSubmit={handleSubmit}
+          noValidate
           className="px-6 pt-14 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:px-8 sm:pt-14 sm:pb-[calc(2rem+env(safe-area-inset-bottom,0px))]"
         >
           <h2
             id="portal-feedback-modal-title"
-            className="text-2xl font-bold text-slate-900 dark:text-white"
+            className="flex flex-wrap items-baseline gap-x-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white"
           >
-            Send Feedback
+            <span>
+              Crew<span className="text-[#75C043]">Rules</span>
+              <span className="align-super text-xs text-slate-600 dark:text-slate-400">™</span>
+            </span>
+            <span className="text-slate-400 dark:text-slate-500" aria-hidden="true">
+              ·
+            </span>
+            <span>Send Feedback</span>
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-            Tell us what broke, what would help, or anything else. We read every submission.
+            Tell us what broke, what would help, or anything else.
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+            We read every submission.
           </p>
 
           <fieldset className="mt-6 space-y-2">
@@ -232,7 +320,7 @@ export function PortalFeedbackModal({ open, onClose, onSubmitted }: Props) {
                     onClick={() => !isDisabled && setType(opt.value)}
                     disabled={isDisabled}
                     className={[
-                      "min-h-[44px] touch-manipulation rounded-xl border px-4 py-2.5 text-sm font-medium transition",
+                      "min-h-[36px] touch-manipulation rounded-lg border px-3 py-1.5 text-sm font-medium transition",
                       selected
                         ? "border-[#75C043] bg-[#75C043]/15 text-slate-900 dark:text-white ring-1 ring-[#75C043]/40"
                         : "border-slate-200 bg-slate-100/80 text-slate-700 hover:border-slate-300 dark:border-white/10 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:border-white/20",
@@ -265,6 +353,49 @@ export function PortalFeedbackModal({ open, onClose, onSubmitted }: Props) {
             />
           </label>
 
+          {showPublicContactEmailField && (
+            <label className="mt-5 block">
+              <span
+                id="portal-feedback-contact-email-hint"
+                className="text-sm font-medium text-slate-800 dark:text-slate-200"
+              >
+                Email{" "}
+                <span className="font-normal text-slate-500 dark:text-slate-400">
+                  (Optional — Include if you&apos;d like a response)
+                </span>
+              </span>
+              <input
+                type="email"
+                name="public_contact_email"
+                inputMode="email"
+                autoComplete="email"
+                value={publicContactEmail}
+                onChange={(e) => {
+                  setPublicContactEmail(e.target.value);
+                  if (contactEmailError) setContactEmailError(null);
+                }}
+                disabled={isDisabled}
+                aria-invalid={contactEmailError ? true : undefined}
+                aria-describedby={
+                  contactEmailError
+                    ? "portal-feedback-contact-email-error"
+                    : "portal-feedback-contact-email-hint"
+                }
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#75C043]/50 dark:border-white/10 dark:bg-slate-900/80 dark:text-white dark:placeholder:text-slate-500 disabled:opacity-60"
+                placeholder="you@example.com"
+              />
+              {contactEmailError && (
+                <p
+                  id="portal-feedback-contact-email-error"
+                  className="mt-1.5 text-sm text-red-600 dark:text-red-400"
+                  role="alert"
+                >
+                  {contactEmailError}
+                </p>
+              )}
+            </label>
+          )}
+
           <div className="mt-5">
             <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
               Screenshots <span className="font-normal text-slate-500 dark:text-slate-400">(optional)</span>
@@ -292,7 +423,7 @@ export function PortalFeedbackModal({ open, onClose, onSubmitted }: Props) {
                 aria-controls="portal-feedback-screenshot-input"
               >
                 <ImagePlus className="size-4 shrink-0 text-[#75C043]" aria-hidden />
-                Add screenshots
+                Add Screenshots
               </button>
               <span className="text-sm text-slate-600 dark:text-slate-400">{screenshotPickerSummary}</span>
             </div>
@@ -354,6 +485,7 @@ export function PortalFeedbackModal({ open, onClose, onSubmitted }: Props) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

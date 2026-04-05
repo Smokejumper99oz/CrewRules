@@ -76,7 +76,7 @@ export default function HomePage() {
                 Developed by airline pilots for real Part 121 operations — delivering operational clarity with tools that extend to Part 135 and Part 91 flying.
               </p>
               <p className="mt-2 text-lg text-slate-400">
-                From FAR 117 compliance to contract interpretation and commute planning — built for how crews actually operate.
+                From FAR 117 compliance to contract interpretation, commute planning, and real-world mentoring — built for how crews actually operate.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
@@ -87,12 +87,21 @@ export default function HomePage() {
                   Login
                 </Link>
                 <Link
+                  href="/frontier/pilots/sign-up"
+                  className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10"
+                >
+                  Create Account
+                </Link>
+                <Link
                   href="/request-access"
                   className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10"
                 >
                   Join Waitlist
                 </Link>
               </div>
+              <p className="mt-3 max-w-xl text-xs leading-relaxed text-slate-400">
+                Frontier Airlines pilots can create an account. All others can join the waitlist.
+              </p>
             </div>
 
             {/* Hero "product" mock */}

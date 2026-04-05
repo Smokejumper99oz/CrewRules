@@ -17,6 +17,38 @@ const SECTION_CLASS =
 const CARD_CLASS =
   `${SECTION_CLASS} transition-shadow transition-colors duration-200 hover:shadow-xl hover:shadow-black/50 hover:border-emerald-400/30 hover:from-slate-900/70 hover:to-slate-950/85`;
 
+const MENTORING_OVERVIEW_PATH = "/frontier/pilots/portal/mentoring";
+
+type MenteesTab = "active" | "archived";
+
+function resolveMenteesTab(raw: string | undefined): MenteesTab {
+  return raw === "archived" ? "archived" : "active";
+}
+
+function buildMentoringOverviewHref(
+  sp: { request?: string; mentees?: string },
+  mentees: MenteesTab,
+): string {
+  const params = new URLSearchParams();
+  if (sp.request === "submitted" || sp.request === "error") {
+    params.set("request", sp.request);
+  }
+  params.set("mentees", mentees);
+  return `${MENTORING_OVERVIEW_PATH}?${params.toString()}`;
+}
+
+/** Matches `pilot-portal-mentoring-subnav` tab link styling (no icon). */
+function menteesTabLinkClass(isActive: boolean) {
+  return [
+    "group flex shrink-0 items-center gap-1.5 border-0 border-b-2 border-b-transparent text-sm transition touch-manipulation",
+    "-mb-px px-3 py-2.5 max-lg:min-h-[48px] max-lg:py-3 lg:min-h-0 lg:px-3.5 lg:py-2",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/40 focus-visible:ring-offset-2 focus-visible:ring-emerald-400/50 focus-visible:ring-offset-slate-950",
+    isActive
+      ? "font-medium text-white shadow-[inset_0_-2px_0_0_#75C043] dark:shadow-[inset_0_-2px_0_0_#34d399]"
+      : "shadow-none text-slate-400",
+  ].join(" ");
+}
+
 function formatHireDate(dateStr: string | null): string {
   if (!dateStr) return "—";
   try {
@@ -301,6 +333,13 @@ function MenteeCard({ a }: { a: MentorAssignmentRow }) {
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold text-white truncate">{fullName}</h3>
             <AssignmentStatusPill a={a} />
+            {a.isMentorView &&
+            a.mentee_status === "inactive" &&
+            a.assignment_archive_reason === "left_frontier" ? (
+              <span className="inline-flex shrink-0 items-center rounded-md border border-white/10 bg-slate-500/10 px-2 py-0.5 text-xs font-medium text-slate-300">
+                Left Frontier
+              </span>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
             <span>
@@ -357,12 +396,30 @@ function MenteeCard({ a }: { a: MentorAssignmentRow }) {
 export default async function MentoringPage({
   searchParams,
 }: {
-  searchParams: Promise<{ request?: string }>;
+  searchParams: Promise<{ request?: string; mentees?: string }>;
 }) {
   const sp = await searchParams;
   const profile = await getProfile();
   const { assignments, error } = await getMentorAssignments();
   const isMentorView = assignments.length > 0 && assignments.some((a) => a.isMentorView);
+  const menteesTab = resolveMenteesTab(sp.mentees);
+  const showMentorMenteesTabs = assignments.length > 0 && isMentorView;
+  const mentorViewAssignments = assignments.filter((a) => a.isMentorView);
+  const visibleAssignments = showMentorMenteesTabs
+    ? assignments.filter(
+        (a) =>
+          !a.isMentorView ||
+          (menteesTab === "active" ? a.mentee_status === "active" : a.mentee_status === "inactive"),
+      )
+    : assignments;
+  const showActiveMenteesEmpty =
+    showMentorMenteesTabs &&
+    menteesTab === "active" &&
+    !mentorViewAssignments.some((a) => a.mentee_status === "active");
+  const showArchivedMenteesEmpty =
+    showMentorMenteesTabs &&
+    menteesTab === "archived" &&
+    !mentorViewAssignments.some((a) => a.mentee_status === "inactive");
   const sectionTitle = isMentorView ? "My Mentees" : "Mentor";
 
   const isMentor = Boolean(profile?.is_mentor);
@@ -402,6 +459,25 @@ export default async function MentoringPage({
                 : "My Mentees"}
         </h2>
 
+        {showMentorMenteesTabs ? (
+          <nav aria-label="Mentee assignment groups" className="mt-3 min-w-0 w-full">
+            <div className="flex w-full max-w-full min-w-0 flex-nowrap items-end gap-3 border-b border-white/10 sm:gap-6">
+              <Link
+                href={buildMentoringOverviewHref(sp, "active")}
+                className={menteesTabLinkClass(menteesTab === "active")}
+              >
+                Active Mentees
+              </Link>
+              <Link
+                href={buildMentoringOverviewHref(sp, "archived")}
+                className={menteesTabLinkClass(menteesTab === "archived")}
+              >
+                Archived Mentees
+              </Link>
+            </div>
+          </nav>
+        ) : null}
+
         {sp.request === "submitted" ? (
           <p className="mt-4 text-sm text-emerald-400" role="status">
             Your request was submitted. The mentoring team will follow up as needed.
@@ -437,7 +513,13 @@ export default async function MentoringPage({
           </>
         ) : (
           <div className="mt-4 space-y-3">
-            {assignments.map((a) => (
+            {showActiveMenteesEmpty ? (
+              <p className="text-sm text-slate-500">No active mentees</p>
+            ) : null}
+            {showArchivedMenteesEmpty ? (
+              <p className="text-sm text-slate-500">No archived mentees</p>
+            ) : null}
+            {visibleAssignments.map((a) => (
               <MenteeCard key={a.id} a={a} />
             ))}
           </div>

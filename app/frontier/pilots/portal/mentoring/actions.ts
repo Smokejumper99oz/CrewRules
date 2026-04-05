@@ -78,6 +78,11 @@ export type MentorAssignmentRow = {
   last_interaction_at: string | null;
   mentee_date_of_hire: string | null;
   mentee_status: string | null;
+  /**
+   * When assignment is inactive: why it was archived, if recorded.
+   * Null for legacy rows; left_frontier set by mentor “Left Frontier” flow.
+   */
+  assignment_archive_reason: "left_frontier" | "completed_program" | null;
   /** From mentee profile; null until first-use welcome onboarding completed. */
   mentee_welcome_modal_version_seen: number | null;
   /**
@@ -410,6 +415,7 @@ export async function getMentorAssignments(): Promise<{
         mentee_user_id,
         hire_date,
         active,
+        assignment_archive_reason,
         assigned_at,
         last_interaction_at,
         mentee_display_name,
@@ -428,6 +434,7 @@ export async function getMentorAssignments(): Promise<{
       mentee_user_id: string;
       hire_date: string | null;
       active: boolean | null;
+      assignment_archive_reason: string | null;
       last_interaction_at: string | null;
       mentee_display_name: string | null;
       mentee: { full_name: string | null; welcome_modal_version_seen: number | null } | null;
@@ -663,6 +670,11 @@ export async function getMentorAssignments(): Promise<{
         last_interaction_at: lastInt ?? null,
         mentee_date_of_hire: row.hire_date ?? null,
         mentee_status: row.active === true ? "active" : "inactive",
+        assignment_archive_reason:
+          row.assignment_archive_reason === "left_frontier" ||
+          row.assignment_archive_reason === "completed_program"
+            ? row.assignment_archive_reason
+            : null,
         mentee_welcome_modal_version_seen: row.mentee?.welcome_modal_version_seen ?? null,
         ...(authSignInMap != null && row.mentee_user_id?.trim()
           ? { mentee_last_sign_in_at: authSignInMap.get(row.mentee_user_id) ?? null }
@@ -1585,5 +1597,24 @@ export async function saveMentorWorkspaceFields(input: {
   if (upsertErr) return { error: upsertErr.message };
 
   revalidatePath("/frontier/pilots/portal/mentoring");
+  return {};
+}
+
+export async function markMenteeLeftFrontier(assignmentId: string): Promise<{ error?: string }> {
+  const profile = await getProfile();
+  if (!profile) return { error: "Not signed in." };
+
+  const aid = assignmentId.trim();
+  if (!aid) return { error: "Invalid assignment." };
+
+  const supabase = await createClient();
+  const { error: rpcErr } = await supabase.rpc("mark_mentee_assignment_inactive_by_mentor", {
+    p_assignment_id: aid,
+  });
+
+  if (rpcErr) return { error: rpcErr.message };
+
+  revalidatePath("/frontier/pilots/portal/mentoring");
+  revalidatePath(`/frontier/pilots/portal/mentoring/${aid}`);
   return {};
 }

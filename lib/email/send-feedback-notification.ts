@@ -81,6 +81,8 @@ export async function sendFeedbackNotificationEmail(params: {
   message: string;
   submitter_full_name: string | null;
   submitter_email: string | null;
+  /** Optional address from public feedback modal; distinct from authenticated profile email. */
+  contact_email?: string | null;
   tenant: string;
   portal: string;
   route_path: string | null;
@@ -109,7 +111,10 @@ export async function sendFeedbackNotificationEmail(params: {
   const attachmentCount = Math.max(0, Math.floor(Number(params.attachment_count ?? 0)));
   const safeAttachmentCount = escapeHtml(String(attachmentCount));
 
-  const replyTo = params.submitter_email?.trim() || undefined;
+  const contactTrim = params.contact_email?.trim() ?? "";
+  const safeContactEmail = escapeHtml(contactTrim || "—");
+
+  const replyTo = params.submitter_email?.trim() || (contactTrim ? contactTrim : undefined);
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -144,6 +149,10 @@ export async function sendFeedbackNotificationEmail(params: {
                   <tr>
                     <td style="padding:8px 0;color:#6b7280;border-top:1px solid #f3f4f6;vertical-align:top;">Email</td>
                     <td style="padding:8px 0;border-top:1px solid #f3f4f6;vertical-align:top;">${safeEmail}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 0;color:#6b7280;border-top:1px solid #f3f4f6;vertical-align:top;">Contact email</td>
+                    <td style="padding:8px 0;border-top:1px solid #f3f4f6;vertical-align:top;">${safeContactEmail}</td>
                   </tr>
                   <tr>
                     <td style="padding:8px 0;color:#6b7280;border-top:1px solid #f3f4f6;vertical-align:top;">Tenant</td>
