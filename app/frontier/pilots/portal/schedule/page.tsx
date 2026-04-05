@@ -662,6 +662,8 @@ export default function SchedulePage() {
                 </button>
               </div>
             </div>
+            <div className="overflow-x-auto sm:overflow-x-visible">
+              <div className="w-full min-w-[560px] sm:min-w-0">
             <div className="grid grid-cols-7 gap-0.5 sm:gap-1 text-center text-[10px] sm:text-xs text-slate-400 mb-1.5 sm:mb-2">
               {weekDays.map((d) => (
                 <div key={d} className="py-1">{d}</div>
@@ -752,6 +754,8 @@ export default function SchedulePage() {
                     })()}
                 </div>
               ))}
+            </div>
+              </div>
             </div>
           </div>
         </div>
