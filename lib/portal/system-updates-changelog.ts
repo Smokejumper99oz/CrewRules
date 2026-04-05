@@ -13,6 +13,14 @@ export type SystemUpdateEntry = {
  */
 export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   {
+    date: "2026-04-06",
+    title: "Improved iPhone month schedule UI",
+    type: "improvement",
+    bullets: [
+      "Improved iPhone month schedule UI (tile density, report-night styling, +N indicator clarity, removed horizontal scroll experiment)",
+    ],
+  },
+  {
     date: "2026-04-05",
     title: "Onboarding clarity, public feedback, and signup UX",
     type: "improvement",
