@@ -635,7 +635,7 @@ export default function SchedulePage() {
       {/* Main content: calendar */}
       {status != null && status.count > 0 && (
         <div className="space-y-6">
-          <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-6">
+          <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">{monthLabel}</h2>
               <div className="flex flex-wrap items-center gap-2">
