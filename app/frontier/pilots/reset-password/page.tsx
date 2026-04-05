@@ -1,16 +1,86 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
-import { updatePassword } from "./actions";
+import { createClient } from "@/lib/supabase/client";
+import { useEffect, useState } from "react";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
 
-export default function ResetPasswordPage() {
-  const [state, formAction, isPending] = useActionState(updatePassword, null);
+type RecoveryStatus = "loading" | "ready" | "invalid";
 
-  if (state?.success) {
+export default function ResetPasswordPage() {
+  const [status, setStatus] = useState<RecoveryStatus>("loading");
+  const [success, setSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+
+  useEffect(() => {
+    const supabase = createClient();
+    let cancelled = false;
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
+      if (session?.user) setStatus("ready");
+    });
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      if (session?.user) setStatus("ready");
+    });
+
+    const t = window.setTimeout(() => {
+      if (cancelled) return;
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (cancelled) return;
+        if (!session?.user) {
+          setStatus((prev) => (prev === "ready" ? "ready" : "invalid"));
+        }
+      });
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+      window.clearTimeout(t);
+    };
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSubmitError(null);
+
+    if (!password || password.length < 6) {
+      setSubmitError("Password must be at least 6 characters");
+      return;
+    }
+    if (password !== confirm) {
+      setSubmitError("Passwords do not match");
+      return;
+    }
+
+    setPending(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) {
+        setSubmitError(error.message);
+        return;
+      }
+      await supabase.auth.signOut();
+      setSuccess(true);
+    } catch {
+      setSubmitError("Failed to update password. Please try again.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (success) {
     return (
       <main className="min-h-screen bg-slate-950 text-white">
         <div className="mx-auto max-w-lg px-6 py-16">
@@ -34,6 +104,50 @@ export default function ResetPasswordPage() {
     );
   }
 
+  if (status === "loading") {
+    return (
+      <main className="min-h-screen bg-slate-950 text-white">
+        <div className="mx-auto max-w-lg px-6 py-16">
+          <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-8 shadow-lg shadow-black/30">
+            <p className="text-slate-300">Verifying your reset link…</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (status === "invalid") {
+    return (
+      <main className="min-h-screen bg-slate-950 text-white">
+        <div className="mx-auto max-w-lg px-6 py-16">
+          <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-8 shadow-lg shadow-black/30">
+            <h1 className="text-2xl font-bold tracking-tight text-rose-200">
+              Link invalid or expired
+            </h1>
+            <p className="mt-3 text-slate-300">
+              This reset link is invalid or has expired. Request a new one from
+              the forgot password page.
+            </p>
+            <Link
+              href={`/${TENANT}/${PORTAL}/forgot-password`}
+              className="mt-6 inline-block rounded-xl bg-[#75C043] px-4 py-3 font-semibold text-slate-950 hover:opacity-95 transition"
+            >
+              Forgot password
+            </Link>
+            <div className="mt-4 text-center">
+              <Link
+                href={`/${TENANT}/${PORTAL}/login`}
+                className="text-sm text-slate-300 hover:text-white"
+              >
+                ← Back to Login
+              </Link>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="mx-auto max-w-lg px-6 py-16">
@@ -45,49 +159,57 @@ export default function ResetPasswordPage() {
             Crew<span className="text-[#75C043]">Rules</span>
             <span className="align-super text-sm">™</span> Reset Password
           </h1>
-          <p className="mt-3 text-slate-300">
-            Enter your new password below.
-          </p>
+          <p className="mt-3 text-slate-300">Enter your new password below.</p>
 
-          <form action={formAction} className="mt-8 space-y-4">
+          <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
             <div>
-              <label className="text-sm text-slate-200">New password</label>
+              <label className="text-sm text-slate-200" htmlFor="reset-password">
+                New password
+              </label>
               <input
+                id="reset-password"
                 name="password"
                 type="password"
                 placeholder="••••••••"
                 required
                 minLength={6}
-                disabled={isPending}
+                disabled={pending}
                 autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
               />
             </div>
 
             <div>
-              <label className="text-sm text-slate-200">Confirm password</label>
+              <label className="text-sm text-slate-200" htmlFor="reset-confirm">
+                Confirm password
+              </label>
               <input
+                id="reset-confirm"
                 name="confirm"
                 type="password"
                 placeholder="••••••••"
                 required
                 minLength={6}
-                disabled={isPending}
+                disabled={pending}
                 autoComplete="new-password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
                 className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
               />
             </div>
 
-            {state?.error && (
-              <p className="text-sm text-red-400">{state.error}</p>
+            {submitError && (
+              <p className="text-sm text-red-400">{submitError}</p>
             )}
 
             <button
               type="submit"
-              disabled={isPending}
+              disabled={pending}
               className="block w-full rounded-xl bg-[#75C043] px-4 py-3 font-semibold text-slate-950 hover:opacity-95 transition text-center disabled:opacity-50"
             >
-              {isPending ? "Updating…" : "Update password"}
+              {pending ? "Updating…" : "Update password"}
             </button>
           </form>
 
