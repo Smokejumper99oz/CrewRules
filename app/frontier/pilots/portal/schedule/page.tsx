@@ -671,7 +671,7 @@ export default function SchedulePage() {
               {calendarDays.map((day, i) => (
                 <div
                   key={i}
-                  className={`min-h-[60px] sm:min-h-[72px] rounded-lg border p-0.5 sm:p-1 ${
+                  className={`min-h-[56px] sm:min-h-[72px] rounded-lg border p-0.5 sm:p-1 ${
                     !day
                       ? "border-transparent"
                       : isSameDay(day, today)
@@ -705,23 +705,25 @@ export default function SchedulePage() {
                                   key={`${ev.id}-${toYyyyMmDd(day)}`}
                                   type="button"
                                   onClick={(e) => handleEventClick(ev, e.clientX, e.clientY, day)}
-                                  className={`flex w-full rounded border px-1 py-px sm:px-1.5 sm:py-0.5 text-left text-[10px] sm:text-xs ${
+                                  className={
                                     isReportNightTile
-                                      ? `flex-col items-stretch gap-px sm:gap-0.5 ${REPORT_NIGHT_TILE_CLASS}`
-                                      : `items-center ${getCalendarTileStyle(ev, visibleDayEvents)}`
-                                  }`}
+                                      ? `flex w-full flex-col items-stretch gap-0 rounded border px-0.5 py-0 text-left text-[10px] sm:gap-0.5 sm:px-1.5 sm:py-0.5 sm:text-xs ${REPORT_NIGHT_TILE_CLASS}`
+                                      : `flex w-full items-center rounded border px-1 py-px text-left text-[10px] sm:px-1.5 sm:py-0.5 sm:text-xs ${getCalendarTileStyle(ev, visibleDayEvents)}`
+                                  }
                                 >
                                   {isReportNightTile ? (
                                     <>
-                                      <span className="min-w-0 truncate font-medium">{scheduleEventDisplayTitle(ev)}</span>
+                                      <span className="min-w-0 truncate font-medium leading-none sm:leading-normal">
+                                        {scheduleEventDisplayTitle(ev)}
+                                      </span>
                                       {rn.reportDisplay && rn.reportLocalDate && (
-                                        <span className="text-[9px] leading-tight sm:text-[10px]">
+                                        <span className="text-[8px] leading-none sm:text-[10px] sm:leading-tight">
                                           <span className="font-semibold">REPORT</span> {rn.reportDisplay} •{" "}
                                           {formatReportNightEeeD(rn.reportLocalDate, displaySettings.baseTimezone)}
                                         </span>
                                       )}
                                       {rn.firstDepDisplay && rn.firstDepartureLocalDate && (
-                                        <span className="text-[9px] leading-tight sm:text-[10px]">
+                                        <span className="text-[8px] leading-none sm:text-[10px] sm:leading-tight">
                                           DEPARTURE {rn.firstDepDisplay} •{" "}
                                           {formatReportNightEeeD(
                                             rn.firstDepartureLocalDate,
