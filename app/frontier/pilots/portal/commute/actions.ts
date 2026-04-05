@@ -9,11 +9,7 @@ import { getRouteTzs } from "@/lib/airports";
 import { normalizeFlightTiming } from "@/lib/commute/normalize-flight-timing";
 import { deriveOperationalStatus } from "@/lib/commute/derive-operational-status";
 import type { CommuteCoverageForClient } from "@/lib/commute/commute-coverage-public";
-import {
-  getCommuteCoverageForCacheFallback,
-  getCommuteCoverageForClient,
-  maybeLogCommuteIntegritySignals,
-} from "@/lib/commute/evaluate-commute-integrity-signals";
+import { getCommuteCoverageForClient, maybeLogCommuteIntegritySignals } from "@/lib/commute/evaluate-commute-integrity-signals";
 import type { CommuteFlight } from "@/lib/aviationstack";
 import { formatInTimeZone } from "date-fns-tz";
 
@@ -658,12 +654,27 @@ export async function getCommuteFlights(input: {
 
   if (cached?.data != null && !input.forceRefresh) {
     const { originTz, destTz } = await getRouteTzs(origin, destination);
-    const { flights: payloadFlights, notice: cachedNotice, coverage: cachedCoverage } =
-      readCommuteFlightCachePayload(cached.data);
+    const { flights: payloadFlights, notice: cachedNotice } = readCommuteFlightCachePayload(cached.data);
     const cachedFlights = filterCodeShareFlights(payloadFlights);
     const sameDayInOriginCache = formatInTimeZone(now, originTz, "yyyy-MM-dd") === input.date;
-    const coverageClient =
-      cachedCoverage ?? getCommuteCoverageForCacheFallback(cachedFlights, sameDayInOriginCache);
+    // Recompute coverage from cached flights only — do not trust stored `data.coverage` (stale reason codes).
+    // Per-provider counts are unknown on cache read; use symmetric placeholders so `single_provider` is not inferred.
+    const finalCachedCount = cachedFlights.length;
+    const coverageClient = getCommuteCoverageForClient({
+      origin,
+      destination,
+      commuteDate: input.date,
+      aviationstackCount: finalCachedCount > 0 ? 1 : 0,
+      aerodataboxCount: finalCachedCount > 0 ? 1 : 0,
+      finalFlightCount: finalCachedCount,
+      mergedFlightsForLiveScan: cachedFlights,
+      providers: {
+        aviationstackFailed: false,
+        aerodataboxFailed: false,
+        aerodataboxSkipped: false,
+      },
+      sameDayInOrigin: sameDayInOriginCache,
+    });
     // Re-derive operationalStatus on cache read; do not trust cached value (DERIVED_STATUS_VERSION).
     const flights = cachedFlights.map((f) => {
       const normalized = normalizeFlightTiming(f, originTz, destTz);

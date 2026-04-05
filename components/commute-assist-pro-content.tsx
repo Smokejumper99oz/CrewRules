@@ -24,6 +24,55 @@ import {
 
 type CommuteFlightsOk = Extract<Awaited<ReturnType<typeof getCommuteFlights>>, { ok: true }>;
 
+/**
+ * Report calendar day (yyyy-MM-dd) in base TZ for commute anchoring — from trip `start_time` + FLICA report_time red-eye rule.
+ * Must not use progressive-leg / card `displayDateStr` (that can be the first departure date, next calendar day).
+ */
+function commuteReportLocalDateStrForDuty(
+  dutyStart: Date,
+  reportTimeHmss: string,
+  timezone: string
+): string {
+  const startDateStr = formatInTimeZone(dutyStart, timezone, "yyyy-MM-dd");
+  const startHour = parseInt(formatInTimeZone(dutyStart, timezone, "HH"), 10);
+  const reportHour = parseInt(reportTimeHmss.slice(0, 2), 10) || 0;
+  return startHour >= 18 && reportHour < 12
+    ? formatInTimeZone(addDays(dutyStart, 1), timezone, "yyyy-MM-dd")
+    : startDateStr;
+}
+
+/** Duty report instant for buffers, search date, and risk scoring — independent of UI leg display date. */
+function buildCommuteDutyDateTime(
+  startTimeIso: string,
+  reportTimeRaw: string | null | undefined,
+  reportTimeOverrideRaw: string | null | undefined,
+  baseTimezone: string
+): Date {
+  const dutyStart = new Date(startTimeIso);
+  if (Number.isNaN(dutyStart.getTime())) return new Date();
+
+  const reportTimeEffective = reportTimeOverrideRaw?.trim()
+    ? reportTimeOverrideRaw.length === 5
+      ? `${reportTimeOverrideRaw.trim()}:00`
+      : reportTimeOverrideRaw.trim()
+    : reportTimeRaw?.trim()
+      ? reportTimeRaw.length === 5
+        ? `${reportTimeRaw.trim()}:00`
+        : reportTimeRaw.trim()
+      : null;
+
+  if (!reportTimeEffective) return dutyStart;
+
+  const reportHmForDateAnchor = reportTimeRaw?.trim()
+    ? reportTimeRaw.length === 5
+      ? `${reportTimeRaw.trim()}:00`
+      : reportTimeRaw.trim()
+    : reportTimeEffective;
+
+  const reportDateStr = commuteReportLocalDateStrForDuty(dutyStart, reportHmForDateAnchor, baseTimezone);
+  return fromZonedTime(`${reportDateStr}T${reportTimeEffective}`, baseTimezone);
+}
+
 function pickCoverageFromCommuteResponse(res: CommuteFlightsOk): CommuteCoverageForClient | null {
   if (!res.coverageWarning) return null;
   return {
@@ -305,7 +354,7 @@ type Props = {
   displaySettings: ScheduleDisplaySettings;
   tenant: string;
   portal: string;
-  /** When set, use as duty date for to_base (dayPriorBase = displayDateStr - 1). */
+  /** Card/schedule leg display date only — not used for commute report or flight search date. */
   displayDateStr?: string | null;
   /** When true, show to_home (return when pairing ends); when false, show to_base (commute to duty). */
   isInPairing?: boolean;
@@ -1041,29 +1090,12 @@ export function CommuteAssistProContent({
   const dutyStart = new Date(event.start_time);
   const dutyOk = !Number.isNaN(dutyStart.getTime());
 
-  // Compute duty date/time in base timezone; use report_time if available.
-  const dutyDateTime = (() => {
-    if (!dutyOk) return new Date();
-    const reportTime = reportTimeOverride?.trim()
-      ? (reportTimeOverride.length === 5 ? `${reportTimeOverride}:00` : reportTimeOverride)
-      : event.report_time?.trim()
-        ? (event.report_time.length === 5 ? `${event.report_time}:00` : event.report_time)
-        : null;
-    if (reportTime) {
-      const reportDateStr =
-        displayDateStr?.trim() ??
-        (() => {
-          const startDateStr = formatInTimeZone(dutyStart, baseTz, "yyyy-MM-dd");
-          const startHour = parseInt(formatInTimeZone(dutyStart, baseTz, "HH"), 10);
-          const reportHour = parseInt(reportTime.slice(0, 2), 10) || 0;
-          return startHour >= 18 && reportHour < 12
-            ? formatInTimeZone(addDays(dutyStart, 1), baseTz, "yyyy-MM-dd")
-            : startDateStr;
-        })();
-      return fromZonedTime(`${reportDateStr}T${reportTime}`, baseTz);
-    }
-    return dutyStart;
-  })();
+  // Report instant from trip start + FLICA report (and optional out-of-base time override for clock only).
+  // Never use `displayDateStr` — it follows progressive first-leg departure and breaks red-eye report nights.
+  const dutyDateTime = useMemo(
+    () => buildCommuteDutyDateTime(event.start_time, event.report_time ?? null, reportTimeOverride ?? null, baseTz),
+    [event.start_time, event.report_time, reportTimeOverride, baseTz]
+  );
   const dutyDateBase = formatInTimeZone(dutyDateTime, baseTz, "yyyy-MM-dd");
   const arriveBy = dutyOk ? subMinutes(dutyDateTime, arrivalBuffer) : null;
 
@@ -1252,20 +1284,7 @@ export function CommuteAssistProContent({
       const dutyStart = new Date(event.start_time);
       const dutyOkLocal = !Number.isNaN(dutyStart.getTime());
       const dutyDateBaseLocal = formatInTimeZone(dutyStart, baseTz, "yyyy-MM-dd");
-      let reportAtIso: string;
-      if (dutyOkLocal && event.report_time?.trim()) {
-        const startDateStr = formatInTimeZone(dutyStart, baseTz, "yyyy-MM-dd");
-        const startHour = parseInt(formatInTimeZone(dutyStart, baseTz, "HH"), 10);
-        const reportTime = event.report_time.length === 5 ? `${event.report_time}:00` : event.report_time;
-        const reportHour = parseInt(reportTime.slice(0, 2), 10) || 0;
-        const reportDateStr =
-          startHour >= 18 && reportHour < 12
-            ? formatInTimeZone(addDays(dutyStart, 1), baseTz, "yyyy-MM-dd")
-            : startDateStr;
-        reportAtIso = fromZonedTime(`${reportDateStr}T${reportTime}`, baseTz).toISOString();
-      } else {
-        reportAtIso = dutyOkLocal ? dutyStart.toISOString() : `${dutyDateBaseLocal}T12:00:00Z`;
-      }
+      const reportAtIso = dutyOkLocal ? dutyDateTime.toISOString() : `${dutyDateBaseLocal}T12:00:00Z`;
       const isReturn = direction === "to_home";
       const releaseEarliestDepIso =
         isReturn && event.end_time
@@ -1299,7 +1318,9 @@ export function CommuteAssistProContent({
       const hasLiveTiming = options.some(
         (o) => o.arr_estimated_raw || o.arr_actual_raw || o.dep_estimated_raw || o.dep_actual_raw
       );
-      const arriveByFormatted = dutyOkLocal ? formatInTimeZone(subMinutes(dutyStart, arrivalBuffer), baseTz, "HH:mm") : "";
+      const arriveByFormatted = dutyOkLocal
+        ? formatInTimeZone(subMinutes(dutyDateTime, arrivalBuffer), baseTz, "HH:mm")
+        : "";
       setOriginTz((prev) => (prev === "UTC" ? originTzVal : prev));
       setDestTz((prev) => (prev === "UTC" ? destTzVal : prev));
       setSource((prev) => (hasLiveTiming ? "live" : prev ?? "scheduled"));
@@ -1310,7 +1331,7 @@ export function CommuteAssistProContent({
       setHomePage(1);
       setAlternatePage(1);
     },
-    [direction, dutyOk, event.start_time, event.end_time, event.report_time, baseTz, arrivalBuffer]
+    [direction, dutyOk, event.start_time, event.end_time, baseTz, arrivalBuffer, dutyDateTime]
   );
 
   const loadFlights = useCallback(
@@ -1398,8 +1419,9 @@ export function CommuteAssistProContent({
           null
         );
         setCommuteCoverageBanner(mergedBanner);
-        const dutyStart = new Date(event.start_time);
-        const arriveByFormatted = dutyOk ? formatInTimeZone(subMinutes(dutyStart, arrivalBuffer), baseTz, "HH:mm") : "";
+        const arriveByFormatted = dutyOk
+          ? formatInTimeZone(subMinutes(dutyDateTime, arrivalBuffer), baseTz, "HH:mm")
+          : "";
         setCommuteMeta({ showInfo: dutyOk, arriveByFormatted, dutyOk });
         if (results.every((r) => r.flights === null) && routes.length > 0) {
           setSource(null);
@@ -1427,6 +1449,7 @@ export function CommuteAssistProContent({
       baseTz,
       dutyOk,
       arrivalBuffer,
+      dutyDateTime,
       applyFlightsToState,
     ]
   );
@@ -1763,11 +1786,10 @@ export function CommuteAssistProContent({
 
   useEffect(() => {
     if (commuteTwoLegEnabled && dutyOk && !commuteMeta) {
-      const dutyStart = new Date(event.start_time);
-      const arriveByFormatted = formatInTimeZone(subMinutes(dutyStart, arrivalBuffer), baseTz, "HH:mm");
+      const arriveByFormatted = formatInTimeZone(subMinutes(dutyDateTime, arrivalBuffer), baseTz, "HH:mm");
       setCommuteMeta({ showInfo: dutyOk, arriveByFormatted, dutyOk });
     }
-  }, [commuteTwoLegEnabled, dutyOk, commuteMeta, event.start_time, arrivalBuffer, baseTz]);
+  }, [commuteTwoLegEnabled, dutyOk, commuteMeta, dutyDateTime, arrivalBuffer, baseTz]);
 
   useEffect(() => {
     if (

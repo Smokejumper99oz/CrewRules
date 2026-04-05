@@ -5,7 +5,7 @@
 
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import type { ScheduleEvent } from "@/app/frontier/pilots/portal/schedule/actions";
-import { formatScheduleTime, type TimeDisplayOptions } from "@/lib/schedule-time";
+import { addDay, formatScheduleTime, type TimeDisplayOptions } from "@/lib/schedule-time";
 import { computeLegDates, getTripDateStrings } from "@/lib/leg-dates";
 
 export const REPORT_NIGHT_TILE_CLASS =
@@ -133,4 +133,44 @@ export function getTripReportNightMeta(event: ScheduleEvent, timeOpts: TimeDispl
     reportDisplay,
     firstDepDisplay,
   };
+}
+
+export type LaterTodayRedEyeCardInfo = {
+  /** Report local calendar line (EEEE MMMM d, base TZ) — pairs with card `reportPart` for inline REPORT row. */
+  reportDateLong: string;
+};
+
+/**
+ * Later today big-card warning: late wall-clock report (≥18:00) and first leg departs the *next* calendar day (base TZ).
+ * Reuses the same report / first-leg date logic as `getTripReportNightMeta` and schedule tiles — do not key off progressive `displayDateStr`.
+ */
+export function getLaterTodayRedEyeCardInfo(
+  event: ScheduleEvent,
+  timeOpts: TimeDisplayOptions
+): LaterTodayRedEyeCardInfo | null {
+  const meta = getTripReportNightMeta(event, timeOpts);
+  if (!meta.isReportNight || !meta.reportLocalDate || !meta.firstDepartureLocalDate) return null;
+  if (meta.firstDepartureLocalDate !== addDay(meta.reportLocalDate)) return null;
+
+  const tz = timeOpts.timezone;
+  const rtRaw = event.report_time!.trim();
+  const asIsoDate = new Date(rtRaw);
+
+  let hour24: number;
+  let minute: number;
+  if (!isNaN(asIsoDate.getTime()) && (rtRaw.includes("T") || /^\d{4}-\d{2}-\d{2}/.test(rtRaw))) {
+    hour24 = parseInt(formatInTimeZone(asIsoDate, tz, "H"), 10);
+    minute = parseInt(formatInTimeZone(asIsoDate, tz, "m"), 10);
+  } else {
+    const hm = parseWallClockHm(rtRaw);
+    if (!hm) return null;
+    hour24 = hm.hh;
+    minute = hm.mm;
+  }
+
+  if (Number.isNaN(hour24) || hour24 < 18) return null;
+
+  const reportNoon = fromZonedTime(`${meta.reportLocalDate}T12:00:00`, tz);
+  const reportDateLong = formatInTimeZone(reportNoon, tz, "EEEE MMMM d");
+  return { reportDateLong };
 }

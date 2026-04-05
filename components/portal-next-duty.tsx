@@ -22,7 +22,7 @@ import {
 } from "@/lib/far-117/fdp-remaining";
 import { getFiledRoute } from "@/lib/weather-brief/get-filed-route";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
-import { getTripReportNightMeta } from "@/lib/schedule-report-night";
+import { getLaterTodayRedEyeCardInfo, getTripReportNightMeta } from "@/lib/schedule-report-night";
 
 function fmtHM(totalMinutes: number) {
   const h = Math.floor(totalMinutes / 60);
@@ -151,6 +151,12 @@ export async function PortalNextDuty({
     showTimezoneLabel: displaySettings.showTimezoneLabel,
     baseAirport: displaySettings.baseAirport,
   };
+  const laterTodayRedEyeCard =
+    label === "later_today" && event && event.event_type === "trip"
+      ? getLaterTodayRedEyeCardInfo(event, scheduleCardTimeOpts)
+      : null;
+  const isRedEyeReport = laterTodayRedEyeCard != null;
+  const redEyeReportDateLong = laterTodayRedEyeCard?.reportDateLong ?? null;
   let scheduleEventCardLegsToShow = legsToShow;
   if (label !== "post_duty_release" && event && event.event_type === "trip") {
     const reportNightMeta = getTripReportNightMeta(event, scheduleCardTimeOpts);
@@ -380,7 +386,14 @@ export async function PortalNextDuty({
       )}
 
       {activeTrip && (
-        <div className="mt-4 rounded-lg border border-slate-200 overflow-hidden bg-slate-50 dark:border-slate-700/60 dark:bg-slate-900/40">
+        <div className="mt-4 space-y-2">
+          <div
+            className={`rounded-lg border overflow-hidden ${
+              isRedEyeReport
+                ? "border-amber-500/30 bg-amber-500/[0.06] dark:border-amber-500/25 dark:bg-amber-500/[0.08]"
+                : "border-slate-200 bg-slate-50 dark:border-slate-700/60 dark:bg-slate-900/40"
+            }`}
+          >
           <div className="border-l-4 border-l-emerald-500">
           {legsToShow && legsToShow.length > 0 ? (
             legsToShow.map((leg, i) => {
@@ -549,11 +562,16 @@ export async function PortalNextDuty({
           )}
           <div className="border-t border-slate-700/60 pl-3 pr-3 py-2">
             <span className="text-sm font-medium text-white">{activeTrip.pairing} • Day {activeTrip.tripDay} of {activeTrip.tripLength}</span>
-            {event && (
-              <span className="block text-sm text-slate-400 mt-0.5">
-                Report {reportTimeOverride ?? event.report_time ?? "—"}
-              </span>
-            )}
+            {event &&
+              (isRedEyeReport && redEyeReportDateLong ? (
+                <span className="mt-0.5 block text-sm font-medium text-amber-300">
+                  Report: {reportTimeOverride ?? event.report_time ?? "—"} — {redEyeReportDateLong} — Flight departs after midnight
+                </span>
+              ) : (
+                <span className="block text-sm text-slate-400 mt-0.5">
+                  Report {reportTimeOverride ?? event.report_time ?? "—"}
+                </span>
+              ))}
           </div>
           </div>
           {matchingChangeSummary && (
@@ -576,6 +594,7 @@ export async function PortalNextDuty({
               )}
             </div>
           )}
+          </div>
         </div>
       )}
 
@@ -598,18 +617,33 @@ export async function PortalNextDuty({
 
       {hasSchedule && event && (
         <div className="mt-4 space-y-2">
-          {!activeTrip && (
-            <ScheduleEventCard
-              event={event}
-              displaySettings={displaySettings}
-              position={profile?.position ?? null}
-              compact={false}
-              legsToShow={scheduleEventCardLegsToShow}
-              displayDateStr={displayDateStr}
-              reportTimeOverride={reportTimeOverride}
-              postDutyRelease={label === "post_duty_release"}
-            />
-          )}
+          {!activeTrip &&
+            (isRedEyeReport ? (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-2 sm:p-3 dark:border-amber-500/25 dark:bg-amber-500/[0.08]">
+                <ScheduleEventCard
+                  event={event}
+                  displaySettings={displaySettings}
+                  position={profile?.position ?? null}
+                  compact={false}
+                  legsToShow={scheduleEventCardLegsToShow}
+                  displayDateStr={displayDateStr}
+                  reportTimeOverride={reportTimeOverride}
+                  postDutyRelease={label === "post_duty_release"}
+                  redEyeReportDateLong={redEyeReportDateLong}
+                />
+              </div>
+            ) : (
+              <ScheduleEventCard
+                event={event}
+                displaySettings={displaySettings}
+                position={profile?.position ?? null}
+                compact={false}
+                legsToShow={scheduleEventCardLegsToShow}
+                displayDateStr={displayDateStr}
+                reportTimeOverride={reportTimeOverride}
+                postDutyRelease={label === "post_duty_release"}
+              />
+            ))}
           {far117Result && !activeTrip && (
             <Far117FdpBanner
               remainingMinutes={far117Result.remainingMinutes}

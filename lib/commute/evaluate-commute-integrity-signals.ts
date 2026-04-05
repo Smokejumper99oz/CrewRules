@@ -86,7 +86,7 @@ function bothProvidersSucceeded(p: CommuteIntegrityProviders): boolean {
 
 /**
  * Shared V1 coverage rules (Super Admin events + user-facing warning).
- * Order: single_provider, low_flight_count, no_live_fields_same_day.
+ * Order: single_provider, no_live_fields_same_day.
  */
 export function collectCoverageReasonCodes(input: CommuteCoverageSignalInput): CommuteCoverageReasonCode[] {
   const codes: CommuteCoverageReasonCode[] = [];
@@ -97,10 +97,6 @@ export function collectCoverageReasonCodes(input: CommuteCoverageSignalInput): C
       (input.aerodataboxCount === 0 && input.aviationstackCount > 0))
   ) {
     codes.push("single_provider");
-  }
-
-  if (input.finalFlightCount < 3) {
-    codes.push("low_flight_count");
   }
 
   const withLive = countWithLiveEvidence(input.mergedFlightsForLiveScan);
@@ -127,7 +123,7 @@ export function getCommuteCoverageForClient(input: CommuteCoverageSignalInput): 
 
 /**
  * When reading legacy cache without stored coverage metadata: flight-derived signals only
- * (low count + same-day no live). Omits single_provider (needs provider counts).
+ * (same-day no live). Omits single_provider (needs provider counts).
  */
 export function getCommuteCoverageForCacheFallback(
   flights: CommuteFlight[],
@@ -136,7 +132,6 @@ export function getCommuteCoverageForCacheFallback(
   const finalFlightCount = flights.length;
   const withLive = countWithLiveEvidence(flights);
   const reasons: CommuteCoverageReasonCode[] = [];
-  if (finalFlightCount < 3) reasons.push("low_flight_count");
   if (sameDayInOrigin && finalFlightCount > 0 && withLive === 0) {
     reasons.push("no_live_fields_same_day");
   }

@@ -19,6 +19,17 @@ import { payYearFromDOH } from "@/lib/pay-utils";
 import { type TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { getInboundEmailForDisplay } from "@/lib/email/get-inbound-email-for-display";
 import { importIcsFromText } from "@/lib/schedule/import-ics-from-text";
+import {
+  computeLegDates,
+  getLegsForDate,
+  getNextActionableLeg,
+  getTripDateStrings,
+  isDateFullyComplete,
+  isTripReportOnLocalCalendarDay,
+  resolveDisplayDateWithLegs,
+  todayStr,
+} from "@/lib/leg-dates";
+import { scheduleCardLegDateHelpers, withLegsToShow } from "@/lib/schedule-card-legs";
 
 const FLICA_SOURCE = "flica_import";
 
@@ -229,18 +240,13 @@ export async function getNextDuty(): Promise<{
 
     const hasSchedule = (count ?? 0) > 0;
 
-    const {
-      getTripDateStrings,
-      getLegsForDate,
-      getNextLegForDate,
-      isDateFullyComplete,
-      todayStr,
-    } = await import("@/lib/leg-dates");
+    const nextDutyLegHelpers = scheduleCardLegDateHelpers;
     const { addDays } = await import("date-fns");
     const { formatInTimeZone } = await import("date-fns-tz");
 
     const today = todayStr(baseTimezone);
     const tomorrow = formatInTimeZone(addDays(new Date(), 1), baseTimezone, "yyyy-MM-dd");
+    const releaseBufferMin = Math.max(0, profile.commute_release_buffer_minutes ?? 0);
 
     // 1. On duty: start <= now < end
     const { data: onDutyData, error: onDutyError } = await supabase
@@ -324,7 +330,27 @@ export async function getNextDuty(): Promise<{
       const tripDates = getTripDateStrings(ev.start_time, ev.end_time, baseTimezone);
 
       if (legs.length > 0 && tripDates.length > 0) {
-        if (isDateFullyComplete(legs, today, tripDates, baseTimezone)) {
+        const nextActionable = getNextActionableLeg(legs, tripDates, baseTimezone, releaseBufferMin);
+        if (nextActionable) {
+          const legRows = computeLegDates(legs, tripDates, baseTimezone);
+          const row = legRows.find((r) => r.leg === nextActionable);
+          const displayLegDate = row?.departureDate ?? today;
+          const commuteAssistSuppressFlightSearch =
+            ev.event_type === "reserve" && !reserveEarlyReleaseActive;
+          logCommuteSuppressDebug("on_duty", ev, commuteAssistSuppressFlightSearch);
+          return {
+            event: ev,
+            label: "on_duty",
+            hasSchedule,
+            legsToShow: [nextActionable],
+            displayDateStr: displayLegDate,
+            isInPairing: true,
+            commuteAssistSuppressFlightSearch,
+            ...reserveEarlyReleaseCommuteFields,
+          };
+        }
+
+        if (isDateFullyComplete(legs, today, tripDates, baseTimezone, releaseBufferMin)) {
           const legsForTomorrow = getLegsForDate(legs, tomorrow, tripDates, baseTimezone);
           if (legsForTomorrow.length > 0) {
             const commuteAssistSuppressFlightSearch =
@@ -359,22 +385,6 @@ export async function getNextDuty(): Promise<{
               ...reserveEarlyReleaseCommuteFields,
             };
           }
-        }
-        const nextLeg = getNextLegForDate(legs, today, tripDates, baseTimezone);
-        if (nextLeg) {
-          const commuteAssistSuppressFlightSearch =
-            ev.event_type === "reserve" && !reserveEarlyReleaseActive;
-          logCommuteSuppressDebug("on_duty", ev, commuteAssistSuppressFlightSearch);
-          return {
-            event: ev,
-            label: "on_duty",
-            hasSchedule,
-            legsToShow: [nextLeg],
-            displayDateStr: today,
-            isInPairing: true,
-            commuteAssistSuppressFlightSearch,
-            ...reserveEarlyReleaseCommuteFields,
-          };
         }
       }
       const commuteAssistSuppressFlightSearch =
@@ -424,9 +434,8 @@ export async function getNextDuty(): Promise<{
         const nextStartsLater =
           upcoming.length === 0 || nowIso < upcoming[0].start_time;
         if (endDate === today && nextStartsLater) {
-          const legDates = { getTripDateStrings, getLegsForDate, todayStr };
           return {
-            ...withLegsToShow(lastEndedEvent, today, baseTimezone, "post_duty_release", hasSchedule, legDates),
+            ...withLegsToShow(lastEndedEvent, today, baseTimezone, "post_duty_release", hasSchedule, nextDutyLegHelpers, 0),
             commuteAssistDirection: "to_home",
           };
         }
@@ -439,26 +448,52 @@ export async function getNextDuty(): Promise<{
 
     const { isEventStartToday } = await import("@/lib/schedule-time");
 
-    // 2a. Later today: first event that starts today
-    const laterToday = upcoming.find((e) => isEventStartToday(e.start_time, baseTimezone));
+    /**
+     * Later today — CrewRules rule (trips):
+     * If trip report_time falls on today's calendar date in base timezone, that trip MUST appear under
+     * "Later today" (including red-eye: report 23:59 today, first dep 00:59 tomorrow). Selection anchors
+     * on report_time, not only start_time / first departure date. Reserve lines use separate on-duty logic.
+     */
+    const laterTodayPool = upcoming.filter(
+      (e) =>
+        isEventStartToday(e.start_time, baseTimezone) ||
+        (e.event_type === "trip" && isTripReportOnLocalCalendarDay(e, today, baseTimezone))
+    );
+    const reportTodayTrips = laterTodayPool.filter(
+      (e) => e.event_type === "trip" && isTripReportOnLocalCalendarDay(e, today, baseTimezone)
+    );
+    const laterToday = reportTodayTrips[0] ?? laterTodayPool[0];
     if (laterToday) {
+      const startIsTodayCal = isEventStartToday(laterToday.start_time, baseTimezone);
       const laterStartHour = parseInt(formatInTimeZone(new Date(laterToday.start_time), baseTimezone, "HH"), 10);
       const firstTomorrow = upcoming.find((e) => {
         const startStr = formatInTimeZone(new Date(e.start_time), baseTimezone, "yyyy-MM-dd");
         return startStr === tomorrow;
       });
-      const legDates = { getTripDateStrings, getLegsForDate, todayStr };
-      if (laterStartHour < 12 && firstTomorrow) {
-        return { ...withLegsToShow(firstTomorrow, tomorrow, baseTimezone, "next_duty", hasSchedule, legDates), isInPairing: false };
+      const reportAnchorsToday =
+        laterToday.event_type === "trip" && isTripReportOnLocalCalendarDay(laterToday, today, baseTimezone);
+      // Morning handoff to tomorrow's duty only when start is calendar-today and report is NOT anchoring today
+      // (never replace a red-eye / report-tonight trip with another row just because first dep is tomorrow)
+      if (startIsTodayCal && laterStartHour < 12 && firstTomorrow && !reportAnchorsToday) {
+        return {
+          ...withLegsToShow(firstTomorrow, tomorrow, baseTimezone, "next_duty", hasSchedule, nextDutyLegHelpers, releaseBufferMin),
+          isInPairing: false,
+        };
       }
-      return { ...withLegsToShow(laterToday, today, baseTimezone, "later_today", hasSchedule, legDates), isInPairing: false };
+      const displayDate = resolveDisplayDateWithLegs(laterToday, today, tomorrow, baseTimezone);
+      return {
+        ...withLegsToShow(laterToday, displayDate, baseTimezone, "later_today", hasSchedule, nextDutyLegHelpers, releaseBufferMin),
+        isInPairing: false,
+      };
     }
 
     // 2b. Next duty: first future event — use first day of that duty
     const firstEvent = upcoming[0];
-    const legDates = { getTripDateStrings, getLegsForDate, todayStr };
     const firstEventStartStr = formatInTimeZone(new Date(firstEvent.start_time), baseTimezone, "yyyy-MM-dd");
-    return { ...withLegsToShow(firstEvent, firstEventStartStr, baseTimezone, "next_duty", hasSchedule, legDates), isInPairing: false };
+    return {
+      ...withLegsToShow(firstEvent, firstEventStartStr, baseTimezone, "next_duty", hasSchedule, nextDutyLegHelpers, releaseBufferMin),
+      isInPairing: false,
+    };
   } catch (e) {
     return { event: null, label: null, hasSchedule: false, error: e instanceof Error ? e.message : "Unknown error" };
   }
@@ -485,38 +520,6 @@ async function findNextEventForDate(
     .limit(1)
     .maybeSingle();
   return (data ?? null) as ScheduleEvent | null;
-}
-
-function withLegsToShow(
-  event: ScheduleEvent,
-  dateStr: string | null,
-  timezone: string,
-  label: NextDutyLabel,
-  hasSchedule: boolean,
-  legDates: {
-    getTripDateStrings: (a: string, b: string, tz: string) => string[];
-    getLegsForDate: (legs: ScheduleEventLeg[], d: string, trip: string[], tz: string) => ScheduleEventLeg[];
-    todayStr: (tz: string) => string;
-  }
-): {
-  event: ScheduleEvent;
-  label: NextDutyLabel;
-  hasSchedule: boolean;
-  legsToShow?: ScheduleEventLeg[] | null;
-  displayDateStr?: string | null;
-} {
-  const legs = event.legs ?? [];
-  if (legs.length === 0) return { event, label, hasSchedule };
-  const tripDates = legDates.getTripDateStrings(event.start_time, event.end_time, timezone);
-  const targetDate = dateStr ?? legDates.todayStr(timezone);
-  const legsForDate = legDates.getLegsForDate(legs, targetDate, tripDates, timezone);
-  return {
-    event,
-    label,
-    hasSchedule,
-    legsToShow: legsForDate,
-    displayDateStr: dateStr ?? legDates.todayStr(timezone),
-  };
 }
 
 export async function getScheduleEvents(fromIso: string, toIso: string): Promise<{

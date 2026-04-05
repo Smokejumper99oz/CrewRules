@@ -46,6 +46,24 @@ export default async function WeatherBriefPage() {
     );
   }
 
+  if (nextFlight.status === "no_upcoming_trip") {
+    return (
+      <div className="space-y-6 md:space-y-8">
+        <WeatherBriefNotice departureIso={null} />
+        <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/60 to-slate-950/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] md:p-6 lg:p-8">
+          <h2 className="text-lg font-semibold text-white">No upcoming trip</h2>
+          <p className="mt-3 text-slate-300">
+            There isn&apos;t a trip on your schedule we can brief yet.
+          </p>
+          <p className="mt-2 text-sm text-slate-400">
+            After your next pairing appears in CrewRules™, Weather Brief will show weather for that flight automatically.
+          </p>
+        </div>
+        <SourcesSection />
+      </div>
+    );
+  }
+
   const { departureAirport, arrivalAirport, departureIso, arrivalIso } = nextFlight;
 
   const routeLookup =

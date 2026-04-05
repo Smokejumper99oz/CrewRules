@@ -1,8 +1,14 @@
 import { getNextDuty, getUpcomingEvents, getScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
+import { scheduleCardLegDateHelpers, withLegsToShow } from "@/lib/schedule-card-legs";
 import type { ScheduleEvent, ScheduleEventLeg } from "@/app/frontier/pilots/portal/schedule/actions";
 import { getProfile } from "@/lib/profile";
 import { ScheduleEventCard } from "@/components/schedule-event-card";
-import { computeLegDates, getTripDateStrings, getLegsForDate } from "@/lib/leg-dates";
+import {
+  computeLegDates,
+  getNextActionableLeg,
+  getTripDateStrings,
+  getLegsForDate,
+} from "@/lib/leg-dates";
 import { getTripReportNightMeta, isRdPlaceholderEvent } from "@/lib/schedule-report-night";
 import type { TimeDisplayOptions } from "@/lib/schedule-time";
 import { formatInTimeZone } from "date-fns-tz";
@@ -26,7 +32,54 @@ function formatLegDepHm(depTime: string | undefined): string | null {
   return `${p.slice(0, 2)}:${p.slice(2)}`;
 }
 
-function expandToDutyDays(events: ScheduleEvent[], timeOpts: TimeDisplayOptions, tz: string): DutyDayRow[] {
+function legPairingIndex(legs: ScheduleEventLeg[], leg: ScheduleEventLeg): number {
+  const i = legs.indexOf(leg);
+  if (i >= 0) return i;
+  return legs.findIndex(
+    (l) =>
+      l.origin === leg.origin &&
+      l.destination === leg.destination &&
+      (l.depTime ?? "") === (leg.depTime ?? "") &&
+      (l.flightNumber ?? "") === (leg.flightNumber ?? "")
+  );
+}
+
+/**
+ * Last leg index shown on the primary Next duty / Later today card for this trip.
+ * Upcoming must start after this so we never duplicate that leg.
+ */
+function primaryDashboardLastLegIndex(
+  nextDuty: Awaited<ReturnType<typeof getNextDuty>>,
+  event: ScheduleEvent,
+  tripDateStrs: string[],
+  tz: string,
+  releaseBufferMinutes: number
+): number | null {
+  if (nextDuty.event?.id !== event.id || event.event_type !== "trip" || !event.legs?.length) return null;
+  const legs = event.legs;
+  if (nextDuty.legsToShow?.length) {
+    let max = -1;
+    for (const sl of nextDuty.legsToShow) {
+      const ix = legPairingIndex(legs, sl);
+      if (ix > max) max = ix;
+    }
+    if (max >= 0) return max;
+  }
+  const next = getNextActionableLeg(legs, tripDateStrs, tz, releaseBufferMinutes);
+  if (!next) return null;
+  const ix = legPairingIndex(legs, next);
+  return ix >= 0 ? ix : null;
+}
+
+function expandToDutyDays(
+  events: ScheduleEvent[],
+  timeOpts: TimeDisplayOptions,
+  tz: string,
+  hasSchedule: boolean,
+  releaseBufferMinutes: number,
+  trimLegsAfterIndexForEventId: string | null,
+  trimAfterLegIndex: number | null
+): DutyDayRow[] {
   const out: DutyDayRow[] = [];
   for (const event of events) {
     if (isRdPlaceholderEvent(event)) continue;
@@ -82,10 +135,41 @@ function expandToDutyDays(events: ScheduleEvent[], timeOpts: TimeDisplayOptions,
           dayNum === 1 ? undefined : formatLegDepHm(firstDepartingLeg?.depTime) ?? "—";
         const compactTimeLabelOverride = dayNum > 1 ? "FIRST LEG" : null;
 
+        const dayLegs = legs;
+        const cardPrep =
+          dayLegs.length > 0
+            ? withLegsToShow(
+                event,
+                dateStr,
+                tz,
+                "next_duty",
+                hasSchedule,
+                scheduleCardLegDateHelpers,
+                releaseBufferMinutes,
+                dateStr
+              )
+            : null;
+
+        let rowLegsToShow = cardPrep?.legsToShow ?? null;
+        let rowDisplayDateStr = cardPrep?.displayDateStr ?? dateStr;
+        if (
+          rowLegsToShow &&
+          trimLegsAfterIndexForEventId &&
+          trimAfterLegIndex != null &&
+          event.id === trimLegsAfterIndexForEventId
+        ) {
+          const legs = event.legs ?? [];
+          rowLegsToShow = rowLegsToShow.filter((leg) => legPairingIndex(legs, leg) > trimAfterLegIndex);
+          if (rowLegsToShow.length === 0) continue;
+          const rows = computeLegDates(legs, tripDateStrs, tz);
+          const firstRow = rows.find((r) => r.leg === rowLegsToShow![0]);
+          if (firstRow?.departureDate) rowDisplayDateStr = firstRow.departureDate;
+        }
+
         out.push({
           event,
-          displayDateStr: dateStr,
-          legsToShow: legs.length > 0 ? legs : null,
+          displayDateStr: rowDisplayDateStr,
+          legsToShow: rowLegsToShow,
           headerTitleOverride,
           reportTimeOverride,
           compactTimeLabelOverride,
@@ -104,8 +188,6 @@ export async function PortalScheduleUpcoming({ tenant, portal }: { tenant: strin
     getScheduleDisplaySettings(),
     getProfile(),
   ]);
-  const excludeId = nextDuty.event?.id;
-  const filtered = excludeId ? rawEvents.filter((e) => e.id !== excludeId) : rawEvents.slice();
 
   const timeOpts: TimeDisplayOptions = {
     timezone: displaySettings.baseTimezone,
@@ -114,8 +196,47 @@ export async function PortalScheduleUpcoming({ tenant, portal }: { tenant: strin
     baseAirport: displaySettings.baseAirport,
   };
   const tz = displaySettings.baseTimezone;
+  const releaseBufferMin = Math.max(0, profile?.commute_release_buffer_minutes ?? 0);
 
-  const dutyDayRows = expandToDutyDays(filtered, timeOpts, tz);
+  /** In-progress / “current” trip on the Dashboard — may have future legs even though `getUpcomingEvents` only returns `start_time >= now`. */
+  const nd = nextDuty;
+  const continuationEvent =
+    nd.event &&
+    nd.event.event_type === "trip" &&
+    nd.event.legs?.length &&
+    nd.label !== "post_duty_release" &&
+    nd.label != null
+      ? nd.event
+      : null;
+
+  let trimForEventId: string | null = null;
+  let trimAfterIdx: number | null = null;
+  const orderedEvents: ScheduleEvent[] = [];
+
+  if (continuationEvent) {
+    const tripDates = getTripDateStrings(continuationEvent.start_time, continuationEvent.end_time, tz);
+    const lastPrimaryIdx = primaryDashboardLastLegIndex(nd, continuationEvent, tripDates, tz, releaseBufferMin);
+    if (lastPrimaryIdx != null && lastPrimaryIdx < continuationEvent.legs!.length - 1) {
+      orderedEvents.push(continuationEvent);
+      trimForEventId = continuationEvent.id;
+      trimAfterIdx = lastPrimaryIdx;
+    }
+  }
+
+  for (const e of rawEvents) {
+    if (continuationEvent && e.id === continuationEvent.id) continue;
+    orderedEvents.push(e);
+  }
+
+  const dutyDayRows = expandToDutyDays(
+    orderedEvents,
+    timeOpts,
+    tz,
+    nextDuty.hasSchedule,
+    releaseBufferMin,
+    trimForEventId,
+    trimAfterIdx
+  );
   dutyDayRows.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
   const upcomingEvents = dutyDayRows.slice(0, 5);
 

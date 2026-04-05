@@ -6,6 +6,7 @@ import {
   getTripReportNightMeta,
   isRdPlaceholderEvent,
 } from "@/lib/schedule-report-night";
+import { getTripDateStrings } from "@/lib/leg-dates";
 
 /** Prefix flight number for display: carrierCode + number, or FLT + number. Does not change stored data. */
 function formatFlightDisplay(flightNumber: string, carrierCode?: string | null): string {
@@ -63,6 +64,8 @@ type Props = {
   compactTimeLabelOverride?: string | null;
   /** Next-duty post-release: compact summary instead of full leg list. */
   postDutyRelease?: boolean;
+  /** Later today red-eye: report-local date (EEEE MMMM d) appended to REPORT row with amber sub-line. */
+  redEyeReportDateLong?: string | null;
 };
 
 export function ScheduleEventCard({
@@ -76,6 +79,7 @@ export function ScheduleEventCard({
   headerTitleOverride,
   compactTimeLabelOverride,
   postDutyRelease,
+  redEyeReportDateLong,
 }: Props) {
   if (isRdPlaceholderEvent(event)) return null;
 
@@ -207,8 +211,11 @@ export function ScheduleEventCard({
   }
 
   const tz = displaySettings.baseTimezone;
+  const tripCalendarSpanDays = getTripDateStrings(event.start_time, event.end_time, tz).length;
   const tripPairingLabel =
-    event.event_type === "trip" ? pairingLengthLabel(event.pairing_days) : null;
+    event.event_type === "trip"
+      ? pairingLengthLabel(tripCalendarSpanDays > 0 ? tripCalendarSpanDays : event.pairing_days)
+      : null;
   const pairingLabelClass = compact ? "text-xs text-slate-500" : "text-sm text-slate-500";
 
   const reportNightBlock = isTripReportNightUi ? (
@@ -240,22 +247,35 @@ export function ScheduleEventCard({
           <span className={pairingLabelClass}>{tripPairingLabel}</span>
         )}
         {reportNightBlock}
-        {showRoute && !headerTitleOverride?.trim() && (
-          <span className="text-xs text-slate-500">{event.route}   {dutyRange}</span>
-        )}
+        {showRoute &&
+          (hasLegs ? (
+            <div className="text-xs space-y-0.5">
+              {effectiveLegs!.map((l, i) => (
+                <div key={i} className="font-normal text-slate-300 whitespace-nowrap">
+                  {l.flightNumber ? `${formatFlightDisplay(l.flightNumber, displaySettings.carrierCode)} ` : ""}
+                  {l.origin} → {l.destination}   {l.depTime ?? "—"} – {l.arrTime ?? "—"}
+                </div>
+              ))}
+            </div>
+          ) : (
+            !headerTitleOverride?.trim() && (
+              <span className="text-xs text-slate-500">{event.route}   {dutyRange}</span>
+            )
+          ))}
         {showReportCredit && (
           <>
-            {!hideLegacyReportLine && (
-              <span className="text-xs text-slate-400">
-                {event.event_type === "reserve" ? (
-                  timeLine
-                ) : compactTimeLabelOverride?.trim() ? (
-                  `${compactTimeLabelOverride.trim()}: ${reportPart}`
-                ) : (
-                  `Report: ${reportPart}`
-                )}
-              </span>
-            )}
+            {!hideLegacyReportLine &&
+              (event.event_type === "reserve" ? (
+                <span className="text-xs text-slate-400">{timeLine}</span>
+              ) : compactTimeLabelOverride?.trim() ? (
+                <span className="text-xs text-slate-400">{`${compactTimeLabelOverride.trim()}: ${reportPart}`}</span>
+              ) : redEyeReportDateLong?.trim() ? (
+                <span className="text-xs font-medium text-amber-300">
+                  Report: {reportPart} — {redEyeReportDateLong.trim()} — Flight departs after midnight
+                </span>
+              ) : (
+                <span className="text-xs text-slate-400">Report: {reportPart}</span>
+              ))}
             <span className="text-xs text-slate-400">Credit {creditDisplay}</span>
           </>
         )}
@@ -288,7 +308,14 @@ export function ScheduleEventCard({
       )}
       {showReportCredit && (
         <>
-          {!hideLegacyReportLine && <span className="text-sm text-slate-400">Report: {reportPart}</span>}
+          {!hideLegacyReportLine &&
+            (redEyeReportDateLong?.trim() ? (
+              <span className="text-sm font-medium text-amber-300">
+                Report: {reportPart} — {redEyeReportDateLong.trim()} — Flight departs after midnight
+              </span>
+            ) : (
+              <span className="text-sm text-slate-400">Report: {reportPart}</span>
+            ))}
           <span className="text-sm text-slate-400">Credit {creditDisplay}</span>
         </>
       )}

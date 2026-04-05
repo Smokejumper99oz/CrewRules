@@ -3,7 +3,8 @@
  * Derives actual departure/arrival dates from leg.day + depTime/arrTime.
  */
 
-import { formatInTimeZone } from "date-fns-tz";
+import { addMinutes } from "date-fns";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { addDay } from "./schedule-time";
 
 const DAY_ABBREVS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -107,6 +108,78 @@ export function todayStr(timezone: string): string {
   return formatInTimeZone(new Date(), timezone, "yyyy-MM-dd");
 }
 
+/** Normalize FLICA report_time (HH:MM / HHMM / HMM) to HH:MM for report-night anchoring. */
+function normalizeReportHmForAnchor(reportTime: string | null | undefined): string | null {
+  if (!reportTime?.trim()) return null;
+  const t = reportTime.trim();
+  if (/^\d{1,2}:\d{2}$/.test(t)) {
+    const [h, m] = t.split(":");
+    const hh = parseInt(h ?? "0", 10);
+    const mm = parseInt(m ?? "0", 10);
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  }
+  const s = t.replace(":", "");
+  if (!/^\d{3,4}$/.test(s)) return null;
+  const p = s.padStart(4, "0");
+  const hh = parseInt(p.slice(0, 2), 10);
+  const mm = parseInt(p.slice(2), 10);
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  return `${p.slice(0, 2)}:${p.slice(2)}`;
+}
+
+/**
+ * True when trip report_time (wall clock), anchored on start day and each day in the trip span,
+ * falls on calendarDayYyyyMmDd in timezone.
+ * Dashboard "Later today" uses this so red-eye trips (report 23:59 today, dep 00:59 tomorrow) stay on today.
+ */
+export function isTripReportOnLocalCalendarDay(
+  event: { event_type: string; report_time?: string | null; start_time: string; end_time: string },
+  calendarDayYyyyMmDd: string,
+  timezone: string
+): boolean {
+  if (event.event_type !== "trip") return false;
+  const hm = normalizeReportHmForAnchor(event.report_time);
+  if (!hm) return false;
+  const candidates = new Set<string>();
+  candidates.add(calendarDayYyyyMmDd);
+  candidates.add(formatInTimeZone(new Date(event.start_time), timezone, "yyyy-MM-dd"));
+  const tripDates = getTripDateStrings(event.start_time, event.end_time, timezone);
+  for (const d of tripDates) candidates.add(d);
+
+  for (const d of candidates) {
+    try {
+      const inst = fromZonedTime(`${d}T${hm}:00`, timezone);
+      if (isNaN(inst.getTime())) continue;
+      if (formatInTimeZone(inst, timezone, "yyyy-MM-dd") === calendarDayYyyyMmDd) return true;
+    } catch {
+      continue;
+    }
+  }
+  return false;
+}
+
+/**
+ * Pick the first calendar day (today → tomorrow → rest of trip span) that has legs, for next-duty cards.
+ */
+export function resolveDisplayDateWithLegs<T extends { day?: string; depTime?: string; arrTime?: string }>(
+  event: { start_time: string; end_time: string; legs?: T[] | null },
+  today: string,
+  tomorrow: string,
+  timezone: string
+): string {
+  const legs = event.legs ?? [];
+  if (legs.length === 0) return today;
+  const tripDates = getTripDateStrings(event.start_time, event.end_time, timezone);
+  const rest = tripDates.filter((d) => d !== today && d !== tomorrow);
+  const order = [today, tomorrow, ...rest];
+  for (const d of order) {
+    const slice = getLegsForDate(legs, d, tripDates, timezone);
+    if (slice.length > 0) return d;
+  }
+  return today;
+}
+
 /**
  * Find the next leg that hasn't completed yet.
  * A leg is "done" when current time has passed its arrival (on arrival date).
@@ -140,7 +213,140 @@ export function isDateFullyComplete<T extends { day?: string; depTime?: string; 
   legs: T[],
   dateStr: string,
   tripDateStrs: string[],
+  timezone: string,
+  releaseBufferMinutes = 0
+): boolean {
+  if (releaseBufferMinutes > 0) {
+    const rows = computeLegDates(legs, tripDateStrs, timezone);
+    for (let i = 0; i < legs.length; i++) {
+      const { departureDate, arrivalDate } = rows[i]!;
+      if (departureDate !== dateStr && arrivalDate !== dateStr) continue;
+      const arrD = arrivalDate ?? departureDate;
+      if (!legCrewReleasedFromLeg(legs[i]!, arrD, timezone, releaseBufferMinutes)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return getNextLegForDate(legs, dateStr, tripDateStrs, timezone) === null;
+}
+
+/** Same "arrival passed?" basis as getNextLegForDate (timezone wall clock vs leg arrival date). */
+function isLegArrivalPassedForProgressive(
+  leg: { arrTime?: string },
+  arrivalDate: string | null,
   timezone: string
 ): boolean {
-  return getNextLegForDate(legs, dateStr, tripDateStrs, timezone) === null;
+  if (!arrivalDate) return false;
+  const arrMin = timeToMinutes(leg.arrTime);
+  if (arrMin == null) return false;
+  const nowDate = todayStr(timezone);
+  const nowMin = nowMinutesInTz(timezone);
+  return nowDate > arrivalDate || (nowDate === arrivalDate && nowMin >= arrMin);
+}
+
+/**
+ * True after scheduled arrival + optional post-arrival release buffer (commute/duty display uses profile buffer).
+ */
+export function legCrewReleasedFromLeg<T extends { arrTime?: string }>(
+  leg: T,
+  arrivalDate: string | null,
+  timezone: string,
+  releaseBufferMinutes: number
+): boolean {
+  if (releaseBufferMinutes <= 0) {
+    return isLegArrivalPassedForProgressive(leg, arrivalDate, timezone);
+  }
+  const arrMin = timeToMinutes(leg.arrTime);
+  if (arrMin == null || !arrivalDate) return false;
+  const h = Math.floor(arrMin / 60);
+  const m = arrMin % 60;
+  const localIso = `${arrivalDate}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+  try {
+    const arrInst = fromZonedTime(localIso, timezone);
+    const releaseInst = addMinutes(arrInst, releaseBufferMinutes);
+    return Date.now() >= releaseInst.getTime();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * First leg in pairing order the crew has not yet cleared (arrival + release buffer), or null if all cleared.
+ * Unlike getNextLegForDate, not limited to a single calendar day — fixes post-midnight / red-eye progression.
+ */
+export function getNextActionableLeg<T extends { day?: string; depTime?: string; arrTime?: string }>(
+  legs: T[],
+  tripDateStrs: string[],
+  timezone: string,
+  releaseBufferMinutes: number
+): T | null {
+  if (legs.length === 0) return null;
+  const rows = computeLegDates(legs, tripDateStrs, timezone);
+  for (let i = 0; i < legs.length; i++) {
+    const ld = rows[i];
+    const arrD = ld?.arrivalDate ?? ld?.departureDate ?? null;
+    if (!legCrewReleasedFromLeg(legs[i]!, arrD, timezone, releaseBufferMinutes)) {
+      return legs[i]!;
+    }
+  }
+  return null;
+}
+
+/**
+ * Pairing-order window: first not-yet-released leg plus the following leg (max two).
+ * Dashboard "Later today" / "Next duty" uses this instead of listing every leg touching a calendar day.
+ *
+ * When `progressiveAnchorCalendarDay` is set (Upcoming duty-day rows), the search for the first
+ * actionable leg starts at the first pairing leg departing that calendar day (fallback: first leg
+ * touching that date), so each row uses the same progressive contract as the Dashboard without
+ * duplicating selection logic elsewhere.
+ */
+export function sliceNextTwoProgressiveLegs<T extends { day?: string; depTime?: string; arrTime?: string }>(
+  legs: T[],
+  tripDateStrs: string[],
+  timezone: string,
+  releaseBufferMinutes = 0,
+  progressiveAnchorCalendarDay?: string | null
+): T[] {
+  if (legs.length === 0) return [];
+  const rows = computeLegDates(legs, tripDateStrs, timezone);
+  let minIdx = 0;
+  if (progressiveAnchorCalendarDay) {
+    let anchorIdx = -1;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i]!.departureDate === progressiveAnchorCalendarDay) {
+        anchorIdx = i;
+        break;
+      }
+    }
+    if (anchorIdx < 0) {
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i]!;
+        if (
+          r.departureDate === progressiveAnchorCalendarDay ||
+          r.arrivalDate === progressiveAnchorCalendarDay
+        ) {
+          anchorIdx = i;
+          break;
+        }
+      }
+    }
+    if (anchorIdx >= 0) minIdx = anchorIdx;
+  }
+  let startIdx = minIdx;
+  for (let i = minIdx; i < legs.length; i++) {
+    const ld = rows[i];
+    const arrD = ld?.arrivalDate ?? ld?.departureDate ?? null;
+    if (!legCrewReleasedFromLeg(legs[i]!, arrD, timezone, releaseBufferMinutes)) {
+      startIdx = i;
+      break;
+    }
+    startIdx = i + 1;
+  }
+  if (startIdx >= legs.length) {
+    const from = Math.max(0, legs.length - 2);
+    return legs.slice(from);
+  }
+  return legs.slice(startIdx, startIdx + 2);
 }

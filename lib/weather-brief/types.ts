@@ -45,7 +45,12 @@ export type ReserveState = {
   status: "reserve";
 };
 
-export type NextFlightResult = NextFlight | ReserveState;
+/** Logged-in user is not on reserve duty but has no trip/leg we can brief (or unauthenticated edge). */
+export type NoUpcomingTripState = {
+  status: "no_upcoming_trip";
+};
+
+export type NextFlightResult = NextFlight | ReserveState | NoUpcomingTripState;
 
 export type DecodedWeather = {
   wind: string;

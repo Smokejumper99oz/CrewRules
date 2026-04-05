@@ -3,32 +3,16 @@
  * Works for the full trip span (layover mornings, between duty periods, etc.).
  */
 
-import { formatInTimeZone } from "date-fns-tz";
 import { createClient } from "@/lib/supabase/server";
-import { getTripDateStrings, getLegsForDate, isDateFullyComplete, todayStr, computeLegDates } from "@/lib/leg-dates";
+import {
+  getTripDateStrings,
+  getLegsForDate,
+  isDateFullyComplete,
+  todayStr,
+  computeLegDates,
+  legCrewReleasedFromLeg,
+} from "@/lib/leg-dates";
 import { extractPairingKey } from "@/lib/schedule-time";
-
-/** Same arrival-passed logic as getNextLegForDate. True when arrival time has passed. */
-function hasArrivalPassed(
-  arrTime: string | undefined,
-  arrivalDate: string | null,
-  timezone: string
-): boolean {
-  if (!arrivalDate) return false;
-  const arrMin = (() => {
-    const t = (arrTime ?? "").trim().replace(":", "");
-    if (!/^\d{3,4}$/.test(t)) return null;
-    const h = parseInt(t.slice(0, -2) || "0", 10);
-    const m = parseInt(t.slice(-2), 10);
-    if (h < 0 || h > 23 || m < 0 || m > 59) return null;
-    return h * 60 + m;
-  })();
-  if (arrMin == null) return false;
-  const nowDate = todayStr(timezone);
-  const [h, m] = [formatInTimeZone(new Date(), timezone, "HH"), formatInTimeZone(new Date(), timezone, "mm")].map(Number);
-  const nowMin = h * 60 + m;
-  return nowDate > arrivalDate || (nowDate === arrivalDate && nowMin >= arrMin);
-}
 
 /** Add one day to YYYY-MM-DD (matches schedule-time.addDay). */
 function addDay(dateStr: string): string {
@@ -92,7 +76,7 @@ export async function getActiveTrip(userId: string): Promise<ActiveTrip | null> 
   // 1. Fetch profile for timezone
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("base_timezone, base_airport, tenant")
+    .select("base_timezone, base_airport, tenant, commute_release_buffer_minutes")
     .eq("id", userId)
     .single();
 
@@ -103,6 +87,11 @@ export async function getActiveTrip(userId: string): Promise<ActiveTrip | null> 
     ((profile as { base_airport?: string }).base_airport
       ? getTimezoneFromAirport((profile as { base_airport: string }).base_airport)
       : getTenantSourceTimezone((profile as { tenant?: string }).tenant ?? "frontier"));
+
+  const releaseBufferMin = Math.max(
+    0,
+    (profile as { commute_release_buffer_minutes?: number | null }).commute_release_buffer_minutes ?? 0
+  );
 
   const today = todayStr(timezone);
   const nowIso = new Date().toISOString();
@@ -138,7 +127,7 @@ export async function getActiveTrip(userId: string): Promise<ActiveTrip | null> 
   let displayIndex = todayIndex;
   let legsToShow = legsForToday;
 
-  if (isDateFullyComplete(legs, today, tripDates, timezone)) {
+  if (isDateFullyComplete(legs, today, tripDates, timezone, releaseBufferMin)) {
     const tomorrow = addDay(today);
     const tomorrowIndex = tripDates.indexOf(tomorrow);
     if (tomorrowIndex >= 0) {
@@ -154,7 +143,8 @@ export async function getActiveTrip(userId: string): Promise<ActiveTrip | null> 
   const legDates = computeLegDates(legs, tripDates, timezone);
   const legsFiltered = legsToShow.filter((leg) => {
     const ld = legDates.find((x) => x.leg.origin === leg.origin && x.leg.destination === leg.destination);
-    return ld?.arrivalDate == null || !hasArrivalPassed(leg.arrTime, ld.arrivalDate, timezone);
+    const arrD = ld?.arrivalDate ?? ld?.departureDate ?? null;
+    return arrD == null || !legCrewReleasedFromLeg(leg, arrD, timezone, releaseBufferMin);
   });
   const todayLegs: ActiveTripTodayLeg[] = legsFiltered.map((leg) => {
     const ld = legDates.find((x) => x.leg.origin === leg.origin && x.leg.destination === leg.destination);
