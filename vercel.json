@@ -1,12 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/trial-reminders",
-      "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/cron/signup-nudge",
-      "schedule": "*/10 * * * *"
-    }
-  ]
-}
+{}
