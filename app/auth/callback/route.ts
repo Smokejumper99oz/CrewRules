@@ -6,7 +6,6 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type");
-  const next = searchParams.get("next") ?? "/frontier/pilots/login";
 
   if (!token_hash || !type) {
     return NextResponse.redirect(
@@ -22,6 +21,14 @@ export async function GET(request: Request) {
       new URL("/frontier/pilots/login?error=invalid_link", request.url)
     );
   }
+
+  const rawNext = searchParams.get("next");
+  const next =
+    rawNext != null && rawNext.trim() !== ""
+      ? rawNext.trim()
+      : isRecovery
+        ? "/frontier/pilots/reset-password"
+        : "/frontier/pilots/login";
 
   const supabase = await createClient();
   const { error } = await supabase.auth.verifyOtp({

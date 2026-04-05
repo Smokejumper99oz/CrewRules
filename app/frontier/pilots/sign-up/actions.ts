@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendPendingSignupOpsNotificationEmail } from "@/lib/email/send-pending-signup-ops-notification";
 import { inferAirlineFromEmail } from "@/lib/supported-airlines";
 import { FRONTIER_PILOT_SIGNUP_USE_AIRLINE_EMAIL } from "./constants";
 
@@ -110,6 +111,37 @@ export async function submitSignUp(_prev: SignUpState, formData: FormData): Prom
         },
         { onConflict: "user_id", ignoreDuplicates: true }
       );
+
+      const { data: pendingRow } = await admin
+        .from("pending_signups")
+        .select("confirmed_at, internal_notify_at, signup_at, email_normalized, employee_number")
+        .eq("user_id", newUserId)
+        .maybeSingle();
+
+      if (
+        pendingRow &&
+        pendingRow.confirmed_at == null &&
+        pendingRow.internal_notify_at == null &&
+        pendingRow.signup_at
+      ) {
+        try {
+          const notify = await sendPendingSignupOpsNotificationEmail({
+            userId: newUserId,
+            email: (pendingRow.email_normalized ?? email).trim(),
+            fullName,
+            employeeNumber: pendingRow.employee_number ?? employeeNum,
+            signupAt: pendingRow.signup_at,
+          });
+          if (notify.ok) {
+            await admin
+              .from("pending_signups")
+              .update({ internal_notify_at: new Date().toISOString() })
+              .eq("user_id", newUserId);
+          }
+        } catch (notifyErr) {
+          console.error("[submitSignUp] pending signup ops notification failed:", notifyErr);
+        }
+      }
     } catch (trackErr) {
       console.error("[submitSignUp] pending_signups upsert failed:", trackErr);
     }
