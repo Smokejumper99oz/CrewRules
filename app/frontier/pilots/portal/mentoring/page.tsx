@@ -289,57 +289,66 @@ function MenteeCard({ a }: { a: MentorAssignmentRow }) {
 
   return (
     <div
-      className={`${CARD_CLASS} ${cardStateAccentClass} p-4 sm:p-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between`}
+      className={`${CARD_CLASS} ${cardStateAccentClass} relative p-4 sm:p-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between`}
     >
-      <div className="min-w-0 flex-1 space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="font-semibold text-white truncate">{fullName}</h3>
-          <AssignmentStatusPill a={a} />
+      <Link
+        href={`/frontier/pilots/portal/mentoring/${a.id}`}
+        className="absolute inset-0 z-0 rounded-3xl"
+        aria-label={`Open mentee details for ${fullName}`}
+      />
+      <div className="relative z-10 pointer-events-none flex min-w-0 w-full flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-semibold text-white truncate">{fullName}</h3>
+            <AssignmentStatusPill a={a} />
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
+            <span>
+              <span>DOH:</span> {formatHireDate(a.mentee_date_of_hire)}
+            </span>
+          </div>
+          {militaryLeavePausedMilestone ? (
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm font-medium leading-snug">
+                <span className="text-slate-500">Next Milestone:</span>
+                <span className="ml-3 flex flex-wrap items-center gap-2 text-slate-200">
+                  <span>Paused</span>
+                  <MentorWorkspaceStatusPill status="Military Leave" />
+                </span>
+              </div>
+              {a.mentor_workspace_next_check_in_date?.trim() ? (
+                <p className="text-xs text-slate-400">
+                  Next Check-In:{" "}
+                  <span className="text-slate-300">
+                    {formatWorkspaceNextCheckIn(a.mentor_workspace_next_check_in_date)}
+                  </span>
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <NextMilestoneCardBlock
+                milestoneLabel={milestoneLabel}
+                milestoneDue={milestoneDue}
+                urgent={nextMilestoneUrgent}
+                neutralMilestoneValueColor
+              />
+              <MentorMenteeCardWorkspaceSummary a={a} />
+            </>
+          )}
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
-          <span>
-            <span>DOH:</span> {formatHireDate(a.mentee_date_of_hire)}
+        <div className="flex w-full min-w-0 shrink-0 flex-nowrap items-center justify-center gap-1.5 overflow-x-auto sm:w-auto sm:justify-end">
+          <LastInteractionSignal at={a.last_interaction_at} compact className="shrink-0" />
+          <Link
+            href={`/frontier/pilots/portal/mentoring/${a.id}`}
+            className="pointer-events-auto inline-flex shrink-0 items-center justify-center rounded-md bg-[#75C043] px-2.5 py-1 text-xs font-semibold leading-none text-slate-950 transition hover:opacity-95"
+          >
+            View
+          </Link>
+          <span className="pointer-events-auto inline-flex shrink-0">
+            <MentorMenteeWorkspaceNotesButton a={a} compact />
           </span>
         </div>
-        {militaryLeavePausedMilestone ? (
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm font-medium leading-snug">
-              <span className="text-slate-500">Next Milestone:</span>
-              <span className="ml-3 flex flex-wrap items-center gap-2 text-slate-200">
-                <span>Paused</span>
-                <MentorWorkspaceStatusPill status="Military Leave" />
-              </span>
-            </div>
-            {a.mentor_workspace_next_check_in_date?.trim() ? (
-              <p className="text-xs text-slate-400">
-                Next Check-In:{" "}
-                <span className="text-slate-300">
-                  {formatWorkspaceNextCheckIn(a.mentor_workspace_next_check_in_date)}
-                </span>
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <>
-            <NextMilestoneCardBlock
-              milestoneLabel={milestoneLabel}
-              milestoneDue={milestoneDue}
-              urgent={nextMilestoneUrgent}
-              neutralMilestoneValueColor
-            />
-            <MentorMenteeCardWorkspaceSummary a={a} />
-          </>
-        )}
-      </div>
-      <div className="flex w-full min-w-0 shrink-0 flex-nowrap items-center justify-center gap-1.5 overflow-x-auto sm:w-auto sm:justify-end">
-        <LastInteractionSignal at={a.last_interaction_at} compact className="shrink-0" />
-        <Link
-          href={`/frontier/pilots/portal/mentoring/${a.id}`}
-          className="inline-flex shrink-0 items-center justify-center rounded-md bg-[#75C043] px-2.5 py-1 text-xs font-semibold leading-none text-slate-950 transition hover:opacity-95"
-        >
-          View
-        </Link>
-        <MentorMenteeWorkspaceNotesButton a={a} compact />
       </div>
     </div>
   );
