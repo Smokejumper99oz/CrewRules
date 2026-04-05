@@ -84,7 +84,7 @@ async function linkExistingProfilesAfterMentorPreloadImport(
   result: MentorPreloadCsvImportResult,
 ): Promise<void> {
   const successRowNumbers = new Set(
-    result.rows.filter((r) => r.status === "success").map((r) => r.rowNumber),
+    result.rows.filter((r) => r.success).map((r) => r.rowNumber),
   );
   if (successRowNumbers.size === 0) return;
 

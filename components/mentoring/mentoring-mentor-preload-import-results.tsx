@@ -3,6 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import type { MentorPreloadCsvImportActionResult } from "@/app/frontier/pilots/admin/mentoring/actions";
+import {
+  MENTORING_IMPORT_ROW_CREATED_MESSAGE,
+  MENTORING_IMPORT_ROW_NO_CHANGES_MESSAGE,
+  MENTORING_IMPORT_ROW_UPDATED_MESSAGE,
+} from "@/lib/mentoring/mentoring-import-summary";
 import type { MentorPreloadCsvImportRowResult } from "@/lib/mentoring/run-mentor-preload-csv-import";
 
 /** Server action returns runner rows plus CSV identity fields from enrichment. */
@@ -15,11 +20,23 @@ const rowGridClass =
   "grid grid-cols-[2.25rem_4.5rem_minmax(0,1fr)_5rem_minmax(0,1.2fr)] gap-x-2 gap-y-0.5 items-center";
 
 function rowStatusClass(r: MentorPreloadCsvImportRowResult): string {
-  return r.status === "success" ? "text-emerald-300/90" : "text-red-300/95";
+  if (!r.success) return "text-red-300/95";
+  if (r.message === MENTORING_IMPORT_ROW_CREATED_MESSAGE) return "text-emerald-300/90";
+  if (
+    r.message === MENTORING_IMPORT_ROW_UPDATED_MESSAGE ||
+    r.message === MENTORING_IMPORT_ROW_NO_CHANGES_MESSAGE
+  ) {
+    return "text-amber-200/95";
+  }
+  return "text-amber-200/95";
 }
 
 function shortStatusLabel(r: MentorPreloadCsvImportRowResult): string {
-  return r.status === "success" ? "Success" : "Failed";
+  if (!r.success) return "Failed";
+  if (r.message === MENTORING_IMPORT_ROW_CREATED_MESSAGE) return "Created";
+  if (r.message === MENTORING_IMPORT_ROW_UPDATED_MESSAGE) return "Updated";
+  if (r.message === MENTORING_IMPORT_ROW_NO_CHANGES_MESSAGE) return "Unchanged";
+  return "OK";
 }
 
 function formatUploadedAt(iso: string): string {

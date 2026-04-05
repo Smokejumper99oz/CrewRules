@@ -194,9 +194,25 @@ export function parseMentorPreloadCsv(text: string): ParsedMentorPreloadCsvResul
     if (!headerIndex.has(lk)) headerIndex.set(lk, i);
   });
 
+  const headersNormalized = headerCells.filter((h) => h.length > 0).map((h) => h.toLowerCase());
+  const headerCounts: Record<string, number> = {};
+  for (const h of headersNormalized) {
+    headerCounts[h] = (headerCounts[h] || 0) + 1;
+  }
+  if ((headerCounts["mentor_employee_number"] ?? 0) > 1) {
+    return {
+      ok: false,
+      error: "Duplicate mentor_employee_number column detected in import file.",
+    };
+  }
+
   const headerErr = mentorPreloadImportHeaderValidationError(headerIndex);
   if (headerErr) {
     return { ok: false, error: headerErr };
+  }
+
+  if (!headerIndex.has("mentor_employee_number")) {
+    return { ok: false, error: "mentor_employee_number column missing." };
   }
 
   const optionalPresent: MentorPreloadCsvHeaderPresence = {
@@ -214,6 +230,7 @@ export function parseMentorPreloadCsv(text: string): ParsedMentorPreloadCsvResul
   const rows: ParsedMentorPreloadCsvOk["rows"] = [];
   for (let i = 1; i < lines.length; i++) {
     const cells = parseCsvLine(lines[i]);
+    const rowNumber = i + 1;
     const values = {} as Record<string, string>;
     for (const key of MENTOR_PRELOAD_CSV_REQUIRED_HEADERS) {
       const idx = headerIndex.get(key)!;
@@ -227,8 +244,18 @@ export function parseMentorPreloadCsv(text: string): ParsedMentorPreloadCsvResul
         values[key] = "";
       }
     }
+
+    if (rowNumber <= 5 && process.env.NODE_ENV === "development") {
+      const empIdx = headerIndex.get("mentor_employee_number")!;
+      console.log("IMPORT DEBUG EMP#", {
+        rowNumber,
+        rawCell: cells[empIdx],
+        parsed: values.mentor_employee_number,
+      });
+    }
+
     rows.push({
-      rowNumber: i + 1,
+      rowNumber,
       values: values as MentorPreloadCsvRowValues,
     });
   }

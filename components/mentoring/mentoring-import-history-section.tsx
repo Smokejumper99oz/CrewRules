@@ -1,4 +1,9 @@
 import type { MentoringImportHistoryRow } from "@/lib/mentoring/mentoring-import-history";
+import {
+  MENTORING_IMPORT_ROW_CREATED_MESSAGE,
+  MENTORING_IMPORT_ROW_NO_CHANGES_MESSAGE,
+  MENTORING_IMPORT_ROW_UPDATED_MESSAGE,
+} from "@/lib/mentoring/mentoring-import-summary";
 import type { MentorPreloadImportHistoryRowResult } from "@/lib/mentoring/mentor-preload-import-history";
 import type { MentoringCsvImportRowResult } from "@/lib/mentoring/run-frontier-mentoring-csv-import";
 
@@ -15,8 +20,31 @@ function formatTs(iso: string): string {
   return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
-function mentorRowStatusLabel(status: string): string {
-  return status === "success" ? "Success" : "Failed";
+/** Stored history may predate `success`; support legacy `status`. */
+function mentorPreloadHistoryRowSuccess(row: MentorPreloadImportHistoryRowResult): boolean {
+  const r = row as MentorPreloadImportHistoryRowResult & { status?: string };
+  if (typeof r.success === "boolean") return r.success;
+  return r.status === "success";
+}
+
+function mentorPreloadHistoryShortLabel(row: MentorPreloadImportHistoryRowResult): string {
+  if (!mentorPreloadHistoryRowSuccess(row)) return "Failed";
+  if (row.message === MENTORING_IMPORT_ROW_CREATED_MESSAGE) return "Created";
+  if (row.message === MENTORING_IMPORT_ROW_UPDATED_MESSAGE) return "Updated";
+  if (row.message === MENTORING_IMPORT_ROW_NO_CHANGES_MESSAGE) return "Unchanged";
+  return "OK";
+}
+
+function mentorPreloadHistoryLineClass(row: MentorPreloadImportHistoryRowResult): string {
+  if (!mentorPreloadHistoryRowSuccess(row)) return "text-red-300/95";
+  if (row.message === MENTORING_IMPORT_ROW_CREATED_MESSAGE) return "text-emerald-300/90";
+  if (
+    row.message === MENTORING_IMPORT_ROW_UPDATED_MESSAGE ||
+    row.message === MENTORING_IMPORT_ROW_NO_CHANGES_MESSAGE
+  ) {
+    return "text-amber-200/95";
+  }
+  return "text-amber-200/95";
 }
 
 function rowLineClass(status: string): string {
@@ -39,7 +67,7 @@ export function MentoringImportHistorySection({
 }: {
   title?: string;
   entries: MentoringImportHistorySectionEntry[];
-  /** Mentor preload imports omit created/updated semantics. */
+  /** Mentor preload row details use the same message-based labels as mentee import. */
   variant?: "mentee" | "mentor";
 }) {
   if (entries.length === 0) {
@@ -111,7 +139,7 @@ export function MentoringImportHistorySection({
                       {e.row_results.map((row, idx) => {
                         if (variant === "mentor") {
                           const mRow = row as MentorPreloadImportHistoryRowResult;
-                          const lineCls = rowLineClass(mRow.status);
+                          const lineCls = mentorPreloadHistoryLineClass(mRow);
                           const name = mRow.fullName?.trim() || "—";
                           const emp = mRow.employeeNumber?.trim() || "—";
                           return (
@@ -121,7 +149,7 @@ export function MentoringImportHistorySection({
                             >
                               <span className="tabular-nums">{mRow.rowNumber}</span>
                               <span className="font-sans text-[10px] font-medium">
-                                {mentorRowStatusLabel(mRow.status)}
+                                {mentorPreloadHistoryShortLabel(mRow)}
                               </span>
                               <span className="truncate min-w-0" title={name !== "—" ? name : undefined}>
                                 {name}
