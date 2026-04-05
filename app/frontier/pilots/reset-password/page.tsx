@@ -9,6 +9,43 @@ const PORTAL = "pilots";
 
 type RecoveryStatus = "loading" | "ready" | "invalid";
 
+/** Same merge rules as @supabase/auth-js parseParametersFromURL: hash + query, query wins. */
+function parseAuthParamsFromHref(href: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const url = new URL(href);
+  if (url.hash?.startsWith("#")) {
+    try {
+      new URLSearchParams(url.hash.slice(1)).forEach((value, key) => {
+        result[key] = value;
+      });
+    } catch {
+      /* hash is not query-style */
+    }
+  }
+  url.searchParams.forEach((value, key) => {
+    result[key] = value;
+  });
+  return result;
+}
+
+function stripRecoveryParamsFromBrowserUrl(): void {
+  const url = new URL(window.location.href);
+  let changed = false;
+  if (url.hash) {
+    url.hash = "";
+    changed = true;
+  }
+  if (url.searchParams.has("code")) {
+    url.searchParams.delete("code");
+    changed = true;
+  }
+  if (changed) {
+    const next =
+      url.pathname + (url.search ? url.search : "") + (url.hash ?? "");
+    window.history.replaceState(window.history.state, "", next);
+  }
+}
+
 export default function ResetPasswordPage() {
   const [status, setStatus] = useState<RecoveryStatus>("loading");
   const [success, setSuccess] = useState(false);
@@ -18,35 +55,61 @@ export default function ResetPasswordPage() {
   const [confirm, setConfirm] = useState("");
 
   useEffect(() => {
-    const supabase = createClient();
     let cancelled = false;
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (cancelled) return;
-      if (session?.user) setStatus("ready");
-    });
+    async function establishRecoverySession() {
+      const supabase = createClient();
+      await supabase.auth.initialize();
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (cancelled) return;
-      if (session?.user) setStatus("ready");
-    });
+      const params = parseAuthParamsFromHref(window.location.href);
 
-    const t = window.setTimeout(() => {
-      if (cancelled) return;
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (cancelled) return;
-        if (!session?.user) {
-          setStatus((prev) => (prev === "ready" ? "ready" : "invalid"));
+      if (params.error || params.error_description) {
+        if (!cancelled) setStatus("invalid");
+        return;
+      }
+
+      async function applySessionIfPresent(): Promise<boolean> {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (cancelled) return true;
+        if (session?.user) {
+          stripRecoveryParamsFromBrowserUrl();
+          setStatus("ready");
+          return true;
         }
-      });
-    }, 3000);
+        return false;
+      }
+
+      if (await applySessionIfPresent()) return;
+
+      if (params.code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(params.code);
+        if (!error && (await applySessionIfPresent())) return;
+      }
+
+      if (params.access_token && params.refresh_token) {
+        const { error } = await supabase.auth.setSession({
+          access_token: params.access_token,
+          refresh_token: params.refresh_token,
+        });
+        if (!error && (await applySessionIfPresent())) return;
+      }
+
+      if (!cancelled) {
+        if (params.access_token || params.code) {
+          stripRecoveryParamsFromBrowserUrl();
+        }
+        setStatus("invalid");
+      }
+    }
+
+    establishRecoverySession().catch(() => {
+      if (!cancelled) setStatus("invalid");
+    });
 
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
-      window.clearTimeout(t);
     };
   }, []);
 
@@ -109,7 +172,7 @@ export default function ResetPasswordPage() {
       <main className="min-h-screen bg-slate-950 text-white">
         <div className="mx-auto max-w-lg px-6 py-16">
           <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-8 shadow-lg shadow-black/30">
-            <p className="text-slate-300">Verifying your reset link…</p>
+            <p className="text-slate-300">Verifying reset link…</p>
           </div>
         </div>
       </main>
