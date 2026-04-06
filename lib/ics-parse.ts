@@ -33,7 +33,7 @@ export type ParsedEvent = {
   blockMinutes?: number;
   legs?: ParsedLeg[];
   /**
-   * True when DESCRIPTION contains recurrent-training markers (SIM / NTR / RGS).
+   * True when DESCRIPTION contains recurrent-training markers (SIM or RGS, whole-word).
    * Title alone does not set this; DH alone does not.
    */
   isTraining?: boolean;
@@ -144,12 +144,12 @@ function hasRrule(block: string): boolean {
 }
 
 /**
- * Reserve-line recurrent training from VEVENT DESCRIPTION only (case-insensitive whole tokens).
+ * Reserve-line recurrent training from VEVENT DESCRIPTION only (case-insensitive whole tokens SIM, RGS).
  * Not triggered by SUMMARY/title. "DH" alone is not sufficient.
  */
 export function isRecurrentTrainingDescription(description: string | null | undefined): boolean {
   const d = description ?? "";
-  return /\bSIM\b/i.test(d) || /\bNTR\b/i.test(d) || /\bRGS\b/i.test(d);
+  return /\bSIM\b/i.test(d) || /\bRGS\b/i.test(d);
 }
 
 /** Parse DESCRIPTION for Report time, Credit, route, pairing_days, block, legs. FLICA/airline ICS. */
@@ -441,6 +441,33 @@ function parseRouteFromText(text: string): string | null {
   return null;
 }
 
+/** vCalendar multiline props sometimes miss with getPropertyMultiline; single-line getProperty still has the value. */
+function propertyTextOrFallback(block: string, name: "DESCRIPTION" | "COMMENT"): string {
+  const multi = getPropertyMultiline(block, name);
+  if (multi != null && multi.trim() !== "") return multi;
+  return getProperty(block, name) ?? "";
+}
+
+const hhmmDigitsToMinutes = (n: number) => Math.floor(n / 100) * 60 + (n % 100);
+
+/**
+ * SUMMARY:PAY events often carry the protected-trip paid HHMM only in DESCRIPTION/COMMENT;
+ * merge those fields so Pay:/TCRD/16:40 patterns match. Also handles Pay=1640-style exports.
+ */
+function parsePayVeEventCreditMinutes(merged: string): number | undefined {
+  if (!merged.trim()) return undefined;
+  const fromPatterns = parseDescription(merged).creditMinutes;
+  if (fromPatterns != null && fromPatterns > 0) return fromPatterns;
+  const fromDecimalOrClock = parseCreditFromText(merged);
+  if (fromDecimalOrClock != null) return Math.round(fromDecimalOrClock * 60);
+  const payEq = merged.match(/\bpay\s*=\s*(\d{3,4})\b/i);
+  if (payEq) {
+    const min = hhmmDigitsToMinutes(parseInt(payEq[1], 10));
+    if (min > 0 && min < 60000) return min;
+  }
+  return undefined;
+}
+
 export function parseIcs(icsText: string, options: ParseIcsOptions = {}): ParsedEvent[] {
   const sourceTimezone = options.sourceTimezone ?? "America/Denver";
   const lines = unfoldLines(icsText);
@@ -462,26 +489,40 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
         const dtstartRaw = getPropertyWithParams(block, "DTSTART");
         const dtendRaw = getPropertyWithParams(block, "DTEND");
         const summary = getProperty(block, "SUMMARY");
-        const description = getPropertyMultiline(block, "DESCRIPTION");
-        const comment = getPropertyMultiline(block, "COMMENT");
+        const descriptionRaw = propertyTextOrFallback(block, "DESCRIPTION");
+        const commentRaw = propertyTextOrFallback(block, "COMMENT");
         const location = getProperty(block, "LOCATION");
         const uid = getProperty(block, "UID");
 
         if (!dtstartRaw?.value) continue;
 
         const { reportTime, creditMinutes, firstLegRoute, firstLegDepartureTime, pairingDays, blockMinutes, legs } =
-          parseDescription(description ?? "");
+          parseDescription(descriptionRaw);
         if (process.env.NODE_ENV === "development" && (summary ?? "").includes("S3090") && (!legs || legs.length === 0)) {
           console.log("[ICS parse] S3090 DESCRIPTION (legs=0)", {
             summary,
-            descriptionLength: (description ?? "").length,
-            descriptionPreview: (description ?? "").slice(0, 500),
-            descriptionFull: description ?? "",
+            descriptionLength: descriptionRaw.length,
+            descriptionPreview: descriptionRaw.slice(0, 500),
+            descriptionFull: descriptionRaw,
           });
         }
-        const creditFromSummary = !creditMinutes ? parseCreditFromText(summary ?? "") : null;
-        const creditFromComment = !creditMinutes && !creditFromSummary ? parseCreditFromText(comment ?? "") : null;
+
+        const summaryTrim = (summary ?? "").trim();
+        const isPayVeEvent = /^PAY\b/i.test(summaryTrim);
+        const payMergedCredit = isPayVeEvent
+          ? parsePayVeEventCreditMinutes(
+              [descriptionRaw, commentRaw, summaryTrim].filter((s) => s.length > 0).join("\n")
+            )
+          : undefined;
+
+        const creditFromSummary =
+          creditMinutes == null && payMergedCredit == null ? parseCreditFromText(summary ?? "") : null;
+        const creditFromComment =
+          creditMinutes == null && payMergedCredit == null && creditFromSummary == null
+            ? parseCreditFromText(commentRaw)
+            : null;
         const resolvedCreditMinutes =
+          payMergedCredit ??
           creditMinutes ??
           (creditFromSummary != null ? Math.round(creditFromSummary * 60) : undefined) ??
           (creditFromComment != null ? Math.round(creditFromComment * 60) : undefined);
@@ -513,7 +554,7 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
           pairingDays: pairingDays ?? undefined,
           blockMinutes: blockMinutes ?? undefined,
           legs: legs ?? undefined,
-          isTraining: isRecurrentTrainingDescription(description ?? "") || undefined,
+          isTraining: isRecurrentTrainingDescription(descriptionRaw) || undefined,
         });
       }
     }

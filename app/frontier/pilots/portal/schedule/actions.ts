@@ -185,6 +185,10 @@ export type ScheduleEvent = {
   credit_hours?: number | null;
   credit_minutes?: number | null;
   baseline_credit_minutes?: number | null;
+  /** Disrupted-trip protected credit (baseline − sequence); counted in Month Overview line/raw totals. */
+  protected_credit_minutes?: number | null;
+  /** FLICA PAY rolled onto trip: full protected trip paid minutes for Month Overview (e.g. 16:40 → 1000). */
+  protected_full_trip_paid_minutes?: number | null;
   route?: string | null;
   pairing_days?: number | null;
   block_minutes?: number | null;
@@ -533,7 +537,7 @@ export async function getScheduleEvents(fromIso: string, toIso: string): Promise
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, is_muted, import_batch_id, imported_at")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, protected_credit_minutes, protected_full_trip_paid_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, is_muted, import_batch_id, imported_at")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", toIso)
@@ -750,7 +754,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("start_time, end_time, event_type, title, credit_hours, credit_minutes, baseline_credit_minutes, pairing_days, block_minutes, is_reserve_assignment, is_muted")
+      .select("start_time, end_time, event_type, title, credit_hours, credit_minutes, baseline_credit_minutes, protected_credit_minutes, protected_full_trip_paid_minutes, pairing_days, block_minutes, is_reserve_assignment, is_muted")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", endStr)
@@ -801,6 +805,8 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
       credit_hours: number | null;
       credit_minutes: number | null;
       baseline_credit_minutes: number | null;
+      protected_credit_minutes: number | null;
+      protected_full_trip_paid_minutes: number | null;
       pairing_days: number | null;
       block_minutes: number | null;
       is_reserve_assignment: boolean | null;
@@ -826,6 +832,10 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
       isReserveAssignment: boolean;
     }> = [];
     let vacationCreditMinutes = 0;
+    /** PAY rows do not add credit here; full protected trip value is on the trip row. */
+    let payCreditMinutes = 0;
+    /** Incremental protected (non–full-trip); omitted when protected_full_trip_paid_minutes is set on the trip. */
+    let protectedCreditMinutes = 0;
     let tripEvents = 0;
     let reserveEvents = 0;
     let vacationEvents = 0;
@@ -834,9 +844,15 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
       if (ev.event_type === "trip" && ev.is_muted === true) continue;
 
       const normalizedTitle = (ev.title ?? "").trim().toUpperCase();
-      if (normalizedTitle === "PAY") continue;
+      if (normalizedTitle === "PAY" && ev.event_type !== "pay") continue;
 
       if (ev.event_type === "trip") {
+        // Carryover trips may still appear on calendar days in the next bid month, but Month Overview
+        // (trip count, block, credit, pay) must attribute each trip only to the bid month where it starts.
+        const tripStartPeriod = getBidPeriodForTimestamp(ev.start_time, baseTimezone, y);
+        if (tripStartPeriod != null && tripStartPeriod.bidMonthIndex !== bidIdx) {
+          continue;
+        }
         const tripKey = `${ev.title ?? ""}|${ev.start_time}|${ev.end_time}`;
         if (seenTripKeys.has(tripKey)) continue;
         seenTripKeys.add(tripKey);
@@ -886,8 +902,19 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
         vacationCreditMinutes += segments.length * minutesPerDay;
       } else if (ev.event_type === "reserve") {
         reserveEvents += 1;
+      } else if (ev.event_type === "pay") {
+        // PAY rows are markers only; protected full-trip paid value is stored on the following trip row.
       } else if (ev.event_type === "trip") {
         tripEvents += 1;
+
+        const fullTripProtectedPaid =
+          ev.protected_full_trip_paid_minutes != null && ev.protected_full_trip_paid_minutes > 0
+            ? ev.protected_full_trip_paid_minutes
+            : null;
+        // Pay-protected trips: use protected_full_trip_paid_minutes as paid credit (original pairing value). PAY rows: markers only. Normal trips: unchanged 5:00/day minimum via credit_minutes / computeTripCredit below.
+        if (fullTripProtectedPaid == null && (ev.protected_credit_minutes ?? 0) > 0) {
+          protectedCreditMinutes += ev.protected_credit_minutes ?? 0;
+        }
 
         // Flown block: independent of credit/pay stubs (reserve-assignment trips still count real block_minutes)
         if (segments.length > 0) {
@@ -901,9 +928,8 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
         }
 
         const evCreditMinutes = ev.credit_minutes != null ? ev.credit_minutes : (ev.credit_hours != null ? Math.round(ev.credit_hours * 60) : null);
-        const effectiveCreditMinutes = ev.baseline_credit_minutes != null && evCreditMinutes != null
-          ? Math.max(evCreditMinutes, ev.baseline_credit_minutes)
-          : evCreditMinutes;
+        // Sequence credit on the row; protected_credit_minutes is added separately to line/raw totals (no max with baseline).
+        const effectiveCreditMinutes = evCreditMinutes;
         const evCreditHrs = effectiveCreditMinutes != null ? effectiveCreditMinutes / 60 : ev.credit_hours ?? null;
         let blockHrs = 0;
         let creditHrs = 0;
@@ -928,7 +954,24 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
           creditHrs = evCreditHrs;
         }
 
-        if (creditHrs > 0 && segments.length > 0) {
+        if (fullTripProtectedPaid != null && segments.length > 0) {
+          const pairingDays = ev.pairing_days ?? 1;
+          const ratio = pairingDays > 0 ? Math.min(1, segments.length / pairingDays) : 1;
+          const payMinutes = Math.round(fullTripProtectedPaid * ratio);
+          const blockMinutesRounded = Math.round(blockHrs * ratio * 60);
+          const extraMinutes = Math.max(0, payMinutes - blockMinutesRounded);
+          const creditMinutesForDelta = Math.round(creditHrs * 60);
+          const baselineMinutes = ev.baseline_credit_minutes ?? creditMinutesForDelta;
+          const credit_delta_minutes = creditMinutesForDelta - baselineMinutes;
+          tripStubs.push({
+            segments,
+            payMinutes,
+            blockMinutes: blockMinutesRounded,
+            extraMinutes,
+            credit_delta_minutes,
+            isReserveAssignment: ev.is_reserve_assignment === true,
+          });
+        } else if (creditHrs > 0 && segments.length > 0) {
           const pairingDays = ev.pairing_days ?? 1;
           const ratio = pairingDays > 0 ? Math.min(1, segments.length / pairingDays) : 1;
           const payMinutes = Math.round(creditHrs * ratio * 60);
@@ -982,7 +1025,12 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
     const guaranteeMinutes = hasReserveGuarantee ? 4500 : 0; // 75:00
 
     // "Line" credit is what can be protected/absorbed by the 75 guarantee
-    const lineCreditMinutes = tripCreditMinutesLine + vacationCreditMinutes + reserveCreditMinutes;
+    const lineCreditMinutes =
+      tripCreditMinutesLine +
+      vacationCreditMinutes +
+      reserveCreditMinutes +
+      payCreditMinutes +
+      protectedCreditMinutes;
 
     // Guarantee applies to the line bucket only
     const creditAfterGuaranteeMinutes = Math.max(lineCreditMinutes, guaranteeMinutes);
@@ -990,7 +1038,12 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
     // Extras ALWAYS add, regardless of guarantee
     const finalCreditedMinutes = creditAfterGuaranteeMinutes + tripCreditMinutesExtra;
 
-    const rawCreditMinutes = tripCreditMinutes + vacationCreditMinutes + reserveCreditMinutes;
+    const rawCreditMinutes =
+      tripCreditMinutes +
+      vacationCreditMinutes +
+      reserveCreditMinutes +
+      payCreditMinutes +
+      protectedCreditMinutes;
 
     const displayCreditMinutes =
       guaranteeMinutes > 0 ? Math.max(rawCreditMinutes, 4500) : rawCreditMinutes;
@@ -1081,12 +1134,13 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
         console.log("[getMonthStats] pay calc:", {
           year,
           rate,
-          displayCreditMinutes: stats.displayCreditMinutes,
-          creditHours: stats.displayCreditMinutes / 60,
+          paidMinutes: stats.paidMinutes,
+          creditHours: stats.paidMinutes / 60,
         });
 
-        // Pay estimate uses display credit (includes temporary 75:00 reserve-line floor when guarantee applies)
-        const creditHours = stats.displayCreditMinutes / 60;
+        // Portal Month Overview Credit and Pay Estimate use payroll-style paid credit (paidMinutes: 82h + 125% beyond),
+        // not raw display credit (displayCreditMinutes).
+        const creditHours = stats.paidMinutes / 60;
         const estimatedMonthlyPay = creditHours * rate;
         const pay20thHours = Math.min(35, creditHours);
         const pay5thHours = Math.max(0, creditHours - 35);

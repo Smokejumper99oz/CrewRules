@@ -153,7 +153,7 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
             <div className="space-y-2">
               <div className="min-w-0">
                 <p className="tabular-nums text-2xl font-normal leading-tight text-amber-800 dark:text-amber-300">
-                  {formatMinutesToHhMm(stats.displayCreditMinutes ?? 0)}
+                  {formatMinutesToHhMm(stats.creditMinutes ?? 0)}
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-300">Credit</p>
               </div>

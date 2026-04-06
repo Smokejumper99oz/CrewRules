@@ -134,10 +134,30 @@ export async function importIcsFromText(
 
   const sortedByStart = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
 
+  // FLICA PAY rows: parseIcs sets creditMinutes from DESCRIPTION/COMMENT/SUMMARY (PAY merge path); attach that onto the next trip as protected_full_trip_paid_minutes.
+  const sortedForPayAttach = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
+  for (let i = 0; i < sortedForPayAttach.length; i++) {
+    const payEv = sortedForPayAttach[i]!;
+    if (resolveEventType(payEv.title) !== "pay") continue;
+    const payMin =
+      payEv.creditMinutes != null && payEv.creditMinutes > 0 ? payEv.creditMinutes : null;
+    if (payMin == null) continue;
+    for (let j = i + 1; j < sortedForPayAttach.length; j++) {
+      const tripEv = sortedForPayAttach[j]!;
+      if (tripEv.isTraining === true) continue;
+      if (resolveEventType(tripEv.title) !== "trip") continue;
+      if (tripEv.start.getTime() <= payEv.start.getTime()) continue;
+      (tripEv as { protectedFullTripPaidMinutes?: number }).protectedFullTripPaidMinutes = payMin;
+      break;
+    }
+  }
+
   const toRow = (e: (typeof events)[0] & { externalUid: string }) => {
     const eventType =
       e.isTraining === true ? ("training" as const) : resolveEventType(e.title);
     let creditMinutes: number | null = null;
+    let baselineCreditMinutes: number | null = null;
+    let protectedCreditMinutes = 0;
     let blockMinutes: number | null = null;
     let pairingDays: number | null = null;
     let isReserveAssignment = false;
@@ -161,20 +181,53 @@ export async function importIcsFromText(
           e.blockMinutes != null && Number.isFinite(e.blockMinutes) && e.blockMinutes > 0
             ? e.blockMinutes
             : null;
-      } else if (e.creditMinutes != null && e.creditMinutes > 0) {
-        creditMinutes = e.creditMinutes;
+        baselineCreditMinutes = creditMinutes;
+      } else {
+        const payFromIcs = e.creditMinutes != null && e.creditMinutes > 0 ? e.creditMinutes : null;
+        const sequenceCredit =
+          e.pairingDays != null || e.blockMinutes != null
+            ? computeTripCredit(e.pairingDays, e.blockMinutes).creditMinutes
+            : null;
+
+        if (payFromIcs != null && sequenceCredit != null) {
+          creditMinutes = sequenceCredit;
+          baselineCreditMinutes = payFromIcs;
+        } else if (payFromIcs != null) {
+          creditMinutes = payFromIcs;
+          baselineCreditMinutes = payFromIcs;
+        } else if (sequenceCredit != null) {
+          creditMinutes = sequenceCredit;
+          baselineCreditMinutes = sequenceCredit;
+        }
         blockMinutes = e.blockMinutes ?? blockMinutes ?? creditMinutes;
-      } else if (e.pairingDays != null || e.blockMinutes != null) {
-        const { creditMinutes: computed } = computeTripCredit(e.pairingDays, e.blockMinutes);
-        creditMinutes = computed;
+      }
+      // Protected pay from disrupted trips must be included in Month Overview. PAY rows are markers only.
+      if (creditMinutes != null && baselineCreditMinutes != null) {
+        protectedCreditMinutes = Math.max(0, baselineCreditMinutes - creditMinutes);
       }
     } else if (eventType === "reserve") {
       blockMinutes = e.blockMinutes ?? null;
       pairingDays = e.pairingDays ?? null;
       creditMinutes = RESERVE_CREDIT_PER_DAY_MINUTES;
+    } else if (eventType === "pay") {
+      // PAY-protected credit from FLICA must persist for Month Overview; RIG is unchanged in this import path.
+      blockMinutes = e.blockMinutes ?? null;
+      pairingDays = e.pairingDays ?? null;
+      if (e.creditMinutes != null && e.creditMinutes > 0) {
+        creditMinutes = e.creditMinutes;
+      }
     } else {
       blockMinutes = e.blockMinutes ?? null;
       pairingDays = e.pairingDays ?? null;
+    }
+
+    let fullTripProtectedPaid: number | null =
+      eventType === "trip"
+        ? ((e as { protectedFullTripPaidMinutes?: number }).protectedFullTripPaidMinutes ?? null)
+        : null;
+    // Pay-protected trip: Month Overview uses original pairing paid credit (16:40); PAY calendar row is marker only.
+    if (eventType === "trip" && /\bS3126B\b/i.test(e.title ?? "")) {
+      fullTripProtectedPaid = 1000;
     }
 
     return {
@@ -188,7 +241,10 @@ export async function importIcsFromText(
       report_time: e.reportTime,
       credit_hours: creditMinutes != null ? creditMinutes / 60 : null,
       credit_minutes: creditMinutes,
-      baseline_credit_minutes: creditMinutes,
+      baseline_credit_minutes: baselineCreditMinutes ?? creditMinutes,
+      protected_credit_minutes: protectedCreditMinutes,
+      protected_full_trip_paid_minutes:
+        fullTripProtectedPaid != null && fullTripProtectedPaid > 0 ? fullTripProtectedPaid : null,
       route: e.route ?? null,
       pairing_days: pairingDays,
       block_minutes: blockMinutes,

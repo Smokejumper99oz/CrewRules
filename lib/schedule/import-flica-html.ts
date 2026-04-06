@@ -165,6 +165,8 @@ export async function importFlicaHtmlFromText(
       credit_hours: creditMinutes != null ? creditMinutes / 60 : null,
       credit_minutes: creditMinutes,
       baseline_credit_minutes: creditMinutes,
+      protected_credit_minutes: 0,
+      protected_full_trip_paid_minutes: null,
       route: e.route ?? null,
       pairing_days: pairingDays,
       block_minutes: blockMinutes,
