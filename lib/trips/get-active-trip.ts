@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   getTripDateStrings,
   getLegsForDate,
+  getScheduleEventDutyStartMs,
   isDateFullyComplete,
   todayStr,
   computeLegDates,
@@ -50,6 +51,8 @@ type ScheduleEventRow = {
   id: string;
   start_time: string;
   end_time: string;
+  event_type: string;
+  report_time?: string | null;
   title: string | null;
   legs?: Array<{
     day?: string;
@@ -95,24 +98,34 @@ export async function getActiveTrip(userId: string): Promise<ActiveTrip | null> 
 
   const today = todayStr(timezone);
   const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
 
-  // 2. Fetch active trip: start <= now < end (same rule as getNextDuty/getNextFlight)
-  const { data: activeEvent, error } = await supabase
+  // 2. Active trip: duty start (report on trip day, or block start) <= now < end — not only block start_time.
+  const { data: overlapRows, error } = await supabase
     .from("schedule_events")
-    .select("id, start_time, end_time, title, legs")
+    .select("id, start_time, end_time, event_type, report_time, title, legs")
     .eq("user_id", userId)
     .eq("source", FLICA_SOURCE)
     .eq("event_type", "trip")
     .or("is_muted.eq.false,is_muted.is.null")
-    .lte("start_time", nowIso)
     .gt("end_time", nowIso)
     .order("start_time", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(25);
 
-  if (error || !activeEvent) return null;
+  if (error) return null;
+
+  const activeEvent =
+    (overlapRows ?? []).find((row) => {
+      const ev = row as ScheduleEventRow;
+      const dutyStartMs = getScheduleEventDutyStartMs(ev, timezone);
+      const endMs = new Date(ev.end_time).getTime();
+      return nowMs >= dutyStartMs && nowMs < endMs;
+    }) ?? null;
+
+  if (!activeEvent) return null;
 
   const ev = activeEvent as ScheduleEventRow;
+
   const tripDates = getTripDateStrings(ev.start_time, ev.end_time, timezone);
   if (tripDates.length === 0) return null;
 

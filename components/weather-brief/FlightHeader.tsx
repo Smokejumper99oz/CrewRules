@@ -2,6 +2,7 @@ import type { NextFlight } from "@/lib/weather-brief/types";
 import { AirlineLogo } from "@/components/airline-logo";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { computeDelayInfo, getDelayStatusLabel, parseIsoTs } from "@/lib/flight-delay";
+import { formatInTimeZone } from "date-fns-tz";
 
 type Props = {
   flight: NextFlight;
@@ -63,16 +64,31 @@ export function FlightHeader({ flight }: Props) {
           ? `${flight.departureTime} (${flight.departureTimeUtc}Z)`
           : flight.departureTime || "—";
 
+  /** Weather Brief: local + Zulu from timezone-correct instant (same tz source as get-next-flight). */
+  const arrFromIso = (() => {
+    if (!flight.arrivalIso) return null;
+    const d = new Date(flight.arrivalIso);
+    if (isNaN(d.getTime())) return null;
+    return {
+      local: formatInTimeZone(d, arrTz, "HH:mm"),
+      utc: formatInTimeZone(d, "UTC", "HH:mm"),
+    };
+  })();
+
   const arrDisplay =
     delayInfo?.cancelled || !delayInfo
-      ? flight.arrivalTime && flight.arrivalTimeUtc
-        ? `${flight.arrivalTime} (${flight.arrivalTimeUtc}Z)`
-        : flight.arrivalTime || "—"
-      : delayInfo?.arr
-        ? `Sched. ${delayInfo.arr.scheduled} → ${delayInfo.arr.actual}`
+      ? arrFromIso
+        ? `${arrFromIso.local} (${arrFromIso.utc}Z)`
         : flight.arrivalTime && flight.arrivalTimeUtc
           ? `${flight.arrivalTime} (${flight.arrivalTimeUtc}Z)`
-          : flight.arrivalTime || "—";
+          : flight.arrivalTime || "—"
+      : delayInfo?.arr
+        ? `Sched. ${delayInfo.arr.scheduled} → ${delayInfo.arr.actual}`
+        : arrFromIso
+          ? `${arrFromIso.local} (${arrFromIso.utc}Z)`
+          : flight.arrivalTime && flight.arrivalTimeUtc
+            ? `${flight.arrivalTime} (${flight.arrivalTimeUtc}Z)`
+            : flight.arrivalTime || "—";
 
   const flightTimeMinutes =
     flight.blockMinutes ??
@@ -123,7 +139,7 @@ export function FlightHeader({ flight }: Props) {
             )}
           </span>
         </div>
-        {flight.arrivalTime != null && (
+        {(flight.arrivalIso != null || flight.arrivalTime != null) && (
           <div>
             <span className="text-slate-500">Arrival (local)</span>
             <span className="ml-2 font-mono text-slate-200">

@@ -1,7 +1,7 @@
 /**
  * Get the signed-in user's next scheduled flight for Weather Brief.
  * Reads from existing schedule_events without modifying any schedule code.
- * Next trip: earliest not-ended trip (end_time > now), preferring the in-progress block (start_time <= now).
+ * Next trip: earliest not-ended trip (end_time > now), preferring rows whose report (or start) is <= now.
  * Matches report-night trips where block calendar start is after report “today”.
  *
  * HARD RULE — Weather Brief empty copy ("No Flight Assigned"):
@@ -20,6 +20,7 @@ import { getTripDateStrings, computeLegDates, type LegWithDates } from "@/lib/le
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getTenantSourceTimezone } from "@/lib/tenant-config";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { addDay } from "@/lib/schedule-time";
 import type { NextFlightResult } from "./types";
 import { briefOpenTripsInPriorityOrder } from "./open-trips-brief-order";
 
@@ -63,27 +64,48 @@ function ensureTripDateStrings(ev: ScheduleEventRow, timezone: string): string[]
   return [];
 }
 
+/** Single source of truth for arrival calendar day (Weather Brief / leg bounds). */
+function resolveArrDateStr(
+  legDatesEntry: LegWithDates | undefined,
+  depDateStr: string,
+  selectedLeg: { depTime?: string; arrTime?: string }
+): string {
+  let effectiveArrivalDate = legDatesEntry?.arrivalDate ?? null;
+  if (!effectiveArrivalDate && selectedLeg.depTime && selectedLeg.arrTime) {
+    const dep = selectedLeg.depTime.replace(":", "").padStart(4, "0");
+    const arr = selectedLeg.arrTime.replace(":", "").padStart(4, "0");
+    if (arr < dep) {
+      effectiveArrivalDate = addDay(depDateStr);
+    } else {
+      effectiveArrivalDate = depDateStr;
+    }
+  }
+  return effectiveArrivalDate ?? depDateStr;
+}
+
 function getLegUtcBounds(
-  leg: LegRow,
+  selectedLeg: LegRow,
   legDates: LegWithDates[],
-  tripDates: string[],
   evStart: string,
   timezone: string
 ): { depUtc: Date; arrUtc: Date | null } | null {
-  if (!leg.origin || !leg.destination) return null;
+  if (!selectedLeg.origin || !selectedLeg.destination) return null;
   const legDatesEntry = legDates.find(
-    (ld) => ld.leg.origin === leg.origin && ld.leg.destination === leg.destination
+    (ld) => ld.leg.origin === selectedLeg.origin && ld.leg.destination === selectedLeg.destination
   );
-  const depDateStr =
-    legDatesEntry?.departureDate ?? tripDates[0] ?? formatInTimeZone(new Date(evStart), timezone, "yyyy-MM-dd");
-  const arrDateStr = legDatesEntry?.arrivalDate ?? depDateStr;
-  const depTimeRaw = (leg.depTime ?? "00:00").replace(":", "").padStart(4, "0");
+  let depDateStr = legDatesEntry?.departureDate ?? null;
+  if (!depDateStr && evStart) {
+    depDateStr = formatInTimeZone(new Date(evStart), timezone, "yyyy-MM-dd");
+  }
+  if (depDateStr == null) return null;
+  const arrDateStr = resolveArrDateStr(legDatesEntry, depDateStr, selectedLeg);
+  const depTimeRaw = (selectedLeg.depTime ?? "00:00").replace(":", "").padStart(4, "0");
   const depTimeNorm = depTimeRaw.length >= 4 ? `${depTimeRaw.slice(0, 2)}:${depTimeRaw.slice(2, 4)}` : "00:00";
-  const arrTime = leg.arrTime ?? null;
+  const arrTime = selectedLeg.arrTime ?? null;
   const arrTimeRaw = arrTime ? arrTime.replace(":", "").padStart(4, "0") : "";
   const arrTimeNorm = arrTimeRaw.length >= 4 ? `${arrTimeRaw.slice(0, 2)}:${arrTimeRaw.slice(2, 4)}` : arrTime;
-  const depAirportTz = getTimezoneFromAirport(leg.origin);
-  const arrAirportTz = getTimezoneFromAirport(leg.destination);
+  const depAirportTz = getTimezoneFromAirport(selectedLeg.origin);
+  const arrAirportTz = getTimezoneFromAirport(selectedLeg.destination);
   const depUtc = fromZonedTime(`${depDateStr} ${depTimeNorm}`, depAirportTz);
   const arrUtc =
     arrTimeNorm && arrDateStr ? fromZonedTime(`${arrDateStr} ${arrTimeNorm}`, arrAirportTz) : null;
@@ -99,7 +121,6 @@ function getLegUtcBounds(
 function pickNextWeatherBriefLeg(
   legs: LegRow[],
   legDates: LegWithDates[],
-  tripDates: string[],
   evStart: string,
   timezone: string
 ): LegRow | null {
@@ -107,10 +128,10 @@ function pickNextWeatherBriefLeg(
   const candidates = legs.filter((l) => !l.deadhead && l.origin && l.destination);
   if (candidates.length === 0) return null;
   const scored = candidates
-    .map((leg) => {
-      const bounds = getLegUtcBounds(leg, legDates, tripDates, evStart, timezone);
+    .map((selectedLeg) => {
+      const bounds = getLegUtcBounds(selectedLeg, legDates, evStart, timezone);
       if (!bounds) return null;
-      return { leg, ...bounds };
+      return { leg: selectedLeg, ...bounds };
     })
     .filter((x): x is { leg: LegRow; depUtc: Date; arrUtc: Date | null } => x != null);
   if (scored.length === 0) return null;
@@ -132,7 +153,7 @@ function tryFlightFromEvent(ev: ScheduleEventRow, timezone: string): NextFlightR
 
   const legDates = computeLegDates(legs, tripDates, timezone);
 
-  let selectedLeg: LegRow | null = pickNextWeatherBriefLeg(legs, legDates, tripDates, ev.start_time, timezone);
+  let selectedLeg: LegRow | null = pickNextWeatherBriefLeg(legs, legDates, ev.start_time, timezone);
 
   if (!selectedLeg?.origin || !selectedLeg.destination) {
     selectedLeg = legs.find((l) => !l.deadhead && l.origin && l.destination) ?? null;
@@ -143,7 +164,7 @@ function tryFlightFromEvent(ev: ScheduleEventRow, timezone: string): NextFlightR
 
   if (!selectedLeg?.origin || !selectedLeg.destination) return null;
 
-  return buildNextFlight(ev, selectedLeg, legDates, tripDates, timezone);
+  return buildNextFlight(ev, selectedLeg, legDates, timezone);
 }
 
 /** Build NextFlightResult from event + selected leg. Reused for active trip and fallback. */
@@ -151,14 +172,17 @@ function buildNextFlight(
   ev: ScheduleEventRow,
   selectedLeg: { flightNumber?: string; origin: string; destination: string; depTime?: string; arrTime?: string; blockMinutes?: number },
   legDates: { leg: typeof selectedLeg; departureDate: string | null; arrivalDate: string | null }[],
-  tripDates: string[],
   timezone: string
 ): NextFlightResult {
   const legDatesEntry = legDates.find(
     (ld) => ld.leg.origin === selectedLeg.origin && ld.leg.destination === selectedLeg.destination
   );
-  const depDateStr = legDatesEntry?.departureDate ?? tripDates[0] ?? formatInTimeZone(new Date(ev.start_time), timezone, "yyyy-MM-dd");
-  const arrDateStr = legDatesEntry?.arrivalDate ?? depDateStr;
+  let depDateStr = legDatesEntry?.departureDate ?? null;
+  if (!depDateStr && ev.start_time) {
+    depDateStr = formatInTimeZone(new Date(ev.start_time), timezone, "yyyy-MM-dd");
+  }
+  depDateStr = depDateStr ?? formatInTimeZone(new Date(ev.start_time), timezone, "yyyy-MM-dd");
+  const arrDateStr = resolveArrDateStr(legDatesEntry, depDateStr, selectedLeg);
 
   const arrTime = selectedLeg.arrTime ?? null;
   const depTimeRaw = (selectedLeg.depTime ?? "00:00").replace(":", "").padStart(4, "0");
@@ -246,6 +270,7 @@ export async function getNextFlight(): Promise<NextFlightResult> {
     .eq("user_id", profile.id)
     .eq("source", FLICA_SOURCE)
     .eq("event_type", "trip")
+    .or(`report_time.lte.${nowIso},start_time.lte.${nowIso}`)
     .gt("end_time", nowIso)
     .order("start_time", { ascending: true })
     .limit(30);
@@ -255,7 +280,7 @@ export async function getNextFlight(): Promise<NextFlightResult> {
   const rows = openTrips as ScheduleEventRow[];
   /**
    * CrewRules Weather Brief: try ALL open trips in priority order before empty state.
-   * In-progress first (each row start_time <= now), then future rows, both orderings preserve
+   * In-progress first (each row report_time ?? start_time <= now), then future rows, both orderings preserve
    * the query’s ascending start_time. Never stop after the first row when tryFlightFromEvent is null.
    */
   const brief = briefOpenTripsInPriorityOrder(rows, nowIso, timezone, tryFlightFromEvent);

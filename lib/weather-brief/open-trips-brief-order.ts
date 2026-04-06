@@ -9,6 +9,7 @@ import type { NextFlightResult } from "./types";
 export type WeatherBriefOpenTripRow = {
   id: string;
   start_time: string;
+  report_time?: string | null;
 };
 
 /**
@@ -22,8 +23,12 @@ export function briefOpenTripsInPriorityOrder<T extends WeatherBriefOpenTripRow>
   timezone: string,
   tryFlight: (ev: T, timezone: string) => NextFlightResult | null
 ): NextFlightResult | null {
-  const inProgress = rows.filter((r) => r.start_time <= nowIso);
-  const futureOnly = rows.filter((r) => r.start_time > nowIso);
+  const inProgress = rows.filter(
+    (r) => new Date(r.report_time ?? r.start_time).toISOString() <= nowIso
+  );
+  const futureOnly = rows.filter(
+    (r) => new Date(r.report_time ?? r.start_time).toISOString() > nowIso
+  );
   const seenIds = new Set<string>();
   const ordered: T[] = [];
   for (const r of [...inProgress, ...futureOnly]) {

@@ -160,6 +160,32 @@ export function isTripReportOnLocalCalendarDay(
 }
 
 /**
+ * Instant (ms since epoch) when crew duty begins for this event.
+ * Trips: earliest report wall time across trip calendar days if report_time is set, else start_time.
+ * Other event types: start_time.
+ */
+export function getScheduleEventDutyStartMs(
+  ev: { event_type: string; start_time: string; end_time: string; report_time?: string | null },
+  timezone: string
+): number {
+  const startMs = new Date(ev.start_time).getTime();
+  if (ev.event_type !== "trip") return startMs;
+  const hm = normalizeReportHmForAnchor(ev.report_time);
+  if (!hm) return startMs;
+  const tripDates = getTripDateStrings(ev.start_time, ev.end_time, timezone);
+  let best: number | null = null;
+  for (const d of tripDates) {
+    try {
+      const ms = fromZonedTime(`${d}T${hm}:00`, timezone).getTime();
+      if (!Number.isNaN(ms) && (best === null || ms < best)) best = ms;
+    } catch {
+      continue;
+    }
+  }
+  return best ?? startMs;
+}
+
+/**
  * Pick the first calendar day (today → tomorrow → rest of trip span) that has legs, for next-duty cards.
  */
 export function resolveDisplayDateWithLegs<T extends { day?: string; depTime?: string; arrTime?: string }>(

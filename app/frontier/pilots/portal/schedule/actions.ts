@@ -26,6 +26,7 @@ import {
   getNextActionableLeg,
   getTripDateStrings,
   isDateFullyComplete,
+  getScheduleEventDutyStartMs,
   isTripReportOnLocalCalendarDay,
   resolveDisplayDateWithLegs,
   todayStr,
@@ -253,20 +254,28 @@ export async function getNextDuty(): Promise<{
     const tomorrow = formatInTimeZone(addDays(new Date(), 1), baseTimezone, "yyyy-MM-dd");
     const releaseBufferMin = Math.max(0, profile.commute_release_buffer_minutes ?? 0);
 
-    // 1. On duty: start <= now < end
-    const { data: onDutyData, error: onDutyError } = await supabase
+    // 1. On duty: duty start <= now < end (trips: duty starts at report_time on trip day, may be before block start_time)
+    const nowMs = Date.now();
+    const { data: onDutyOverlap, error: onDutyError } = await supabase
       .from("schedule_events")
       .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .or("is_muted.eq.false,is_muted.is.null")
-      .lte("start_time", nowIso)
       .gt("end_time", nowIso)
       .order("start_time", { ascending: true })
-      .limit(1)
-      .maybeSingle();
+      .limit(25);
 
     if (onDutyError) return { event: null, label: null, hasSchedule, error: onDutyError.message };
+    const onDutyData =
+      (onDutyOverlap ?? []).find((row) => {
+        const ev = row as ScheduleEvent;
+        if (isVacationCode(ev.title)) return false;
+        const dutyStartMs = getScheduleEventDutyStartMs(ev, baseTimezone);
+        const endMs = new Date(ev.end_time).getTime();
+        return nowMs >= dutyStartMs && nowMs < endMs;
+      }) ?? null;
+
     if (onDutyData) {
       const ev = onDutyData as ScheduleEvent;
       if (!isVacationCode(ev.title)) {
@@ -438,7 +447,11 @@ export async function getNextDuty(): Promise<{
         const endDate = formatInTimeZone(new Date(lastEndedEvent.end_time), baseTimezone, "yyyy-MM-dd");
         const nextStartsLater =
           upcoming.length === 0 || nowIso < upcoming[0].start_time;
-        if (endDate === today && nextStartsLater) {
+        /** Trip with report today may have block start_time after now; still show "Later today", not Trip Complete + commute home. */
+        const hasUpcomingReportTodayTrip = upcoming.some(
+          (e) => e.event_type === "trip" && isTripReportOnLocalCalendarDay(e, today, baseTimezone)
+        );
+        if (endDate === today && nextStartsLater && !hasUpcomingReportTodayTrip) {
           return {
             ...withLegsToShow(lastEndedEvent, today, baseTimezone, "post_duty_release", hasSchedule, nextDutyLegHelpers, 0),
             commuteAssistDirection: "to_home",
