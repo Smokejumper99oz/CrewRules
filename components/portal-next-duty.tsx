@@ -669,7 +669,11 @@ export async function PortalNextDuty({
             commuteAssistReserveEarlyReleaseWindow={commuteAssistReserveEarlyReleaseWindow}
             commuteAssistSuppressFlightSearch={commuteAssistSuppressFlightSearch}
             dutyStartAirportOverride={legsToShow?.[0]?.origin}
-            dutyEndAirportOverride={legsToShow?.[legsToShow.length - 1]?.destination}
+            dutyEndAirportOverride={
+              event?.legs && event.legs.length > 0
+                ? event.legs[event.legs.length - 1]?.destination
+                : undefined
+            }
             reportTimeOverride={reportTimeOverride}
             dutyStartTime={reportTimeOverride ?? event?.start_time ?? null}
           />

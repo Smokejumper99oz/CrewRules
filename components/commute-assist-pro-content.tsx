@@ -2018,6 +2018,16 @@ export function CommuteAssistProContent({
     );
   }
 
+  const directRouteLabel = (route: { origin: string; destination: string; label: "home" | "alternate" }) => {
+    if (route.label === "alternate") return "Commute from Alternate";
+    const o = route.origin.trim().toUpperCase();
+    const d = route.destination.trim().toUpperCase();
+    const h = homeAirport?.trim().toUpperCase() ?? "";
+    if (h && d === h) return "Return Home";
+    if (h && o === h) return "Commute from Home";
+    return "Commute";
+  };
+
   const routeLabelItems =
     twoLegRoutes.length > 0
       ? twoLegRoutes.map((r, i) => ({
@@ -2042,7 +2052,7 @@ export function CommuteAssistProContent({
             ...r,
             routeText: `${r.origin} → ${r.destination}`,
             key: r.label,
-            routeLabel: r.label === "home" ? "Commute from Home" : "Commute from Alternate",
+            routeLabel: directRouteLabel(r),
           }));
 
   if (commuteError) {
