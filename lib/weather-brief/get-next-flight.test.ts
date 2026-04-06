@@ -48,6 +48,21 @@ test("CrewRules: single valid open trip → briefs that trip", () => {
   assert.equal(brief.eventId, "only-trip");
 });
 
+test("CrewRules: FLICA HH:MM report_time does not throw; ordering falls back to start_time", () => {
+  const rows = [
+    {
+      id: "flica-trip",
+      start_time: "2026-04-05T14:00:00.000Z",
+      report_time: "19:59",
+    },
+  ];
+  const brief = briefOpenTripsInPriorityOrder(rows, NOW_ISO, TZ, (ev) =>
+    ev.id === "flica-trip" ? flightStub(ev.id) : null
+  );
+  assert.ok(brief && brief.status === "flight");
+  assert.equal(brief.eventId, "flica-trip");
+});
+
 test("CrewRules: first open trip fails tryFlight, second is valid → second trip (not no_upcoming_trip)", () => {
   const rows = [
     { id: "earlier-bad", start_time: "2026-04-05T12:00:00.000Z" },

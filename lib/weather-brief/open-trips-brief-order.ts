@@ -13,6 +13,26 @@ export type WeatherBriefOpenTripRow = {
 };
 
 /**
+ * Instant for in-progress vs future partitioning.
+ * Prefers `report_time` when it is a real datetime; FLICA often stores HH:MM only, which does not parse
+ * as a finite Date — then falls back to `start_time`. Returns null only when both are unusable.
+ */
+function pickOpenTripOrderingInstant(
+  row: Pick<WeatherBriefOpenTripRow, "start_time" | "report_time">
+): Date | null {
+  const tryParse = (s: string | null | undefined): Date | null => {
+    if (s == null || !String(s).trim()) return null;
+    const d = new Date(s);
+    return Number.isFinite(d.getTime()) ? d : null;
+  };
+  const fromReport = tryParse(row.report_time);
+  if (fromReport) return fromReport;
+  const fromStart = tryParse(row.start_time);
+  if (fromStart) return fromStart;
+  return null;
+}
+
+/**
  * CrewRules Weather Brief rule: attempt EVERY open trip in priority order before giving up.
  * Do not regress to “try one row then return empty state” — a bad or unbriefable earlier row
  * must never block a valid later trip (e.g. red-eye S3090 after an earlier pairing row fails).
@@ -23,12 +43,16 @@ export function briefOpenTripsInPriorityOrder<T extends WeatherBriefOpenTripRow>
   timezone: string,
   tryFlight: (ev: T, timezone: string) => NextFlightResult | null
 ): NextFlightResult | null {
-  const inProgress = rows.filter(
-    (r) => new Date(r.report_time ?? r.start_time).toISOString() <= nowIso
-  );
-  const futureOnly = rows.filter(
-    (r) => new Date(r.report_time ?? r.start_time).toISOString() > nowIso
-  );
+  const inProgress = rows.filter((r) => {
+    const d = pickOpenTripOrderingInstant(r);
+    if (d) return d.toISOString() <= nowIso;
+    return r.start_time <= nowIso;
+  });
+  const futureOnly = rows.filter((r) => {
+    const d = pickOpenTripOrderingInstant(r);
+    if (d) return d.toISOString() > nowIso;
+    return r.start_time > nowIso;
+  });
   const seenIds = new Set<string>();
   const ordered: T[] = [];
   for (const r of [...inProgress, ...futureOnly]) {
