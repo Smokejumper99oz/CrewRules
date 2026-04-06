@@ -258,7 +258,7 @@ export async function getNextDuty(): Promise<{
     const nowMs = Date.now();
     const { data: onDutyOverlap, error: onDutyError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .or("is_muted.eq.false,is_muted.is.null")
@@ -418,7 +418,7 @@ export async function getNextDuty(): Promise<{
     // 2. Upcoming events: start >= now
     const { data: upcomingData, error: upcomingError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .or("is_muted.eq.false,is_muted.is.null")
@@ -432,7 +432,7 @@ export async function getNextDuty(): Promise<{
 
     const { data: lastEndedData, error: lastEndedError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .or("is_muted.eq.false,is_muted.is.null")
@@ -528,7 +528,7 @@ async function findNextEventForDate(
   const dayEnd = new Date(Date.UTC(y, m - 1, d, 23, 59, 59)).toISOString();
   const { data } = await supabase
     .from("schedule_events")
-    .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
+    .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
     .eq("user_id", userId)
     .eq("source", FLICA_SOURCE)
     .or("is_muted.eq.false,is_muted.is.null")
@@ -617,7 +617,7 @@ export async function getUpcomingEvents(limit = 8): Promise<{ events: ScheduleEv
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .or("is_muted.eq.false,is_muted.is.null")

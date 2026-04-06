@@ -14,6 +14,8 @@ import {
   legCrewReleasedFromLeg,
 } from "@/lib/leg-dates";
 import { extractPairingKey } from "@/lib/schedule-time";
+import type { ScheduleEvent } from "@/app/frontier/pilots/portal/schedule/actions";
+import { getDisplayedTripDayInfo } from "@/lib/trips/displayed-trip-day";
 
 /** Add one day to YYYY-MM-DD (matches schedule-time.addDay). */
 function addDay(dateStr: string): string {
@@ -174,10 +176,14 @@ export async function getActiveTrip(userId: string): Promise<ActiveTrip | null> 
 
   const tripStartDate = tripDates[0] ?? today;
 
+  const dayInfo = getDisplayedTripDayInfo(ev as ScheduleEvent, timezone, {
+    releaseBufferMinutes: releaseBufferMin,
+  });
+
   return {
     pairing: extractPairingKey(ev.title),
-    tripDay: displayIndex + 1,
-    tripLength: tripDates.length,
+    tripDay: dayInfo.displayedTripDay,
+    tripLength: dayInfo.displayedTripLength,
     tripStartDate,
     todayLegs,
     displayDateStr: displayDate,

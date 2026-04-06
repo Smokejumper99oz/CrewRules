@@ -1,6 +1,6 @@
 "use server";
 
-import { createActionClient } from "@/lib/supabase/server-action";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/profile";
 import { fetchFlightsFromAviationStack } from "@/lib/aviationstack";
@@ -325,7 +325,7 @@ export async function getCommuteFlights(input: {
   /** When true, skip plan gating (for internal reuse by resolveLegIdentity). */
   skipPlanGating?: boolean;
 }) {
-  const supabase = await createActionClient();
+  const supabase = await createClient();
   const admin = createAdminClient();
   const profile = await getProfile();
 

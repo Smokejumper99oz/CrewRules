@@ -6,7 +6,7 @@ import type { ActiveTrip } from "@/lib/trips/get-active-trip";
 import { formatLegLine } from "@/lib/trips/detect-trip-changes";
 import type { TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { resolveLegIdentity } from "@/lib/trips/resolve-leg-identity";
-import { formatDayLabel, addDay } from "@/lib/schedule-time";
+import { formatDayLabel, addDay, subtractMinutesFromTime } from "@/lib/schedule-time";
 import { getLegsForDate, computeLegDates, getTripDateStrings } from "@/lib/leg-dates";
 import { computeDelayInfo, getDelayStatusLabel, parseIsoTs } from "@/lib/flight-delay";
 import { AirlineLogo } from "@/components/airline-logo";
@@ -57,16 +57,6 @@ function computeLiveDurationMinutes(depIso?: string | null, arrIso?: string | nu
 
 /** Default carrier for tenant when API has no data (e.g. Frontier = F9). */
 const TENANT_CARRIER: Record<string, string> = { frontier: "F9" };
-
-/** Subtract minutes from HH:MM; returns HH:MM. */
-function subtractMinutesFromTime(time: string, minutes: number): string {
-  const [h, m] = time.split(":").map(Number);
-  const totalMin = (h ?? 0) * 60 + (m ?? 0) - minutes;
-  const wrapped = ((totalMin % (24 * 60)) + 24 * 60) % (24 * 60);
-  const nh = Math.floor(wrapped / 60);
-  const nm = wrapped % 60;
-  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
-}
 
 const DUTY_LABELS: Record<string, string> = {
   on_duty: "On Duty",

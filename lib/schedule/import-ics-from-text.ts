@@ -58,6 +58,72 @@ export function getTripInstanceDedupeKey(
   return `${pc}_${tripStartLocalDateInTimezone(startTimeIso, timezone)}`;
 }
 
+/** Stable DB identity for keyed trips; avoids FLICA UID churn creating duplicate rows. */
+function canonicalTripExternalUid(instanceKey: string): string {
+  return `flica-trip-${instanceKey}`;
+}
+
+/** DB row shape loaded for trip-instance merge + delete (subset of schedule_events). */
+type ExistingFlicaTripRow = {
+  id: string;
+  title: string | null;
+  start_time: string;
+  end_time: string;
+  report_time: string | null;
+  credit_minutes: number | null;
+  credit_hours: number | null;
+  baseline_credit_minutes: number | null;
+  protected_credit_minutes: number | null;
+  protected_full_trip_paid_minutes: number | null;
+  legs: unknown;
+  first_leg_departure_time: string | null;
+  route: string | null;
+  pairing_days: number | null;
+  imported_at: string;
+};
+
+/** When a canonical trip row already exists, keep pay + original schedule from the earliest import. */
+function applyPreservedTripFieldsFromExisting(
+  incoming: {
+    start_time: string;
+    end_time: string;
+    report_time: string | null | undefined;
+    credit_minutes: number | null;
+    credit_hours: number | null;
+    baseline_credit_minutes: number | null;
+    protected_credit_minutes: number;
+    protected_full_trip_paid_minutes: number | null;
+    legs: unknown;
+    first_leg_departure_time: string | null;
+    route: string | null;
+    pairing_days: number | null;
+  },
+  existing: ExistingFlicaTripRow
+): void {
+  incoming.report_time = existing.report_time ?? incoming.report_time;
+  if (existing.credit_minutes != null) {
+    incoming.credit_minutes = existing.credit_minutes;
+    incoming.credit_hours =
+      existing.credit_hours != null ? existing.credit_hours : existing.credit_minutes / 60;
+  }
+  if (existing.baseline_credit_minutes != null) {
+    incoming.baseline_credit_minutes = existing.baseline_credit_minutes;
+  }
+  if (existing.protected_credit_minutes != null) {
+    incoming.protected_credit_minutes = existing.protected_credit_minutes;
+  }
+  if (existing.protected_full_trip_paid_minutes != null) {
+    incoming.protected_full_trip_paid_minutes = existing.protected_full_trip_paid_minutes;
+  }
+  incoming.start_time = existing.start_time;
+  incoming.end_time = existing.end_time;
+  incoming.legs = existing.legs ?? incoming.legs;
+  incoming.first_leg_departure_time =
+    existing.first_leg_departure_time ?? incoming.first_leg_departure_time;
+  incoming.route = existing.route ?? incoming.route;
+  incoming.pairing_days = existing.pairing_days ?? incoming.pairing_days;
+}
+
 /**
  * FLICA often splits recurrent training into a SIM/RGS training row and a companion line trip (deadhead).
  * Titles still refer to the same pairing (e.g. S3A01 / S3A01A). Used to move pay onto the training row
@@ -223,6 +289,7 @@ export async function importIcsFromText(
   }
 
   const protectedCodes = await loadScheduleImportProtectedCodes(supabase, tenant);
+  const preserve = protectedCodes.preservationNormalizedTitles;
   const resolveEventType = (title: string) =>
     resolveScheduleEventType(title, protectedCodes.classification, inferScheduleEventTypeHeuristic);
 
@@ -411,6 +478,13 @@ export async function importIcsFromText(
     return true;
   });
 
+  for (const r of rows) {
+    if (r.event_type !== "trip") continue;
+    const instanceKey = getTripInstanceDedupeKey(r.title, r.start_time, sourceTimezone);
+    if (instanceKey == null) continue;
+    r.external_uid = canonicalTripExternalUid(instanceKey);
+  }
+
   if (rows.length === 0) {
     return {
       success: `Imported 0 events (all duplicates)`,
@@ -418,6 +492,109 @@ export async function importIcsFromText(
       importedAt,
       tripChangeSummaries: [],
     };
+  }
+
+  const incomingTripInstanceKeys = new Set<string>();
+  for (const r of rows) {
+    if (r.event_type !== "trip") continue;
+    const ik = getTripInstanceDedupeKey(r.title, r.start_time, sourceTimezone);
+    if (ik) incomingTripInstanceKeys.add(ik);
+  }
+
+  let fetchRangeMin = rows[0]!.start_time;
+  let fetchRangeMax = rows[0]!.start_time;
+  for (const r of rows) {
+    if (r.start_time < fetchRangeMin) fetchRangeMin = r.start_time;
+    if (r.start_time > fetchRangeMax) fetchRangeMax = r.start_time;
+  }
+  const INSTANCE_FETCH_PAD_MS = 30 * 24 * 60 * 60 * 1000;
+  const fetchMinIso = new Date(new Date(fetchRangeMin).getTime() - INSTANCE_FETCH_PAD_MS).toISOString();
+  const fetchMaxIso = new Date(new Date(fetchRangeMax).getTime() + INSTANCE_FETCH_PAD_MS).toISOString();
+
+  const tripChangeSummaries: TripChangeSummary[] = [];
+  const instanceKeyTripIdsToDelete = new Set<string>();
+  const earliestTripByInstanceKey = new Map<string, ExistingFlicaTripRow>();
+
+  if (incomingTripInstanceKeys.size > 0) {
+    const { data: existingTrips, error: existingTripsError } = await supabase
+      .from("schedule_events")
+      .select(
+        "id, title, start_time, end_time, report_time, credit_minutes, credit_hours, legs, baseline_credit_minutes, protected_credit_minutes, protected_full_trip_paid_minutes, first_leg_departure_time, route, pairing_days, imported_at, external_uid, event_type"
+      )
+      .eq("user_id", userId)
+      .eq("source", FLICA_SOURCE)
+      .eq("event_type", "trip")
+      .gte("start_time", fetchMinIso)
+      .lte("start_time", fetchMaxIso);
+
+    if (existingTripsError) {
+      return {
+        error: `Failed to import: ${existingTripsError.message}`,
+        technicalError: existingTripsError.message,
+      };
+    }
+
+    for (const raw of existingTrips ?? []) {
+      const t = raw as ExistingFlicaTripRow;
+      if (preserve.has(normalizeScheduleImportTitle(t.title))) continue;
+      const ik = getTripInstanceDedupeKey(t.title, t.start_time, sourceTimezone);
+      if (ik == null || !incomingTripInstanceKeys.has(ik)) continue;
+      instanceKeyTripIdsToDelete.add(t.id);
+      const prevEarliest = earliestTripByInstanceKey.get(ik);
+      if (!prevEarliest || t.imported_at < prevEarliest.imported_at) {
+        earliestTripByInstanceKey.set(ik, t);
+      }
+    }
+
+    for (const incoming of rows) {
+      if (incoming.event_type !== "trip") continue;
+      const ik = getTripInstanceDedupeKey(incoming.title, incoming.start_time, sourceTimezone);
+      if (ik == null) continue;
+      const prev = earliestTripByInstanceKey.get(ik);
+      if (prev) {
+        const summary = detectTripChanges(
+          prev as Parameters<typeof detectTripChanges>[0],
+          incoming as Parameters<typeof detectTripChanges>[0]
+        );
+        if (process.env.NODE_ENV === "development") {
+          console.log("[Trip change detect]", summary);
+        }
+        if (summary.hasChanges) tripChangeSummaries.push(summary);
+        applyPreservedTripFieldsFromExisting(incoming, prev);
+      }
+    }
+  }
+
+  const tripRowsLegacyUid = rows.filter(
+    (r) =>
+      r.event_type === "trip" &&
+      r.external_uid &&
+      getTripInstanceDedupeKey(r.title, r.start_time, sourceTimezone) == null
+  );
+  if (tripRowsLegacyUid.length > 0) {
+    const uids = tripRowsLegacyUid.map((r) => r.external_uid!);
+    const { data: existingLegacy } = await supabase
+      .from("schedule_events")
+      .select("external_uid, start_time, end_time, title, report_time, credit_minutes, legs")
+      .eq("user_id", userId)
+      .eq("source", FLICA_SOURCE)
+      .in("external_uid", uids);
+    const existingByUid = new Map(
+      (existingLegacy ?? []).map((e) => [(e as { external_uid: string }).external_uid, e])
+    );
+    for (const incoming of tripRowsLegacyUid) {
+      const prev = existingByUid.get(incoming.external_uid!);
+      if (prev) {
+        const summary = detectTripChanges(
+          prev as Parameters<typeof detectTripChanges>[0],
+          incoming as Parameters<typeof detectTripChanges>[0]
+        );
+        if (process.env.NODE_ENV === "development") {
+          console.log("[Trip change detect]", summary);
+        }
+        if (summary.hasChanges) tripChangeSummaries.push(summary);
+      }
+    }
   }
 
   if (process.env.NODE_ENV === "development") {
@@ -430,27 +607,6 @@ export async function importIcsFromText(
         legsCount: row.legs?.length ?? 0,
         legs: row.legs,
       });
-    }
-  }
-
-  const tripChangeSummaries: TripChangeSummary[] = [];
-  const tripRows = rows.filter((r) => r.event_type === "trip" && r.external_uid);
-  if (tripRows.length > 0) {
-    const uids = tripRows.map((r) => r.external_uid!);
-    const { data: existing } = await supabase
-      .from("schedule_events")
-      .select("external_uid, start_time, end_time, title, report_time, credit_minutes, legs")
-      .eq("user_id", userId)
-      .eq("source", FLICA_SOURCE)
-      .in("external_uid", uids);
-    const existingByUid = new Map((existing ?? []).map((e) => [(e as { external_uid: string }).external_uid, e]));
-    for (const incoming of tripRows) {
-      const prev = existingByUid.get(incoming.external_uid);
-      if (prev) {
-        const summary = detectTripChanges(prev as Parameters<typeof detectTripChanges>[0], incoming);
-        console.log("[Trip change detect]", summary);
-        if (summary.hasChanges) tripChangeSummaries.push(summary);
-      }
     }
   }
 
@@ -476,7 +632,6 @@ export async function importIcsFromText(
     };
   }
 
-  const preserve = protectedCodes.preservationNormalizedTitles;
   const nonProtected = (candidates ?? []).filter(
     (c) => !preserve.has(normalizeScheduleImportTitle(c.title))
   ) as Array<{
@@ -543,17 +698,8 @@ export async function importIcsFromText(
    * shares the same pairing + local start date but falls slightly outside the raw start_time min/max window
    * (UTC vs local). Any remaining flica_import trip with the same instance key as an incoming trip is
    * removed so we never keep two rows for one pairing on one calendar day. Protected titles unchanged.
+   * Precomputed instanceKeyTripIdsToDelete removes all rows matching incoming instance keys (any external_uid).
    */
-  const incomingTripInstanceKeys = new Set<string>();
-  for (const r of rows) {
-    if (r.event_type !== "trip") continue;
-    const pc = extractPairingCodeFromTripTitle(r.title);
-    if (pc == null) continue;
-    incomingTripInstanceKeys.add(
-      `${pc}_${tripStartLocalDateInTimezone(r.start_time, sourceTimezone)}`
-    );
-  }
-
   if (incomingTripInstanceKeys.size > 0) {
     const padMs = 7 * 24 * 60 * 60 * 1000;
     const queryMinIso = new Date(new Date(rangeMin).getTime() - padMs).toISOString();
@@ -576,6 +722,9 @@ export async function importIcsFromText(
 
     const muteIdSet = new Set(muteIds);
     const deleteIdSet = new Set(deleteIds);
+    for (const id of instanceKeyTripIdsToDelete) {
+      if (!muteIdSet.has(id)) deleteIdSet.add(id);
+    }
     for (const row of extraTripRows ?? []) {
       if (preserve.has(normalizeScheduleImportTitle(row.title))) continue;
       const pc = extractPairingCodeFromTripTitle(row.title);

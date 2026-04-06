@@ -109,6 +109,16 @@ export function formatMinutesToHhMm(minutes: number): string {
   return mm > 0 ? `${h}:${String(mm).padStart(2, "0")}` : `${h}:00`;
 }
 
+/** Subtract minutes from HH:MM; returns HH:MM (wraps within 24h). */
+export function subtractMinutesFromTime(time: string, minutes: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const totalMin = (h ?? 0) * 60 + (m ?? 0) - minutes;
+  const wrapped = ((totalMin % (24 * 60)) + 24 * 60) % (24 * 60);
+  const nh = Math.floor(wrapped / 60);
+  const nm = wrapped % 60;
+  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
+}
+
 /** Compute trip credit: min 5 hrs/day, credit = max(block, min_credit), extra = credit - block. */
 export function computeTripCredit(
   pairingDays: number | null | undefined,

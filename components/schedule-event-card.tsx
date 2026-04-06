@@ -66,6 +66,8 @@ type Props = {
   postDutyRelease?: boolean;
   /** Later today red-eye: report-local date (EEEE MMMM d) appended to REPORT row with amber sub-line. */
   redEyeReportDateLong?: string | null;
+  /** When set, use these minutes for the Credit line only (e.g. Upcoming: baseline / upload credit). */
+  creditMinutesDisplayOverride?: number | null;
 };
 
 export function ScheduleEventCard({
@@ -80,6 +82,7 @@ export function ScheduleEventCard({
   compactTimeLabelOverride,
   postDutyRelease,
   redEyeReportDateLong,
+  creditMinutesDisplayOverride,
 }: Props) {
   if (isRdPlaceholderEvent(event)) return null;
 
@@ -144,9 +147,11 @@ export function ScheduleEventCard({
       ? computeTripCredit(event.pairing_days, event.block_minutes)
       : null;
   const creditMinutes =
-    event.event_type === "trip"
-      ? event.credit_minutes ?? (tripCredit ? tripCredit.creditMinutes : null)
-      : event.credit_minutes ?? (event.credit_hours != null ? Math.round(event.credit_hours * 60) : null);
+    creditMinutesDisplayOverride != null
+      ? creditMinutesDisplayOverride
+      : event.event_type === "trip"
+        ? event.credit_minutes ?? (tripCredit ? tripCredit.creditMinutes : null)
+        : event.credit_minutes ?? (event.credit_hours != null ? Math.round(event.credit_hours * 60) : null);
   const creditDisplay =
     creditMinutes != null && creditMinutes > 0
       ? formatMinutesToHhMm(creditMinutes)
