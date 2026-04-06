@@ -152,16 +152,20 @@ function expandToDutyDays(
 
         let rowLegsToShow = cardPrep?.legsToShow ?? null;
         let rowDisplayDateStr = cardPrep?.displayDateStr ?? dateStr;
-        if (
-          rowLegsToShow &&
-          trimLegsAfterIndexForEventId &&
-          trimAfterLegIndex != null &&
-          event.id === trimLegsAfterIndexForEventId
-        ) {
-          const legs = event.legs ?? [];
-          rowLegsToShow = rowLegsToShow.filter((leg) => legPairingIndex(legs, leg) > trimAfterLegIndex);
+        const shouldTrimContinuationLegs =
+          !!trimLegsAfterIndexForEventId &&
+          typeof trimAfterLegIndex === "number" &&
+          event.id === trimLegsAfterIndexForEventId;
+
+        if (shouldTrimContinuationLegs) {
+          const allEventLegs = event.legs ?? [];
+          const trimIdx = trimAfterLegIndex;
+          const sourceLegsForTrim = rowLegsToShow ?? dayLegs;
+          rowLegsToShow = sourceLegsForTrim.filter(
+            (leg) => legPairingIndex(allEventLegs, leg) > trimIdx
+          );
           if (rowLegsToShow.length === 0) continue;
-          const rows = computeLegDates(legs, tripDateStrs, tz);
+          const rows = computeLegDates(allEventLegs, tripDateStrs, tz);
           const firstRow = rows.find((r) => r.leg === rowLegsToShow![0]);
           if (firstRow?.departureDate) rowDisplayDateStr = firstRow.departureDate;
         }
