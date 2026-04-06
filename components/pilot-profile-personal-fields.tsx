@@ -69,6 +69,8 @@ function getTimezoneAbbreviation(iana: string): string {
 
 /** Keys used for Settings > Pilot field-local auto-save feedback (not used on Profile page). */
 export const PILOT_SETTINGS_FIELD_FEEDBACK_KEYS = {
+  full_name: "full_name",
+  employee_number: "employee_number",
   role: "role",
   crew_base: "crew_base",
   date_of_hire: "date_of_hire",
@@ -228,7 +230,14 @@ export function PilotProfilePersonalFields({
             defaultValue={profile.full_name ?? ""}
             placeholder="e.g. Jane Smith"
             className={`${PILOT_FIELD_CONTROL} mt-1.5 w-full ${maxWide}`}
-            onInput={() => onTextEdit?.()}
+            onInput={() => {
+              onSettingsFieldTouched?.(PILOT_SETTINGS_FIELD_FEEDBACK_KEYS.full_name);
+              onTextEdit?.();
+            }}
+          />
+          <FieldSaveFeedback
+            fieldKey={PILOT_SETTINGS_FIELD_FEEDBACK_KEYS.full_name}
+            feedback={settingsFieldFeedback}
           />
         </div>
         <div>
@@ -242,7 +251,14 @@ export function PilotProfilePersonalFields({
             defaultValue={profile.employee_number ?? ""}
             placeholder="e.g. 12345"
             className={`${PILOT_FIELD_CONTROL} mt-1.5 w-full ${maxWide}`}
-            onInput={() => onTextEdit?.()}
+            onInput={() => {
+              onSettingsFieldTouched?.(PILOT_SETTINGS_FIELD_FEEDBACK_KEYS.employee_number);
+              onTextEdit?.();
+            }}
+          />
+          <FieldSaveFeedback
+            fieldKey={PILOT_SETTINGS_FIELD_FEEDBACK_KEYS.employee_number}
+            feedback={settingsFieldFeedback}
           />
           <p className="mt-1 text-xs text-slate-500">
             Employee Number is used for internal portal identification and to enable pilot matching in the CrewRules™
@@ -257,7 +273,7 @@ export function PilotProfilePersonalFields({
             id="date_of_hire"
             name="date_of_hire"
             value={profile.date_of_hire ?? undefined}
-            placeholder="mm/dd/yyyy"
+            placeholder="mm/dd/yyyy or mm/dd/yy"
             strictFullDateEntry={Boolean(onTextEdit)}
             className={`${PILOT_FIELD_CONTROL} mt-1.5 w-full max-w-[12rem] cursor-pointer`}
             onDisplayInput={

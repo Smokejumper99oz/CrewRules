@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Loader2 } from "lucide-react";
 import { markWelcomeModalSeen } from "@/app/frontier/pilots/portal/profile/actions";
 
 type Props = {
@@ -15,19 +14,6 @@ export function PortalWelcomeModal({ profileBase, onDismiss }: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleClose = useCallback(async () => {
-    if (pending) return;
-    setPending(true);
-    setError(null);
-    const result = await markWelcomeModalSeen();
-    setPending(false);
-    if ("success" in result && result.success) {
-      onDismiss();
-    } else {
-      setError("Could not save your welcome status. Please try again.");
-    }
-  }, [pending, onDismiss]);
-
   const handleCompleteProfile = async () => {
     if (pending) return;
     setPending(true);
@@ -36,7 +22,7 @@ export function PortalWelcomeModal({ profileBase, onDismiss }: Props) {
     setPending(false);
     if ("success" in result && result.success) {
       onDismiss();
-      router.push(profileBase);
+      router.push(`${profileBase}/settings/pilot`);
     } else {
       setError("Could not save your welcome status. Please try again.");
     }
@@ -55,17 +41,6 @@ export function PortalWelcomeModal({ profileBase, onDismiss }: Props) {
     }
   };
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !pending) {
-        e.preventDefault();
-        handleClose();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [pending, handleClose]);
-
   const isDisabled = pending;
 
   return (
@@ -80,18 +55,7 @@ export function PortalWelcomeModal({ profileBase, onDismiss }: Props) {
         className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto sidebar-scrollbar-hide rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/95 to-slate-950/95 shadow-2xl shadow-black/40 ring-1 ring-white/5"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close X - top right */}
-        <button
-          type="button"
-          onClick={handleClose}
-          disabled={isDisabled}
-          className="absolute right-4 top-4 rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white transition touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-          aria-label="Close"
-        >
-          {pending ? <Loader2 size={20} className="animate-spin" /> : <X size={20} />}
-        </button>
-
-        <div className="p-6 sm:p-8 pt-14 sm:pt-14">
+        <div className="p-6 sm:p-8">
           {/* Title & Subtitle */}
           <h2 id="welcome-modal-title" className="text-2xl font-bold text-white">
             Welcome to Crew<span className="text-[#75C043]">Rules</span>
@@ -128,7 +92,11 @@ export function PortalWelcomeModal({ profileBase, onDismiss }: Props) {
               </li>
               <li className="flex gap-2">
                 <span className="text-[#75C043]">•</span>
-                <span>Connect your FLICA account to automatically sync your schedule</span>
+                <span>
+                  {
+                    'Go to the "My Schedule" page and upload your FLICA schedule. Use "View Guide" for help.'
+                  }
+                </span>
               </li>
             </ul>
             <p className="mt-3 text-sm leading-relaxed text-slate-300">

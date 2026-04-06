@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { linkMenteeToAssignments } from "@/lib/mentoring/link-mentee-to-assignments";
+import { linkMentorToAssignments } from "@/lib/mentoring/link-mentor-to-assignments";
+import { linkMentorToPreload } from "@/lib/mentoring/link-mentor-to-preload";
 import { CompleteProfileForm } from "./complete-profile-form";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +29,7 @@ export default async function CompleteProfilePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("base_airport, position, date_of_hire, home_airport")
+    .select("base_airport, position, date_of_hire, home_airport, employee_number")
     .eq("id", user.id)
     .eq("tenant", TENANT)
     .eq("portal", PORTAL)
@@ -38,6 +41,12 @@ export default async function CompleteProfilePage() {
     !!String(profile.position ?? "").trim() &&
     (profile.date_of_hire != null && profile.date_of_hire !== "") &&
     !!String(profile.home_airport ?? "").trim();
+
+  if (profile?.employee_number?.trim()) {
+    await linkMenteeToAssignments(user.id, profile.employee_number);
+    await linkMentorToAssignments(user.id, profile.employee_number);
+    await linkMentorToPreload(user.id, profile.employee_number.trim(), TENANT);
+  }
 
   if (hasRequiredOnboarding) {
     redirect(PORTAL_PATH);

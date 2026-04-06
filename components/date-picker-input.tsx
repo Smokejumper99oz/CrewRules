@@ -7,7 +7,7 @@ const PAUSE_BEFORE_INCOMPLETE_HINT_MS = 800;
 
 /** Shown under the field when {@link DatePickerInputProps.strictFullDateEntry} is on and the value is incomplete. */
 export const DATE_PICKER_FULL_DATE_HINT =
-  "Enter a full date in MM/DD/YYYY format.";
+  "Enter a full date in MM/DD/YYYY or MM/DD/YY format.";
 
 type Props = {
   id: string;
@@ -60,11 +60,33 @@ function isNotFutureDate(y: number, m: number, day: number): boolean {
   return cand <= endToday;
 }
 
+/**
+ * Hire dates since 1985: YY 85–99 → 19YY, else → 20YY (e.g. 26 → 2026).
+ */
+function expandTwoDigitHireYear(yy: number): number {
+  if (!Number.isFinite(yy) || yy < 0 || yy > 99) return NaN;
+  if (yy >= 85) return 1900 + yy;
+  return 2000 + yy;
+}
+
 function computeHiddenFromDigits(digits: string): string {
-  if (digits.length !== 8) return "";
-  const mm = parseInt(digits.slice(0, 2), 10);
-  const dd = parseInt(digits.slice(2, 4), 10);
-  const yyyy = parseInt(digits.slice(4, 8), 10);
+  let mm: number;
+  let dd: number;
+  let yyyy: number;
+
+  if (digits.length === 8) {
+    mm = parseInt(digits.slice(0, 2), 10);
+    dd = parseInt(digits.slice(2, 4), 10);
+    yyyy = parseInt(digits.slice(4, 8), 10);
+  } else if (digits.length === 6) {
+    mm = parseInt(digits.slice(0, 2), 10);
+    dd = parseInt(digits.slice(2, 4), 10);
+    const yy = parseInt(digits.slice(4, 6), 10);
+    yyyy = expandTwoDigitHireYear(yy);
+  } else {
+    return "";
+  }
+
   if (!Number.isFinite(mm) || !Number.isFinite(dd) || !Number.isFinite(yyyy)) return "";
   if (yyyy < MIN_YEAR) return "";
   if (!isValidCalendarDate(yyyy, mm, dd)) return "";
@@ -73,7 +95,8 @@ function computeHiddenFromDigits(digits: string): string {
 }
 
 function isDohCompleteValid(digits: string, hidden: string): boolean {
-  return digits.length === 8 && /^\d{4}-\d{2}-\d{2}$/.test(hidden);
+  const lenOk = digits.length === 8 || digits.length === 6;
+  return lenOk && /^\d{4}-\d{2}-\d{2}$/.test(hidden);
 }
 
 function isDohPartial(digits: string, hidden: string): boolean {

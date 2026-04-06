@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { signOut } from "../portal/actions";
 import { SignOutButton } from "@/components/sign-out-button";
 
@@ -55,6 +56,7 @@ export function LoginForm() {
     const form = e.currentTarget;
     const formData = new FormData(form);
 
+    let navigatedAfterSuccess = false;
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -76,6 +78,7 @@ export function LoginForm() {
         } catch {
           /* ignore */
         }
+        navigatedAfterSuccess = true;
         window.location.href = data.redirect ?? "/frontier/pilots/portal";
         return;
       }
@@ -84,7 +87,7 @@ export function LoginForm() {
     } catch {
       setSubmitError("Network error. Please try again.");
     } finally {
-      setIsPending(false);
+      if (!navigatedAfterSuccess) setIsPending(false);
     }
   }
 
@@ -150,8 +153,8 @@ export function LoginForm() {
               />
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer mt-3">
-              <input type="checkbox" name="remember" className="rounded border-slate-500 bg-slate-800 text-[#75C043] focus:ring-[#75C043]/50" />
+            <label className={`flex items-center gap-2 mt-3 ${isPending ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
+              <input type="checkbox" name="remember" disabled={isPending} className="rounded border-slate-500 bg-slate-800 text-[#75C043] focus:ring-[#75C043]/50 disabled:opacity-50" />
               <span className="text-sm text-slate-300">Remember Me</span>
             </label>
 
@@ -163,9 +166,16 @@ export function LoginForm() {
               <button
                 type="submit"
                 disabled={isPending}
-                className="block w-full rounded-xl bg-[#75C043] px-4 py-3 font-semibold text-slate-950 hover:opacity-95 transition text-center disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#75C043] px-4 py-3 font-semibold text-slate-950 hover:opacity-95 transition disabled:opacity-70 disabled:cursor-wait"
               >
-                {isPending ? "Signing in…" : "Sign In"}
+                {isPending ? (
+                  <>
+                    <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
+                    <span>Signing in…</span>
+                  </>
+                ) : (
+                  "Sign In"
+                )}
               </button>
             </div>
 

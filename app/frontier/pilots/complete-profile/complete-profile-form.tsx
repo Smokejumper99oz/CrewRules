@@ -67,7 +67,7 @@ export function CompleteProfileForm() {
         <DatePickerInput
           id="date_of_hire"
           name="date_of_hire"
-          placeholder="mm/dd/yyyy"
+          placeholder="mm/dd/yyyy or mm/dd/yy"
           className="mt-2 w-full max-w-[12rem] rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/30 cursor-pointer disabled:opacity-50"
         />
         <p className="mt-1 text-xs text-slate-500">Used for pay, seniority-based features, and schedule insights.</p>
