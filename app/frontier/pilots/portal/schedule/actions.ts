@@ -832,6 +832,8 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
       isReserveAssignment: boolean;
     }> = [];
     let vacationCreditMinutes = 0;
+    /** FLICA training credit (event_type training); block never counts toward totalBlock (trip-only path). */
+    let trainingCreditMinutes = 0;
     /** PAY rows do not add credit here; full protected trip value is on the trip row. */
     let payCreditMinutes = 0;
     /** Incremental protected (non–full-trip); omitted when protected_full_trip_paid_minutes is set on the trip. */
@@ -840,8 +842,21 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
     let reserveEvents = 0;
     let vacationEvents = 0;
 
+    /*
+     * PROTECTED TRIP PAY RULE (LOCKED):
+     * - If a trip has protected_full_trip_paid_minutes, it represents full payroll credit for that pairing
+     * - This overrides normal trip credit and protection math
+     * - PAY rows are markers only and must not add credit
+     * - 5:00/day minimum rule still applies to normal (non-protected) trips
+     * - Do not modify without verifying against real payroll examples
+     */
     for (const ev of rows) {
-      if (ev.event_type === "trip" && ev.is_muted === true) continue;
+      if (
+        (ev.event_type === "trip" || ev.event_type === "training") &&
+        ev.is_muted === true
+      ) {
+        continue;
+      }
 
       const normalizedTitle = (ev.title ?? "").trim().toUpperCase();
       if (normalizedTitle === "PAY" && ev.event_type !== "pay") continue;
@@ -856,6 +871,13 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
         const tripKey = `${ev.title ?? ""}|${ev.start_time}|${ev.end_time}`;
         if (seenTripKeys.has(tripKey)) continue;
         seenTripKeys.add(tripKey);
+      }
+
+      if (ev.event_type === "training") {
+        const trainStartPeriod = getBidPeriodForTimestamp(ev.start_time, baseTimezone, y);
+        if (trainStartPeriod != null && trainStartPeriod.bidMonthIndex !== bidIdx) {
+          continue;
+        }
       }
 
       const period = getBidPeriodForTimestamp(ev.start_time, baseTimezone);
@@ -886,6 +908,10 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
           trainingDays.add(seg.dateStr);
         }
       }
+
+      // Locked: event_type pay skips vacation/reserve/trip credit math only (see PROTECTED TRIP PAY RULE above).
+      if (ev.event_type === "pay") continue;
+
       if (ev.event_type === "vacation") {
         vacationEvents += 1;
 
@@ -902,8 +928,37 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
         vacationCreditMinutes += segments.length * minutesPerDay;
       } else if (ev.event_type === "reserve") {
         reserveEvents += 1;
-      } else if (ev.event_type === "pay") {
-        // PAY rows are markers only; protected full-trip paid value is stored on the following trip row.
+      } else if (ev.event_type === "training") {
+        /*
+         * Training credit counts toward month credit (same bid-month attribution as trips).
+         * Training block never counts: rows are import-normalized to null block, and this branch does not touch totalBlock.
+         * Legacy/weird rows with event_type === "training" and block_minutes set are still excluded — only trips add block below.
+         */
+        const fullTripProtectedPaidTrain =
+          ev.protected_full_trip_paid_minutes != null && ev.protected_full_trip_paid_minutes > 0
+            ? ev.protected_full_trip_paid_minutes
+            : null;
+        if (fullTripProtectedPaidTrain == null && (ev.protected_credit_minutes ?? 0) > 0) {
+          protectedCreditMinutes += ev.protected_credit_minutes ?? 0;
+        }
+
+        if (segments.length === 0) continue;
+
+        const pairingDaysTrain = ev.pairing_days ?? segments.length;
+        const ratioTrain =
+          pairingDaysTrain > 0 ? Math.min(1, segments.length / pairingDaysTrain) : 1;
+
+        if (fullTripProtectedPaidTrain != null) {
+          trainingCreditMinutes += Math.round(fullTripProtectedPaidTrain * ratioTrain);
+        } else {
+          const cm =
+            ev.credit_minutes != null
+              ? ev.credit_minutes
+              : ev.credit_hours != null
+                ? Math.round(ev.credit_hours * 60)
+                : 0;
+          if (cm > 0) trainingCreditMinutes += Math.round(cm * ratioTrain);
+        }
       } else if (ev.event_type === "trip") {
         tripEvents += 1;
 
@@ -911,12 +966,12 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
           ev.protected_full_trip_paid_minutes != null && ev.protected_full_trip_paid_minutes > 0
             ? ev.protected_full_trip_paid_minutes
             : null;
-        // Pay-protected trips: use protected_full_trip_paid_minutes as paid credit (original pairing value). PAY rows: markers only. Normal trips: unchanged 5:00/day minimum via credit_minutes / computeTripCredit below.
+        // Protected trip: trip pay in buckets below is ONLY fullTripProtectedPaid * ratio (stub payMinutes). Do not also add ev.protected_credit_minutes, ev.credit_minutes-based pay, or PAY rows for this pairing.
         if (fullTripProtectedPaid == null && (ev.protected_credit_minutes ?? 0) > 0) {
           protectedCreditMinutes += ev.protected_credit_minutes ?? 0;
         }
 
-        // Flown block: independent of credit/pay stubs (reserve-assignment trips still count real block_minutes)
+        // Flown block: trip-only. Training companion block is cleared on import; legacy training block cannot hit this branch.
         if (segments.length > 0) {
           const bm = ev.block_minutes;
           if (bm != null && Number.isFinite(bm) && bm > 0) {
@@ -928,7 +983,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
         }
 
         const evCreditMinutes = ev.credit_minutes != null ? ev.credit_minutes : (ev.credit_hours != null ? Math.round(ev.credit_hours * 60) : null);
-        // Sequence credit on the row; protected_credit_minutes is added separately to line/raw totals (no max with baseline).
+        // Sequence credit on the row; for non-protected trips, protected_credit_minutes may also add to line/raw. Not used for protected-trip payMinutes (see fullTripProtectedPaid branch).
         const effectiveCreditMinutes = evCreditMinutes;
         const evCreditHrs = effectiveCreditMinutes != null ? effectiveCreditMinutes / 60 : ev.credit_hours ?? null;
         let blockHrs = 0;
@@ -954,6 +1009,7 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
           creditHrs = evCreditHrs;
         }
 
+        // Locked: if fullTripProtectedPaid is set, stub payMinutes use only that value * ratio—not creditHrs-based payMinutes (creditHrs below is still used for block/delta pieces of the stub only).
         if (fullTripProtectedPaid != null && segments.length > 0) {
           const pairingDays = ev.pairing_days ?? 1;
           const ratio = pairingDays > 0 ? Math.min(1, segments.length / pairingDays) : 1;
@@ -1030,7 +1086,8 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
       vacationCreditMinutes +
       reserveCreditMinutes +
       payCreditMinutes +
-      protectedCreditMinutes;
+      protectedCreditMinutes +
+      trainingCreditMinutes;
 
     // Guarantee applies to the line bucket only
     const creditAfterGuaranteeMinutes = Math.max(lineCreditMinutes, guaranteeMinutes);
@@ -1043,7 +1100,8 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
       vacationCreditMinutes +
       reserveCreditMinutes +
       payCreditMinutes +
-      protectedCreditMinutes;
+      protectedCreditMinutes +
+      trainingCreditMinutes;
 
     const displayCreditMinutes =
       guaranteeMinutes > 0 ? Math.max(rawCreditMinutes, 4500) : rawCreditMinutes;

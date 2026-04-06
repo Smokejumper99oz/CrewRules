@@ -22,6 +22,91 @@ import {
 
 const FLICA_SOURCE = "flica_import";
 
+/**
+ * FLICA trip titles usually start with a pairing id (e.g. S3120, S3126B). The same code appears on many
+ * different calendar days — each day is a distinct trip. Only the combination of pairing code + local
+ * start date denotes a single trip instance; duplicates would double-count.
+ *
+ * Conservative: require one leading letter, then 3+ digits, then at most one trailing letter, anchored at
+ * the start of the trimmed title. If this pattern does not match, return null (no instance guard key).
+ */
+function extractPairingCodeFromTripTitle(title: string | null | undefined): string | null {
+  const t = (title ?? "").trim();
+  if (!t) return null;
+  const m = t.match(/^([A-Za-z]\d{3,}[A-Za-z]?)(?=\s|[/(]|$)/);
+  if (!m) return null;
+  return m[1]!.toUpperCase();
+}
+
+/** Trip start as local calendar day in the import/source timezone (YYYY-MM-DD). */
+function tripStartLocalDateInTimezone(startTimeIso: string, timezone: string): string {
+  return formatInTimeZone(new Date(startTimeIso), timezone, "yyyy-MM-dd");
+}
+
+/**
+ * FLICA often splits recurrent training into a SIM/RGS training row and a companion line trip (deadhead).
+ * Titles still refer to the same pairing (e.g. S3A01 / S3A01A). Used to move pay onto the training row
+ * and strip credit/block from the companion so Month Overview matches payroll: training credit counts,
+ * training/deadhead block does not.
+ */
+function titlesLikelySameTrainingPairing(a: string | null, b: string | null): boolean {
+  const x = (a ?? "").trim().toUpperCase();
+  const y = (b ?? "").trim().toUpperCase();
+  if (!x || !y) return false;
+  return x.startsWith(y) || y.startsWith(x);
+}
+
+function isoIntervalsOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  return aStart < bEnd && aEnd > bStart;
+}
+
+type ScheduleRow = {
+  title: string | null;
+  event_type: string;
+  start_time: string;
+  end_time: string;
+  credit_minutes: number | null;
+  credit_hours: number | null;
+  baseline_credit_minutes: number | null;
+  protected_credit_minutes: number;
+  protected_full_trip_paid_minutes: number | null;
+  block_minutes: number | null;
+  pairing_days: number | null;
+};
+
+/** Merge FLICA training split: credit lives on training row; companion trip keeps legs/route but no pay/block. */
+function normalizeTrainingSplitRows(rows: ScheduleRow[]): void {
+  for (const t of rows) {
+    if (t.event_type !== "training") continue;
+    for (const r of rows) {
+      if (r.event_type !== "trip") continue;
+      if (!titlesLikelySameTrainingPairing(t.title, r.title)) continue;
+      if (!isoIntervalsOverlap(t.start_time, t.end_time, r.start_time, r.end_time)) continue;
+
+      // Companion deadhead: never count block toward month block (clear even if credit was already on training).
+      r.block_minutes = null;
+
+      const tripCredit = r.credit_minutes != null && r.credit_minutes > 0 ? r.credit_minutes : null;
+      const trainNeedsCredit = t.credit_minutes == null || t.credit_minutes <= 0;
+      if (trainNeedsCredit && tripCredit != null) {
+        t.credit_minutes = tripCredit;
+        t.credit_hours = tripCredit / 60;
+        t.baseline_credit_minutes =
+          r.baseline_credit_minutes != null ? r.baseline_credit_minutes : tripCredit;
+        t.protected_credit_minutes = r.protected_credit_minutes ?? 0;
+        if (r.protected_full_trip_paid_minutes != null && r.protected_full_trip_paid_minutes > 0) {
+          t.protected_full_trip_paid_minutes = r.protected_full_trip_paid_minutes;
+        }
+        r.credit_minutes = null;
+        r.credit_hours = null;
+        r.baseline_credit_minutes = null;
+        r.protected_credit_minutes = 0;
+        r.protected_full_trip_paid_minutes = null;
+      }
+    }
+  }
+}
+
 /** True if trip immediately follows a reserve event (short call → pairing). */
 function tripFollowsReserve(
   tripStart: Date,
@@ -134,7 +219,13 @@ export async function importIcsFromText(
 
   const sortedByStart = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
 
-  // FLICA PAY rows: parseIcs sets creditMinutes from DESCRIPTION/COMMENT/SUMMARY (PAY merge path); attach that onto the next trip as protected_full_trip_paid_minutes.
+  /*
+   * PROTECTED TRIP PAY RULE (LOCKED) — import side:
+   * - PAY VEVENT credit is copied onto the following trip as protected_full_trip_paid_minutes (Month Overview uses that field only for trip pay; PAY row stays a marker in stats).
+   * - Trip rows may also set protected_full_trip_paid_minutes (e.g. pairing-specific overrides). Do not double-count PAY in getMonthStats.
+   * - Normal trips still use computeTripCredit (5:00/day minimum) for credit_minutes when not overridden by protected_full_trip_paid_minutes.
+   * - Do not modify without verifying against real payroll examples.
+   */
   const sortedForPayAttach = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
   for (let i = 0; i < sortedForPayAttach.length; i++) {
     const payEv = sortedForPayAttach[i]!;
@@ -163,9 +254,13 @@ export async function importIcsFromText(
     let isReserveAssignment = false;
 
     if (eventType === "training") {
-      creditMinutes = null;
+      // Training pay/credit counts in Month Overview; block is never stored for training (month block must ignore training/deadhead).
+      const payFromIcs = e.creditMinutes != null && e.creditMinutes > 0 ? e.creditMinutes : null;
+      creditMinutes = payFromIcs;
+      baselineCreditMinutes = payFromIcs ?? null;
+      protectedCreditMinutes = 0;
       blockMinutes = null;
-      pairingDays = null;
+      pairingDays = e.pairingDays ?? null;
       isReserveAssignment = false;
     } else if (eventType === "trip") {
       blockMinutes = e.blockMinutes ?? null;
@@ -276,11 +371,29 @@ export async function importIcsFromText(
     return toRow({ ...e, externalUid });
   });
 
+  normalizeTrainingSplitRows(rows);
+
   const seenInBatch = new Set<string>();
   rows = rows.filter((r) => {
     const key = `${r.title ?? ""}|${r.start_time}|${r.end_time}|${r.source}`;
     if (seenInBatch.has(key)) return false;
     seenInBatch.add(key);
+    return true;
+  });
+
+  /*
+   * Trip instance dedupe (batch): same pairing on different start dates stays as separate rows; same pairing
+   * on the same local start date is one trip (drop extra VEVENTs). Only applies when a pairing code is
+   * extracted from the title; otherwise existing title/start/end dedupe above still applies.
+   */
+  const seenTripInstanceKeys = new Set<string>();
+  rows = rows.filter((r) => {
+    if (r.event_type !== "trip") return true;
+    const pc = extractPairingCodeFromTripTitle(r.title);
+    if (pc == null) return true;
+    const instanceKey = `${pc}_${tripStartLocalDateInTimezone(r.start_time, sourceTimezone)}`;
+    if (seenTripInstanceKeys.has(instanceKey)) return false;
+    seenTripInstanceKeys.add(instanceKey);
     return true;
   });
 
@@ -409,6 +522,57 @@ export async function importIcsFromText(
       }
     }
     deleteIds.push(c.id);
+  }
+
+  /*
+   * Cross-import trip instance guard: the baseline window delete can miss an older duplicate trip row that
+   * shares the same pairing + local start date but falls slightly outside the raw start_time min/max window
+   * (UTC vs local). Any remaining flica_import trip with the same instance key as an incoming trip is
+   * removed so we never keep two rows for one pairing on one calendar day. Protected titles unchanged.
+   */
+  const incomingTripInstanceKeys = new Set<string>();
+  for (const r of rows) {
+    if (r.event_type !== "trip") continue;
+    const pc = extractPairingCodeFromTripTitle(r.title);
+    if (pc == null) continue;
+    incomingTripInstanceKeys.add(
+      `${pc}_${tripStartLocalDateInTimezone(r.start_time, sourceTimezone)}`
+    );
+  }
+
+  if (incomingTripInstanceKeys.size > 0) {
+    const padMs = 7 * 24 * 60 * 60 * 1000;
+    const queryMinIso = new Date(new Date(rangeMin).getTime() - padMs).toISOString();
+    const queryMaxIso = new Date(new Date(rangeMax).getTime() + padMs).toISOString();
+    const { data: extraTripRows, error: extraTripsError } = await supabase
+      .from("schedule_events")
+      .select("id, title, start_time, event_type")
+      .eq("user_id", userId)
+      .eq("source", FLICA_SOURCE)
+      .eq("event_type", "trip")
+      .gte("start_time", queryMinIso)
+      .lte("start_time", queryMaxIso);
+
+    if (extraTripsError) {
+      return {
+        error: `Failed to import: ${extraTripsError.message}`,
+        technicalError: extraTripsError.message,
+      };
+    }
+
+    const muteIdSet = new Set(muteIds);
+    const deleteIdSet = new Set(deleteIds);
+    for (const row of extraTripRows ?? []) {
+      if (preserve.has(normalizeScheduleImportTitle(row.title))) continue;
+      const pc = extractPairingCodeFromTripTitle(row.title);
+      if (pc == null) continue;
+      const d = tripStartLocalDateInTimezone(row.start_time, sourceTimezone);
+      if (!incomingTripInstanceKeys.has(`${pc}_${d}`)) continue;
+      if (muteIdSet.has(row.id)) continue;
+      deleteIdSet.add(row.id);
+    }
+    deleteIds.length = 0;
+    deleteIds.push(...deleteIdSet);
   }
 
   for (let i = 0; i < muteIds.length; i += DELETE_ID_CHUNK) {
