@@ -44,6 +44,21 @@ function tripStartLocalDateInTimezone(startTimeIso: string, timezone: string): s
 }
 
 /**
+ * Trip instance dedupe key: pairing_code + local start date (import TZ). Same pairing on different dates
+ * → different keys (both kept). Same pairing + same local start → one key (duplicates dropped). Not pairing-only.
+ * Returns null if no extractable pairing code (dedupe guard skipped for that row).
+ */
+export function getTripInstanceDedupeKey(
+  title: string | null | undefined,
+  startTimeIso: string,
+  timezone: string
+): string | null {
+  const pc = extractPairingCodeFromTripTitle(title);
+  if (pc == null) return null;
+  return `${pc}_${tripStartLocalDateInTimezone(startTimeIso, timezone)}`;
+}
+
+/**
  * FLICA often splits recurrent training into a SIM/RGS training row and a companion line trip (deadhead).
  * Titles still refer to the same pairing (e.g. S3A01 / S3A01A). Used to move pay onto the training row
  * and strip credit/block from the companion so Month Overview matches payroll: training credit counts,
@@ -60,7 +75,7 @@ function isoIntervalsOverlap(aStart: string, aEnd: string, bStart: string, bEnd:
   return aStart < bEnd && aEnd > bStart;
 }
 
-type ScheduleRow = {
+export type TrainingSplitScheduleRow = {
   title: string | null;
   event_type: string;
   start_time: string;
@@ -75,7 +90,7 @@ type ScheduleRow = {
 };
 
 /** Merge FLICA training split: credit lives on training row; companion trip keeps legs/route but no pay/block. */
-function normalizeTrainingSplitRows(rows: ScheduleRow[]): void {
+export function normalizeTrainingSplitRows(rows: TrainingSplitScheduleRow[]): void {
   for (const t of rows) {
     if (t.event_type !== "training") continue;
     for (const r of rows) {
@@ -83,7 +98,7 @@ function normalizeTrainingSplitRows(rows: ScheduleRow[]): void {
       if (!titlesLikelySameTrainingPairing(t.title, r.title)) continue;
       if (!isoIntervalsOverlap(t.start_time, t.end_time, r.start_time, r.end_time)) continue;
 
-      // Companion deadhead: never count block toward month block (clear even if credit was already on training).
+      // Training / deadhead block must not count toward monthly block: strip companion trip block (Month Overview totalBlock is trip-only).
       r.block_minutes = null;
 
       const tripCredit = r.credit_minutes != null && r.credit_minutes > 0 ? r.credit_minutes : null;
@@ -254,7 +269,7 @@ export async function importIcsFromText(
     let isReserveAssignment = false;
 
     if (eventType === "training") {
-      // Training pay/credit counts in Month Overview; block is never stored for training (month block must ignore training/deadhead).
+      // Training credit counts in Month Overview. Training block is never stored here — monthly block is trip-only (companion deadhead block stripped in normalizeTrainingSplitRows).
       const payFromIcs = e.creditMinutes != null && e.creditMinutes > 0 ? e.creditMinutes : null;
       creditMinutes = payFromIcs;
       baselineCreditMinutes = payFromIcs ?? null;
@@ -382,16 +397,15 @@ export async function importIcsFromText(
   });
 
   /*
-   * Trip instance dedupe (batch): same pairing on different start dates stays as separate rows; same pairing
-   * on the same local start date is one trip (drop extra VEVENTs). Only applies when a pairing code is
-   * extracted from the title; otherwise existing title/start/end dedupe above still applies.
+   * Trip instance dedupe (batch): dedupe key is pairing code + local start date (not pairing alone).
+   * Same pairing on different dates → different keys, both kept. Same pairing + same local start date → drop extras.
+   * No extractable pairing code → this guard skipped (title/start/end dedupe still applies).
    */
   const seenTripInstanceKeys = new Set<string>();
   rows = rows.filter((r) => {
     if (r.event_type !== "trip") return true;
-    const pc = extractPairingCodeFromTripTitle(r.title);
-    if (pc == null) return true;
-    const instanceKey = `${pc}_${tripStartLocalDateInTimezone(r.start_time, sourceTimezone)}`;
+    const instanceKey = getTripInstanceDedupeKey(r.title, r.start_time, sourceTimezone);
+    if (instanceKey == null) return true;
     if (seenTripInstanceKeys.has(instanceKey)) return false;
     seenTripInstanceKeys.add(instanceKey);
     return true;

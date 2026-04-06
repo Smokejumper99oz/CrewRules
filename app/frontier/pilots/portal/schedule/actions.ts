@@ -19,6 +19,7 @@ import { payYearFromDOH } from "@/lib/pay-utils";
 import { type TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { getInboundEmailForDisplay } from "@/lib/email/get-inbound-email-for-display";
 import { importIcsFromText } from "@/lib/schedule/import-ics-from-text";
+import { computeTrainingMonthCreditDeltas } from "@/lib/schedule/training-month-credit";
 import {
   computeLegDates,
   getLegsForDate,
@@ -930,35 +931,14 @@ export async function getMonthStats(year?: number, bidMonthIndex?: number): Prom
         reserveEvents += 1;
       } else if (ev.event_type === "training") {
         /*
-         * Training credit counts toward month credit (same bid-month attribution as trips).
-         * Training block never counts: rows are import-normalized to null block, and this branch does not touch totalBlock.
-         * Legacy/weird rows with event_type === "training" and block_minutes set are still excluded — only trips add block below.
+         * Business rule: training credit counts toward monthly credit; training block does not count toward monthly block.
+         * Rows are import-normalized to null training block; companion deadhead block is cleared on import.
+         * Backstop: only event_type === "trip" increments totalBlock below — legacy training rows with block_minutes set cannot inflate month block.
+         * Implementation: computeTrainingMonthCreditDeltas (lib/schedule/training-month-credit.ts) — regression tests cover it.
          */
-        const fullTripProtectedPaidTrain =
-          ev.protected_full_trip_paid_minutes != null && ev.protected_full_trip_paid_minutes > 0
-            ? ev.protected_full_trip_paid_minutes
-            : null;
-        if (fullTripProtectedPaidTrain == null && (ev.protected_credit_minutes ?? 0) > 0) {
-          protectedCreditMinutes += ev.protected_credit_minutes ?? 0;
-        }
-
-        if (segments.length === 0) continue;
-
-        const pairingDaysTrain = ev.pairing_days ?? segments.length;
-        const ratioTrain =
-          pairingDaysTrain > 0 ? Math.min(1, segments.length / pairingDaysTrain) : 1;
-
-        if (fullTripProtectedPaidTrain != null) {
-          trainingCreditMinutes += Math.round(fullTripProtectedPaidTrain * ratioTrain);
-        } else {
-          const cm =
-            ev.credit_minutes != null
-              ? ev.credit_minutes
-              : ev.credit_hours != null
-                ? Math.round(ev.credit_hours * 60)
-                : 0;
-          if (cm > 0) trainingCreditMinutes += Math.round(cm * ratioTrain);
-        }
+        const trainDeltas = computeTrainingMonthCreditDeltas(ev, segments.length);
+        protectedCreditMinutes += trainDeltas.addProtectedCreditMinutes;
+        trainingCreditMinutes += trainDeltas.addTrainingCreditMinutes;
       } else if (ev.event_type === "trip") {
         tripEvents += 1;
 

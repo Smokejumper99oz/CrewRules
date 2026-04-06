@@ -1,0 +1,28 @@
+---
+description: >-
+  FLICA training credit vs month block, training/companion split normalization,
+  and trip duplicate guard (pairing + local start date). Do not regress without
+  updating tests.
+globs: lib/schedule/import-ics-from-text.ts,lib/schedule/training-month-credit.ts,lib/schedule/schedule-import-regression.test.ts,app/frontier/pilots/portal/schedule/actions.ts
+alwaysApply: false
+---
+
+# Schedule training credit, block, and trip instance dedupe
+
+## Business rules (locked)
+
+- **Training credit** must count toward **monthly credit** totals (`event_type === "training"`, via `computeTrainingMonthCreditDeltas` and `getMonthStats`).
+- **Training / companion deadhead block** must **not** count toward **monthly block** (`totalBlock` is **trip-only** in `getMonthStats`; import clears companion `block_minutes` in `normalizeTrainingSplitRows`; training rows do not store block for this purpose).
+- **Trip duplicate guard** (import batch): dedupe key is **extractable pairing code + local start date** in the import timezone — **not** pairing alone. Same pairing on **different** dates = separate rows. Same pairing + **same** local start = one row.
+
+## Regression tests
+
+Run: `npm run test:schedule-regression` (or `npx tsx lib/schedule/schedule-import-regression.test.ts`).
+
+If you change import normalization, month training credit math, or trip instance dedupe behavior, **update or extend** `lib/schedule/schedule-import-regression.test.ts` in the same change. Do not weaken these rules without explicit product approval.
+
+## Pointers
+
+- Import: `lib/schedule/import-ics-from-text.ts` — `normalizeTrainingSplitRows`, `getTripInstanceDedupeKey`, training `toRow`.
+- Month credit helper: `lib/schedule/training-month-credit.ts`.
+- Month totals loop: `getMonthStats` in `app/frontier/pilots/portal/schedule/actions.ts` (training branch + trip-only `totalBlock`).
