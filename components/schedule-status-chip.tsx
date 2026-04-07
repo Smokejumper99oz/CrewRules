@@ -38,7 +38,7 @@ export function ScheduleStatusChip({
   return (
     <div className={useStackedLayout ? "flex flex-col items-end gap-1" : "flex items-center gap-2"}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className={`inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-medium ${config.className}`}>
+        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${config.className}`}>
           {config.label}
         </span>
         {useStackedLayout && (
