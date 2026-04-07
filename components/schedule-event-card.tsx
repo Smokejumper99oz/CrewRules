@@ -8,10 +8,13 @@ import {
 } from "@/lib/schedule-report-night";
 import { getTripDateStrings } from "@/lib/leg-dates";
 
-/** Prefix flight number for display: carrierCode + number, or FLT + number. Does not change stored data. */
+/** Prefix flight number for display: carrierCode + number, or FLT + number. Does not change stored data.
+ *  If the flight number already starts with its own IATA carrier code (e.g. "WN479"), use it as-is. */
 function formatFlightDisplay(flightNumber: string, carrierCode?: string | null): string {
   const num = (flightNumber ?? "").trim();
   if (!num) return "";
+  // Flight number already has a carrier prefix (2 letters + digits, e.g. "WN479") — don't double-prefix
+  if (/^[A-Z]{2}\d/i.test(num)) return num;
   const prefix = carrierCode?.trim() || "FLT";
   return `${prefix}${num}`;
 }
