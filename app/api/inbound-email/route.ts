@@ -216,7 +216,7 @@ export async function POST(req: Request) {
       if (markError) {
         const isDuplicate = /duplicate key value|unique constraint/i.test(markError.message);
         if (isDuplicate) {
-          console.log("[inbound-email] duplicate message ignored (race):", messageId);
+          console.log("[inbound-email] duplicate message ignored (race)");
           return new Response("ok", { status: 200 });
         }
         console.error("[inbound-email] event insert error (ics attachment):", markError);
@@ -269,7 +269,7 @@ export async function POST(req: Request) {
       if (markError) {
         const isDuplicate = /duplicate key value|unique constraint/i.test(markError.message);
         if (isDuplicate) {
-          console.log("[inbound-email] duplicate message ignored (race):", messageId);
+          console.log("[inbound-email] duplicate message ignored (race)");
           return new Response("ok", { status: 200 });
         }
         console.error("[inbound-email] event insert error (flica attachment):", markError);
@@ -390,7 +390,7 @@ export async function POST(req: Request) {
   if (eventInsertError) {
     const isDuplicate = /duplicate key value|unique constraint/i.test(eventInsertError.message);
     if (isDuplicate) {
-      console.log("[inbound-email] duplicate message ignored (race):", messageId);
+      console.log("[inbound-email] duplicate message ignored (race)");
       return new Response("ok", { status: 200 });
     }
     console.error("[inbound-email] event insert error", eventInsertError);
