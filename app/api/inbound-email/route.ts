@@ -413,47 +413,95 @@ export async function POST(req: Request) {
         if (!trip) {
           console.log("[inbound-email] no trip to update");
         } else {
-          console.log("[inbound-email] updating trip:", trip.id);
+          console.log("[ELP DEBUG] pairingCode:", parsed.pairingCode);
+          console.log("[ELP DEBUG] legsAdded:", JSON.stringify(parsed.legsAdded, null, 2));
+          console.log("[ELP DEBUG] legsDeleted:", JSON.stringify(parsed.legsDeleted, null, 2));
+          console.log("[ELP DEBUG] dutyModifications:", JSON.stringify(parsed.dutyModifications, null, 2));
+          console.log("[ELP DEBUG] trip.id:", trip.id);
+          console.log("[ELP DEBUG] trip.title before update:", trip.title);
 
-          const currentLegs = Array.isArray(trip.legs) ? [...trip.legs] : [];
+          const currentLegs: any[] = Array.isArray(trip.legs) ? [...trip.legs] : [];
 
-          const updatedLegs = currentLegs.filter((l: any) => {
-            return !parsed.legsDeleted.some((d) =>
-              String(l.flightNumber || "").includes(d.flightNumber)
+          // Remove legs identified as deleted by flight number
+          const afterDeletes = currentLegs.filter((l: any) => {
+            return !parsed.legsDeleted.some(
+              (d) => String(l.flightNumber ?? "").trim() === d.flightNumber.trim()
             );
           });
 
-          for (const leg of parsed.legsAdded) {
-            updatedLegs.push({
-              flightNumber: leg.flightNumber,
-              origin: leg.dep,
-              destination: leg.arr,
-              depTime: leg.depText,
-              arrTime: leg.arrText,
-              blockMinutes: null,
-              deadhead: leg.deadhead,
-              raw: "ELP update",
-            });
+          // Build normalized leg objects for each added leg
+          const legsToAdd = parsed.legsAdded.map((leg) => ({
+            flightNumber: leg.flightNumber,
+            origin: leg.dep,
+            destination: leg.arr,
+            day: leg.day ?? undefined,
+            depTime: leg.depTime ?? undefined,
+            arrTime: leg.arrTime ?? undefined,
+            blockMinutes: null,
+            deadhead: leg.deadhead === true,
+            raw: "ELP update",
+          }));
+
+          // Append only legs not already present (match on flightNumber + origin + destination + depTime + arrTime)
+          const rebuiltLegs = [...afterDeletes];
+          for (const incoming of legsToAdd) {
+            const alreadyPresent = rebuiltLegs.some(
+              (l: any) =>
+                String(l.flightNumber ?? "") === String(incoming.flightNumber) &&
+                String(l.origin ?? "") === String(incoming.origin) &&
+                String(l.destination ?? "") === String(incoming.destination) &&
+                String(l.depTime ?? "") === String(incoming.depTime ?? "") &&
+                String(l.arrTime ?? "") === String(incoming.arrTime ?? "")
+            );
+            if (!alreadyPresent) rebuiltLegs.push(incoming);
           }
 
-          const newReport =
-            parsed.dutyModifications?.[0]?.reportText || trip.report_time;
+          // Sort legs chronologically: weekday order then depTime ascending; missing values sort last
+          const DAY_ORDER: Record<string, number> = { Su: 0, Mo: 1, Tu: 2, We: 3, Th: 4, Fr: 5, Sa: 6 };
+          rebuiltLegs.sort((a: any, b: any) => {
+            const dayA = DAY_ORDER[String(a.day ?? "")] ?? 7;
+            const dayB = DAY_ORDER[String(b.day ?? "")] ?? 7;
+            if (dayA !== dayB) return dayA - dayB;
+            const depA = String(a.depTime ?? "99:99");
+            const depB = String(b.depTime ?? "99:99");
+            return depA < depB ? -1 : depA > depB ? 1 : 0;
+          });
+
+          const rawReport = parsed.dutyModifications?.[0]?.reportText ?? null;
+          const newReport = rawReport
+            ? (rawReport.match(/(\d{1,2}:\d{2})$/)?.[1] ?? null)
+            : null;
 
           const newTitle = `Trip ${parsed.pairingCode}`;
 
+          const updatePayload = {
+            title: newTitle,
+            legs: rebuiltLegs,
+            report_time: newReport ?? trip.report_time,
+          };
+          console.log("[ELP DEBUG] update payload:", JSON.stringify(updatePayload, null, 2));
+
           const { error: updateError } = await supabase
             .from("schedule_events")
-            .update({
-              title: newTitle,
-              legs: updatedLegs,
-              report_time: newReport,
-            })
+            .update(updatePayload)
             .eq("id", trip.id);
+
+          console.log("[ELP DEBUG] updateError:", updateError ?? null);
 
           if (updateError) {
             console.error("[inbound-email] trip update error", updateError);
           } else {
             console.log("[inbound-email] trip updated successfully");
+
+            const { data: verifyRow, error: verifyError } = await supabase
+              .from("schedule_events")
+              .select("title, report_time, legs")
+              .eq("id", trip.id)
+              .single();
+            console.log("[ELP DEBUG] verifyError:", verifyError ?? null);
+            console.log("[ELP DEBUG] verified row title:", verifyRow?.title ?? null);
+            console.log("[ELP DEBUG] verified row report_time:", verifyRow?.report_time ?? null);
+            console.log("[ELP DEBUG] verified row legs:", JSON.stringify(verifyRow?.legs, null, 2));
           }
         }
       }

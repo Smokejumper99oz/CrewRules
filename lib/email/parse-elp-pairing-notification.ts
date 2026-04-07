@@ -9,6 +9,9 @@ export type ElpLegAdded = {
   arr: string;
   depText: string;
   arrText: string;
+  depTime: string | null;
+  arrTime: string | null;
+  day: string | null;
   blockText: string;
   deadhead: boolean;
   rawType: "added";
@@ -20,6 +23,9 @@ export type ElpLegDeleted = {
   arr: string;
   depText: string;
   arrText: string;
+  depTime: string | null;
+  arrTime: string | null;
+  day: string | null;
   blockText: string;
   deadhead: boolean;
   rawType: "deleted";
@@ -44,11 +50,12 @@ export type ElpPairingNotificationParse = {
 const PAIRING_HEADLINE_RE =
   /Pairing\s+Number\s+\*?([A-Z0-9]+)\*?/i;
 
-/** Flight row: Added/Deleted, optional "- Flight" / "- DUT:", then flight, dep, arr, two date/times, block */
+/** Flight row: Added/Deleted, optional "- Flight" / "- DUT:", then flight, dep, arr, two date/times (with optional (S)/(E) zone), block, optional trailing flag */
 const LEG_ROW_RE =
-  /^(Added|Deleted)(?:\s+-\s*Flight\s+|\s+-\s*DUT\s*:?\s*)?\s*(\S+)\s+([A-Z]{3})\s+([A-Z]{3})\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2}(?:\s*\([A-Z]\))?)\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2}(?:\s*\([A-Z]\))?)\s+(\d{1,2}:\d{2})\s*$/i;
+  /^(Added|Deleted)(?:\s+-\s*Flight\s+|\s+-\s*DUT\s*:?\s*)?\s*(\S+)\s+([A-Z]{3})\s+([A-Z]{3})\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})(?:\s*\([A-Z]\))?\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})(?:\s*\([A-Z]\))?\s+(\d{1,2}:\d{2})(?:\s+\S)?\s*$/i;
 
-const MODIFIED_REPORT_START_RE = /^Modified\s+Report\s+DT\s*:?\s*(.*)$/i;
+const MODIFIED_REPORT_START_RE =
+  /^Modified\s+Report\s+DT\s*:?\s*(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})/i;
 const RELEASE_DT_RE = /^Release\s+DT\s*:?\s*(.+)$/i;
 const BLOCK_RE = /^Block\s*:?\s*(.+)$/i;
 const HOTEL_RE = /^Hotel\s*:?\s*(.+)$/i;
@@ -71,6 +78,23 @@ function inferDeadhead(flightNumber: string, fullLine: string): boolean {
   if (/\bDH\b/.test(fullLine) || /\bDEADHEAD\b/i.test(fullLine)) return true;
   if (/DHD\s*[:.]?\s*D\b/i.test(line)) return true;
   return false;
+}
+
+/** Extract "HH:MM" from a date+time string like "04/07 16:55" */
+function extractTime(t: string): string | null {
+  const m = t.match(/(\d{1,2}:\d{2})/);
+  return m ? m[1]! : null;
+}
+
+/** Return "Su","Mo",... for an MM/DD string using the current year */
+function getWeekdayFromMMDD(mmdd: string): string | null {
+  const parts = mmdd.split("/").map(Number);
+  const month = parts[0];
+  const day = parts[1];
+  if (!month || !day) return null;
+  const year = new Date().getFullYear();
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][d.getUTCDay()] ?? null;
 }
 
 function mapStatus(word: string | undefined): ElpPairingNotificationParse["pairingStatus"] {
@@ -117,6 +141,11 @@ export function parseElpPairingNotification(body: string): ElpPairingNotificatio
       const blockText = legM[7]!.trim();
       const deadhead = inferDeadhead(flightNumber, line);
 
+      const depDateMatch = depText.match(/^(\d{1,2}\/\d{1,2})/);
+      const depTime = extractTime(depText);
+      const arrTime = extractTime(arrText);
+      const day = depDateMatch ? getWeekdayFromMMDD(depDateMatch[1]!) : null;
+
       if (kind === "added") {
         legsAdded.push({
           flightNumber,
@@ -124,6 +153,9 @@ export function parseElpPairingNotification(body: string): ElpPairingNotificatio
           arr,
           depText,
           arrText,
+          depTime,
+          arrTime,
+          day,
           blockText,
           deadhead,
           rawType: "added",
@@ -135,6 +167,9 @@ export function parseElpPairingNotification(body: string): ElpPairingNotificatio
           arr,
           depText,
           arrText,
+          depTime,
+          arrTime,
+          day,
           blockText,
           deadhead,
           rawType: "deleted",
@@ -231,8 +266,8 @@ export function parseElpPairingNotification(body: string): ElpPairingNotificatio
  * // parseElpPairingNotification(sample) => {
  * //   pairingCode: "S3090A",
  * //   pairingStatus: "modified",
- * //   legsAdded: [{ flightNumber: "WN479", dep: "BDL", arr: "MCO", depText: "04/07 16:55 (S)", arrText: "04/07 19:55 (S)", blockText: "00:00", deadhead: true, rawType: "added" }],
- * //   legsDeleted: [{ flightNumber: "1683", dep: "BDL", arr: "MCO", depText: "04/07 09:15 (E)", arrText: "04/07 12:21 (E)", blockText: "03:06", deadhead: false, rawType: "deleted" }],
+ * //   legsAdded: [{ flightNumber: "WN479", dep: "BDL", arr: "MCO", depText: "04/07 16:55", arrText: "04/07 19:55", depTime: "16:55", arrTime: "19:55", day: "Mo", blockText: "00:00", deadhead: true, rawType: "added" }],
+ * //   legsDeleted: [{ flightNumber: "1683", dep: "BDL", arr: "MCO", depText: "04/07 09:15", arrText: "04/07 12:21", depTime: "09:15", arrTime: "12:21", day: "Mo", blockText: "03:06", deadhead: false, rawType: "deleted" }],
  * //   dutyModifications: [{ reportText: "04/07 16:10", releaseText: "04/08 00:17", blockText: "02:57", hotelName: "N/A", hotelPhone: null }]
  * // }
  */
