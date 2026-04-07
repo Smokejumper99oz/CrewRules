@@ -1,0 +1,66 @@
+---
+description: Family View display rules for training events and return routing logic
+globs: app/frontier/pilots/portal/family-view/**,lib/family-view/**
+alwaysApply: false
+---
+
+# Family View: Training Event Display
+
+## Training vs. Trip — key differences
+
+- `event_type === "training"` must be treated differently from `event_type === "trip"`.
+- Training blocks route: **home base → training city → home base** (company-provided deadheads).
+- The family doesn't know what `sim`, `rgs`, `ntr` mean. Use plain-English labels.
+
+## Plain-English leg type labels
+
+| Raw leg type | Display label |
+|---|---|
+| `sim` | Simulator Session |
+| `rgs` | Ground School |
+| `ntr` | Positioning / Travel |
+| Deadhead flight (DH) | Travel |
+| Regular flight | Flying |
+
+## Training card display structure
+
+- Header: **"Recurrent Training — [City, State]"** (training location from legs)
+- Show training days labeled with the above plain-English types
+- Show travel days separately ("Travel to Training", "Heading Home")
+- Do **not** show flight numbers or block times — not relevant for family
+
+## Return routing logic (most important rule)
+
+Training always routes the pilot back to crew base via company-provided travel.
+**Do not display the company return routing as the pilot's actual homecoming.**
+
+### Decision tree for last training day:
+
+**If there is enough gap before the next trip** (no trip starting within ~24 hours at base):
+- Pilot will likely find their own flight from the training city directly to their home airport.
+- Display: **"Heading Home from [training city]"**
+- Do NOT show MCO or intermediate company stops as the destination.
+- Do NOT show "arriving SJU at 2:01 AM" — that's the company route, not the pilot's route.
+
+**If next trip starts within ~24 hours at base (SJU):**
+- Pilot will use company-provided travel back to base — impractical to go home and return.
+- Display: **"Returning to base for next trip"**
+- Apply the same `getBetweenTripStatus`-style gap logic used for regular trips.
+
+### Why the MCO stopover is irrelevant:
+Company routing may go DEN → MCO → SJU. The pilot will skip MCO entirely and book a
+direct flight from the training city (e.g., DEN → TPA). A rental car from MCO ($120+ one-way)
+makes the intermediate stop unattractive when direct flights home exist.
+
+## Hotel data
+
+Training legs contain hotel info (name + phone) in the FLICA description.
+This is the primary source for future hotel display in Family View.
+Parse from legs where `hotelName` is present.
+Do **not** implement hotel display until explicitly requested.
+
+## Future: Commute Assist integration
+
+When a pilot has training, Commute Assist should eventually show flight options from the
+**training city** (not crew base) on the last training day — for pilots with enough gap to go home.
+This is not yet implemented. Do not implement until explicitly requested.

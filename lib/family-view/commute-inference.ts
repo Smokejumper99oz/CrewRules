@@ -8,6 +8,7 @@ import type { ScheduleEvent } from "@/app/frontier/pilots/portal/schedule/action
 import type { Profile } from "@/lib/profile";
 import { getTripDateStrings } from "@/lib/leg-dates";
 import { formatDayLabel } from "@/lib/schedule-time";
+import { formatInTimeZone } from "date-fns-tz";
 
 /** Parse report_time (HH:MM or HHMM) to minutes since midnight. Returns null if invalid. */
 function reportTimeToMinutes(reportTime: string | undefined | null): number | null {
@@ -82,7 +83,24 @@ export function getCommuteInfoForTrip(
   if (event.event_type !== "trip") return null;
   if (!isCommuter(profile)) return null;
 
-  const reportMin = reportTimeToMinutes(event.report_time ?? null);
+  // If the trip's first leg departs from the pilot's home airport, no commute travel
+  // is needed — they just drive to their local airport. Do not generate a commute day.
+  const homeIata = (profile?.home_airport ?? "").trim().toUpperCase();
+  const firstLegOrigin = ((event.legs ?? [])[0] as { origin?: string } | undefined)
+    ?.origin?.trim().toUpperCase() ?? "";
+  if (homeIata.length === 3 && firstLegOrigin === homeIata) return null;
+
+  // Use report_time when available; fall back to start_time converted to local HH:MM.
+  // report_time can be null on freshly-imported trips not yet updated by ELP.
+  let reportMin = reportTimeToMinutes(event.report_time ?? null);
+  if (reportMin == null && event.start_time) {
+    try {
+      const localHHMM = formatInTimeZone(new Date(event.start_time), baseTimezone, "HH:mm");
+      reportMin = reportTimeToMinutes(localHHMM);
+    } catch {
+      // ignore parse errors
+    }
+  }
   if (reportMin == null) return null;
 
   const tripDates = getTripDateStrings(event.start_time, event.end_time, baseTimezone);

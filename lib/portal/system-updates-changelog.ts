@@ -13,6 +13,49 @@ export type SystemUpdateEntry = {
  */
 export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   {
+    date: "2026-04-07",
+    title: "Mentoring auto-match now works reliably",
+    type: "fix",
+    bullets: [
+      "When an admin uploads a mentor–mentee roster, mentors who already have a CrewRules account now immediately see their new mentees — no waiting, no manual step.",
+      "When a new mentor or mentee creates a CrewRules account, they are automatically linked to any pre-uploaded assignments the moment they sign in.",
+      "Fixed a matching failure caused by whitespace and leading zeros in employee numbers (e.g. 01234 now correctly matches 1234).",
+    ],
+  },
+  {
+    date: "2026-04-07",
+    title: "Automatic schedule updates from ELP notifications",
+    type: "new_feature",
+    bullets: [
+      "When crew scheduling modifies a trip via FLICA's ELP system, the notification email now automatically updates your schedule in CrewRules — no manual re-import needed.",
+      "Added legs, removed legs, and report time changes are all applied in real time as soon as the ELP email is received.",
+      "Deadhead legs (including carrier-coded flights like Southwest) are correctly identified and flagged during the update.",
+      "Works through your existing email alias — forward your ELP notifications once and all future schedule changes arrive automatically.",
+    ],
+  },
+  {
+    date: "2026-04-07",
+    title: "Family View — Day Trip detection",
+    type: "new_feature",
+    bullets: [
+      "When a commuter pilot picks up a trip that both departs from and returns to their home airport, Family View now recognizes it as a Day Trip.",
+      "Day Trip cards show the actual flight route and scheduled departure and arrival times (e.g. Departs 7:25 AM · Arrives 3:18 PM) instead of a vague time-of-day estimate.",
+      "The 'won't make it home' warning no longer triggers for Day Trips or any trip that ends at the pilot's home airport — because they're already there.",
+    ],
+  },
+  {
+    date: "2026-04-07",
+    title: "Family View — cleaner, more honest schedule sharing",
+    type: "improvement",
+    bullets: [
+      "Removed the duplicate Trip Details card — everything it showed is now in the Current Trip Overview with better context.",
+      "Renamed 'This Week' to 'Week Ahead' and removed days already covered by the Current Trip Overview, eliminating repeated rows.",
+      "Status labels are now plain-English throughout: 'Overnight' instead of 'Away Overnight', 'Duty Starts' instead of 'Working', with a Day X of Y progress badge on every trip day including the first and last.",
+      "Commuter pilots no longer see a misleading 'Coming Home' on their last trip day — it now shows 'Commuting Home' with an honest note that timing depends on available flights and seat options.",
+      "U.S. city names now use two-letter state abbreviations (Tampa, FL · Charlotte, NC) to save space; international destinations keep their full name (San Juan, Puerto Rico · Cancún, Mexico).",
+    ],
+  },
+  {
     date: "2026-04-06",
     title: "Improved iPhone month schedule UI",
     type: "improvement",

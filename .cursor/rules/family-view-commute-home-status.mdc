@@ -1,0 +1,56 @@
+---
+description: Family View commute-home display rules and future Commute Assist integration
+globs: app/frontier/pilots/portal/family-view/**,lib/family-view/**
+alwaysApply: false
+---
+
+# Family View: Commute Home Status
+
+## Current Rule
+
+For **commuter pilots** (home airport ≠ base airport), the last day of any trip must **never** promise a home arrival time or imply the pilot is "Coming Home" at a specific time of day.
+
+- The schedule only records when the *trip ends* (landing at base), not when the pilot gets home.
+- Use label: **"Commuting Home"**
+- Use detail: **"Timing depends on available flights and seat options"**
+- Do **not** show the trip end time as a home arrival estimate for commuters.
+
+Non-commuter (local/drive-home) pilots may retain "Coming Home" with the expected home time.
+
+---
+
+## Why "Commuting Home" Is Intentionally Vague
+
+The commute home decision is highly personal and depends on multiple factors:
+
+- **Trip end time**: A pilot landing at 8 PM may choose to rest at a crash pad and take the first morning flight. A pilot landing at 4 AM might power through and still take the 6 AM flight.
+- **Accommodation type**:
+  - Pilots with a **crash pad** will typically rest first and take a later flight once rested.
+  - Pilots relying on a **hotel** may not want to pay for a room and will sit at the airport to catch the earliest flight home instead.
+- **Flight availability**: Jump seat and open seat availability varies and is only known at departure time.
+- **Rest and fatigue**: FAA/company duty rules and personal judgment both affect the decision.
+
+There is no single correct answer — the app should never guess.
+
+---
+
+## Future Feature: Commute Home Preference (Family View Profile Settings)
+
+Two options are planned for a future phase. **Do not implement until explicitly requested.**
+
+### Option A — Commute Assist Tick Box (Per-Trip)
+Pilot selects their intended commute flight from Commute Assist and optionally shares it to Family View.
+- Family View last-day card displays: chosen airline, flight time, and estimated home arrival.
+- If no flight is selected/shared, fall back to "Commuting Home / Timing depends on available flights."
+- Requires schema addition (e.g. `family_view_commute_share` on the trip or profile).
+
+### Option B — Profile-Level Commute Rule (Always-On)
+A toggle in the pilot's Family View profile settings:
+> "Always try to commute home on the first available flight after duty ends."
+
+If enabled:
+- Family View last-day card can show "Aiming for first available flight home" as the detail.
+- Commute Assist can highlight the earliest jump seat option on the trip's last day.
+- Still does not promise a home time — seat availability is never guaranteed.
+
+These two options are **not mutually exclusive** — Option B sets the default intent, Option A overrides it for a specific trip.

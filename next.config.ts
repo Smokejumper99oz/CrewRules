@@ -8,6 +8,15 @@ const nextConfig: NextConfig = {
     root: path.join(__dirname),
   },
   serverExternalPackages: ["pdf-parse"],
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "www.gstatic.com",
+        pathname: "/flights/airline_logos/**",
+      },
+    ],
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "50mb",

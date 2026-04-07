@@ -1,6 +1,7 @@
 import { formatInTimeZone } from "date-fns-tz";
 import type { CommuteFlight } from "@/lib/aviationstack";
 import { AIRLINE_NAMES } from "@/lib/airlines";
+import type { FamilyViewStrings } from "@/lib/family-view/family-view-i18n";
 
 /** IATA → "City, State" for Family View. Fall back to code if unknown. */
 const IATA_TO_CITY_STATE: Record<string, string> = {
@@ -64,23 +65,27 @@ type Props = {
   flights: { flight: CommuteFlight; label: "Likely your flight" | "Backup option" }[];
   originTz: string;
   destTz: string;
+  s: FamilyViewStrings;
+  use24h?: boolean;
 };
 
-export function FamilyViewTodayCommuteFlights({ flights, originTz, destTz }: Props) {
+export function FamilyViewTodayCommuteFlights({ flights, originTz, destTz, s, use24h = false }: Props) {
+  const timeFormat = use24h ? "HH:mm" : "h:mm a";
   return (
     <div className="space-y-2">
       {flights.map(({ flight, label }) => {
         const depTime = formatInTimeZone(
           new Date(flight.departureTime),
           originTz,
-          "h:mm a"
+          timeFormat
         );
         const arrTime = formatInTimeZone(
           new Date(flight.arrivalTime),
           destTz,
-          "h:mm a"
+          timeFormat
         );
         const isPrimary = label === "Likely your flight";
+        const displayLabel = isPrimary ? s.likelyYourFlight : s.backupOption;
         return (
           <div
             key={`${flight.carrier}-${flight.flightNumber}-${flight.departureTime}`}
@@ -99,14 +104,18 @@ export function FamilyViewTodayCommuteFlights({ flights, originTz, destTz }: Pro
                   isPrimary ? "text-[#7FB069]" : "text-[#6F6F6F]"
                 }`}
               >
-                {label}
+                {displayLabel}
               </span>
             </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-sm text-[#6F6F6F]">
+              <span>{formatAirportDisplay(flight.origin)}</span>
+              <span className="rounded bg-[#EDE9E2] px-1.5 py-px text-[10px] font-medium text-[#7A7A7A] tracking-wide">{(flight.origin ?? "").trim().toUpperCase()}</span>
+              <span className="text-[#9AAE92]">→</span>
+              <span>{formatAirportDisplay(flight.destination)}</span>
+              <span className="rounded bg-[#EDE9E2] px-1.5 py-px text-[10px] font-medium text-[#7A7A7A] tracking-wide">{(flight.destination ?? "").trim().toUpperCase()}</span>
+            </div>
             <p className="mt-1 text-sm text-[#6F6F6F]">
-              {formatAirportDisplay(flight.origin)} to {formatAirportDisplay(flight.destination)}
-            </p>
-            <p className="mt-1 text-sm text-[#6F6F6F]">
-              Departure: {depTime} · Arrival: {arrTime}
+              {s.departureLabel} {depTime} · {s.arrivalLabel} {arrTime}
             </p>
           </div>
         );

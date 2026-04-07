@@ -1,3 +1,35 @@
+/**
+ * IATA 2-letter code → ICAO 3-letter code.
+ * FlightAware live-tracking URLs use the ICAO designator (e.g. FFT2982, not F92982).
+ */
+export const IATA_TO_ICAO: Record<string, string> = {
+  AA: "AAL",
+  DL: "DAL",
+  UA: "UAL",
+  WN: "SWA",
+  F9: "FFT",
+  NK: "NKS",
+  B6: "JBU",
+  AS: "ASA",
+  HA: "HAL",
+  G4: "AAY",
+  SY: "SCX",
+  OO: "SKW",
+  YX: "RPA",
+  MQ: "MQ",  // Envoy uses MQ on FlightAware
+  "9E": "EDV",
+};
+
+/**
+ * Build a FlightAware live-tracking URL for an airline flight.
+ * Uses the ICAO designator when known; falls back to the IATA code.
+ */
+export function flightAwareUrl(iataCarrier: string, flightNumeric: string): string {
+  const code = (iataCarrier ?? "").trim().toUpperCase();
+  const icao = IATA_TO_ICAO[code] ?? code;
+  return `https://www.flightaware.com/live/flight/${icao}${flightNumeric}`;
+}
+
 /** IATA code → display name for Current Trip flight identity. */
 export const AIRLINE_NAMES: Record<string, string> = {
   AA: "American Airlines",
