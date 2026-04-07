@@ -42,7 +42,7 @@ export type ElpPairingNotificationParse = {
 };
 
 const PAIRING_HEADLINE_RE =
-  /Pairing\s+Number\s+\*?([A-Z0-9]+)\*?\s+has\s+been\s+(MODIFIED|ADDED|DELETED)/i;
+  /Pairing\s+Number\s+\*?([A-Z0-9]+)\*?/i;
 
 /** Flight row: Added/Deleted, optional "- Flight" / "- DUT:", then flight, dep, arr, two date/times, block */
 const LEG_ROW_RE =
