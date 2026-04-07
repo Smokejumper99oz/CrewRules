@@ -474,7 +474,7 @@ export async function POST(req: Request) {
             ? (rawReport.match(/(\d{1,2}:\d{2})$/)?.[1] ?? null)
             : null;
 
-          const newTitle = `Trip ${parsed.pairingCode}`;
+          const newTitle = parsed.pairingCode;
 
           const updatePayload = {
             title: newTitle,
