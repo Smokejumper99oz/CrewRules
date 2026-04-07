@@ -1,0 +1,34 @@
+---
+description: Weather Brief feature roadmap and tiering plan. Never collapse Basic/Pro tiers or gate Basic behind a paywall.
+globs: app/**/weather-brief/**, components/weather-brief/**, lib/weather-brief/**
+alwaysApply: false
+---
+
+# Weather Brief — Tiering Roadmap (Never Regress)
+
+## Current state (Basic — Free for all users)
+- Departure / arrival METAR + TAF via Aviation Weather Center (AWC/FAA) — free, no API cost
+- Enroute SIGMET / AIRMET advisories via AWC — free
+- Filed route + live flight status via FlightAware AeroAPI (optional, key-gated)
+- Delay risk, operational watch items, pilot summary — computed server-side
+- **Zero per-request API cost to the platform**
+
+## Planned: Basic vs. Advanced Weather Brief
+
+### Basic (Free plan — ALL users always keep this)
+- Everything above stays as-is
+- No paid weather API required
+- Do NOT gate Basic behind `proActive` or any subscription flag
+
+### Advanced / Pro (Pro plan — paid feature, costs the platform money)
+- In-route hazard weather forecast (turbulence, icing, convection along the filed route)
+- Route overlay on a map with weather layers
+- Higher-resolution forecast data (e.g. Meteomatics, Tomorrow.io, or equivalent)
+- Powered by a paid aviation weather API — only enable when user has an active Pro subscription
+- **Cost must be offset by Pro subscription revenue**
+
+## Implementation rules
+1. **Do not merge** Basic and Advanced into a single feature gated by `proActive`. Keep them as separate page sections or separate routes.
+2. **Do not add paid API calls** to the Basic weather brief path — AWC is free and must stay the foundation.
+3. When building Advanced, use a clearly isolated fetch path so Basic always works even if the paid API is down or key is missing.
+4. The Advanced tier is **future work** — do not start building it until the user explicitly asks.

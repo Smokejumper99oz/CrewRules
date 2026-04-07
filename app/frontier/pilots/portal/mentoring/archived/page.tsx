@@ -55,7 +55,7 @@ export default async function ProgramHistoryPage() {
     .eq("active", false)
     .order("assigned_at", { ascending: false });
 
-  const assignments = (rawAssignments ?? []) as Array<{
+  type AssignmentRow = {
     id: string;
     hire_date: string | null;
     active: boolean;
@@ -64,8 +64,10 @@ export default async function ProgramHistoryPage() {
     mentor_user_id: string | null;
     mentor_employee_number: string | null;
     mentee_display_name: string | null;
-    mentor: { full_name: string | null; position: string | null } | null;
-  }>;
+    // Supabase returns FK joins as an array; we take [0] below
+    mentor: { full_name: string | null; position: string | null }[] | null;
+  };
+  const assignments = (rawAssignments ?? []) as AssignmentRow[];
 
   // Fetch milestones for all archived assignments
   const assignmentIds = assignments.map((a) => a.id);
@@ -105,8 +107,8 @@ export default async function ProgramHistoryPage() {
       ) : (
         <div className="space-y-5">
           {assignments.map((a) => {
-            const mentorName = a.mentor?.full_name?.trim() || null;
-            const mentorPosition = a.mentor?.position?.trim() || null;
+            const mentorName = a.mentor?.[0]?.full_name?.trim() || null;
+            const mentorPosition = a.mentor?.[0]?.position?.trim() || null;
             const archiveLabel = a.assignment_archive_reason
               ? ARCHIVE_REASON_LABELS[a.assignment_archive_reason] ?? a.assignment_archive_reason
               : null;

@@ -14,6 +14,28 @@ export type SystemUpdateEntry = {
 export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   {
     date: "2026-04-07",
+    title: "Dashboard weather widget",
+    type: "new_feature",
+    bullets: [
+      "Your dashboard now shows a live weather snapshot for wherever you are right now — layover city, home base, or en-route origin — pulled directly from official FAA Aviation Weather Center data.",
+      "Displays current temperature in both °F and °C, conditions, wind speed and direction, and 'feels like' temperature when wind chill applies.",
+      "Tapping the widget takes you straight to the full Aviation Weather Brief for your next flight.",
+      "Updates automatically every 5 minutes using the same free FAA data source as the Weather Brief — no extra cost.",
+    ],
+  },
+  {
+    date: "2026-04-07",
+    title: "ALPA Mentorship — Important Contacts & Program History",
+    type: "new_feature",
+    bullets: [
+      "Mentees now have an Important Contacts tab showing ALPA program manager, Military Affairs Committee chairman, and payroll support — with tappable phone and email links.",
+      "A new Program History tab (formerly Archived) shows completed mentorship assignments including mentor details, milestones, and the reason the assignment ended.",
+      "Contact cards are managed per-airline by your local admin — no developer involvement needed when contact info changes.",
+      "Frontier MEC ALPA branding added to the contacts page with the official Frontier Master Executive Council logo.",
+    ],
+  },
+  {
+    date: "2026-04-07",
     title: "Mentoring auto-match now works reliably",
     type: "fix",
     bullets: [

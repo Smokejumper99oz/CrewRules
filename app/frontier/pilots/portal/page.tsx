@@ -6,6 +6,8 @@ import { PortalNextDuty } from "@/components/portal-next-duty";
 import { PortalScheduleUpcoming } from "@/components/portal-schedule-upcoming";
 import { PortalMonthStats } from "@/components/portal-month-stats-wrapper";
 import { DashboardAskBox } from "@/components/dashboard-ask-box";
+import { DashboardWeatherWidget } from "@/components/dashboard-weather-widget";
+import { getHomeBaseMetar } from "@/lib/weather-brief/get-home-base-metar";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +23,31 @@ export default async function PortalDashboard() {
   const tripChangeSummaries = profile?.id ? await getTripChangeSummariesForUser(profile.id) : [];
   console.log("[CurrentTrip wired]", { loaded: !!profile?.id, hasActiveTrip: !!activeTrip, pairing: activeTrip?.pairing ?? null });
 
+  // Current location: first upcoming leg's origin if on a trip, otherwise home base.
+  // This shows the weather where the pilot actually is right now (layover city, home base, etc.)
+  const currentLocationAirport =
+    activeTrip?.todayLegs?.[0]?.origin?.trim() ||
+    profile?.base_airport?.trim() ||
+    null;
+
+  const homeBaseMetar = currentLocationAirport
+    ? await getHomeBaseMetar(currentLocationAirport).catch(() => null)
+    : null;
+
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-[0.9375rem] text-slate-500">{greetingPart}</p>
-        <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{namePart}</p>
+      {/* Greeting + compact weather chip — share one row */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[0.9375rem] text-slate-500">{greetingPart}</p>
+          <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{namePart}</p>
+        </div>
+        {homeBaseMetar && (
+          <DashboardWeatherWidget
+            metar={homeBaseMetar}
+            weatherBriefHref={`/${TENANT}/${PORTAL}/portal/weather-brief`}
+          />
+        )}
       </div>
 
       {/* Next Duty */}

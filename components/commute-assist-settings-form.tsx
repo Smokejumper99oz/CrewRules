@@ -7,6 +7,7 @@ import { SettingsProfilePreserveFields } from "@/components/settings-profile-pre
 import { useSettingsAutoSave } from "@/hooks/use-settings-auto-save";
 import { DEFAULT_TIMEZONE } from "@/lib/airport-timezone";
 import type { Profile } from "@/lib/profile";
+import { isEligibleForProTrialStartCta } from "@/lib/profile-helpers";
 
 /** Same option set as Profile “Commute Assist” → Direct Flights. */
 const COMMUTE_BUFFER_OPTIONS = [30, 60, 90, 120, 180] as const;
@@ -279,7 +280,7 @@ export function CommuteAssistSettingsForm({ profile, proActive }: Props) {
               feedback={settingsFieldFeedback}
             />
             <p className="mt-1 text-xs text-slate-500">3-letter IATA code. This is where your commute normally begins.</p>
-            {!proActive && (
+            {!proActive && isEligibleForProTrialStartCta(profile) && (
               <button type="button" className="mt-1 inline-block text-xs text-[#75C043] hover:underline">
                 Start your free 14-day trial
               </button>

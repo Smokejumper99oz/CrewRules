@@ -6,6 +6,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { ProBadge } from "@/components/pro-badge";
 import { CommuteAssistProContent } from "@/components/commute-assist-pro-content";
 import type { Profile } from "@/lib/profile";
+import { isEligibleForProTrialStartCta } from "@/lib/profile-helpers";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
 import { getPlanBadgeLabel, getPlanBadgeVariant } from "@/lib/profile-badge";
 
@@ -108,12 +109,16 @@ export function PortalNextDutyCommuteSection({
             <span className="align-super text-[10px]">™</span>
             {"\u00A0"}·{"\u00A0"}PRO
           </span>
-          <p className="text-xs text-slate-600 dark:text-slate-500">Start a 14-day PRO trial to unlock this feature.</p>
+          <p className="text-xs text-slate-600 dark:text-slate-500">
+            {isEligibleForProTrialStartCta(profile)
+              ? "Start a 14-day PRO trial to unlock this feature."
+              : "Upgrade to Pro to unlock this feature."}
+          </p>
           <Link
             href={`/${tenant}/${portal}/portal/settings/pilot`}
             className="inline-block text-sm font-medium text-[#75C043] hover:underline"
           >
-            Go to Profile →
+            {isEligibleForProTrialStartCta(profile) ? "Go to Profile →" : "View upgrade options →"}
           </Link>
         </div>
       ) : (
