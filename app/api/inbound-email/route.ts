@@ -150,20 +150,6 @@ export async function POST(req: Request) {
 
   const supabase = createAdminClient();
 
-  // Idempotency: if we already processed this message_id, return success without importing
-  if (messageId?.trim()) {
-    const { data: existing } = await supabase
-      .from("inbound_email_events")
-      .select("id")
-      .eq("message_id", messageId.trim())
-      .maybeSingle();
-
-    if (existing) {
-      console.log("[inbound-email] duplicate message ignored:", messageId);
-      return new Response("ok", { status: 200 });
-    }
-  }
-
   // 1. Multipart: read attachment text and detect ICS or FLICA HTML (before body check)
   const attachmentCount = form?.get("attachment-count");
   const attachmentCountNum = typeof attachmentCount === "string" ? parseInt(attachmentCount, 10) : 0;
@@ -212,7 +198,6 @@ export async function POST(req: Request) {
         subject,
         body_plain: "",
         payload: { from, to, subject, bodyPlain: "", bodyHtml: "", rawBody: "" },
-        message_id: messageId?.trim() || null,
       });
       if (markError) {
         const isDuplicate = /duplicate key value|unique constraint/i.test(markError.message);
@@ -265,7 +250,6 @@ export async function POST(req: Request) {
         subject,
         body_plain: "",
         payload: { from, to, subject, bodyPlain: "", bodyHtml: "", rawBody: "" },
-        message_id: messageId?.trim() || null,
       });
       if (markError) {
         const isDuplicate = /duplicate key value|unique constraint/i.test(markError.message);
@@ -381,7 +365,6 @@ export async function POST(req: Request) {
       subject,
       body_plain: bodyText,
       payload,
-      message_id: messageId?.trim() || null,
     })
     .select("id")
     .single();
