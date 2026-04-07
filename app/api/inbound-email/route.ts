@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseCrewEmailText } from "@/lib/email/parse-crew-email-text";
+import { parseElpPairingNotification } from "@/lib/email/parse-elp-pairing-notification";
 import { importIcsFromText } from "@/lib/schedule/import-ics-from-text";
 import { importFlicaHtmlFromText } from "@/lib/schedule/import-flica-html";
 import { isFlicaHtml } from "@/lib/schedule/parse-flica-html";
@@ -395,6 +396,82 @@ export async function POST(req: Request) {
     }
     console.error("[inbound-email] event insert error", eventInsertError);
     return NextResponse.json({ ok: false, error: "event_insert_failed" }, { status: 500 });
+  }
+
+  {
+    const parsed = parseElpPairingNotification(bodyText);
+    console.log("[inbound-email] parsed ELP:", parsed);
+    if (!parsed.pairingCode) {
+      console.log("[inbound-email] no pairing code found → skipping ELP update");
+    } else {
+      console.log("[inbound-email] applying ELP update for pairing:", parsed.pairingCode);
+
+      const pairingFamily = parsed.pairingCode.replace(/[A-Z]$/i, "");
+
+      // 1. Find existing trip rows for this pairing
+      const { data: existingTrips, error: tripError } = await supabase
+        .from("schedule_events")
+        .select("*")
+        .eq("user_id", aliasRow.user_id)
+        .ilike("title", `%${pairingFamily}%`);
+
+      if (tripError) {
+        console.error("[inbound-email] failed to load trips", tripError);
+      } else if (!existingTrips || existingTrips.length === 0) {
+        console.log("[inbound-email] no matching trip found for pairing", parsed.pairingCode);
+      } else {
+        console.log("[inbound-email] found trips:", existingTrips.length);
+
+        const trip = existingTrips[0];
+
+        if (!trip) {
+          console.log("[inbound-email] no trip to update");
+        } else {
+          console.log("[inbound-email] updating trip:", trip.id);
+
+          const currentLegs = Array.isArray(trip.legs) ? [...trip.legs] : [];
+
+          const updatedLegs = currentLegs.filter((l: any) => {
+            return !parsed.legsDeleted.some((d) =>
+              String(l.flightNumber || "").includes(d.flightNumber)
+            );
+          });
+
+          for (const leg of parsed.legsAdded) {
+            updatedLegs.push({
+              flightNumber: leg.flightNumber,
+              origin: leg.dep,
+              destination: leg.arr,
+              depTime: leg.depText,
+              arrTime: leg.arrText,
+              blockMinutes: null,
+              deadhead: leg.deadhead,
+              raw: "ELP update",
+            });
+          }
+
+          const newReport =
+            parsed.dutyModifications?.[0]?.reportText || trip.report_time;
+
+          const newTitle = `Trip ${parsed.pairingCode}`;
+
+          const { error: updateError } = await supabase
+            .from("schedule_events")
+            .update({
+              title: newTitle,
+              legs: updatedLegs,
+              report_time: newReport,
+            })
+            .eq("id", trip.id);
+
+          if (updateError) {
+            console.error("[inbound-email] trip update error", updateError);
+          } else {
+            console.log("[inbound-email] trip updated successfully");
+          }
+        }
+      }
+    }
   }
 
   // ICS from body (when not from attachment)
