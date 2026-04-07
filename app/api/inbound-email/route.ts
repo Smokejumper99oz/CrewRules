@@ -6,6 +6,7 @@ import { parseElpPairingNotification } from "@/lib/email/parse-elp-pairing-notif
 import { importIcsFromText } from "@/lib/schedule/import-ics-from-text";
 import { importFlicaHtmlFromText } from "@/lib/schedule/import-flica-html";
 import { isFlicaHtml } from "@/lib/schedule/parse-flica-html";
+import { postSystemEvent } from "@/lib/super-admin/post-system-event";
 
 export async function POST(req: Request) {
   if (req.method !== "POST") {
@@ -226,6 +227,14 @@ export async function POST(req: Request) {
 
       if ("error" in result) {
         console.log("[inbound-email] ics import error:", result.error, result.technicalError ?? "");
+        await postSystemEvent({
+          id: `ics-import-error-${aliasRow.user_id}-${Date.now()}`,
+          type: "import",
+          severity: "error",
+          title: "ICS import failed",
+          message: `${result.error}${result.technicalError ? ` — ${result.technicalError}` : ""}`,
+          metadata: { userId: aliasRow.user_id, alias, subject },
+        });
       } else {
         console.log("[inbound-email] ics import result:", result.success, "count:", result.count);
       }
@@ -286,6 +295,14 @@ export async function POST(req: Request) {
 
         if ("error" in result) {
           console.log("[inbound-email] flica html import error:", result.error, result.technicalError ?? "");
+          await postSystemEvent({
+            id: `flica-import-error-${aliasRow.user_id}-${Date.now()}`,
+            type: "import",
+            severity: "error",
+            title: "FLICA HTML import failed",
+            message: `${result.error}${result.technicalError ? ` — ${result.technicalError}` : ""}`,
+            metadata: { userId: aliasRow.user_id, alias, subject },
+          });
         } else {
           console.log("[inbound-email] flica html import result:", result.success, "count:", result.count);
         }
@@ -294,6 +311,14 @@ export async function POST(req: Request) {
         console.error("[inbound-email] flica html import crash:", ex.message);
         console.error("[inbound-email] flica html import stack:", ex.stack);
         console.error("[inbound-email] flica html first 200 chars:", flicaHtmlFromAttachment.slice(0, 200));
+        await postSystemEvent({
+          id: `flica-import-crash-${alias}-${Date.now()}`,
+          type: "import",
+          severity: "error",
+          title: "FLICA HTML import crashed",
+          message: ex.message,
+          metadata: { alias, subject, preview: flicaHtmlFromAttachment.slice(0, 200) },
+        });
       }
       return new Response("ok", { status: 200 });
     }
@@ -492,6 +517,14 @@ export async function POST(req: Request) {
 
           if (updateError) {
             console.error("[inbound-email] trip update error", updateError);
+            await postSystemEvent({
+              id: `elp-update-error-${aliasRow.user_id}-${parsed.pairingCode}`,
+              type: "import",
+              severity: "error",
+              title: "ELP trip update failed",
+              message: `Failed to apply ELP changes for pairing ${parsed.pairingCode}: ${updateError.message}`,
+              metadata: { userId: aliasRow.user_id, pairingCode: parsed.pairingCode, tripId: trip.id },
+            });
           } else {
             console.log("[inbound-email] trip updated successfully");
 
@@ -627,6 +660,14 @@ export async function POST(req: Request) {
 
     if ("error" in result) {
       console.log("[inbound-email] ics import error:", result.error, result.technicalError ?? "");
+      await postSystemEvent({
+        id: `ics-import-error-${aliasRow.user_id}-${Date.now()}`,
+        type: "import",
+        severity: "error",
+        title: "ICS import failed",
+        message: `${result.error}${result.technicalError ? ` — ${result.technicalError}` : ""}`,
+        metadata: { userId: aliasRow.user_id, alias, subject },
+      });
     } else {
       console.log("[inbound-email] ics import result:", result.success, "count:", result.count);
     }

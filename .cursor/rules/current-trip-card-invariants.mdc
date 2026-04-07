@@ -1,0 +1,60 @@
+---
+description: Locked behavior for the Current Trip card (portal-next-duty.tsx). Never regress these fixes.
+globs: components/portal-next-duty.tsx
+alwaysApply: false
+---
+
+# Current Trip Card — Hard-Won Fixes (Never Regress)
+
+These behaviors were fixed through painful iteration. Do NOT change them without explicit user approval.
+
+## 1. Carrier prefix on flight label
+
+When `leg.flightNumber` already starts with an IATA carrier code (2 letters + digit, e.g. `WN479`), **do NOT prepend** the tenant carrier (`F9`). Use the flight number as-is.
+
+```ts
+// ✅ CORRECT — detect encoded carrier first
+const legEncodedCarrier = /^([A-Z]{2})\d/i.exec(legFlightNum)?.[1]?.toUpperCase() ?? null;
+const flightLabel = fallbackCarrier && !legEncodedCarrier
+  ? `${fallbackCarrier}${legFlightNum}`
+  : legFlightNum;
+
+// ❌ WRONG — blindly prepends F9 → produces "F9WN479"
+const flightLabel = `${fallbackCarrier}${leg.flightNumber}`;
+```
+
+## 2. Airline logo must reflect the OPERATING carrier, not the tenant
+
+When `leg.flightNumber` encodes its own carrier (e.g. `WN479`), the logo must use `WN` (Southwest), not `F9` (Frontier).
+
+```ts
+// ✅ CORRECT
+<AirlineLogo carrier={f?.carrier ?? legEncodedCarrier ?? fallbackCarrierForLeg ?? ""} size={24} />
+
+// ❌ WRONG — always shows Frontier logo even on Southwest legs
+<AirlineLogo carrier={fallbackCarrierForLeg ?? ""} size={24} />
+```
+
+## 3. Aircraft type fallback for Southwest (WN)
+
+Southwest only flies B737. When the effective carrier resolves to `WN` and no live `aircraft_type` is available, always display `"B737"` — never `"—"`.
+
+```ts
+// ✅ CORRECT
+const effectiveCarrier = (f?.carrier ?? legEncodedCarrier ?? fallbackCarrierForLeg ?? "").toUpperCase();
+const effectiveAircraftType = f
+  ? (f.aircraft_type ?? (effectiveCarrier === "WN" ? "B737" : "—"))
+  : (effectiveCarrier === "WN" ? "B737" : "—");
+
+// ❌ WRONG — shows "—" for WN deadhead legs where f is null
+const effectiveAircraftType = f ? (f.aircraft_type ?? ...) : "—";
+```
+
+## 4. Carrier resolution priority
+
+Always resolve carrier in this order:
+1. `f?.carrier` — live API data (most accurate)
+2. `legEncodedCarrier` — extracted from flight number (e.g. `WN` from `WN479`)
+3. `fallbackCarrierForLeg` / `fallbackCarrier` — tenant default (`F9`)
+
+Never skip step 2.
