@@ -111,14 +111,14 @@ export function PortalNextDutyCommuteSection({
           </span>
           <p className="text-xs text-slate-600 dark:text-slate-500">
             {isEligibleForProTrialStartCta(profile)
-              ? "Start a 14-day PRO trial to unlock this feature."
-              : "Upgrade to Pro to unlock this feature."}
+              ? "Start a 14-day free trial to unlock this feature. No credit card required."
+              : "Subscribe to CrewRules™ Pro to unlock Commute Assist."}
           </p>
           <Link
             href={`/${tenant}/${portal}/portal/settings/subscription`}
             className="inline-block text-sm font-medium text-[#75C043] hover:underline"
           >
-            {isEligibleForProTrialStartCta(profile) ? "Start free trial →" : "View upgrade options →"}
+            {isEligibleForProTrialStartCta(profile) ? "Start free trial →" : "Subscribe now →"}
           </Link>
         </div>
       ) : (

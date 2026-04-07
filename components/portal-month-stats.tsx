@@ -180,14 +180,14 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
               <p className="text-xs text-slate-500">See your projected monthly pay based on credit and guarantee.</p>
               <p className="text-xs text-slate-500">
                 {isEligibleForProTrialStartCta(profile)
-                  ? "Start a 14-day PRO trial to unlock this feature."
-                  : "Upgrade to Pro to unlock this feature."}
+                  ? "Start a 14-day free trial to unlock this feature. No credit card required."
+                  : "Subscribe to CrewRules™ Pro to unlock Pay Estimate."}
               </p>
               <Link
                 href={`/${tenant}/${portal}/portal/settings/subscription`}
                 className="inline-block text-sm font-medium text-[#75C043] hover:underline"
               >
-                {isEligibleForProTrialStartCta(profile) ? "Start free trial →" : "View upgrade options →"}
+                {isEligibleForProTrialStartCta(profile) ? "Start free trial →" : "Subscribe now →"}
               </Link>
             </div>
           ) : (
