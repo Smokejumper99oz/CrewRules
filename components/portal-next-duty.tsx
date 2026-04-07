@@ -171,7 +171,7 @@ export async function PortalNextDuty({
   const firstLeg = (legsToShow && legsToShow.length > 0 ? legsToShow[0] : activeTrip?.todayLegs?.[0]) ?? null;
   const displayDateForResolve = (legsToShow && legsToShow.length > 0 ? displayDateStr : activeTrip?.displayDateStr) ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
   const [resolvedFirstLeg, filedResult] = await Promise.all([
-    firstLeg && firstLeg.flightNumber && firstLeg.origin && firstLeg.destination && proActive
+    firstLeg && firstLeg.flightNumber && firstLeg.origin && firstLeg.destination && proActive && !firstLeg.deadhead
       ? resolveLegIdentity({
           flightNumber: firstLeg.flightNumber,
           origin: firstLeg.origin,
