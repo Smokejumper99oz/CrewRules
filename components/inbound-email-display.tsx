@@ -27,7 +27,7 @@ export function InboundEmailDisplay({ email, variant = "default", suffix }: Prop
     return (
       <div className="space-y-1.5">
         <div>
-          <span className="text-xs font-bold uppercase text-white">Schedule Import Email</span>
+          <span className="text-xs font-semibold text-white">Add your CrewRules™ import email to your ELP app for automatic schedule updates.</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center rounded-lg border border-slate-600 bg-slate-800/50 px-3 py-2 text-sm font-mono text-slate-200">
