@@ -429,18 +429,20 @@ export async function POST(req: Request) {
             );
           });
 
-          // Build normalized leg objects for each added leg
-          const legsToAdd = parsed.legsAdded.map((leg) => ({
-            flightNumber: leg.flightNumber,
-            origin: leg.dep,
-            destination: leg.arr,
-            day: leg.day ?? undefined,
-            depTime: leg.depTime ?? undefined,
-            arrTime: leg.arrTime ?? undefined,
-            blockMinutes: null,
-            deadhead: leg.deadhead === true,
-            raw: "ELP update",
-          }));
+          // Build normalized leg objects for each added leg — skip DUT duty-period markers
+          const legsToAdd = parsed.legsAdded
+            .filter((leg) => leg.flightNumber.toUpperCase() !== "DUT" && leg.dep !== leg.arr)
+            .map((leg) => ({
+              flightNumber: leg.flightNumber,
+              origin: leg.dep,
+              destination: leg.arr,
+              day: leg.day ?? undefined,
+              depTime: leg.depTime ?? undefined,
+              arrTime: leg.arrTime ?? undefined,
+              blockMinutes: null,
+              deadhead: leg.deadhead === true,
+              raw: "ELP update",
+            }));
 
           // Append only legs not already present (match on flightNumber + origin + destination + depTime + arrTime)
           const rebuiltLegs = [...afterDeletes];
@@ -467,7 +469,7 @@ export async function POST(req: Request) {
             return depA < depB ? -1 : depA > depB ? 1 : 0;
           });
 
-          const rawReport = parsed.dutyModifications?.[0]?.reportText ?? null;
+          const rawReport = parsed.dutyModifications?.filter((m) => m.reportText).at(-1)?.reportText ?? null;
           const newReport = rawReport
             ? (rawReport.match(/(\d{1,2}:\d{2})$/)?.[1] ?? null)
             : null;
