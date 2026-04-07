@@ -71,19 +71,27 @@ export default async function ProgramHistoryPage() {
 
   // Fetch milestones for all archived assignments
   const assignmentIds = assignments.map((a) => a.id);
+
+  type MilestoneRow = {
+    assignment_id: string;
+    milestone_type: string;
+    due_date: string;
+    completed_date: string | null;
+  };
+
   const { data: rawMilestones } = assignmentIds.length > 0
     ? await supabase
         .from("mentorship_milestones")
         .select("assignment_id, milestone_type, due_date, completed_date")
         .in("assignment_id", assignmentIds)
-    : { data: [] };
+    : { data: [] as MilestoneRow[] };
 
-  const milestonesByAssignment = new Map<string, typeof rawMilestones>();
+  const milestonesByAssignment = new Map<string, MilestoneRow[]>();
   for (const m of rawMilestones ?? []) {
-    const row = m as { assignment_id: string; milestone_type: string; due_date: string; completed_date: string | null };
+    const row = m as MilestoneRow;
     const aid = row.assignment_id;
     if (!milestonesByAssignment.has(aid)) milestonesByAssignment.set(aid, []);
-    milestonesByAssignment.get(aid)!.push(m);
+    milestonesByAssignment.get(aid)!.push(row);
   }
 
   return (
@@ -115,17 +123,14 @@ export default async function ProgramHistoryPage() {
 
             const rawMs = milestonesByAssignment.get(a.id) ?? [];
             const milestones = sortMilestonesByProgramOrder(
-              rawMs.map((m) => {
-                const row = m as { assignment_id: string; milestone_type: string; due_date: string; completed_date: string | null };
-                return {
-                  assignment_id: row.assignment_id,
-                  milestone_type: row.milestone_type,
-                  due_date: row.due_date,
-                  completed_date: row.completed_date,
-                  completion_note: null,
-                  completed_at: null,
-                };
-              })
+              rawMs.map((row) => ({
+                assignment_id: row.assignment_id,
+                milestone_type: row.milestone_type,
+                due_date: row.due_date,
+                completed_date: row.completed_date,
+                completion_note: null,
+                completed_at: null,
+              }))
             );
 
             const completedCount = milestones.filter((m) => m.completed_date).length;
