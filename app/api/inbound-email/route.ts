@@ -415,6 +415,9 @@ export async function POST(req: Request) {
         .eq("user_id", aliasRow.user_id)
         .ilike("title", `%${pairingFamily}%`);
 
+      console.log("[ELP DEBUG] pairingFamily:", pairingFamily);
+      console.log("[ELP DEBUG] trips found:", existingTrips?.length);
+
       if (tripError) {
         console.error("[inbound-email] failed to load trips", tripError);
       } else if (!existingTrips || existingTrips.length === 0) {
