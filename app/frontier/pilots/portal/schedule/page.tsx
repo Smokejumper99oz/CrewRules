@@ -14,6 +14,7 @@ import {
 } from "./actions";
 import { InboundEmailDisplay } from "@/components/inbound-email-display";
 import { FlicaIcsHelperModal } from "@/components/flica-ics-helper-modal";
+import { ElpEmailHelperModal } from "@/components/elp-email-helper-modal";
 import type { TripChangeSummary } from "@/lib/trips/detect-trip-changes";
 import { formatMinutesToHhMm } from "@/lib/schedule-time";
 import { ScheduleStatusChip, formatLastImport } from "@/components/schedule-status-chip";
@@ -386,6 +387,7 @@ export default function SchedulePage() {
   });
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [showFlicaIcsGuide, setShowFlicaIcsGuide] = useState(false);
+  const [showElpGuide, setShowElpGuide] = useState(false);
   const [selectedPopover, setSelectedPopover] = useState<SelectedPopoverState | null>(null);
   const [detailPosition, setDetailPosition] = useState<{ x: number; y: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -587,7 +589,14 @@ export default function SchedulePage() {
           </li>
           <li>
             Optional: Add your CrewRules™ import email to ELP to receive reserve updates when sent by Crew
-            Scheduling.
+            Scheduling.{" "}
+            <button
+              type="button"
+              onClick={() => setShowElpGuide(true)}
+              className="inline-flex items-center px-2 py-0.5 ml-2 text-xs font-medium rounded-full border border-[#75C043]/40 text-[#75C043] bg-[#75C043]/10 hover:bg-[#75C043]/20 transition align-baseline"
+            >
+              View guide
+            </button>
           </li>
         </ul>
         <p className="mt-2 text-xs text-slate-500">
@@ -829,6 +838,7 @@ export default function SchedulePage() {
       )}
 
       <FlicaIcsHelperModal open={showFlicaIcsGuide} onClose={() => setShowFlicaIcsGuide(false)} />
+      <ElpEmailHelperModal open={showElpGuide} onClose={() => setShowElpGuide(false)} />
     </div>
   );
 }
