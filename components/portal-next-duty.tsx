@@ -422,7 +422,7 @@ export async function PortalNextDuty({
                 ? (f.flightNumber ?? "").slice((f.carrier ?? "").length).trim()
                 : null;
               const fallbackCarrierForLeg = tenant ? TENANT_CARRIER[tenant] ?? null : null;
-              const flightLabel = f ? `${f.carrier} ${numPart || f.flightNumber}` : (fallbackCarrierForLeg ? `${fallbackCarrierForLeg} ${leg.flightNumber}` : leg.flightNumber);
+              const flightLabel = f ? `${f.carrier}${numPart || f.flightNumber}` : (fallbackCarrierForLeg ? `${fallbackCarrierForLeg}${leg.flightNumber}` : leg.flightNumber);
               const effectiveAircraftType = f
                 ? (f.aircraft_type ?? (f.carrier?.toUpperCase() === "WN" ? "B737" : "—"))
                 : "—";
@@ -507,7 +507,7 @@ export async function PortalNextDuty({
               // Fallback when API has no data (e.g. tomorrow's flights): show schedule-derived info to match Commute Assist style
               const legDisplayDate = ("departureDate" in leg && leg.departureDate) ? leg.departureDate : displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
               const fallbackCarrier = tenant ? TENANT_CARRIER[tenant] ?? null : null;
-              const fallbackFlightLabel = fallbackCarrier ? `${fallbackCarrier} ${leg.flightNumber}` : leg.flightNumber;
+              const fallbackFlightLabel = fallbackCarrier ? `${fallbackCarrier}${leg.flightNumber}` : leg.flightNumber;
               const durMin = leg.depTime && leg.arrTime ? legDurationMinutes(leg.depTime, leg.arrTime) : 0;
 
               return (
