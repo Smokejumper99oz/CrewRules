@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { BookUser, Handshake, ListChecks } from "lucide-react";
+import { BookUser, Handshake, ListChecks, FolderOpen } from "lucide-react";
 import { PilotPortalMentoringSubnav } from "@/components/mentoring/pilot-portal-mentoring-subnav";
 
 const MENTORING_BASE = "/frontier/pilots/portal/mentoring";
@@ -30,17 +30,18 @@ function mentoringPathnameAssignmentId(pathname: string): string | null {
   if (!norm.startsWith(prefix)) return null;
   const seg = norm.slice(prefix.length);
   if (!seg || seg.includes("/")) return null;
-  const staticRoutes = new Set(["library", "guide", "profile"]);
+  const staticRoutes = new Set(["library", "guide", "profile", "archived", "contacts"]);
   if (staticRoutes.has(seg)) return null;
   return seg;
 }
 
-type MenteeTopKey = "my_mentor" | "important_contacts" | "my_milestones";
+type MenteeTopKey = "my_milestones" | "my_mentor" | "program_history" | "important_contacts";
 
 const MENTEE_TOP_ITEMS: readonly { key: MenteeTopKey; label: string; icon: LucideIcon }[] = [
-  { key: "my_mentor", label: "My Mentor", icon: Handshake },
-  { key: "my_milestones", label: "My Milestones", icon: ListChecks },
-  { key: "important_contacts", label: "Important Contacts", icon: BookUser },
+  { key: "my_milestones",      label: "My Milestones",      icon: ListChecks  },
+  { key: "my_mentor",          label: "My Mentor",           icon: Handshake   },
+  { key: "program_history",    label: "Program History",     icon: FolderOpen  },
+  { key: "important_contacts", label: "Important Contacts",  icon: BookUser    },
 ] as const;
 
 export function MentoringSectionChrome({
@@ -66,19 +67,23 @@ export function MentoringSectionChrome({
             {MENTEE_TOP_ITEMS.map(({ key, label, icon: Icon }) => {
               const detailHref =
                 menteeNavAssignmentId != null ? `${MENTORING_BASE}/${menteeNavAssignmentId}` : null;
+
               let href: string | null = null;
               let disabled = false;
 
               switch (key) {
-                case "my_mentor":
-                  href = MENTORING_BASE;
-                  break;
-                case "important_contacts":
                 case "my_milestones":
                   if (detailHref) href = detailHref;
                   else disabled = true;
                   break;
-                default:
+                case "my_mentor":
+                  href = MENTORING_BASE;
+                  break;
+                case "program_history":
+                  href = `${MENTORING_BASE}/archived`;
+                  break;
+                case "important_contacts":
+                  href = `${MENTORING_BASE}/contacts`;
                   break;
               }
 
@@ -89,15 +94,15 @@ export function MentoringSectionChrome({
                 detailIdFromPath === menteeNavAssignmentId;
 
               let isActive = false;
-              if (key === "my_mentor") isActive = isMyMentorHome;
-              else if (key === "my_milestones") isActive = onKnownDetail;
-              /** On assignment detail, Important Contacts shares URL with milestones; only My Milestones shows active (deterministic). */
-              else if (key === "important_contacts") isActive = false;
+              if (key === "my_milestones")      isActive = onKnownDetail;
+              else if (key === "my_mentor")     isActive = isMyMentorHome;
+              else if (key === "program_history")    isActive = norm === `${MENTORING_BASE}/archived`;
+              else if (key === "important_contacts") isActive = norm === `${MENTORING_BASE}/contacts`;
 
               const sharedItemClass = [
                 "group flex shrink-0 items-center gap-1.5 border-0 border-b-2 border-b-transparent text-sm transition touch-manipulation",
                 "-mb-px px-3 py-2.5 max-lg:min-h-[48px] max-lg:snap-start max-lg:snap-always max-lg:py-3 lg:min-h-0 lg:px-3.5 lg:py-2",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-emerald-400/50 dark:focus-visible:ring-offset-slate-950",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:outline-none dark:focus-visible:ring-2 dark:focus-visible:ring-emerald-400/50 dark:focus-visible:ring-offset-slate-950",
               ];
 
               if (disabled) {

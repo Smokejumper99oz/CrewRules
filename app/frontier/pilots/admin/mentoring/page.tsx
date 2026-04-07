@@ -5,14 +5,12 @@ import {
   mentorshipProgramRequestTypeLabel,
 } from "@/lib/mentoring/mentorship-program-request-labels";
 import { resolveFrontierPilotAdminMentorshipProgramRequest } from "./actions";
+import { ContactsEditor } from "./contacts-editor";
 
 export const dynamic = "force-dynamic";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
-
-const statCard =
-  "rounded-xl border border-slate-700/50 bg-slate-800/50 p-4 transition-all duration-200";
 
 const sectionCard = "rounded-xl border border-slate-700/50 bg-slate-800/50 p-5 sm:p-6";
 
@@ -21,6 +19,15 @@ function formatRequestCreatedAt(iso: string): string {
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
+
+type ContactCard = {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon_key: string;
+  sort_order: number;
+  entries: { label: string; value: string; href?: string }[];
+};
 
 type MentorshipProgramRequestRow = {
   id: string;
@@ -41,7 +48,7 @@ type MentorshipProgramRequestRow = {
 
 export default async function FrontierPilotAdminMentoringPage() {
   const admin = createAdminClient();
-  const [stats, programRequestsRes] = await Promise.all([
+  const [stats, programRequestsRes, contactsRes] = await Promise.all([
     getMentoringOverviewStats(admin, { kind: "tenant", tenant: TENANT, portal: PORTAL }),
     admin
       .from("mentorship_program_requests")
@@ -57,6 +64,12 @@ export default async function FrontierPilotAdminMentoringPage() {
       )
       .eq("tenant", TENANT)
       .order("created_at", { ascending: false }),
+    admin
+      .from("mentoring_contacts")
+      .select("id, title, subtitle, icon_key, sort_order, entries")
+      .eq("tenant", TENANT)
+      .eq("portal", PORTAL)
+      .order("sort_order", { ascending: true }),
   ]);
 
   const programRequests: MentorshipProgramRequestRow[] =
@@ -64,87 +77,92 @@ export default async function FrontierPilotAdminMentoringPage() {
       ? []
       : (programRequestsRes.data as MentorshipProgramRequestRow[]);
 
+  const initialContacts: ContactCard[] = contactsRes.error || !contactsRes.data
+    ? []
+    : (contactsRes.data as ContactCard[]);
+
   return (
     <div className="space-y-8">
-      <div className="max-w-3xl">
-        <p className="text-sm text-slate-400 leading-relaxed">
-          Frontier pilot mentoring roster for this tenant. Correct hire dates per assignment; saving updates milestone due
-          dates from the standard schedule. Platform-wide backfill tools stay on the Platform Owner dashboard.
+      <div className="max-w-3xl space-y-1">
+        <p className="text-sm text-slate-300 leading-relaxed">
+          Manage the Frontier Airlines pilot mentoring program. View assignments, rosters, and program requests for all Frontier pilots enrolled in the ALPA mentoring program.
+        </p>
+        <p className="text-sm text-slate-500 leading-relaxed">
+          Hire dates can be corrected directly on each assignment — saving automatically recalculates milestone due dates. Bulk imports are available under the Mentee Imports and Mentor Imports tabs above.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7">
-        <div
-          className={`${statCard} border-emerald-500/25 bg-emerald-500/[0.05] shadow-[inset_0_1px_0_0_rgba(16,185,129,0.07)]`}
-        >
-          <div className="text-xs text-slate-400 mb-1">Live Mentors</div>
-          <div className="text-2xl font-semibold text-slate-200 tabular-nums">{stats.mentors}</div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+        {/* Live Mentors */}
+        <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.05] px-3 py-3 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-medium text-slate-300">Live Mentors</div>
+            <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">Active CrewRules™ mentor accounts</div>
+          </div>
+          <span className="text-lg font-semibold text-slate-200 tabular-nums shrink-0">{stats.mentors}</span>
         </div>
-        <div
-          className={`${statCard} border-amber-500/25 bg-amber-500/[0.05] shadow-[inset_0_1px_0_0_rgba(245,158,11,0.07)]`}
-        >
-          <div className="text-xs text-slate-400 mb-1">Staged Mentors</div>
-          <div className="text-2xl font-semibold text-slate-200 tabular-nums">{stats.stagedMentors}</div>
+        {/* Staged Mentors */}
+        <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.05] px-3 py-3 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-medium text-slate-300">Staged Mentors</div>
+            <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">In system, not yet live</div>
+          </div>
+          <span className="text-lg font-semibold text-slate-200 tabular-nums shrink-0">{stats.stagedMentors}</span>
         </div>
-        <div
-          className={`${statCard} border-sky-500/25 bg-sky-500/[0.06] shadow-[inset_0_1px_0_0_rgba(14,165,233,0.08)]`}
-        >
-          <div className="text-xs text-slate-400 mb-1">Assigned Mentees</div>
-          <div className="text-2xl font-semibold text-slate-200 tabular-nums">{stats.activeMentees}</div>
+        {/* Assigned Mentees */}
+        <div className="rounded-lg border border-sky-500/25 bg-sky-500/[0.06] px-3 py-3 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-medium text-slate-300">Assigned Mentees</div>
+            <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">Paired with a mentor</div>
+          </div>
+          <span className="text-lg font-semibold text-slate-200 tabular-nums shrink-0">{stats.activeMentees}</span>
         </div>
-        <div
-          className={`${statCard} border-emerald-500/20 bg-emerald-500/[0.04] shadow-[inset_0_1px_0_0_rgba(16,185,129,0.05)]`}
-        >
-          <div className="text-xs text-slate-400 mb-1">Live Mentees</div>
-          <div className="text-2xl font-semibold text-slate-200 tabular-nums">{stats.liveMentees}</div>
+        {/* Live Mentees */}
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-3 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-medium text-slate-300">Live Mentees</div>
+            <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">Active CrewRules™ mentee accounts</div>
+          </div>
+          <span className="text-lg font-semibold text-slate-200 tabular-nums shrink-0">{stats.liveMentees}</span>
         </div>
-        <div
-          className={`${statCard} border-amber-500/25 bg-amber-500/[0.05] shadow-[inset_0_1px_0_0_rgba(245,158,11,0.07)] ${
-            stats.unmatchedMentees > 0 ? "ring-1 ring-amber-400/20" : ""
-          }`}
-        >
-          <div className="text-xs text-slate-400 mb-1">Unlinked Mentees</div>
-          <p className="mb-1 text-[10px] leading-snug text-slate-500">
-            Unlinked = assignment with no linked portal user yet
-          </p>
-          <div
-            className={`text-2xl font-semibold tabular-nums ${stats.unmatchedMentees > 0 ? "text-amber-300" : "text-slate-200"}`}
-          >
+        {/* Unlinked Mentees */}
+        <div className={`rounded-lg border border-amber-500/25 bg-amber-500/[0.05] px-3 py-3 flex items-start justify-between gap-3${stats.unmatchedMentees > 0 ? " ring-1 ring-amber-400/20" : ""}`}>
+          <div>
+            <div className="text-xs font-medium text-slate-300">Unlinked Mentees</div>
+            <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">Assignment exists, no CrewRules™ mentee account linked yet</div>
+          </div>
+          <span className={`text-lg font-semibold tabular-nums shrink-0 ${stats.unmatchedMentees > 0 ? "text-amber-300" : "text-slate-200"}`}>
             {stats.unmatchedMentees}
-          </div>
+          </span>
         </div>
-        <div
-          className={`${statCard} border-rose-500/25 bg-rose-500/[0.05] shadow-[inset_0_1px_0_0_rgba(244,63,94,0.07)] ${
-            stats.missingMentorContact > 0 ? "ring-1 ring-rose-400/20" : ""
-          }`}
-        >
-          <div className="text-xs text-slate-400 mb-1">Mentor Contact Incomplete</div>
-          <div
-            className={`text-2xl font-semibold tabular-nums ${stats.missingMentorContact > 0 ? "text-rose-300" : "text-slate-200"}`}
-          >
+        {/* Mentor Contact Incomplete */}
+        <div className={`rounded-lg border border-rose-500/25 bg-rose-500/[0.05] px-3 py-3 flex items-start justify-between gap-3${stats.missingMentorContact > 0 ? " ring-1 ring-rose-400/20" : ""}`}>
+          <div>
+            <div className="text-xs font-medium text-slate-300">Contact Incomplete</div>
+            <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">Mentor missing phone or email on their profile</div>
+          </div>
+          <span className={`text-lg font-semibold tabular-nums shrink-0 ${stats.missingMentorContact > 0 ? "text-rose-300" : "text-slate-200"}`}>
             {stats.missingMentorContact}
-          </div>
+          </span>
         </div>
-        <div
-          className={`${statCard} border-violet-500/25 bg-violet-500/[0.05] shadow-[inset_0_1px_0_0_rgba(139,92,246,0.07)] ${
-            stats.openMentorshipProgramRequests > 0 ? "ring-1 ring-violet-400/25" : ""
-          }`}
-        >
-          <div className="text-xs text-slate-400 mb-1">Open Program Requests</div>
-          <div
-            className={`text-2xl font-semibold tabular-nums ${stats.openMentorshipProgramRequests > 0 ? "text-violet-200" : "text-slate-200"}`}
-          >
-            {stats.openMentorshipProgramRequests}
+        {/* Open Program Requests */}
+        <div className={`rounded-lg border border-violet-500/25 bg-violet-500/[0.05] px-3 py-3 flex items-start justify-between gap-3${stats.openMentorshipProgramRequests > 0 ? " ring-1 ring-violet-400/25" : ""}`}>
+          <div>
+            <div className="text-xs font-medium text-slate-300">Open Requests</div>
+            <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">Pilots requesting to join the program</div>
           </div>
+          <span className={`text-lg font-semibold tabular-nums shrink-0 ${stats.openMentorshipProgramRequests > 0 ? "text-violet-200" : "text-slate-200"}`}>
+            {stats.openMentorshipProgramRequests}
+          </span>
         </div>
       </div>
 
       <section className={sectionCard} aria-labelledby="program-requests-heading">
-        <h2 id="program-requests-heading" className="text-sm font-semibold text-slate-200">
-          Mentorship program requests
+        <h2 id="program-requests-heading" className="text-base font-semibold text-slate-200">
+          ALPA Mentorship Program Requests
         </h2>
-        <p className="mt-2 text-sm text-slate-400">
-          Submitted from the pilot Mentoring page when no assignment is listed yet.
+        <p className="mt-1 text-sm text-slate-500">
+          Submitted by Frontier pilots via the Mentoring page when no active assignment is on file yet.
         </p>
         {programRequests.length === 0 ? (
           <p className="mt-4 text-sm text-slate-500">None yet.</p>
@@ -219,6 +237,8 @@ export default async function FrontierPilotAdminMentoringPage() {
           </div>
         )}
       </section>
+
+      <ContactsEditor initialCards={initialContacts} />
     </div>
   );
 }

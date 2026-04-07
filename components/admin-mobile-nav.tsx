@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 type NavItem = { label: string; href: string };
 
@@ -29,15 +30,15 @@ export function AdminMobileNav({
         </svg>
       </button>
 
-      {open && (
+      {open && createPortal(
         <>
           <div
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
             aria-hidden
             onClick={() => setOpen(false)}
           />
           <aside
-            className="fixed left-0 top-0 z-50 h-full w-72 border-r border-white/10 bg-slate-950 shadow-xl md:hidden"
+            className="fixed left-0 top-0 z-50 h-screen w-72 border-r border-white/10 bg-slate-950 shadow-xl"
             role="dialog"
             aria-label="Admin navigation"
           >
@@ -65,7 +66,7 @@ export function AdminMobileNav({
                       key={item.label}
                       href={item.href ? `${base}/${item.href}` : base}
                       onClick={() => setOpen(false)}
-                      className="block rounded-xl px-3 py-3 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition touch-manipulation min-h-[44px] flex items-center"
+                      className="flex items-center rounded-xl px-3 py-3 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition touch-manipulation min-h-[44px]"
                     >
                       {item.label}
                     </Link>
@@ -83,7 +84,8 @@ export function AdminMobileNav({
               </nav>
             </div>
           </aside>
-        </>
+        </>,
+        document.body
       )}
     </>
   );

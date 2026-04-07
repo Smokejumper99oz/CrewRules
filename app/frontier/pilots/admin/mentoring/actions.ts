@@ -446,6 +446,73 @@ export async function recalculateFrontierPilotAdminMentorshipMilestoneDueDates(
   return {};
 }
 
+/** Frontier pilots tenant admin: upsert a mentoring_contacts card (title, subtitle, icon_key, sort_order, entries). */
+export async function upsertMentoringContactCard(formData: FormData): Promise<{ error?: string }> {
+  const gate = await ensureFrontierPilotsTenantAdmin();
+  if (gate.error) return { error: gate.error };
+
+  const id = String(formData.get("id") ?? "").trim() || null;
+  const title = String(formData.get("title") ?? "").trim();
+  const subtitle = String(formData.get("subtitle") ?? "").trim();
+  const icon_key = String(formData.get("icon_key") ?? "users").trim() || "users";
+  const sort_order = parseInt(String(formData.get("sort_order") ?? "0"), 10) || 0;
+  const entriesRaw = String(formData.get("entries") ?? "[]");
+
+  if (!title) return { error: "Title is required." };
+
+  let entries: unknown;
+  try {
+    entries = JSON.parse(entriesRaw);
+    if (!Array.isArray(entries)) throw new Error("not array");
+  } catch {
+    return { error: "Invalid entries data." };
+  }
+
+  const admin = createAdminClient();
+
+  if (id) {
+    const { error } = await admin
+      .from("mentoring_contacts")
+      .update({ title, subtitle, icon_key, sort_order, entries })
+      .eq("id", id)
+      .eq("tenant", TENANT)
+      .eq("portal", PORTAL);
+    if (error) return { error: error.message };
+  } else {
+    const { error } = await admin
+      .from("mentoring_contacts")
+      .insert({ tenant: TENANT, portal: PORTAL, title, subtitle, icon_key, sort_order, entries });
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath("/frontier/pilots/admin/mentoring");
+  revalidatePath("/frontier/pilots/portal/mentoring/contacts");
+  return {};
+}
+
+/** Frontier pilots tenant admin: delete a mentoring_contacts card by id. */
+export async function deleteMentoringContactCard(formData: FormData): Promise<{ error?: string }> {
+  const gate = await ensureFrontierPilotsTenantAdmin();
+  if (gate.error) return { error: gate.error };
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return { error: "Invalid card." };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("mentoring_contacts")
+    .delete()
+    .eq("id", id)
+    .eq("tenant", TENANT)
+    .eq("portal", PORTAL);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/frontier/pilots/admin/mentoring");
+  revalidatePath("/frontier/pilots/portal/mentoring/contacts");
+  return {};
+}
+
 /** Frontier pilots tenant admin: mark one open `mentorship_program_requests` row resolved for this tenant. */
 export async function resolveFrontierPilotAdminMentorshipProgramRequest(formData: FormData): Promise<void> {
   const gate = await ensureFrontierPilotsTenantAdmin();
