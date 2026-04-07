@@ -1,5 +1,13 @@
 /**
  * Frontier mentoring CSV: final template headers and parsing (server-side).
+ *
+ * Accepted name column formats (case-insensitive):
+ *   • mentee_full_name          — original template
+ *   • first_name  + last_name   — snake_case HR export
+ *   • First Name  + Last Name   — human-readable Excel export
+ *   • mentee_first_name + mentee_last_name — prefixed variant
+ * When split columns are detected, they are combined as "First Last" and
+ * surfaced as mentee_full_name so the rest of the pipeline is unchanged.
  */
 
 export const FRONTIER_MENTORING_CSV_HEADERS = [
@@ -12,6 +20,43 @@ export const FRONTIER_MENTORING_CSV_HEADERS = [
   "mentee_email@flyfrontier.com",
   "notes",
 ] as const;
+
+/** Aliases accepted for the first-name column (checked case-insensitively). */
+const FIRST_NAME_ALIASES = ["first_name", "first name", "mentee_first_name"];
+/** Aliases accepted for the last-name column (checked case-insensitively). */
+const LAST_NAME_ALIASES = ["last_name", "last name", "mentee_last_name"];
+
+/**
+ * Given a header→index map, detect split first/last name columns and return
+ * their indices. Returns null if the sheet already has mentee_full_name or
+ * if no recognisable split-name pair is found.
+ */
+export function detectSplitNameColumns(
+  headerIndex: Map<string, number>
+): { firstIdx: number; lastIdx: number } | null {
+  if (headerIndex.has("mentee_full_name")) return null;
+
+  // Build a lower-case lookup so matching is case-insensitive
+  const lowerMap = new Map<string, number>();
+  for (const [key, idx] of headerIndex.entries()) {
+    lowerMap.set(key.toLowerCase(), idx);
+  }
+
+  let firstIdx: number | undefined;
+  let lastIdx: number | undefined;
+
+  for (const alias of FIRST_NAME_ALIASES) {
+    const idx = lowerMap.get(alias);
+    if (idx !== undefined) { firstIdx = idx; break; }
+  }
+  for (const alias of LAST_NAME_ALIASES) {
+    const idx = lowerMap.get(alias);
+    if (idx !== undefined) { lastIdx = idx; break; }
+  }
+
+  if (firstIdx === undefined || lastIdx === undefined) return null;
+  return { firstIdx, lastIdx };
+}
 
 export type FrontierMentoringCsvHeader = (typeof FRONTIER_MENTORING_CSV_HEADERS)[number];
 
@@ -118,9 +163,23 @@ export function parseFrontierMentoringCsv(text: string): ParsedMentoringCsvResul
     if (h && !headerIndex.has(h)) headerIndex.set(h, i);
   });
 
+  // Detect split first/last name columns and synthesize mentee_full_name
+  const splitName = detectSplitNameColumns(headerIndex);
+  if (splitName) {
+    // Register a virtual column index beyond the actual columns
+    const syntheticIdx = headerCells.length;
+    headerIndex.set("mentee_full_name", syntheticIdx);
+  }
+
   for (const required of FRONTIER_MENTORING_CSV_HEADERS) {
     if (!headerIndex.has(required)) {
-      return { ok: false, error: `Missing required column: ${required}` };
+      return {
+        ok: false,
+        error:
+          required === "mentee_full_name"
+            ? `Missing required column: mentee_full_name (or provide separate first_name / last_name columns)`
+            : `Missing required column: ${required}`,
+      };
     }
   }
 
@@ -129,8 +188,15 @@ export function parseFrontierMentoringCsv(text: string): ParsedMentoringCsvResul
     const cells = parseCsvLine(lines[i]);
     const values = {} as Record<FrontierMentoringCsvHeader, string>;
     for (const key of FRONTIER_MENTORING_CSV_HEADERS) {
-      const idx = headerIndex.get(key)!;
-      values[key] = (cells[idx] ?? "").trim();
+      if (key === "mentee_full_name" && splitName) {
+        // Combine "First Last" from the split columns
+        const first = (cells[splitName.firstIdx] ?? "").trim();
+        const last = (cells[splitName.lastIdx] ?? "").trim();
+        values[key] = [first, last].filter(Boolean).join(" ");
+      } else {
+        const idx = headerIndex.get(key)!;
+        values[key] = (cells[idx] ?? "").trim();
+      }
     }
     const rowNumber = i + 1;
     rows.push({ rowNumber, values });

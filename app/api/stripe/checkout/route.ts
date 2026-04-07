@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     }
 
     if (interval === "founding_pilot_annual") {
-      const foundingCount = await getFoundingPilotCount(supabase);
+      const foundingCount = await getFoundingPilotCount();
       if (foundingCount >= FOUNDING_PILOT_CAP) {
         return NextResponse.json(
           { error: "Founding Pilot program is full." },

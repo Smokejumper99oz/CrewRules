@@ -25,7 +25,7 @@ export function DashboardWeatherWidget({ metar, weatherBriefHref }: Props) {
   return (
     <Link
       href={weatherBriefHref}
-      className="group shrink-0 min-w-[260px] flex items-start gap-3 rounded-xl border border-white/5 bg-slate-900/40 px-4 py-2.5 transition hover:border-white/10 hover:bg-slate-900/60"
+      className="group w-full sm:shrink-0 sm:min-w-[260px] sm:w-auto flex items-start gap-3 rounded-xl border border-white/5 bg-slate-900/40 px-4 py-2.5 transition hover:border-white/10 hover:bg-slate-900/60"
     >
       {/* Weather emoji */}
       <span className="text-2xl leading-none mt-0.5 shrink-0" aria-hidden>

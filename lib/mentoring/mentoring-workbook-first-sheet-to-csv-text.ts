@@ -14,7 +14,10 @@ import {
   mentorPreloadImportHeaderValidationError,
   mentorPreloadSheetOutputHeaderList,
 } from "@/lib/mentoring/mentor-preload-csv-import";
-import { FRONTIER_MENTORING_CSV_HEADERS } from "@/lib/mentoring/mentoring-csv-import";
+import {
+  FRONTIER_MENTORING_CSV_HEADERS,
+  detectSplitNameColumns,
+} from "@/lib/mentoring/mentoring-csv-import";
 
 /** RFC 4180-style quoted fields so commas/quotes in cells round-trip through existing CSV parsers. */
 function encodeCsvRow(fields: string[]): string {
@@ -175,9 +178,22 @@ function mentoringAssignXlsxBufferToCsvText(
     if (key && !headerIndex.has(key)) headerIndex.set(key, i);
   });
 
+  // Detect split first/last name columns and register a synthetic mentee_full_name
+  const splitName = detectSplitNameColumns(headerIndex);
+  if (splitName) {
+    // Use a sentinel index that won't collide with any real column
+    headerIndex.set("mentee_full_name", -1);
+  }
+
   for (const required of requiredHeaders) {
     if (!headerIndex.has(required)) {
-      return { ok: false, error: `Missing required column: ${required}` };
+      return {
+        ok: false,
+        error:
+          required === "mentee_full_name"
+            ? `Missing required column: mentee_full_name (or provide separate first_name / last_name columns)`
+            : `Missing required column: ${required}`,
+      };
     }
   }
 
@@ -186,15 +202,30 @@ function mentoringAssignXlsxBufferToCsvText(
     ...optionalHeaders.filter((h) => headerIndex.has(h)),
   ];
 
-  const maxCol =
-    Math.max(...outputHeaders.map((h) => headerIndex.get(h)!), ...headerIndex.values()) + 1;
+  // Max column index for reading real cell data (exclude the synthetic -1 sentinel)
+  const realIndices = outputHeaders
+    .map((h) => headerIndex.get(h)!)
+    .filter((i) => i >= 0);
+  const maxCol = Math.max(0, ...realIndices, ...headerIndex.values().filter((v) => v >= 0)) + 1;
+
   const lines: string[] = [];
   lines.push(encodeCsvRow([...outputHeaders]));
 
   for (let r = 1; r < aoa.length; r++) {
     const raw = aoa[r] as unknown[];
     const wide = rowStrings(raw, Math.max(raw?.length ?? 0, maxCol));
-    const values = outputHeaders.map((h) => wide[headerIndex.get(h)!] ?? "");
+
+    const values = outputHeaders.map((h) => {
+      const idx = headerIndex.get(h)!;
+      if (h === "mentee_full_name" && splitName) {
+        // Combine "First Last" from the detected split columns
+        const first = wide[splitName.firstIdx]?.trim() ?? "";
+        const last = wide[splitName.lastIdx]?.trim() ?? "";
+        return [first, last].filter(Boolean).join(" ");
+      }
+      return wide[idx] ?? "";
+    });
+
     if (isRowAllBlank(values)) continue;
     lines.push(encodeCsvRow(values));
   }

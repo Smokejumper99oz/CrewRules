@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server";
 import {
   getProfile,
   getPlanBadgeLabel,
@@ -20,8 +19,7 @@ export default async function SubscriptionSettingsPage() {
     );
   }
 
-  const supabase = await createClient();
-  const foundingPilotCount = await getFoundingPilotCount(supabase);
+  const foundingPilotCount = await getFoundingPilotCount();
 
   return (
     <>

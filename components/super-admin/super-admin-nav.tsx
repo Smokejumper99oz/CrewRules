@@ -138,7 +138,12 @@ export function SuperAdminNav() {
             icon={GraduationCap}
             isActive={pathname?.startsWith("/super-admin/mentoring")}
           />
-          <NavItem label="Feature Flags" icon={ToggleLeft} isComingSoon />
+          <NavItem
+            href="/super-admin/tenant-features"
+            label="Tenant Features"
+            icon={ToggleLeft}
+            isActive={pathname?.startsWith("/super-admin/tenant-features")}
+          />
           <NavItem label="Admin Settings" icon={Settings} isComingSoon />
         </div>
       </div>

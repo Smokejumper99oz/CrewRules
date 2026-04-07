@@ -36,8 +36,8 @@ export default async function PortalDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Greeting + compact weather chip — share one row */}
-      <div className="flex items-start justify-between gap-4">
+      {/* Greeting + compact weather chip */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
           <p className="text-[0.9375rem] text-slate-500">{greetingPart}</p>
           <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{namePart}</p>

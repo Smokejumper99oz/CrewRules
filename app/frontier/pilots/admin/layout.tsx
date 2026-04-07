@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTenantPortalConfig } from "@/lib/tenant-config";
 import { getAccountRoleDisplay } from "@/lib/account-role-display";
 import { getProfile, isAdmin } from "@/lib/profile";
 import { signOut } from "../portal/actions";
 import { AdminMobileNav } from "@/components/admin-mobile-nav";
+import { AdminSidebarNav } from "@/components/admin-sidebar-nav";
 import { PortalUserMenu } from "@/components/portal-user-menu";
 import { PageTitle } from "@/components/page-title";
+import { AdminFeedbackButton } from "@/components/admin-feedback-button";
 
 const TENANT = "frontier";
 const PORTAL = "pilots";
@@ -68,36 +69,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             </div>
           </div>
 
-          <nav className="px-4 pb-6 pt-2">
-            <div className="space-y-1">
-              {adminNav.map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href ? `${base}/${item.href}` : base}
-                  className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-
-            <div className="mt-6 border-t border-white/5 pt-4">
-              {isSuperAdmin && (
-                <Link
-                  href="/super-admin"
-                  className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-amber-400/90 hover:bg-white/5 hover:text-amber-400 transition"
-                >
-                  Platform Owner Dashboard →
-                </Link>
-              )}
-              <Link
-                href={`/${TENANT}/${PORTAL}/portal`}
-                className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-slate-400 hover:bg-white/5 hover:text-white transition"
-              >
-                ← Back to Portal
-              </Link>
-            </div>
-          </nav>
+          <AdminSidebarNav
+            base={base}
+            nav={adminNav}
+            portalBase={`/${TENANT}/${PORTAL}/portal`}
+            isSuperAdmin={isSuperAdmin}
+          />
         </aside>
 
         <section className="flex-1">
@@ -124,7 +101,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 </div>
               </div>
 
-              <div className="flex shrink-0 items-center">
+              <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                <AdminFeedbackButton />
                 <PortalUserMenu
                   email={userProfile.email ?? null}
                   roleLabel={userMenuRoleLabel}
