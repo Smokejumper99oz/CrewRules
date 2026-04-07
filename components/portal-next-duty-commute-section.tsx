@@ -115,10 +115,10 @@ export function PortalNextDutyCommuteSection({
               : "Upgrade to Pro to unlock this feature."}
           </p>
           <Link
-            href={`/${tenant}/${portal}/portal/settings/pilot`}
+            href={`/${tenant}/${portal}/portal/settings/subscription`}
             className="inline-block text-sm font-medium text-[#75C043] hover:underline"
           >
-            {isEligibleForProTrialStartCta(profile) ? "Go to Profile →" : "View upgrade options →"}
+            {isEligibleForProTrialStartCta(profile) ? "Start free trial →" : "View upgrade options →"}
           </Link>
         </div>
       ) : (

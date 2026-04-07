@@ -8,6 +8,7 @@ import { formatMinutesToHhMm } from "@/lib/schedule-time";
 import { ProBadge } from "@/components/pro-badge";
 import { getPlanBadgeLabel, getPlanBadgeVariant } from "@/lib/profile-badge";
 import type { MonthOption, MonthStats } from "@/app/frontier/pilots/portal/schedule/actions";
+import { isEligibleForProTrialStartCta } from "@/lib/profile-helpers";
 import { getBidPeriodForTimestamp, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { setShowPayProjection } from "@/app/frontier/pilots/portal/profile/actions";
@@ -177,12 +178,16 @@ export function PortalMonthStatsClient({ tenant, portal, profile, availableMonth
                 Pay Estimate{"\u00A0"}·{"\u00A0"}PRO
               </span>
               <p className="text-xs text-slate-500">See your projected monthly pay based on credit and guarantee.</p>
-              <p className="text-xs text-slate-500">Start a 14-day PRO trial to unlock this feature.</p>
+              <p className="text-xs text-slate-500">
+                {isEligibleForProTrialStartCta(profile)
+                  ? "Start a 14-day PRO trial to unlock this feature."
+                  : "Upgrade to Pro to unlock this feature."}
+              </p>
               <Link
-                href={`/${tenant}/${portal}/portal/settings/pilot`}
+                href={`/${tenant}/${portal}/portal/settings/subscription`}
                 className="inline-block text-sm font-medium text-[#75C043] hover:underline"
               >
-                Go to Profile →
+                {isEligibleForProTrialStartCta(profile) ? "Start free trial →" : "View upgrade options →"}
               </Link>
             </div>
           ) : (
