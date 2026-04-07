@@ -588,7 +588,7 @@ export default function SchedulePage() {
             </button>
           </li>
           <li>
-            Optional: Add your CrewRules™ import email to ELP to receive reserve updates when sent by Crew
+            Recommended: Add your CrewRules™ import email to ELP to receive reserve updates when sent by Crew
             Scheduling.{" "}
             <button
               type="button"
