@@ -23,7 +23,7 @@ export function ElpEmailHelperModal({ open, onClose }: Props) {
       >
         <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
           <h2 id="elp-helper-modal-title" className="text-lg font-semibold text-white">
-            ELP auto-update guide
+            ELP Auto-update Guide — Where to add your CrewRules™ email address
           </h2>
           <button
             type="button"
