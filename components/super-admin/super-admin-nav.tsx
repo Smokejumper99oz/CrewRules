@@ -21,6 +21,7 @@ import {
   Settings,
   CalendarClock,
   MessageSquare,
+  UserPlus,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -117,6 +118,12 @@ export function SuperAdminNav() {
           Admin Tools
         </div>
         <div className="space-y-0.5">
+          <NavItem
+            href="/super-admin/create-user"
+            label="Create User"
+            icon={UserPlus}
+            isActive={pathname?.startsWith("/super-admin/create-user")}
+          />
           <NavItem label="Access Requests" icon={Inbox} isComingSoon />
           <Link
             href="/super-admin/waitlist"

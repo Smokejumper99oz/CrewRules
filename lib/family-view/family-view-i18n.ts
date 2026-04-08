@@ -75,7 +75,7 @@ export type FamilyViewStrings = {
   delayed: string;            // "Delayed +" prefix, then "+N min"
 
   // Commute flights
-  likelyYourFlight: string;
+  likelyYourFlight: (firstName: string) => string;
   backupOption: string;
   departureLabel: string;
   arrivalLabel: string;
@@ -157,7 +157,7 @@ const en: FamilyViewStrings = {
   flightCancelled: "Flight Cancelled",
   delayed: "Delayed",
 
-  likelyYourFlight: "Likely your flight",
+  likelyYourFlight: (firstName) => `Likely ${firstName}'s flight`,
   backupOption: "Backup option",
   departureLabel: "Departure:",
   arrivalLabel: "Arrival:",
@@ -234,7 +234,7 @@ const es: FamilyViewStrings = {
   flightCancelled: "Vuelo Cancelado",
   delayed: "Retrasado",
 
-  likelyYourFlight: "Probablemente tu vuelo",
+  likelyYourFlight: (firstName) => `Probablemente el vuelo de ${firstName}`,
   backupOption: "Opción alternativa",
   departureLabel: "Salida:",
   arrivalLabel: "Llegada:",
@@ -311,7 +311,7 @@ const de: FamilyViewStrings = {
   flightCancelled: "Flug gestrichen",
   delayed: "Verspätet",
 
-  likelyYourFlight: "Wahrscheinlich dein Flug",
+  likelyYourFlight: (firstName) => `Wahrscheinlich ${firstName}s Flug`,
   backupOption: "Ausweichoption",
   departureLabel: "Abflug:",
   arrivalLabel: "Ankunft:",

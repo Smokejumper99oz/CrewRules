@@ -32,6 +32,8 @@ import {
   todayStr,
 } from "@/lib/leg-dates";
 import { scheduleCardLegDateHelpers, withLegsToShow } from "@/lib/schedule-card-legs";
+import { resolveLegIdentity } from "@/lib/trips/resolve-leg-identity";
+import { parseAviationstackTs } from "@/lib/aviationstack";
 
 const FLICA_SOURCE = "flica_import";
 
@@ -225,6 +227,8 @@ export async function getNextDuty(): Promise<{
   commuteAssistReserveEarlyReleaseWindow?: boolean;
   /** True when on overlapping reserve duty but outside the last-day early-release window — skip Commute Assist flight fetches. */
   commuteAssistSuppressFlightSearch?: boolean;
+  /** Set when post_duty_release and next trip starts at base within 32h — commute home is likely impractical. */
+  shortTurnAtBase?: { nextReportIso: string; nextReportDisplay: string; hoursUntilNextReport: number };
   error?: string;
 }> {
   const profile = await getProfile();
@@ -452,10 +456,92 @@ export async function getNextDuty(): Promise<{
           (e) => e.event_type === "trip" && isTripReportOnLocalCalendarDay(e, today, baseTimezone)
         );
         if (endDate === today && nextStartsLater && !hasUpcomingReportTodayTrip) {
-          return {
-            ...withLegsToShow(lastEndedEvent, today, baseTimezone, "post_duty_release", hasSchedule, nextDutyLegHelpers, 0),
-            commuteAssistDirection: "to_home",
-          };
+          const LANDING_FLIP_HOURS = 4;      // switch to next duty N hours after landing
+          const NEXT_DUTY_WINDOW_HOURS = 48; // only flip if next report is still within this window
+          const SHORT_TURN_HOURS = 32;       // show short-turn warning note if layover is within this
+
+          const nowMs = new Date(nowIso).getTime();
+          const endMs = new Date(lastEndedEvent.end_time).getTime();
+
+          // Pro users: try to get actual landing time from live API for the last leg
+          let actualEndMs = endMs;
+          if (isProActive(profile)) {
+            const legs = Array.isArray(lastEndedEvent.legs) ? lastEndedEvent.legs : [];
+            const lastLeg = legs.length > 0 ? legs[legs.length - 1] : null;
+            if (lastLeg?.flightNumber && lastLeg.origin?.length === 3 && lastLeg.destination?.length === 3) {
+              try {
+                // Try scheduled arrival date first, then prior day (overnight flights depart the day before)
+                const dayBefore = formatInTimeZone(new Date(endMs - 86_400_000), baseTimezone, "yyyy-MM-dd");
+                for (const tryDate of [endDate, dayBefore]) {
+                  const resolved = await resolveLegIdentity({
+                    flightNumber: lastLeg.flightNumber,
+                    origin: lastLeg.origin,
+                    destination: lastLeg.destination,
+                    depTime: lastLeg.depTime,
+                    date: tryDate,
+                  });
+                  const arrRaw = resolved?.flight?.arr_actual_raw ?? resolved?.flight?.arr_estimated_raw;
+                  if (arrRaw) {
+                    const destTz = resolved?.flight?.destTz ?? baseTimezone;
+                    const parsed = parseAviationstackTs(arrRaw, destTz);
+                    if (!isNaN(parsed.getTime())) {
+                      actualEndMs = parsed.getTime();
+                    }
+                    break; // flight found — stop regardless of whether actual time exists
+                  }
+                  if (resolved?.flight) break; // flight found but no actual time
+                }
+              } catch {
+                // silently fall back to scheduled time
+              }
+            }
+          }
+
+          const hoursSinceLanding = (nowMs - actualEndMs) / (60 * 60 * 1000);
+
+          const nextTrip = upcoming.length > 0 ? upcoming[0] : null;
+          const nextReportMs =
+            nextTrip && nextTrip.event_type === "trip"
+              ? getScheduleEventDutyStartMs(nextTrip, baseTimezone)
+              : null;
+
+          // Hours from NOW until next report (for flip window check)
+          const hoursUntilNextReportFromNow =
+            nextReportMs != null ? (nextReportMs - nowMs) / (60 * 60 * 1000) : null;
+          // Total layover from landing to next report (for short-turn note display)
+          const totalLayoverHours =
+            nextReportMs != null ? (nextReportMs - endMs) / (60 * 60 * 1000) : null;
+
+          // After 4h post-landing AND next report still within 48h → flip to next duty
+          const shouldFlipToNextDuty =
+            hoursSinceLanding >= LANDING_FLIP_HOURS &&
+            hoursUntilNextReportFromNow != null &&
+            hoursUntilNextReportFromNow > 0 &&
+            hoursUntilNextReportFromNow <= NEXT_DUTY_WINDOW_HOURS;
+
+          if (shouldFlipToNextDuty) {
+            // Fall through — the next-duty logic below will pick up upcoming[0]
+          } else {
+            // Still within 4h of landing (or next trip > 48h away) → show Trip Complete + to_home
+            let shortTurnAtBase: { nextReportIso: string; nextReportDisplay: string; hoursUntilNextReport: number } | undefined;
+            if (
+              nextReportMs != null &&
+              totalLayoverHours != null &&
+              totalLayoverHours > 0 &&
+              totalLayoverHours <= SHORT_TURN_HOURS
+            ) {
+              shortTurnAtBase = {
+                nextReportIso: new Date(nextReportMs).toISOString(),
+                nextReportDisplay: formatInTimeZone(new Date(nextReportMs), baseTimezone, "HH:mm"),
+                hoursUntilNextReport: Math.round(totalLayoverHours),
+              };
+            }
+            return {
+              ...withLegsToShow(lastEndedEvent, today, baseTimezone, "post_duty_release", hasSchedule, nextDutyLegHelpers, 0),
+              commuteAssistDirection: "to_home",
+              shortTurnAtBase,
+            };
+          }
         }
       }
     }

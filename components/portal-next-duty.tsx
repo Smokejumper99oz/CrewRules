@@ -112,6 +112,7 @@ export async function PortalNextDuty({
       commuteAssistDirection,
       commuteAssistReserveEarlyReleaseWindow,
       commuteAssistSuppressFlightSearch,
+      shortTurnAtBase,
     },
     statusData,
     displaySettings,
@@ -679,6 +680,7 @@ export async function PortalNextDuty({
             }
             reportTimeOverride={reportTimeOverride}
             dutyStartTime={reportTimeOverride ?? event?.start_time ?? null}
+            shortTurnAtBase={shortTurnAtBase}
           />
 
           <div className="flex justify-end">

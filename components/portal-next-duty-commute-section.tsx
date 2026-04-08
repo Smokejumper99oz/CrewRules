@@ -27,6 +27,7 @@ type Props = {
   dutyEndAirportOverride?: string | null;
   reportTimeOverride?: string | null;
   dutyStartTime?: string | null;
+  shortTurnAtBase?: { nextReportIso: string; nextReportDisplay: string; hoursUntilNextReport: number };
 };
 
 export function PortalNextDutyCommuteSection({
@@ -46,6 +47,7 @@ export function PortalNextDutyCommuteSection({
   dutyEndAirportOverride,
   reportTimeOverride,
   dutyStartTime,
+  shortTurnAtBase,
 }: Props) {
   const daysUntilDuty =
     dutyStartTime
@@ -141,6 +143,7 @@ export function PortalNextDutyCommuteSection({
             dutyStartAirportOverride={dutyStartAirportOverride}
             dutyEndAirportOverride={dutyEndAirportOverride}
             reportTimeOverride={reportTimeOverride}
+            shortTurnAtBase={shortTurnAtBase}
           />
           </>
           )}

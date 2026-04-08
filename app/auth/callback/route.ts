@@ -15,17 +15,20 @@ export async function GET(request: Request) {
 
   const isRecovery = type === "recovery";
   const isEmailConfirmation = type === "email";
+  // invite / signup types are used by Supabase's inviteUserByEmail
+  const isInvite = type === "invite" || type === "signup";
 
-  if (!isRecovery && !isEmailConfirmation) {
+  if (!isRecovery && !isEmailConfirmation && !isInvite) {
     return NextResponse.redirect(
       new URL("/frontier/pilots/login?error=invalid_link", request.url)
     );
   }
 
   const supabase = await createClient();
+  const otpType = isRecovery ? "recovery" : isInvite ? "invite" : "email";
   const { error } = await supabase.auth.verifyOtp({
     token_hash,
-    type: isRecovery ? "recovery" : "email",
+    type: otpType,
   });
 
   if (error) {
@@ -58,6 +61,7 @@ export async function GET(request: Request) {
     );
   }
 
+  // Invite and recovery both send the user to set/reset their password
   return NextResponse.redirect(
     new URL("/frontier/pilots/reset-password", request.url)
   );

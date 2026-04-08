@@ -91,8 +91,14 @@ export async function gateUserForPortal(
     };
   }
 
+  // tenant_admin and is_admin users may use any email (e.g. ALPA or personal).
+  // They are invited manually via Super Admin and must not be gated by airline domain.
+  const isTenantAdmin =
+    minimalProfile?.role === "tenant_admin" ||
+    minimalProfile?.is_admin === true;
+
   const requiredDomain = TENANT_EMAIL_DOMAIN[tenant];
-  if (requiredDomain) {
+  if (requiredDomain && !isTenantAdmin) {
     if (!email || !email.endsWith(requiredDomain.toLowerCase())) {
       redirect(`${loginPath}?error=company_email_required`);
     }
@@ -119,13 +125,16 @@ export async function gateUserForPortal(
     redirect(`${loginPath}?error=role_not_allowed`);
   }
 
+  // tenant_admin and is_admin users are invited externally; they skip pilot onboarding.
+  const isAdminUser = p.role === "tenant_admin" || p.is_admin === true;
+
   const hasRequiredOnboarding =
     !!String(p.base_airport ?? "").trim() &&
     !!String(p.position ?? "").trim() &&
     (p.date_of_hire != null && p.date_of_hire !== "") &&
     !!String(p.home_airport ?? "").trim();
 
-  if (!hasRequiredOnboarding) {
+  if (!hasRequiredOnboarding && !isAdminUser) {
     redirect(completeProfilePath);
   }
 

@@ -10,11 +10,13 @@ export function AdminSidebarNav({
   nav,
   portalBase,
   isSuperAdmin,
+  hidePortalLink = false,
 }: {
   base: string;
   nav: NavItem[];
   portalBase: string;
   isSuperAdmin: boolean;
+  hidePortalLink?: boolean;
 }) {
   const pathname = usePathname();
 
@@ -55,12 +57,14 @@ export function AdminSidebarNav({
             Platform Owner Dashboard →
           </Link>
         )}
-        <Link
-          href={portalBase}
-          className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-slate-500 hover:bg-white/5 hover:text-slate-300 transition"
-        >
-          ← Back to Portal
-        </Link>
+        {!hidePortalLink && (
+          <Link
+            href={portalBase}
+            className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-slate-500 hover:bg-white/5 hover:text-slate-300 transition"
+          >
+            ← Back to Portal
+          </Link>
+        )}
       </div>
     </nav>
   );

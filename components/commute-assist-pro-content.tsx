@@ -370,6 +370,8 @@ type Props = {
   dutyEndAirportOverride?: string | null;
   /** When set (e.g. 05:15 when out of base = first leg dep - 45 min), use for arrive-by. */
   reportTimeOverride?: string | null;
+  /** Set when post_duty_release and next trip starts within 32h — commute home is likely impractical. */
+  shortTurnAtBase?: { nextReportIso: string; nextReportDisplay: string; hoursUntilNextReport: number };
 };
 
 /** 2-leg commute option: origin → stop → destination. */
@@ -1036,6 +1038,7 @@ export function CommuteAssistProContent({
   dutyStartAirportOverride,
   dutyEndAirportOverride,
   reportTimeOverride,
+  shortTurnAtBase,
 }: Props) {
   const [commuteError, setCommuteError] = useState<string | null>(null);
   const [commuteGroups, setCommuteGroups] = useState<Record<"home" | "alternate", CommuteFlightOption[]>>({
@@ -1099,12 +1102,14 @@ export function CommuteAssistProContent({
   const dutyDateBase = formatInTimeZone(dutyDateTime, baseTz, "yyyy-MM-dd");
   const arriveBy = dutyOk ? subMinutes(dutyDateTime, arrivalBuffer) : null;
 
-  // Search date for to_base: derived from user's arrival cutoff (report datetime - buffer), not a fixed rule.
-  // If cutoff falls on report day → same-day flights; if on prior calendar day → day-prior flights.
-  const toBaseCommuteSearchDate =
-    dutyOk && arriveBy
-      ? formatInTimeZone(arriveBy, baseTz, "yyyy-MM-dd")
-      : new Date().toISOString().slice(0, 10);
+  // Search date for to_base: if arriveBy is before noon in base TZ, use the prior calendar day.
+  // Early-morning reports (e.g. 05:00) require prior-evening departures — no same-day flight can arrive by 04:00.
+  const toBaseCommuteSearchDate = (() => {
+    if (!dutyOk || !arriveBy) return new Date().toISOString().slice(0, 10);
+    const arriveByHour = parseInt(formatInTimeZone(arriveBy, baseTz, "HH"), 10);
+    const searchDay = arriveByHour < 12 ? subDays(arriveBy, 1) : arriveBy;
+    return formatInTimeZone(searchDay, baseTz, "yyyy-MM-dd");
+  })();
 
   const [commuteExpiryTick, setCommuteExpiryTick] = useState(0);
   const arriveByTimeForExpiry = arriveBy?.getTime();
@@ -1169,7 +1174,7 @@ export function CommuteAssistProContent({
     dutyEndDateBase,
   ]);
 
-  /** 2-leg first-leg routes only: Home/Alternate → Commute Airport 1/2. Uses duty date (day of duty). Same DB as direct. */
+  /** 2-leg first-leg routes only: Home/Alternate → Commute Airport 1/2. Uses same search date as direct routes. */
   const twoLegFirstLegRoutes = useMemo(() => {
     if (!commuteTwoLegEnabled) return [];
     const stops = [commuteTwoLegStop1, commuteTwoLegStop2]
@@ -1180,7 +1185,7 @@ export function CommuteAssistProContent({
 
     const commuteDate =
       direction === "to_base"
-        ? dutyDateBase
+        ? toBaseCommuteSearchDate
         : dutyEndDateBase ?? new Date().toISOString().slice(0, 10);
 
     const result: { origin: string; destination: string; routeKey: string; commuteDate: string }[] = [];
@@ -1202,7 +1207,7 @@ export function CommuteAssistProContent({
     homeAirport,
     alternateHomeAirport,
     direction,
-    dutyDateBase,
+    toBaseCommuteSearchDate,
     dutyEndDateBase,
   ]);
 
@@ -2210,14 +2215,13 @@ export function CommuteAssistProContent({
           Possible commute home if released early or on schedule — actual release time may differ.
         </p>
       )}
-      {commuteCoverageBanner?.coverageWarning && !isCommuteWindowExpired && (
-        <div
-          className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.07] px-3 py-2.5"
-          role="status"
-        >
-          <p className="text-xs font-medium text-amber-100/90">{commuteCoverageBanner.coverageWarningTitle}</p>
+      {direction === "to_home" && shortTurnAtBase && (
+        <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-3">
+          <p className="text-xs font-semibold text-amber-300">
+            Short turn · ~{shortTurnAtBase.hoursUntilNextReport}h until next show ({shortTurnAtBase.nextReportDisplay})
+          </p>
           <p className="mt-1 text-[11px] leading-snug text-slate-400">
-            {commuteCoverageBanner.coverageWarningMessage}
+            A round trip home leaves little time to rest before your next trip. Most pilots in this situation stay in base. Options are shown below in case you need them.
           </p>
         </div>
       )}

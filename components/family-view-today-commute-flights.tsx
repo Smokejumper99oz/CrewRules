@@ -66,10 +66,11 @@ type Props = {
   originTz: string;
   destTz: string;
   s: FamilyViewStrings;
+  pilotFirstName: string;
   use24h?: boolean;
 };
 
-export function FamilyViewTodayCommuteFlights({ flights, originTz, destTz, s, use24h = false }: Props) {
+export function FamilyViewTodayCommuteFlights({ flights, originTz, destTz, s, pilotFirstName, use24h = false }: Props) {
   const timeFormat = use24h ? "HH:mm" : "h:mm a";
   return (
     <div className="space-y-2">
@@ -85,7 +86,7 @@ export function FamilyViewTodayCommuteFlights({ flights, originTz, destTz, s, us
           timeFormat
         );
         const isPrimary = label === "Likely your flight";
-        const displayLabel = isPrimary ? s.likelyYourFlight : s.backupOption;
+        const displayLabel = isPrimary ? s.likelyYourFlight(pilotFirstName) : s.backupOption;
         return (
           <div
             key={`${flight.carrier}-${flight.flightNumber}-${flight.departureTime}`}

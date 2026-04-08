@@ -47,6 +47,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   const base = `/${TENANT}/${PORTAL}/admin`;
   const isSuperAdmin = userProfile.role === "super_admin";
+  // tenant_admin users (e.g. ALPA program managers) have no pilot portal — hide the back link
+  const isTenantAdminOnly = userProfile.role === "tenant_admin" && !isSuperAdmin;
   const adminNav = getAdminNav(isSuperAdmin);
   const userMenuRoleLabel = getAccountRoleDisplay({
     role: userProfile.role,
@@ -74,6 +76,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             nav={adminNav}
             portalBase={`/${TENANT}/${PORTAL}/portal`}
             isSuperAdmin={isSuperAdmin}
+            hidePortalLink={isTenantAdminOnly}
           />
         </aside>
 
@@ -85,6 +88,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                   base={`/${TENANT}/${PORTAL}/admin`}
                   nav={adminNav}
                   portalBase={`/${TENANT}/${PORTAL}/portal`}
+                  hidePortalLink={isTenantAdminOnly}
                 />
                 <div className="min-w-0 space-y-0.5">
                   <div className="flex items-center gap-2">

@@ -77,19 +77,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: message }, { status: 401 });
     }
 
-    // Super admin lands on /super-admin; others on portal
+    // Route after login: super_admin → /super-admin, tenant_admin → /admin, everyone else → /portal
     const userId = signInData?.user?.id;
     let redirectTo = "/frontier/pilots/portal";
     if (userId) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, tenant, portal")
         .eq("id", userId)
         .maybeSingle();
       const emailLower = email.toLowerCase().trim();
       const isAllowlisted = ["svenfolmer92@gmail.com"].some((e) => e.toLowerCase() === emailLower);
       const isSuperAdmin = profile?.role === "super_admin" || isAllowlisted;
-      if (isSuperAdmin) redirectTo = "/super-admin";
+      const isTenantAdmin = profile?.role === "tenant_admin";
+      if (isSuperAdmin) {
+        redirectTo = "/super-admin";
+      } else if (isTenantAdmin && profile?.tenant && profile?.portal) {
+        redirectTo = `/${profile.tenant}/${profile.portal}/admin`;
+      }
     }
 
     const final = NextResponse.json({ ok: true, redirect: redirectTo });

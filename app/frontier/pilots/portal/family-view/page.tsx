@@ -411,6 +411,7 @@ export default async function FamilyViewPage({
               originTz={commuteFlightsData.originTz}
               destTz={commuteFlightsData.destTz}
               s={s}
+              pilotFirstName={firstName}
               use24h={lang === "de"}
             />
           </>

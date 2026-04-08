@@ -129,9 +129,9 @@ function normalizeReportHmForAnchor(reportTime: string | null | undefined): stri
 }
 
 /**
- * True when trip report_time (wall clock), anchored on start day and each day in the trip span,
- * falls on calendarDayYyyyMmDd in timezone.
- * Dashboard "Later today" uses this so red-eye trips (report 23:59 today, dep 00:59 tomorrow) stay on today.
+ * True when this trip's FIRST report falls on calendarDayYyyyMmDd in timezone.
+ * Anchors report_time against first departure (start_time):
+ * report_time on the start day must be ≤ first departure for it to count as that day's report.
  */
 export function isTripReportOnLocalCalendarDay(
   event: { event_type: string; report_time?: string | null; start_time: string; end_time: string },
@@ -141,21 +141,20 @@ export function isTripReportOnLocalCalendarDay(
   if (event.event_type !== "trip") return false;
   const hm = normalizeReportHmForAnchor(event.report_time);
   if (!hm) return false;
-  const candidates = new Set<string>();
-  candidates.add(calendarDayYyyyMmDd);
-  candidates.add(formatInTimeZone(new Date(event.start_time), timezone, "yyyy-MM-dd"));
-  const tripDates = getTripDateStrings(event.start_time, event.end_time, timezone);
-  for (const d of tripDates) candidates.add(d);
+  const firstDep = new Date(event.start_time);
+  if (isNaN(firstDep.getTime())) return false;
 
-  for (const d of candidates) {
-    try {
-      const inst = fromZonedTime(`${d}T${hm}:00`, timezone);
-      if (isNaN(inst.getTime())) continue;
-      if (formatInTimeZone(inst, timezone, "yyyy-MM-dd") === calendarDayYyyyMmDd) return true;
-    } catch {
-      continue;
+  const startDateLocal = formatInTimeZone(firstDep, timezone, "yyyy-MM-dd");
+
+  try {
+    const reportSameDay = fromZonedTime(`${startDateLocal}T${hm}:00`, timezone);
+    if (!isNaN(reportSameDay.getTime()) && reportSameDay.getTime() <= firstDep.getTime()) {
+      return formatInTimeZone(reportSameDay, timezone, "yyyy-MM-dd") === calendarDayYyyyMmDd;
     }
+  } catch {
+    // ignore
   }
+
   return false;
 }
 

@@ -10,10 +10,12 @@ export function AdminMobileNav({
   base,
   nav,
   portalBase,
+  hidePortalLink = false,
 }: {
   base: string;
   nav: NavItem[];
   portalBase: string;
+  hidePortalLink?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -72,15 +74,17 @@ export function AdminMobileNav({
                     </Link>
                   ))}
                 </div>
-                <div className="mt-6 border-t border-white/10 pt-4">
-                  <Link
-                    href={portalBase}
-                    onClick={() => setOpen(false)}
-                    className="flex min-h-[44px] items-center rounded-xl px-3 py-3 text-sm text-slate-400 hover:bg-white/5 hover:text-white transition touch-manipulation"
-                  >
-                    ← Back to Portal
-                  </Link>
-                </div>
+                {!hidePortalLink && (
+                  <div className="mt-6 border-t border-white/10 pt-4">
+                    <Link
+                      href={portalBase}
+                      onClick={() => setOpen(false)}
+                      className="flex min-h-[44px] items-center rounded-xl px-3 py-3 text-sm text-slate-400 hover:bg-white/5 hover:text-white transition touch-manipulation"
+                    >
+                      ← Back to Portal
+                    </Link>
+                  </div>
+                )}
               </nav>
             </div>
           </aside>
