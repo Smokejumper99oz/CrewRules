@@ -291,6 +291,12 @@ export async function getNextDuty(): Promise<{
       let reserveEarlyReleaseCommuteFields: ReserveEarlyReleaseCommuteFields = {};
 
       if (ev.event_type === "reserve") {
+        // Only treat a future reserve row as a consecutive block if it starts within 36 hours
+        // of this event ending. A reserve day next week is not a multi-day block and must not
+        // suppress the 4-hour early-release commute window on the last active day.
+        const nextDayCutoff = new Date(
+          new Date(ev.end_time).getTime() + 36 * 60 * 60 * 1000
+        ).toISOString();
         const { data: futureReserveRows, error: futureReserveError } = await supabase
           .from("schedule_events")
           .select("id")
@@ -299,6 +305,7 @@ export async function getNextDuty(): Promise<{
           .eq("event_type", "reserve")
           .or("is_muted.eq.false,is_muted.is.null")
           .gt("start_time", ev.end_time)
+          .lte("start_time", nextDayCutoff)
           .limit(1);
 
         const futureReserveBlocksEarlyRelease =

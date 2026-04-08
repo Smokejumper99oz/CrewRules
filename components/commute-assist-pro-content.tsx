@@ -2212,7 +2212,7 @@ export function CommuteAssistProContent({
       )}
       {commuteAssistReserveEarlyReleaseWindow && (
         <p className="text-xs text-amber-200/90 mt-1">
-          Possible commute home if released early or on schedule — actual release time may differ.
+          Possible commute home if released early or on schedule — Actual release time may differ.
         </p>
       )}
       {direction === "to_home" && shortTurnAtBase && (
