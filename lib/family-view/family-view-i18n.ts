@@ -19,6 +19,7 @@ export type FamilyViewStrings = {
   sectionWeekAhead: string;
   sectionUpcoming: string;
   sectionCurrentTrip: string;
+  sectionNextTrip: string;
 
   // Status labels
   dayOff: string;
@@ -35,6 +36,10 @@ export type FamilyViewStrings = {
   // Detail text
   travelingTo: string;        // "Traveling to" — city appended after
   timingDepends: string;      // commute home timing disclaimer
+  /** Bottom line: "Commute home [inThePeriod], …" — pass inTheMorning / inTheAfternoon / inTheEvening */
+  commuteHomeAfterLanding: (inThePeriod: string) => string;
+  commuteHome: string;        // "Commute home" prefix on the home row
+  ifFlightsAvailable: string; // "if flights are available" suffix on the home row
   currently: string;          // prefix "Currently"
 
   // Trip overview
@@ -69,7 +74,13 @@ export type FamilyViewStrings = {
 
   // Flying today section
   flyingToday: string;
+  recurrentTraining: string;
+  travelToTraining: string;
+  travelFromTraining: string;
+  /** Prefix before city on last training day (company deadhead home), e.g. "Leaving" */
+  leavingFrom: string;
   deadheadBadge: string;
+  commuteBadge: string;
   pilotOperating: string;
   flightCancelled: string;
   delayed: string;            // "Delayed +" prefix, then "+N min"
@@ -110,6 +121,7 @@ const en: FamilyViewStrings = {
   sectionWeekAhead: "Week Ahead",
   sectionUpcoming: "Upcoming",
   sectionCurrentTrip: "Current Trip Overview",
+  sectionNextTrip: "Next Trip Overview",
 
   dayOff: "Day Off",
   dutyStarts: "Duty Starts",
@@ -124,6 +136,10 @@ const en: FamilyViewStrings = {
 
   travelingTo: "Traveling to",
   timingDepends: "Timing depends on available flights and seat options",
+  commuteHomeAfterLanding: (inThe) =>
+    `Commute home ${inThe}, depending on available flights and seat options.`,
+  commuteHome: "Commute home",
+  ifFlightsAvailable: "if flights are available",
   currently: "Currently",
 
   daysAway: "Days Away",
@@ -152,7 +168,12 @@ const en: FamilyViewStrings = {
   daysBetweenTrips: "days between trips",
 
   flyingToday: "Flying Today",
+  recurrentTraining: "Recurrent Training",
+  travelToTraining: "Travel to Training",
+  travelFromTraining: "Travel from Training",
+  leavingFrom: "Leaving",
   deadheadBadge: "Deadhead",
+  commuteBadge: "Commute",
   pilotOperating: "Pilot Operating",
   flightCancelled: "Flight Cancelled",
   delayed: "Delayed",
@@ -187,6 +208,7 @@ const es: FamilyViewStrings = {
   sectionWeekAhead: "Próxima Semana",
   sectionUpcoming: "Próximamente",
   sectionCurrentTrip: "Viaje Actual",
+  sectionNextTrip: "Próximo Viaje",
 
   dayOff: "Día Libre",
   dutyStarts: "Inicio de Servicio",
@@ -201,6 +223,10 @@ const es: FamilyViewStrings = {
 
   travelingTo: "Viajando a",
   timingDepends: "Depende de los vuelos y asientos disponibles",
+  commuteHomeAfterLanding: (inThe) =>
+    `Regreso a casa ${inThe}, según los vuelos y asientos disponibles.`,
+  commuteHome: "Regreso a casa",
+  ifFlightsAvailable: "si hay vuelos disponibles",
   currently: "Actualmente",
 
   daysAway: "Días Fuera",
@@ -229,7 +255,12 @@ const es: FamilyViewStrings = {
   daysBetweenTrips: "días entre viajes",
 
   flyingToday: "Volando Hoy",
+  recurrentTraining: "Entrenamiento",
+  travelToTraining: "Viaje al entrenamiento",
+  travelFromTraining: "Viaje desde el entrenamiento",
+  leavingFrom: "Saliendo de",
   deadheadBadge: "Deadhead",
+  commuteBadge: "Commute",
   pilotOperating: "Piloto al Mando",
   flightCancelled: "Vuelo Cancelado",
   delayed: "Retrasado",
@@ -264,6 +295,7 @@ const de: FamilyViewStrings = {
   sectionWeekAhead: "Nächste Woche",
   sectionUpcoming: "Demnächst",
   sectionCurrentTrip: "Aktueller Dienst",
+  sectionNextTrip: "Nächster Dienst",
 
   dayOff: "Freier Tag",
   dutyStarts: "Dienstbeginn",
@@ -278,6 +310,10 @@ const de: FamilyViewStrings = {
 
   travelingTo: "Reise nach",
   timingDepends: "Abhängig von verfügbaren Flügen und Sitzplätzen",
+  commuteHomeAfterLanding: (inThe) =>
+    `Pendeln nach Hause ${inThe}, abhängig von verfügbaren Flügen und Sitzplätzen.`,
+  commuteHome: "Heimreise",
+  ifFlightsAvailable: "wenn Flüge verfügbar sind",
   currently: "Aktuell",
 
   daysAway: "Tage unterwegs",
@@ -306,7 +342,12 @@ const de: FamilyViewStrings = {
   daysBetweenTrips: "Tage zwischen den Trips",
 
   flyingToday: "Fliegt heute",
+  recurrentTraining: "Recurrent Training",
+  travelToTraining: "Anreise zum Training",
+  travelFromTraining: "Abreise vom Training",
+  leavingFrom: "Abflug von",
   deadheadBadge: "Deadhead",
+  commuteBadge: "Commute",
   pilotOperating: "Als Pilot im Dienst",
   flightCancelled: "Flug gestrichen",
   delayed: "Verspätet",

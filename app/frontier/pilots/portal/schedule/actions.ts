@@ -203,6 +203,7 @@ export type ScheduleEvent = {
   import_batch_id?: string | null;
   imported_at?: string | null;
   legs?: ScheduleEventLeg[] | null;
+  training_deviation_home_commute?: boolean | null;
 };
 
 export type NextDutyLabel = "on_duty" | "later_today" | "next_duty" | "post_duty_release";
@@ -229,6 +230,10 @@ export async function getNextDuty(): Promise<{
   commuteAssistSuppressFlightSearch?: boolean;
   /** Set when post_duty_release and next trip starts at base within 32h — commute home is likely impractical. */
   shortTurnAtBase?: { nextReportIso: string; nextReportDisplay: string; hoursUntilNextReport: number };
+  /** Set when the next event is a training event. IATA code of the training city (from companion trip legs). */
+  trainingCityIata?: string | null;
+  /** Whether the pilot is deviating from company routing for this training (null = not yet set). */
+  trainingDeviationHomeCommute?: boolean | null;
   error?: string;
 }> {
   const profile = await getProfile();
@@ -262,7 +267,7 @@ export async function getNextDuty(): Promise<{
     const nowMs = Date.now();
     const { data: onDutyOverlap, error: onDutyError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_deviation_home_commute")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .or("is_muted.eq.false,is_muted.is.null")
@@ -429,7 +434,7 @@ export async function getNextDuty(): Promise<{
     // 2. Upcoming events: start >= now
     const { data: upcomingData, error: upcomingError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_deviation_home_commute")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .or("is_muted.eq.false,is_muted.is.null")
@@ -443,7 +448,7 @@ export async function getNextDuty(): Promise<{
 
     const { data: lastEndedData, error: lastEndedError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_deviation_home_commute")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .or("is_muted.eq.false,is_muted.is.null")
@@ -621,7 +626,7 @@ async function findNextEventForDate(
   const dayEnd = new Date(Date.UTC(y, m - 1, d, 23, 59, 59)).toISOString();
   const { data } = await supabase
     .from("schedule_events")
-    .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
+    .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_deviation_home_commute")
     .eq("user_id", userId)
     .eq("source", FLICA_SOURCE)
     .or("is_muted.eq.false,is_muted.is.null")
@@ -644,7 +649,7 @@ export async function getScheduleEvents(fromIso: string, toIso: string): Promise
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, protected_credit_minutes, protected_full_trip_paid_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, is_muted, import_batch_id, imported_at")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, protected_credit_minutes, protected_full_trip_paid_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, is_muted, import_batch_id, imported_at, training_deviation_home_commute")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", toIso)
@@ -710,7 +715,7 @@ export async function getUpcomingEvents(limit = 8): Promise<{ events: ScheduleEv
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_deviation_home_commute")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .or("is_muted.eq.false,is_muted.is.null")
@@ -1379,5 +1384,111 @@ export async function getAvailableMonths(): Promise<MonthOption[]> {
     return [currentOption];
   } catch {
     return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Training deviation helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the training city IATA from the legs of a companion trip.
+ * Uses the longest leg (most block minutes) whose destination isn't the crew base,
+ * which is the furthest point from base and the training location.
+ */
+function extractTrainingCityFromLegs(
+  legs: ScheduleEventLeg[],
+  baseAirport: string | null | undefined
+): string | null {
+  if (!legs || legs.length === 0) return null;
+  const base = (baseAirport ?? "").trim().toUpperCase();
+
+  let bestLeg: ScheduleEventLeg | null = null;
+  let bestBlock = -1;
+  for (const leg of legs) {
+    const dest = (leg.destination ?? "").trim().toUpperCase();
+    if (!dest || dest === base) continue;
+    const block = leg.blockMinutes ?? 0;
+    if (block > bestBlock) {
+      bestBlock = block;
+      bestLeg = leg;
+    }
+  }
+  if (bestLeg?.destination) return bestLeg.destination.trim().toUpperCase();
+
+  // Fallback: first non-base destination
+  for (const leg of legs) {
+    const dest = (leg.destination ?? "").trim().toUpperCase();
+    if (dest && dest !== base) return dest;
+  }
+  return null;
+}
+
+/**
+ * Fetch the training city IATA for a training event by looking at its companion trip's legs.
+ * Companion trip = overlapping trip event whose title shares a prefix with the training event title.
+ */
+export async function getTrainingCityForEvent(
+  eventTitle: string | null,
+  startTime: string,
+  endTime: string
+): Promise<string | null> {
+  try {
+    const supabase = await createClient();
+    const profile = await getProfile();
+    if (!profile) return null;
+
+    const { data } = await supabase
+      .from("schedule_events")
+      .select("legs, title")
+      .eq("user_id", profile.id)
+      .eq("source", FLICA_SOURCE)
+      .eq("event_type", "trip")
+      .lt("start_time", endTime)
+      .gt("end_time", startTime)
+      .order("start_time", { ascending: true })
+      .limit(5);
+
+    if (!data || data.length === 0) return null;
+
+    const trainingTitle = (eventTitle ?? "").trim().toUpperCase();
+    // Prefer the companion trip whose title shares a prefix with the training title
+    const companion =
+      data.find((row) => {
+        const t = ((row as { title?: string | null }).title ?? "").trim().toUpperCase();
+        return t && trainingTitle && (t.startsWith(trainingTitle) || trainingTitle.startsWith(t));
+      }) ?? data[0];
+
+    const legs = ((companion as { legs?: unknown }).legs as ScheduleEventLeg[] | null) ?? [];
+    return extractTrainingCityFromLegs(legs, profile.base_airport);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save the pilot's deviation preference for a training event.
+ * true  = deviating (flying from home airport to training city on own)
+ * false = using company-provided travel
+ */
+export async function setTrainingDeviation(
+  eventId: string,
+  deviate: boolean
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const profile = await getProfile();
+    if (!profile) return { ok: false, error: "Not authenticated" };
+
+    const { error } = await supabase
+      .from("schedule_events")
+      .update({ training_deviation_home_commute: deviate })
+      .eq("id", eventId)
+      .eq("user_id", profile.id);
+
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error" };
   }
 }

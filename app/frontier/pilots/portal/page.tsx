@@ -7,6 +7,7 @@ import { PortalScheduleUpcoming } from "@/components/portal-schedule-upcoming";
 import { PortalMonthStats } from "@/components/portal-month-stats-wrapper";
 import { DashboardAskBox } from "@/components/dashboard-ask-box";
 import { DashboardWeatherWidget } from "@/components/dashboard-weather-widget";
+import { DashboardCrewRulesAnniversary } from "@/components/dashboard-crewrules-anniversary";
 import { getHomeBaseMetar } from "@/lib/weather-brief/get-home-base-metar";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +50,8 @@ export default async function PortalDashboard() {
           />
         )}
       </div>
+
+      <DashboardCrewRulesAnniversary />
 
       {/* Next Duty */}
       <PortalNextDuty tenant={TENANT} portal={PORTAL} activeTrip={activeTrip} tripChangeSummaries={tripChangeSummaries} />

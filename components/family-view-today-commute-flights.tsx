@@ -1,6 +1,7 @@
+import Image from "next/image";
 import { formatInTimeZone } from "date-fns-tz";
 import type { CommuteFlight } from "@/lib/aviationstack";
-import { AIRLINE_NAMES } from "@/lib/airlines";
+import { AIRLINE_NAMES, flightAwareUrl } from "@/lib/airlines";
 import type { FamilyViewStrings } from "@/lib/family-view/family-view-i18n";
 
 /** IATA → "City, State" for Family View. Fall back to code if unknown. */
@@ -51,16 +52,6 @@ function extractFlightNumber(carrier: string, flightNumber: string | undefined):
   return numPart || raw;
 }
 
-/** Format as "AirlineName Flight 1234" for Family View (no carrier codes like F9/B6). */
-function formatFlightLabel(carrier: string, flightNumber: string | undefined): string {
-  const code = (carrier ?? "").trim().toUpperCase();
-  const num = extractFlightNumber(carrier, flightNumber);
-  const airlineName = code ? AIRLINE_NAMES[code] : null;
-  if (airlineName && num) return `${airlineName} Flight ${num}`;
-  if (num) return `Flight ${num}`;
-  return airlineName ?? "Flight";
-}
-
 type Props = {
   flights: { flight: CommuteFlight; label: "Likely your flight" | "Backup option" }[];
   originTz: string;
@@ -73,51 +64,82 @@ type Props = {
 export function FamilyViewTodayCommuteFlights({ flights, originTz, destTz, s, pilotFirstName, use24h = false }: Props) {
   const timeFormat = use24h ? "HH:mm" : "h:mm a";
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {flights.map(({ flight, label }) => {
-        const depTime = formatInTimeZone(
-          new Date(flight.departureTime),
-          originTz,
-          timeFormat
-        );
-        const arrTime = formatInTimeZone(
-          new Date(flight.arrivalTime),
-          destTz,
-          timeFormat
-        );
+        const depTime = formatInTimeZone(new Date(flight.departureTime), originTz, timeFormat);
+        const arrTime = formatInTimeZone(new Date(flight.arrivalTime), destTz, timeFormat);
         const isPrimary = label === "Likely your flight";
-        const displayLabel = isPrimary ? s.likelyYourFlight(pilotFirstName) : s.backupOption;
+
+        const carrierCode = (flight.carrier ?? "").trim().toUpperCase();
+        const flightNum = extractFlightNumber(flight.carrier, flight.flightNumber);
+        const airlineName = carrierCode ? (AIRLINE_NAMES[carrierCode] ?? null) : null;
+
+        const originCity = formatAirportDisplay(flight.origin);
+        const destCity = formatAirportDisplay(flight.destination);
+        const originIata = (flight.origin ?? "").trim().toUpperCase();
+        const destIata = (flight.destination ?? "").trim().toUpperCase();
+
         return (
           <div
             key={`${flight.carrier}-${flight.flightNumber}-${flight.departureTime}`}
-            className={`rounded-xl border px-4 py-3 ${
-              isPrimary
-                ? "border-[#7FB069]/50 bg-[#E6F1EA]/60"
-                : "border-[#E8E3DA] bg-white"
-            }`}
+            className={`rounded-lg border bg-[#F9F8F5] px-3 py-2 space-y-1.5 ${isPrimary ? "border-[#7FB069]/50" : "border-[#E8E3DA]"}`}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-lg font-medium text-[#2F2F2F]">
-                {formatFlightLabel(flight.carrier, flight.flightNumber)}
-              </span>
-              <span
-                className={`text-xs font-medium ${
-                  isPrimary ? "text-[#7FB069]" : "text-[#6F6F6F]"
-                }`}
-              >
-                {displayLabel}
-              </span>
+            {/* Row 1: Route + likely/backup label + times */}
+            <div className="flex items-center justify-between gap-2 text-sm">
+              <div className="min-w-0 flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                <span className="font-medium text-[#2F2F2F]">{originCity}</span>
+                <span className="rounded bg-[#EDE9E2] px-1.5 py-px text-[10px] font-medium text-[#7A7A7A] tracking-wide">{originIata}</span>
+                <span className="mx-0.5 text-[#9AAE92]">→</span>
+                <span className="font-medium text-[#2F2F2F]">{destCity}</span>
+                <span className="rounded bg-[#EDE9E2] px-1.5 py-px text-[10px] font-medium text-[#7A7A7A] tracking-wide">{destIata}</span>
+                {isPrimary ? (
+                  <span className="rounded-full bg-[#E8F5E0] px-2 py-0.5 text-[10px] font-medium text-[#3A7A1A]">
+                    {s.likelyYourFlight(pilotFirstName)}
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-[#EDE9E2] px-2 py-0.5 text-[10px] font-medium text-[#7A7A7A]">
+                    {s.backupOption}
+                  </span>
+                )}
+              </div>
+              <div className="shrink-0 text-right text-xs tabular-nums text-[#6F6F6F]">
+                {depTime} → {arrTime}
+              </div>
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-sm text-[#6F6F6F]">
-              <span>{formatAirportDisplay(flight.origin)}</span>
-              <span className="rounded bg-[#EDE9E2] px-1.5 py-px text-[10px] font-medium text-[#7A7A7A] tracking-wide">{(flight.origin ?? "").trim().toUpperCase()}</span>
-              <span className="text-[#9AAE92]">→</span>
-              <span>{formatAirportDisplay(flight.destination)}</span>
-              <span className="rounded bg-[#EDE9E2] px-1.5 py-px text-[10px] font-medium text-[#7A7A7A] tracking-wide">{(flight.destination ?? "").trim().toUpperCase()}</span>
+
+            {/* Row 2: Commute badge + airline logo + flight link */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                {s.commuteBadge}
+              </span>
+              {(carrierCode || flightNum) && (
+                <div className="flex items-center gap-1.5">
+                  {carrierCode && (
+                    <Image
+                      src={`https://www.gstatic.com/flights/airline_logos/70px/${carrierCode}.png`}
+                      alt={airlineName ?? carrierCode}
+                      width={20}
+                      height={20}
+                      className="rounded-sm"
+                      unoptimized
+                    />
+                  )}
+                  <span className="text-[11px] text-[#6F6F6F]">
+                    {airlineName ?? carrierCode}
+                    {flightNum && (
+                      <a
+                        href={flightAwareUrl(carrierCode, flightNum)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-1 font-medium text-[#3A7A1A] underline underline-offset-2 hover:text-[#2d6115]"
+                      >
+                        · Flight {flightNum} ↗
+                      </a>
+                    )}
+                  </span>
+                </div>
+              )}
             </div>
-            <p className="mt-1 text-sm text-[#6F6F6F]">
-              {s.departureLabel} {depTime} · {s.arrivalLabel} {arrTime}
-            </p>
           </div>
         );
       })}

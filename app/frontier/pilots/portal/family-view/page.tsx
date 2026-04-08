@@ -31,7 +31,9 @@ import {
   formatStatusForDisplay,
   iataToCityName,
   isSameRegionAirports,
+  commuteHomeLineAfterLanding,
 } from "@/lib/family-view/translate-schedule";
+import { getTrainingCityForEvent } from "@/app/frontier/pilots/portal/schedule/actions";
 import Image from "next/image";
 import { addDays, differenceInCalendarDays } from "date-fns";
 import { getTripDateStrings, todayStr } from "@/lib/leg-dates";
@@ -106,9 +108,23 @@ export default async function FamilyViewPage({
   const settings = getFamilyViewSettings(profile);
 
   const todayStatus = getTodayStatus(events, profile, baseTimezone, settings);
+  const todayTripDayMatch = todayStatus.tripDayLabel?.match(/^Day (\d+) of (\d+)$/);
+  const todayIsSingleCalTrip =
+    todayTripDayMatch?.[1] === "1" && todayTripDayMatch?.[2] === "1";
+  const todayIsDayTripCard =
+    todayIsSingleCalTrip &&
+    (!!todayStatus.isHomeBaseTrip || (isCommuter(profile) && !todayStatus.isHomeBaseTrip));
+  const todayCommuteFooterLine =
+    todayStatus.status === "Expected Home" &&
+    todayIsDayTripCard &&
+    isCommuter(profile) &&
+    !todayStatus.isHomeBaseTrip
+      ? commuteHomeLineAfterLanding(s, todayStatus.dutyEndIsoUtc, baseTimezone) ?? s.timingDepends
+      : null;
   const nextTrip = getNextTripSummary(events, profile, baseTimezone, settings);
   const thisWeek = getThisWeekDays(events, profile, baseTimezone, settings);
-  const upcomingAll = getUpcomingDays(events, profile, baseTimezone, settings, 7, 28);
+  // Week Ahead is T+1…T+7; Upcoming starts after that window (T+8) to avoid gaps or duplicates.
+  const upcomingAll = getUpcomingDays(events, profile, baseTimezone, settings, 8, 28);
 
   const isEnabled = profile?.family_view_enabled ?? false;
 
@@ -264,12 +280,59 @@ export default async function FamilyViewPage({
     }
   }
 
+  // Detect upcoming training event with deviation ON (pilot flying home → training city)
+  const now = new Date().toISOString();
+  const nextTrainingEvent = events.find(
+    (e) => e.event_type === "training" && e.end_time > now
+  ) ?? null;
+  const trainingDeviationOn = nextTrainingEvent?.training_deviation_home_commute === true;
+  const trainingCityIata = trainingDeviationOn && nextTrainingEvent
+    ? await getTrainingCityForEvent(
+        nextTrainingEvent.title ?? null,
+        nextTrainingEvent.start_time,
+        nextTrainingEvent.end_time
+      )
+    : null;
+
   let commuteFlightsData: {
     flights: { flight: CommuteFlight; label: "Likely your flight" | "Backup option" }[];
     originTz: string;
     destTz: string;
   } | null = null;
+
+  // Commute to training city (when pilot is deviating and it's their commute day)
   if (
+    todayStatus.status === "Likely Commuting" &&
+    trainingDeviationOn &&
+    trainingCityIata &&
+    profile?.home_airport
+  ) {
+    const origin = (profile.home_airport ?? "").trim().toUpperCase();
+    const destination = trainingCityIata;
+    // Use the training event's start date as the commute date
+    const date = nextTrainingEvent
+      ? formatInTimeZone(new Date(nextTrainingEvent.start_time), baseTimezone, "yyyy-MM-dd")
+      : null;
+    if (origin.length === 3 && destination.length === 3 && date) {
+      const res = await cachedGetCommuteFlights({ origin, destination, date });
+      if (res.ok && res.flights && res.flights.length > 0) {
+        const ranked = res.flights.slice(0, 2);
+        const labeled = ranked.map((flight, i) => ({
+          flight,
+          label: (i === 0 ? "Likely your flight" : "Backup option") as "Likely your flight" | "Backup option",
+        }));
+        commuteFlightsData = {
+          flights: labeled,
+          originTz: res.originTz ?? "America/Denver",
+          destTz: res.destTz ?? "America/Denver",
+        };
+      }
+    }
+  }
+
+  // Commute to crew base for regular trips
+  if (
+    !commuteFlightsData &&
     todayStatus.status === "Likely Commuting" &&
     nextTrip?.commuteInfo &&
     profile?.home_airport &&
@@ -424,13 +487,25 @@ export default async function FamilyViewPage({
                   : todayStatus.status === "At Work"
                   ? s.dutyStarts
                   : todayStatus.status === "Expected Home"
-                  ? s.comingHome
+                  ? todayIsDayTripCard
+                    ? s.dayTrip
+                    : todayStatus.isHomeBaseTrip
+                    ? s.comingHome
+                    : isCommuter(profile)
+                    ? s.commutingHome
+                    : s.comingHome
                   : todayStatus.status === "Day Off"
                   ? s.dayOff
                   : todayStatus.status === "On Call"
                   ? s.onCall
                   : todayStatus.status === "Likely Commuting"
                   ? s.headingToWork
+                  : todayStatus.status === "Travel to Training"
+                  ? s.travelToTraining
+                  : todayStatus.status === "Travel from Training"
+                  ? s.travelFromTraining
+                  : todayStatus.status === "Recurrent Training"
+                  ? s.recurrentTraining
                   : formatStatusForDisplay(todayStatus.status)}
               </span>
               {todayStatus.tripDayLabel && (() => {
@@ -443,11 +518,31 @@ export default async function FamilyViewPage({
                 );
               })()}
             </div>
-            {todayStatus.detail && (
-              <p className="flex items-center gap-2 text-sm text-[#6F6F6F]">
-                <MapPin className={iconClass} aria-hidden />
-                {s.currently} {todayStatus.detail}
-              </p>
+            {(() => {
+              const st = todayStatus.status;
+              let line: string | null = null;
+              if (st === "Travel to Training" && todayStatus.detail) {
+                line = `${s.travelingTo} ${todayStatus.detail}`;
+              } else if (st === "Travel from Training") {
+                if (todayStatus.trainingReturnUsesOwnCommute) line = s.timingDepends;
+                else if (todayStatus.detail) line = `${s.leavingFrom} ${todayStatus.detail}`;
+              } else if (st === "Recurrent Training" && todayStatus.detail) {
+                line = todayStatus.detail;
+              } else if (todayStatus.detail && !todayCommuteFooterLine) {
+                line = `${s.currently} ${todayStatus.detail}`;
+              }
+              return line ? (
+                <p className="flex items-center gap-2 text-sm text-[#6F6F6F]">
+                  <MapPin className={iconClass} aria-hidden />
+                  {line}
+                </p>
+              ) : null;
+            })()}
+            {todayStatus.todayFlightRoute && !todayStatus.todayLegs?.length && (
+              <div className="flex items-center gap-1.5 text-xs text-[#6F6F6F]">
+                <PlaneTakeoff className="size-3.5 shrink-0 text-[#7A7A7A]" aria-hidden />
+                {todayStatus.todayFlightRoute}
+              </div>
             )}
             {todayStatus.todayLegs && todayStatus.todayLegs.length > 0 && (
               <div className="space-y-1.5 pt-0.5">
@@ -557,6 +652,12 @@ export default async function FamilyViewPage({
                 })}
               </div>
             )}
+            {todayCommuteFooterLine && (
+              <p className="mt-1 flex items-center gap-2 text-sm text-[#6F6F6F]">
+                <MapPin className={iconClass} aria-hidden />
+                {todayCommuteFooterLine}
+              </p>
+            )}
           </div>
         )}
       </section>
@@ -573,7 +674,7 @@ export default async function FamilyViewPage({
             return (
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h2 className="text-xl font-semibold text-[#2F2F2F] sm:text-2xl">{s.sectionCurrentTrip}</h2>
+                  <h2 className="text-xl font-semibold text-[#2F2F2F] sm:text-2xl">{dayIndex >= 0 ? s.sectionCurrentTrip : s.sectionNextTrip}</h2>
                   <div className="mt-1 flex items-center gap-2 flex-wrap">
                     <p className="text-sm text-[#6F6F6F]">
                       {localDayLabel(currentTripFirstDayStr ?? tripDates[0] ?? "", nextTrip.firstDayLabel)} → {localDayLabel(currentTripLastDayStr ?? tripDates[tripDates.length - 1] ?? "", nextTrip.lastDayLabel)}
@@ -614,6 +715,7 @@ export default async function FamilyViewPage({
                   // to the same date as first duty when report time is ≥ 10 AM.
                   const firstDutyDateStr = formatInTimeZone(new Date(nextTrip.event.start_time), baseTimezone, "yyyy-MM-dd");
                   const lastDutyDateStr = formatInTimeZone(new Date(nextTrip.event.end_time), baseTimezone, "yyyy-MM-dd");
+                  const isSingleCalendarDutyDay = firstDutyDateStr === lastDutyDateStr;
                   const isFirstDay = day.dateStr === firstDutyDateStr;
                   const isLastDay = day.status === "Expected Home" || day.dateStr === lastDutyDateStr;
                   const wonʼtComeHome = betweenTripStatus?.likelyComesHome === false && isLastDay;
@@ -634,10 +736,16 @@ export default async function FamilyViewPage({
                     ? s.headingToWork
                     : isCommuteHome
                     ? s.commutingHome
+                    : isSingleCalendarDutyDay && isLastDay && day.isHomeBaseTrip
+                    ? s.comingHome
+                    : isSingleCalendarDutyDay && isLastDay && !day.isHomeBaseTrip && isCommuter(profile)
+                    ? s.dayTrip
                     : isFirstDay
                     ? s.dutyStarts
                     : day.status === "Overnight Away"
                     ? s.overnight
+                    : isLastDay && !day.isHomeBaseTrip && isCommuter(profile)
+                    ? s.tripEnds
                     : formatStatusForDisplay(day.status);
                   // Duty start time — shown inline on the first actual trip day
                   const startDate = new Date(nextTrip.event.start_time);
@@ -659,6 +767,16 @@ export default async function FamilyViewPage({
                     ? (baseCityOverview ? `${s.travelingTo} ${baseCityOverview}` : null)
                     : isCommuteHome && !isCommuteHomeCannotReturn
                     ? s.timingDepends
+                    : isLastDay &&
+                        day.status === "Expected Home" &&
+                        !day.isHomeBaseTrip &&
+                        isCommuter(profile) &&
+                        !wonʼtComeHome
+                      ? commuteHomeLineAfterLanding(
+                          s,
+                          day.dutyEndIsoUtc ?? nextTrip.event.end_time,
+                          baseTimezone
+                        ) ?? s.timingDepends
                     : null;
                   return (
                   <div key={`${day.dateStr}-${dayIdx}`} className="space-y-0.5">
@@ -666,12 +784,14 @@ export default async function FamilyViewPage({
                       <span className="shrink-0 whitespace-nowrap text-[#6F6F6F]">{localDayLabel(day.dateStr, day.dayLabel)}</span>
                       <span className="text-[#2F2F2F] font-medium">
                         {statusLabel}
-                        {isFirstDay && (
+                        {isFirstDay && !isSingleCalendarDutyDay && (
                           <span className="ml-1 font-normal text-[#6F6F6F]">
                             {tod} {s.at} {dutyTime}
                           </span>
                         )}
-                        {(isLastDay || isCommuteHomeCannotReturn) && !isFirstDay && lastDayDetail ? (
+                        {(isLastDay || isCommuteHomeCannotReturn) &&
+                        lastDayDetail &&
+                        (!isFirstDay || isSingleCalendarDutyDay) ? (
                           <span className="ml-1 font-normal text-[#6F6F6F]">{s.at} {lastDayDetail}</span>
                         ) : null}
                       </span>
@@ -699,7 +819,12 @@ export default async function FamilyViewPage({
             <div className="flex items-center gap-3 text-sm">
               <Home className="size-4 shrink-0 text-[#9AAE92]" aria-hidden />
               <span className="text-[#2F2F2F]">
-                {s.home} {localDayLabel(currentTripLastDayStr ?? "", nextTrip.lastDayLabel)} {nextTrip.expectedHomeTime}
+                {localDayLabel(currentTripLastDayStr ?? "", nextTrip.lastDayLabel)}{" "}
+                {isCommuter(profile) ? (
+                  <>{s.commuteHome} {nextTrip.expectedHomeTime}, {s.ifFlightsAvailable}.</>
+                ) : (
+                  <>{s.homeOn} {nextTrip.expectedHomeTime}</>
+                )}
               </span>
             </div>
           )}
@@ -731,12 +856,9 @@ export default async function FamilyViewPage({
         </div>
       )}
 
-      {/* Section 3: Remaining Week */}
+      {/* Section 3: Week Ahead — all 7 days, no trip days filtered out */}
       {(() => {
-        const currentTripDates = nextTrip
-          ? new Set(getTripDateStrings(nextTrip.event.start_time, nextTrip.event.end_time, baseTimezone))
-          : new Set<string>();
-        const remainingWeek = thisWeek.filter((day) => !currentTripDates.has(day.dateStr));
+        const remainingWeek = thisWeek;
         if (remainingWeek.length === 0) return null;
         const pilotIsCommuter = isCommuter(profile);
         const baseCity = profile?.base_airport
@@ -749,14 +871,34 @@ export default async function FamilyViewPage({
         </h2>
         <div className="space-y-2">
           {remainingWeek.map((day) => {
+            const isTravelToTraining = day.status === "Travel to Training";
+            const isTravelFromTraining = day.status === "Travel from Training";
+            const isRecurrentTrainingMiddle = day.status === "Recurrent Training";
+            const isAnyTrainingBlockDay =
+              isTravelToTraining || isTravelFromTraining || isRecurrentTrainingMiddle;
             const isCommuteDay = day.status === "Likely Commuting";
-            const isFirstTripDay = day.tripDayLabel?.startsWith("Day 1 ");
             const isLastTripDay = day.status === "Expected Home";
-            // Single-day home-base trip: departs from and returns to home airport
-            const isDayTrip = isFirstTripDay && isLastTripDay && !!day.isHomeBaseTrip;
+            const tripDayParts = day.tripDayLabel?.match(/^Day (\d+) of (\d+)$/);
+            const isSingleCalendarDayTrip =
+              tripDayParts?.[1] === "1" && tripDayParts?.[2] === "1";
+            // Single-day trip: status is Expected Home but label still says "Day 1 of 1" — do not treat as first duty day for wording.
+            const isFirstTripDay =
+              !isAnyTrainingBlockDay &&
+              !!day.tripDayLabel?.startsWith("Day 1 ") &&
+              !(isLastTripDay && isSingleCalendarDayTrip);
+            // Single calendar day: home-base trip, or commuter ending at base (still a "day trip" for the card)
+            const isDayTrip =
+              isSingleCalendarDayTrip &&
+              (!!day.isHomeBaseTrip || (pilotIsCommuter && !day.isHomeBaseTrip));
             const rawLabel = formatStatusForDisplay(day.status);
             const statusLabel =
-              isDayTrip
+              isTravelToTraining
+                ? s.travelToTraining
+                : isTravelFromTraining
+                ? s.travelFromTraining
+                : isRecurrentTrainingMiddle
+                ? s.recurrentTraining
+                : isDayTrip
                 ? s.dayTrip
                 : isCommuteDay
                 ? s.headingToWork
@@ -771,14 +913,30 @@ export default async function FamilyViewPage({
                 : isLastTripDay && pilotIsCommuter
                 ? s.commutingHome
                 : rawLabel;
-            const detailText =
-              isCommuteDay
-                ? (baseCity ? `${s.travelingTo} ${baseCity}` : day.detail)
-                : isDayTrip || (isLastTripDay && day.isHomeBaseTrip)
-                ? day.detail
-                : isLastTripDay && !isFirstTripDay && pilotIsCommuter
-                ? s.timingDepends
-                : day.detail;
+            const detailText = (() => {
+              if (isCommuteDay) return baseCity ? `${s.travelingTo} ${baseCity}` : day.detail;
+              if (isTravelToTraining && day.detail) return `${s.travelingTo} ${day.detail}`;
+              if (isTravelFromTraining) {
+                if (day.trainingReturnUsesOwnCommute) return s.timingDepends;
+                if (day.detail) return `${s.leavingFrom} ${day.detail}`;
+                return null;
+              }
+              if (isRecurrentTrainingMiddle && day.detail) return day.detail;
+              if (isDayTrip) {
+                if (day.isHomeBaseTrip) return day.detail;
+                if (pilotIsCommuter && !day.isHomeBaseTrip)
+                  return (
+                    commuteHomeLineAfterLanding(s, day.dutyEndIsoUtc, baseTimezone) ?? s.timingDepends
+                  );
+                return day.detail;
+              }
+              if (isLastTripDay && day.isHomeBaseTrip) return day.detail;
+              if (isLastTripDay && pilotIsCommuter && !day.isHomeBaseTrip)
+                return (
+                  commuteHomeLineAfterLanding(s, day.dutyEndIsoUtc, baseTimezone) ?? s.timingDepends
+                );
+              return day.detail;
+            })();
             return (
             <div
               key={day.dateStr}
@@ -832,13 +990,32 @@ export default async function FamilyViewPage({
             <div className="space-y-1.5">
               {upcoming.map((item) => {
                 const isDayOff = item.status === "Day Off";
+                const isTravelToTraining = item.status === "Travel to Training";
+                const isTravelFromTraining = item.status === "Travel from Training";
+                const isRecurrentTrainingMiddle = item.status === "Recurrent Training";
+                const isAnyTrainingBlockDay =
+                  isTravelToTraining || isTravelFromTraining || isRecurrentTrainingMiddle;
                 const isCommuteDay = item.status === "Likely Commuting";
-                const isFirstTripDay = item.tripDayLabel?.startsWith("Day 1 ");
                 const isLastTripDay = item.status === "Expected Home";
-                const isDayTrip = isFirstTripDay && isLastTripDay && !!item.isHomeBaseTrip;
+                const tripDayPartsUp = item.tripDayLabel?.match(/^Day (\d+) of (\d+)$/);
+                const isSingleCalendarDayTripUp =
+                  tripDayPartsUp?.[1] === "1" && tripDayPartsUp?.[2] === "1";
+                const isFirstTripDay =
+                  !isAnyTrainingBlockDay &&
+                  !!item.tripDayLabel?.startsWith("Day 1 ") &&
+                  !(isLastTripDay && isSingleCalendarDayTripUp);
+                const isDayTrip =
+                  isSingleCalendarDayTripUp &&
+                  (!!item.isHomeBaseTrip || (pilotIsCommuterUpcoming && !item.isHomeBaseTrip));
                 const rawLabel = formatStatusForDisplay(item.status);
                 const statusLabel =
-                  isDayTrip
+                  isTravelToTraining
+                    ? s.travelToTraining
+                    : isTravelFromTraining
+                    ? s.travelFromTraining
+                    : isRecurrentTrainingMiddle
+                    ? s.recurrentTraining
+                    : isDayTrip
                     ? s.dayTrip
                     : isCommuteDay
                     ? s.headingToWork
@@ -853,14 +1030,33 @@ export default async function FamilyViewPage({
                     : isLastTripDay && pilotIsCommuterUpcoming
                     ? s.commutingHome
                     : rawLabel;
-                const detailText =
-                  isCommuteDay
-                    ? (baseCityUpcoming ? `${s.travelingTo} ${baseCityUpcoming}` : item.detail)
-                    : isDayTrip || (isLastTripDay && item.isHomeBaseTrip)
-                    ? item.detail
-                    : isLastTripDay && !isFirstTripDay && pilotIsCommuterUpcoming
-                    ? s.timingDepends
-                    : item.detail;
+                const detailText = (() => {
+                  if (isCommuteDay)
+                    return baseCityUpcoming ? `${s.travelingTo} ${baseCityUpcoming}` : item.detail;
+                  if (isTravelToTraining && item.detail) return `${s.travelingTo} ${item.detail}`;
+                  if (isTravelFromTraining) {
+                    if (item.trainingReturnUsesOwnCommute) return s.timingDepends;
+                    if (item.detail) return `${s.leavingFrom} ${item.detail}`;
+                    return null;
+                  }
+                  if (isRecurrentTrainingMiddle && item.detail) return item.detail;
+                  if (isDayTrip) {
+                    if (item.isHomeBaseTrip) return item.detail;
+                    if (pilotIsCommuterUpcoming && !item.isHomeBaseTrip)
+                      return (
+                        commuteHomeLineAfterLanding(s, item.dutyEndIsoUtc, baseTimezone) ??
+                        s.timingDepends
+                      );
+                    return item.detail;
+                  }
+                  if (isLastTripDay && item.isHomeBaseTrip) return item.detail;
+                  if (isLastTripDay && pilotIsCommuterUpcoming && !item.isHomeBaseTrip)
+                    return (
+                      commuteHomeLineAfterLanding(s, item.dutyEndIsoUtc, baseTimezone) ??
+                      s.timingDepends
+                    );
+                  return item.detail;
+                })();
                 return (
                 <div
                   key={item.dateStr}

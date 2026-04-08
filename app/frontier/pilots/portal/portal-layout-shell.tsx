@@ -37,7 +37,7 @@ const NAV_GROUPS = [
       { label: "Dashboard", href: "" },
       { label: "Weather Brief", href: "weather-brief", badge: "BETA" },
       { label: "My Schedule", href: "schedule" },
-      { label: "Family View", href: "family-view", badge: "IN DEVELOPMENT" },
+      { label: "Family View", href: "family-view", badge: "BETA" },
       { label: "Ask", href: "ask" },
       { label: "Library", href: "library" },
     ],
@@ -45,7 +45,7 @@ const NAV_GROUPS = [
   {
     title: "Community",
     items: [
-      { label: "Forum", href: "forum" },
+      { label: "Forum", href: "forum", badge: "IN DEVELOPMENT" },
       { label: "Notes", href: "notes" },
       { label: "Mentoring", href: "mentoring", badge: "BETA" },
     ],

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
-import { getNextDuty, getScheduleImportStatus, getScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
+import { getNextDuty, getScheduleImportStatus, getScheduleDisplaySettings, getTrainingCityForEvent } from "@/app/frontier/pilots/portal/schedule/actions";
 import { getProfile, isProActive } from "@/lib/profile";
 import type { ActiveTrip } from "@/lib/trips/get-active-trip";
 import { formatLegLine } from "@/lib/trips/detect-trip-changes";
@@ -23,6 +23,8 @@ import {
 import { getFiledRoute } from "@/lib/weather-brief/get-filed-route";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getLaterTodayRedEyeCardInfo, getTripReportNightMeta } from "@/lib/schedule-report-night";
+import { TrainingDeviationPrompt } from "@/components/training-deviation-prompt";
+import { iataToCityName } from "@/lib/family-view/translate-schedule";
 
 function fmtHM(totalMinutes: number) {
   const h = Math.floor(totalMinutes / 60);
@@ -123,6 +125,18 @@ export async function PortalNextDuty({
     getScheduleDisplaySettings(),
     getProfile(),
   ]);
+
+  // Training event enrichment — fetch companion trip legs to determine training city
+  const isTrainingEvent = event?.event_type === "training";
+  const trainingCityIata = isTrainingEvent && event
+    ? await getTrainingCityForEvent(event.title ?? null, event.start_time, event.end_time)
+    : null;
+  const trainingDeviationHomeCommute = isTrainingEvent
+    ? (event?.training_deviation_home_commute ?? null)
+    : null;
+  const trainingCityDisplay = trainingCityIata ? iataToCityName(trainingCityIata) : null;
+  const homeAirport = profile?.home_airport?.trim().toUpperCase() ?? null;
+  const homeCity = homeAirport ? iataToCityName(homeAirport) : null;
   const scheduleHref = `/${tenant}/${portal}/portal/schedule`;
   const heading = label ? DUTY_LABELS[label] : "Next Duty";
   const isOnDuty = label === "on_duty";
@@ -658,7 +672,19 @@ export async function PortalNextDuty({
             <OnDutyTimer startTime={event.start_time} endTime={event.end_time} timezone={displaySettings.baseTimezone} />
           )}
 
-          {/* Commute Assist — layout scaffold with mock data */}
+          {/* Training deviation prompt — shown when deviation preference not yet set */}
+          {isTrainingEvent && trainingDeviationHomeCommute === null && event && (
+            <TrainingDeviationPrompt
+              eventId={event.id}
+              trainingCityIata={trainingCityIata}
+              trainingCityDisplay={trainingCityDisplay}
+              homeAirport={homeAirport}
+              homeCity={homeCity}
+            />
+          )}
+
+          {/* Commute Assist — suppressed for training unless pilot is deviating */}
+          {(!isTrainingEvent || trainingDeviationHomeCommute === true) && (
           <PortalNextDutyCommuteSection
             event={event}
             label={label ?? undefined}
@@ -672,16 +698,23 @@ export async function PortalNextDuty({
             commuteAssistDirection={commuteAssistDirection}
             commuteAssistReserveEarlyReleaseWindow={commuteAssistReserveEarlyReleaseWindow}
             commuteAssistSuppressFlightSearch={commuteAssistSuppressFlightSearch}
-            dutyStartAirportOverride={legsToShow?.[0]?.origin}
+            dutyStartAirportOverride={
+              isTrainingEvent && trainingDeviationHomeCommute === true
+                ? (homeAirport ?? legsToShow?.[0]?.origin)
+                : legsToShow?.[0]?.origin
+            }
             dutyEndAirportOverride={
-              event?.legs && event.legs.length > 0
-                ? event.legs[event.legs.length - 1]?.destination
-                : undefined
+              isTrainingEvent && trainingDeviationHomeCommute === true
+                ? (trainingCityIata ?? undefined)
+                : event?.legs && event.legs.length > 0
+                  ? event.legs[event.legs.length - 1]?.destination
+                  : undefined
             }
             reportTimeOverride={reportTimeOverride}
             dutyStartTime={reportTimeOverride ?? event?.start_time ?? null}
             shortTurnAtBase={shortTurnAtBase}
           />
+          )}
 
           <div className="flex justify-end">
             <Link

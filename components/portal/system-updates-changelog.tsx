@@ -56,6 +56,8 @@ function typeBadgeLabel(type: SystemUpdateType): string {
       return "Improvement";
     case "fix":
       return "Fix";
+    case "birthday":
+      return "Birthday";
   }
 }
 
@@ -69,6 +71,8 @@ function typeBadgeClass(type: SystemUpdateType): string {
       return `${base} border-sky-500/40 bg-sky-500/15 text-sky-200`;
     case "fix":
       return `${base} border-amber-500/40 bg-amber-500/15 text-amber-200`;
+    case "birthday":
+      return `${base} border-fuchsia-500/45 bg-fuchsia-500/15 text-fuchsia-200`;
   }
 }
 
@@ -128,7 +132,14 @@ export function SystemUpdatesChangelog(props: Props) {
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium text-slate-400">{formatDisplayDate(entry.date)}</p>
-                        <h4 className="mt-1 text-base font-semibold text-white tracking-tight">{entry.title}</h4>
+                        {entry.titleWordmark ? (
+                          <h4 className="mt-1 text-base font-bold text-white tracking-tight">
+                            Crew<span className="text-[#75C043]">Rules</span>
+                            <span className="text-white">™ Initial Public Launch</span>
+                          </h4>
+                        ) : (
+                          <h4 className="mt-1 text-base font-semibold text-white tracking-tight">{entry.title}</h4>
+                        )}
                       </div>
                       <span className={typeBadgeClass(entry.type)}>{typeBadgeLabel(entry.type)}</span>
                     </div>

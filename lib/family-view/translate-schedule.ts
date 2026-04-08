@@ -22,6 +22,7 @@ import { isLikelyCommuteDayBefore, getCommuteInfoForTrip, isCommuter } from "./c
 import type { CommuteInfo } from "./commute-inference";
 import type { ScheduleEvent, ScheduleEventLeg } from "@/app/frontier/pilots/portal/schedule/actions";
 import type { Profile } from "@/lib/profile";
+import type { FamilyViewStrings } from "@/lib/family-view/family-view-i18n";
 
 /** Settings that control Family View output. Derived from profile. */
 export type FamilyViewSettings = {
@@ -219,7 +220,10 @@ export type FamilyViewStatus =
   | "Likely Commuting"
   | "At Work"
   | "Overnight Away"
-  | "Expected Home";
+  | "Expected Home"
+  | "Recurrent Training"
+  | "Travel to Training"
+  | "Travel from Training";
 
 export type TodayLegDetail = {
   origin: string;              // plain city name
@@ -252,6 +256,10 @@ export type FamilyViewDayItem = {
   todayLegs?: TodayLegDetail[] | null;
   /** True when a commuter picks up a trip departing from and/or returning to their home airport. */
   isHomeBaseTrip?: boolean | null;
+  /** Last day of training block: pilot flies own commute home (deviation) vs company deadhead. */
+  trainingReturnUsesOwnCommute?: boolean | null;
+  /** Trip duty end (ISO UTC) when status is Expected Home — for commute-home time-of-day wording. */
+  dutyEndIsoUtc?: string | null;
 };
 
 /** Report time display for dual timezone (base + home when commuter). */
@@ -282,6 +290,9 @@ export type FamilyViewTodayStatus = {
   tripDayLabel?: string | null;
   todayFlightRoute?: string | null;
   todayLegs?: TodayLegDetail[] | null;
+  trainingReturnUsesOwnCommute?: boolean | null;
+  isHomeBaseTrip?: boolean | null;
+  dutyEndIsoUtc?: string | null;
 };
 
 /** Map internal status to spouse-friendly display label. */
@@ -294,6 +305,9 @@ export function formatStatusForDisplay(status: FamilyViewStatus): string {
     "At Work": "Working",
     "Overnight Away": "Away Overnight",
     "Expected Home": "Coming Home",
+    "Recurrent Training": "Recurrent Training",
+    "Travel to Training": "Travel to Training",
+    "Travel from Training": "Travel from Training",
   };
   return LABELS[status];
 }
@@ -328,6 +342,32 @@ function minutesToTimeOfDay(minutes: number): TimeOfDayLabel {
   if (minutes < 720) return "morning";   // before 12:00
   if (minutes < 1080) return "afternoon"; // 12:00–17:59
   return "evening";                        // 18:00+
+}
+
+/** Landing / duty-end local time → morning | afternoon | evening (for commute-home copy). */
+export function landingTimeOfDayPeriod(isoUtc: string, timezone: string): TimeOfDayLabel {
+  try {
+    const date = new Date(isoUtc);
+    if (isNaN(date.getTime())) return "afternoon";
+    const h = parseInt(formatInTimeZone(date, timezone, "HH"), 10);
+    const m = parseInt(formatInTimeZone(date, timezone, "mm"), 10);
+    return minutesToTimeOfDay(h * 60 + m);
+  } catch {
+    return "afternoon";
+  }
+}
+
+/** Bottom-of-card copy: commute home after landing, with time-of-day from duty end (e.g. "in the afternoon"). */
+export function commuteHomeLineAfterLanding(
+  s: FamilyViewStrings,
+  isoUtc: string | null | undefined,
+  baseTimezone: string
+): string | null {
+  if (!isoUtc?.trim()) return null;
+  const period = landingTimeOfDayPeriod(isoUtc, baseTimezone);
+  const inThe =
+    period === "morning" ? s.inTheMorning : period === "afternoon" ? s.inTheAfternoon : s.inTheEvening;
+  return s.commuteHomeAfterLanding(inThe);
 }
 
 /** Format report_time to time-of-day when exact times hidden (e.g. "in the morning"). */
@@ -461,6 +501,60 @@ function filterScheduleEvents(events: ScheduleEvent[]): ScheduleEvent[] {
   return events.filter((e) => e.is_muted !== true);
 }
 
+/** FLICA training row + companion deadhead trip share a pairing-style title prefix. */
+function titlesLikelySameTrainingPairing(a: string | null | undefined, b: string | null | undefined): boolean {
+  const x = (a ?? "").trim().toUpperCase();
+  const y = (b ?? "").trim().toUpperCase();
+  if (!x || !y) return false;
+  return x.startsWith(y) || y.startsWith(x);
+}
+
+function isoIntervalsOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  return aStart < bEnd && aEnd > bStart;
+}
+
+/** Companion trip row that carries deadhead legs for a training block. */
+function findCompanionTripForTraining(
+  training: ScheduleEvent,
+  events: ScheduleEvent[]
+): ScheduleEvent | null {
+  const candidates = events.filter(
+    (e) =>
+      e.event_type === "trip" &&
+      titlesLikelySameTrainingPairing(training.title, e.title) &&
+      isoIntervalsOverlap(training.start_time, training.end_time, e.start_time, e.end_time)
+  );
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.start_time.localeCompare(b.start_time));
+  return candidates[0] ?? null;
+}
+
+/** Training city IATA from deadhead legs (furthest non-base destination by block time). */
+function extractTrainingCityIataFromLegs(
+  legs: ScheduleEventLeg[] | null | undefined,
+  baseAirport: string | null | undefined
+): string | null {
+  if (!legs?.length) return null;
+  const base = (baseAirport ?? "").trim().toUpperCase();
+  let best: ScheduleEventLeg | null = null;
+  let bestBlock = -1;
+  for (const leg of legs) {
+    const dest = (leg.destination ?? "").trim().toUpperCase();
+    if (!dest || dest === base) continue;
+    const block = leg.blockMinutes ?? 0;
+    if (block > bestBlock) {
+      bestBlock = block;
+      best = leg;
+    }
+  }
+  if (best?.destination) return best.destination.trim().toUpperCase();
+  for (const leg of legs) {
+    const dest = (leg.destination ?? "").trim().toUpperCase();
+    if (dest && dest !== base) return dest;
+  }
+  return null;
+}
+
 /** Get primary status for a single day from overlapping events. */
 function getStatusForDay(
   dateStr: string,
@@ -487,11 +581,32 @@ function getStatusForDay(
   const overlapping = events.filter((e) =>
     eventOverlapsDay(e.start_time, e.end_time, dayDate, baseTimezone)
   );
-  const workEvents = overlapping.filter((e) => e.event_type === "trip" || e.event_type === "reserve");
+  const workEvents = overlapping.filter((e) => e.event_type === "trip" || e.event_type === "reserve" || e.event_type === "training");
   const vacationOff = overlapping.filter((e) => e.event_type === "vacation" || e.event_type === "off");
 
-  // Prefer work over vacation/off when both exist
-  const primary = workEvents.length > 0 ? workEvents[0] : vacationOff[0];
+  const tripOrReserve = workEvents.find((e) => e.event_type === "trip" || e.event_type === "reserve");
+  const trainingEvent = workEvents.find((e) => e.event_type === "training");
+  const companionTrip =
+    tripOrReserve?.event_type === "trip"
+      ? tripOrReserve
+      : workEvents.find((e) => e.event_type === "trip");
+
+  // Recurrent training: FLICA splits credit (training row) and deadhead legs (companion trip).
+  // Prefer the training row for family-facing labels; legs come from the companion trip.
+  const trainingWithCompanion =
+    trainingEvent &&
+    companionTrip &&
+    titlesLikelySameTrainingPairing(trainingEvent.title, companionTrip.title) &&
+    isoIntervalsOverlap(
+      trainingEvent.start_time,
+      trainingEvent.end_time,
+      companionTrip.start_time,
+      companionTrip.end_time
+    );
+
+  const primary = trainingWithCompanion
+    ? trainingEvent
+    : tripOrReserve ?? trainingEvent ?? vacationOff[0];
 
   if (!primary) {
     return { dateStr, dayLabel, status: "Day Off" };
@@ -505,6 +620,76 @@ function getStatusForDay(
   }
   if (primary.event_type === "reserve") {
     return { dateStr, dayLabel, status: "On Call" };
+  }
+  if (primary.event_type === "training") {
+    const trainingDates = getTripDateStrings(primary.start_time, primary.end_time, baseTimezone);
+    const trainingDayIndex = trainingDates.indexOf(dateStr);
+    const tripDayLabel = trainingDayIndex >= 0 ? `Day ${trainingDayIndex + 1} of ${trainingDates.length}` : null;
+    const baseIata = (profile?.base_airport ?? "").trim().toUpperCase() || null;
+
+    const companion = findCompanionTripForTraining(primary, events);
+    const legs = (companion?.legs ?? []) as ScheduleEventLeg[];
+    const trainingCityIata = extractTrainingCityIataFromLegs(legs, baseIata);
+    const trainingCityName = trainingCityIata ? iataToCityName(trainingCityIata) : null;
+
+    const companionTripDates =
+      companion && legs.length > 0
+        ? getTripDateStrings(companion.start_time, companion.end_time, baseTimezone)
+        : [];
+    const todayFlightRoute =
+      companion && legs.length > 0 && companionTripDates.length > 0
+        ? computeDayFlightRoute(legs, companionTripDates, dateStr, baseTimezone)
+        : null;
+
+    const n = trainingDates.length;
+    const isFirst = trainingDayIndex === 0;
+    const isLast = trainingDayIndex === n - 1;
+    const deviation = primary.training_deviation_home_commute === true;
+    const commuter = isCommuter(profile);
+    const trainingReturnUsesOwnCommute = isLast && n > 1 && commuter && deviation;
+
+    if (n === 1) {
+      return {
+        dateStr,
+        dayLabel,
+        status: "Recurrent Training",
+        tripDayLabel,
+        detail: trainingCityName ?? null,
+        todayFlightRoute,
+      };
+    }
+
+    if (isFirst) {
+      return {
+        dateStr,
+        dayLabel,
+        status: "Travel to Training",
+        tripDayLabel,
+        detail: trainingCityName ? `${trainingCityName}` : null,
+        todayFlightRoute,
+      };
+    }
+
+    if (isLast) {
+      return {
+        dateStr,
+        dayLabel,
+        status: "Travel from Training",
+        tripDayLabel,
+        detail: trainingReturnUsesOwnCommute ? null : trainingCityName ?? null,
+        todayFlightRoute,
+        trainingReturnUsesOwnCommute: trainingReturnUsesOwnCommute || null,
+      };
+    }
+
+    return {
+      dateStr,
+      dayLabel,
+      status: "Recurrent Training",
+      tripDayLabel,
+      detail: trainingCityName ? `In ${trainingCityName}` : null,
+      todayFlightRoute,
+    };
   }
 
   // Trip: determine if first day, middle, or last day
@@ -633,6 +818,7 @@ function getStatusForDay(
       tripDayLabel,
       todayFlightRoute: lastDayRoute,
       isHomeBaseTrip: isHomeBaseTrip || null,
+      dutyEndIsoUtc: primary.end_time,
     };
   }
 
@@ -741,6 +927,9 @@ export function getTodayStatus(
     tripDayLabel: item.tripDayLabel ?? null,
     todayFlightRoute: item.todayFlightRoute ?? null,
     todayLegs: item.todayLegs ?? null,
+    trainingReturnUsesOwnCommute: item.trainingReturnUsesOwnCommute ?? null,
+    isHomeBaseTrip: item.isHomeBaseTrip ?? null,
+    dutyEndIsoUtc: item.dutyEndIsoUtc ?? null,
   };
 }
 
@@ -872,7 +1061,7 @@ export function getNextTripSummary(
   };
 }
 
-/** Get day-by-day items for "This Week" (next 7 days including today). */
+/** Get day-by-day items for "Week Ahead": next 7 days after today (today is omitted — covered by Today). */
 export function getThisWeekDays(
   events: ScheduleEvent[],
   profile: Profile | null,
@@ -880,7 +1069,7 @@ export function getThisWeekDays(
   settings: FamilyViewSettings
 ): FamilyViewDayItem[] {
   const filtered = filterScheduleEvents(events);
-  let cur = todayStr(baseTimezone);
+  let cur = addDay(todayStr(baseTimezone));
   const result: FamilyViewDayItem[] = [];
 
   for (let i = 0; i < 7; i++) {
@@ -896,6 +1085,7 @@ export function getThisWeekDays(
 /**
  * Get a continuous day-by-day list for the Upcoming section.
  * Starts `startOffset` days after today and runs for `numDays`.
+ * Family View uses `startOffset` 8 so the list begins after {@link getThisWeekDays} (T+1…T+7).
  * Every day is included — Days Off, work days, training, reserve — no gaps.
  */
 export function getUpcomingDays(

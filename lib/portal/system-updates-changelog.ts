@@ -1,17 +1,43 @@
-export type SystemUpdateType = "new_feature" | "improvement" | "fix";
+export type SystemUpdateType = "new_feature" | "improvement" | "fix" | "birthday";
 
 export type SystemUpdateEntry = {
   date: string;
   title: string;
   type: SystemUpdateType;
   bullets: readonly string[];
+  /** When true, System Updates renders title with Crew + logo-green Rules + rest, all bold. */
+  titleWordmark?: boolean;
 };
 
 /**
  * Flat changelog rows; UI applies explicit newest-first sorting by `date` (then `title`).
  * Swap this export for a Supabase-backed fetcher returning the same shape.
+ *
+ * Pilot-facing product updates only — do not add Admin or Super Admin–only changes here.
  */
 export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
+  {
+    date: "2026-04-08",
+    title: "Recurrent Training — Commute deviation preference",
+    type: "new_feature",
+    bullets: [
+      "For recurrent training on your schedule, you can now record whether you plan to commute on your own from your home airport to the training city instead of using company-provided travel from crew base.",
+      "Your choice is saved with the training event and stays with the trip as your schedule updates.",
+      "When deviation is on, Commute Assist and Family View™ use home ↔ training-city routing for that block so suggested flights and shared wording match how you actually travel.",
+      "The dashboard Next Duty card can remind you to set or confirm this preference when training is coming up.",
+    ],
+  },
+  {
+    date: "2026-04-08",
+    title: "Family View™ — Day-trip cards and Week Ahead",
+    type: "improvement",
+    bullets: [
+      "In Family View™, single-calendar-day trips for commuters who finish at crew base (but not at home) now show as a Day Trip with route and day count, instead of using “Commuting Home” as the main headline.",
+      "On the shared Family View™ page, the line under the route uses duty end in base time to say when you’re likely heading home (e.g. in the afternoon), plus the usual note that it still depends on available flights and seats — in English, Spanish, and German.",
+      "In Family View™, Week Ahead no longer lists today; it starts tomorrow and still covers seven forward days. Upcoming begins right after that window so you don’t see the same date twice or skip a day.",
+      "The Today card and Work Trip overview in Family View™ follow the same day-trip and commute wording where it applies.",
+    ],
+  },
   {
     date: "2026-04-07",
     title: "Dashboard weather widget",
@@ -162,6 +188,57 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
     bullets: [
       "Founding Pilot badge and plan messaging tuned for clarity.",
       "Profile header spacing refined on small screens.",
+    ],
+  },
+  {
+    date: "2026-03-14",
+    title: "FAR 117 banner, live flight status, and schedule pay tools",
+    type: "improvement",
+    bullets: [
+      "FAR 117 FDP banner is tied to Current Trip, with delay-adjusted duty end where it applies.",
+      "FlightAware live delay and status on Current Trip (first leg) and on the Weather Brief top flight card.",
+      "Pay & Credit popover and PAY-day tile styling on the schedule.",
+      "AviationStack throttling, deduplication, and 429 handling for more reliable commute flight lookups.",
+    ],
+  },
+  {
+    date: "2026-03-10",
+    title: "Schedule email parsing, Month Overview, Weather Brief, and Family View™",
+    type: "improvement",
+    bullets: [
+      "Inbound email to your CrewRules import address can parse FLICA-style HTML calendar content as well as ICS attachments.",
+      "Duplicate-import prevention when the same schedule update email arrives more than once.",
+      "Month Overview: filtering, award-change display, and muting for selected schedule imports.",
+      "Weather Brief: TAF handling fixes, better iPad support, and header layout cleanup.",
+      "Family View™ wording and layout polish on the shared schedule page.",
+    ],
+  },
+  {
+    date: "2026-02-28",
+    title: "Frontier Pilot Portal — schedule, profile, and dashboard",
+    type: "new_feature",
+    bullets: [
+      "Schedule in the pilot portal: trip cards, first-leg route on trips, PAY and credit context, multi-day events, and clearer On Duty and reserve-related display.",
+      "Complete Profile flow plus login and session fixes so pilots can finish onboarding without getting stuck.",
+      "Dashboard polish: greeting, trip counts, On Call labeling, Upcoming list behavior, and a cleaner first-run experience.",
+    ],
+  },
+  {
+    date: "2026-02-24",
+    title: "Frontier Pilot Portal preview",
+    type: "new_feature",
+    bullets: [
+      "First CrewRules™ pilot portal experience for Frontier: sign-in path, portal shell, and continued improvements to Request Access.",
+      "Sets the stage for schedule, dashboard, and the rest of the pilot experience shipped over the following days.",
+    ],
+  },
+  {
+    date: "2026-02-23",
+    title: "CrewRules™ Initial Public Launch",
+    type: "birthday",
+    titleWordmark: true,
+    bullets: [
+      "CrewRules™ goes live with a public landing page, Request Access backed by Supabase, CrewRules branding, access levels (the former pricing section), logos, and Open Graph previews for social apps and iMessage.",
     ],
   },
   {
