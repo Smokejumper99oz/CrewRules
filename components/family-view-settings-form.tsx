@@ -241,6 +241,10 @@ export function FamilyViewSettingsForm({ profile, proActive }: Props) {
             >
               Sharing
             </h3>
+            <p className="mt-2 text-pretty text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+              Control what your family can see when viewing your schedule. You can keep it simple or share more
+              detailed information depending on your preference.
+            </p>
           </div>
           <div className="mt-4 space-y-4">
             {!proActive && (
@@ -281,7 +285,12 @@ export function FamilyViewSettingsForm({ profile, proActive }: Props) {
               label="Show exact times"
               feedbackFieldKey={FAMILY_VIEW_FIELD_KEYS.family_view_show_exact_times}
               feedback={settingsFieldFeedback}
-            />
+            >
+              <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                Displays your report and release times so your family knows exactly when you&apos;re working. Turn this
+                off to keep timing more private.
+              </p>
+            </FamilyViewToggleRow>
             <FamilyViewToggleRow
               id="settings_family_view_show_overnight_cities"
               name="family_view_show_overnight_cities"
@@ -296,7 +305,12 @@ export function FamilyViewSettingsForm({ profile, proActive }: Props) {
               label="Show overnight cities"
               feedbackFieldKey={FAMILY_VIEW_FIELD_KEYS.family_view_show_overnight_cities}
               feedback={settingsFieldFeedback}
-            />
+            >
+              <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                Shows the cities where you&apos;ll be staying overnight. Helpful for family to know where you are during
+                trips.
+              </p>
+            </FamilyViewToggleRow>
             <FamilyViewToggleRow
               id="settings_family_view_show_commute_estimates"
               name="family_view_show_commute_estimates"
@@ -311,7 +325,12 @@ export function FamilyViewSettingsForm({ profile, proActive }: Props) {
               label="Show commute estimates"
               feedbackFieldKey={FAMILY_VIEW_FIELD_KEYS.family_view_show_commute_estimates}
               feedback={settingsFieldFeedback}
-            />
+            >
+              <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                Adds simple indicators like &ldquo;Likely commuting&rdquo; to help your family understand travel days.
+                This is an estimate, not a confirmed commute.
+              </p>
+            </FamilyViewToggleRow>
           </div>
         </section>
 
