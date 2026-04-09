@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { loadFrontierPilotMenteeRosterPageData } from "@/lib/mentoring/frontier-mentee-roster-load";
 
 export type MentoringOverviewScope =
   | { kind: "platform" }
@@ -17,6 +18,18 @@ export type MentoringOverviewStats = {
 };
 
 const IN_CHUNK = 120;
+
+/** Mentee roster loader is tenant-scoped to Frontier pilots; keep in sync with `frontier-mentee-roster-load.ts`. */
+const FRONTIER_PILOT_TENANT = "frontier";
+const FRONTIER_PILOT_PORTAL = "pilots";
+
+function isFrontierPilotTenantScope(scope: MentoringOverviewScope): boolean {
+  return (
+    scope.kind === "tenant" &&
+    scope.tenant === FRONTIER_PILOT_TENANT &&
+    scope.portal === FRONTIER_PILOT_PORTAL
+  );
+}
 
 function chunk<T>(arr: T[], size: number): T[][] {
   if (arr.length === 0) return [];
@@ -173,11 +186,21 @@ export async function getMentoringOverviewStats(
     return total;
   };
 
+  const activeMenteesPromise = countAssignments((q) =>
+    q.not("mentee_user_id", "is", null).eq("active", true)
+  );
+
+  /** Unmatched / “needs mentor” must match Mentee Roster `counts.unassigned` (same loader, same `status`). */
+  const unmatchedMenteesPromise = isFrontierPilotTenantScope(scope)
+    ? loadFrontierPilotMenteeRosterPageData({
+        collectDohAudit: false,
+        emitDohAuditToConsole: false,
+      }).then((pack) => pack.counts.unassigned)
+    : countAssignments((q) => q.is("mentee_user_id", null));
+
   const [activeMentees, unmatchedMentees] = await Promise.all([
-    countAssignments((q) =>
-      q.not("mentee_user_id", "is", null).eq("active", true)
-    ),
-    countAssignments((q) => q.is("mentee_user_id", null)),
+    activeMenteesPromise,
+    unmatchedMenteesPromise,
   ]);
 
   const assignmentMentorRows: { mentor_user_id: string }[] = [];

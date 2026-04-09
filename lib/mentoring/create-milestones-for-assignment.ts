@@ -156,3 +156,46 @@ export async function createMilestonesForAssignment(
   if (insErr) return { error: insErr.message };
   return {};
 }
+
+/**
+ * For every `mentor_assignments` row where this user is the mentee: idempotently inserts missing
+ * program milestones from `hire_date`, then reapplies hire-based `due_date` sync (same rules as CSV
+ * import and admin recalc; respects completion cascades via `syncMentorshipMilestoneDueDatesFromHireForAssignment`).
+ *
+ * Call after mentee linking so production signup/portal paths always have trustworthy milestone rows
+ * when `hire_date` is set. Rows without a usable YYYY-MM-DD hire_date are skipped.
+ */
+export async function ensureMentorshipMilestonesForMenteeUser(userId: string): Promise<void> {
+  const id = userId?.trim();
+  if (!id) return;
+
+  const admin = createAdminClient();
+  const { data: rows, error: fetchErr } = await admin
+    .from("mentor_assignments")
+    .select("id, hire_date")
+    .eq("mentee_user_id", id);
+
+  if (fetchErr) {
+    console.error("[ensureMentorshipMilestonesForMenteeUser] mentor_assignments:", fetchErr.message);
+    return;
+  }
+
+  for (const row of rows ?? []) {
+    const aid = String(row.id);
+    const hireRaw = (row.hire_date as string | null) ?? "";
+    const hireYmd = hireRaw.trim().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(hireYmd)) {
+      continue;
+    }
+
+    const created = await createMilestonesForAssignment(aid, hireYmd);
+    if (created.error) {
+      console.warn(`[ensureMentorshipMilestonesForMenteeUser] createMilestones ${aid}:`, created.error);
+    }
+
+    const synced = await syncMentorshipMilestoneDueDatesFromHireForAssignment(admin, aid);
+    if (synced.error) {
+      console.warn(`[ensureMentorshipMilestonesForMenteeUser] sync ${aid}:`, synced.error);
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureMentorshipMilestonesForMenteeUser } from "@/lib/mentoring/create-milestones-for-assignment";
 
 async function linkMenteeToAssignmentsLegacyExact(
   userId: string,
@@ -48,18 +49,22 @@ export async function linkMenteeToAssignments(
     "link_mentee_assignments_for_authenticated_user"
   );
 
+  let linked = 0;
   const fromRpc = rpcCount(rpcData);
   if (!rpcError && fromRpc !== null) {
-    return fromRpc;
+    linked = fromRpc;
+  } else {
+    if (rpcError) {
+      console.warn(
+        "[linkMenteeToAssignments] RPC link_mentee_assignments_for_authenticated_user failed; using exact match fallback:",
+        rpcError.message
+      );
+    }
+    linked = await linkMenteeToAssignmentsLegacyExact(userId, empNum);
   }
 
-  if (rpcError) {
-    console.warn(
-      "[linkMenteeToAssignments] RPC link_mentee_assignments_for_authenticated_user failed; using exact match fallback:",
-      rpcError.message
-    );
-  }
+  // Central guarantee: milestone rows + hire-based due dates for all assignments this user is linked to as mentee.
+  await ensureMentorshipMilestonesForMenteeUser(userId);
 
-  // Fallback uses admin client to bypass RLS on the direct UPDATE.
-  return linkMenteeToAssignmentsLegacyExact(userId, empNum);
+  return linked;
 }

@@ -33,7 +33,35 @@ function featureEnabled(features: TenantFeature[], key: string) {
   return features.find((f) => f.feature_key === key)?.enabled === true;
 }
 
-function AttentionItem({
+const ATTENTION_SEVERITY_STYLES: Record<
+  "critical" | "warning" | "info",
+  { shell: string; count: string; label: string; icon: string; footer: string }
+> = {
+  critical: {
+    shell: "border-red-500/30 bg-red-500/10 transition hover:opacity-90",
+    count: "text-red-200",
+    label: "text-red-400",
+    icon: "text-red-400 opacity-90",
+    footer: "text-red-400/75",
+  },
+  warning: {
+    shell: "border-amber-500/30 bg-amber-500/10 transition hover:opacity-90",
+    count: "text-amber-200",
+    label: "text-amber-400",
+    icon: "text-amber-400 opacity-90",
+    footer: "text-amber-400/75",
+  },
+  info: {
+    shell: "border-blue-500/30 bg-blue-500/10 transition hover:opacity-90",
+    count: "text-blue-200",
+    label: "text-blue-400",
+    icon: "text-blue-400 opacity-90",
+    footer: "text-blue-400/75",
+  },
+};
+
+/** Compact tile (StatPill-style layout) with legacy banner severity colors. */
+function AttentionStatCard({
   icon: Icon,
   label,
   count,
@@ -46,28 +74,23 @@ function AttentionItem({
   href: string;
   severity: "critical" | "warning" | "info";
 }) {
-  const colors = {
-    critical: "bg-red-500/10 border-red-500/30 text-red-400",
-    warning: "bg-amber-500/10 border-amber-500/30 text-amber-400",
-    info: "bg-blue-500/10 border-blue-500/30 text-blue-400",
-  };
-  const badgeColors = {
-    critical: "bg-red-500/20 text-red-300",
-    warning: "bg-amber-500/20 text-amber-300",
-    info: "bg-blue-500/20 text-blue-300",
-  };
-
+  const s = ATTENTION_SEVERITY_STYLES[severity];
   return (
     <Link
       href={href}
-      className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition hover:opacity-90 ${colors[severity]}`}
+      className={`group flex min-h-0 flex-col gap-0.5 rounded-xl border px-4 py-3 ${s.shell}`}
     >
-      <Icon className="h-4 w-4 shrink-0" />
-      <span className="flex-1 text-sm font-medium">{label}</span>
-      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${badgeColors[severity]}`}>
-        {count}
+      <div className="flex items-start justify-between gap-2">
+        <span className={`text-xl font-light leading-none tabular-nums ${s.count}`}>
+          {count}
+        </span>
+        <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${s.icon}`} aria-hidden />
+      </div>
+      <span className={`text-xs leading-snug ${s.label}`}>{label}</span>
+      <span className={`mt-1 flex items-center gap-1 text-[11px] ${s.footer}`}>
+        Open
+        <ArrowRight className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
       </span>
-      <ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-60" />
     </Link>
   );
 }
@@ -167,7 +190,7 @@ export function AdminDashboard({
       icon: UserX,
       label: "Mentees waiting for a mentor match",
       count: overview.unmatchedMentees,
-      href: `${base}/mentoring`,
+      href: `${base}/mentoring/mentee-roster`,
       severity: "critical" as const,
     },
     overview.openMentorshipProgramRequests > 0 && {
@@ -191,7 +214,7 @@ export function AdminDashboard({
       href: `${base}/mentoring`,
       severity: "info" as const,
     },
-  ].filter(Boolean) as React.ComponentProps<typeof AttentionItem>[];
+  ].filter(Boolean) as React.ComponentProps<typeof AttentionStatCard>[];
 
   const mentorEnabled = featureEnabled(tenantFeatures, "mentoring");
   const inactiveCount = mentorActivity.filter(
@@ -200,26 +223,18 @@ export function AdminDashboard({
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-semibold text-slate-100">Admin Dashboard</h1>
-        <p className="mt-0.5 text-sm text-slate-500">
-          Frontier Airlines · Pilots Program
-        </p>
-      </div>
-
       {/* ── ATTENTION REQUIRED ─────────────────────────────── */}
       {attentionItems.length > 0 && (
-        <section className="space-y-3">
-          <div className="flex items-center gap-2">
+        <section className="rounded-xl border border-white/5 bg-slate-950/40 p-4 sm:p-5">
+          <div className="mb-4 flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-400" />
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
               Attention Required
             </h2>
           </div>
-          <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {attentionItems.map((item) => (
-              <AttentionItem key={item.label} {...item} />
+              <AttentionStatCard key={item.label} {...item} />
             ))}
           </div>
         </section>
