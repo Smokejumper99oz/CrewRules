@@ -21,6 +21,10 @@ import { getInboundEmailForDisplay } from "@/lib/email/get-inbound-email-for-dis
 import { importIcsFromText } from "@/lib/schedule/import-ics-from-text";
 import { computeTrainingMonthCreditDeltas } from "@/lib/schedule/training-month-credit";
 import {
+  extractTrainingCityFromLegs,
+  getTrainingCityIataFromTrainingRow,
+} from "@/lib/schedule/training-city-iata";
+import {
   computeLegDates,
   getLegsForDate,
   getNextActionableLeg,
@@ -1392,51 +1396,22 @@ export async function getAvailableMonths(): Promise<MonthOption[]> {
 // ---------------------------------------------------------------------------
 
 /**
- * Extract the training city IATA from the legs of a companion trip.
- * Uses the longest leg (most block minutes) whose destination isn't the crew base,
- * which is the furthest point from base and the training location.
- */
-function extractTrainingCityFromLegs(
-  legs: ScheduleEventLeg[],
-  baseAirport: string | null | undefined
-): string | null {
-  if (!legs || legs.length === 0) return null;
-  const base = (baseAirport ?? "").trim().toUpperCase();
-
-  let bestLeg: ScheduleEventLeg | null = null;
-  let bestBlock = -1;
-  for (const leg of legs) {
-    const dest = (leg.destination ?? "").trim().toUpperCase();
-    if (!dest || dest === base) continue;
-    const block = leg.blockMinutes ?? 0;
-    if (block > bestBlock) {
-      bestBlock = block;
-      bestLeg = leg;
-    }
-  }
-  if (bestLeg?.destination) return bestLeg.destination.trim().toUpperCase();
-
-  // Fallback: first non-base destination
-  for (const leg of legs) {
-    const dest = (leg.destination ?? "").trim().toUpperCase();
-    if (dest && dest !== base) return dest;
-  }
-  return null;
-}
-
-/**
  * Fetch the training city IATA for a training event by looking at its companion trip's legs.
  * Companion trip = overlapping trip event whose title shares a prefix with the training event title.
  */
 export async function getTrainingCityForEvent(
   eventTitle: string | null,
   startTime: string,
-  endTime: string
+  endTime: string,
+  trainingRow?: Pick<ScheduleEvent, "event_type" | "legs" | "route"> | null
 ): Promise<string | null> {
   try {
     const supabase = await createClient();
     const profile = await getProfile();
     if (!profile) return null;
+
+    const fromTrainingRow = () =>
+      trainingRow ? getTrainingCityIataFromTrainingRow(trainingRow, profile.base_airport) : null;
 
     const { data } = await supabase
       .from("schedule_events")
@@ -1449,7 +1424,9 @@ export async function getTrainingCityForEvent(
       .order("start_time", { ascending: true })
       .limit(5);
 
-    if (!data || data.length === 0) return null;
+    if (!data || data.length === 0) {
+      return fromTrainingRow();
+    }
 
     const trainingTitle = (eventTitle ?? "").trim().toUpperCase();
     // Prefer the companion trip whose title shares a prefix with the training title
@@ -1460,7 +1437,9 @@ export async function getTrainingCityForEvent(
       }) ?? data[0];
 
     const legs = ((companion as { legs?: unknown }).legs as ScheduleEventLeg[] | null) ?? [];
-    return extractTrainingCityFromLegs(legs, profile.base_airport);
+    const fromCompanion = extractTrainingCityFromLegs(legs, profile.base_airport);
+    if (fromCompanion) return fromCompanion;
+    return fromTrainingRow();
   } catch {
     return null;
   }

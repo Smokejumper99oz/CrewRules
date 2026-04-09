@@ -129,7 +129,7 @@ export async function PortalNextDuty({
   // Training event enrichment — fetch companion trip legs to determine training city
   const isTrainingEvent = event?.event_type === "training";
   const trainingCityIata = isTrainingEvent && event
-    ? await getTrainingCityForEvent(event.title ?? null, event.start_time, event.end_time)
+    ? await getTrainingCityForEvent(event.title ?? null, event.start_time, event.end_time, event)
     : null;
   const trainingDeviationHomeCommute = isTrainingEvent
     ? (event?.training_deviation_home_commute ?? null)

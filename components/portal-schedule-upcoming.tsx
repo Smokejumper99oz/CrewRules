@@ -1,4 +1,10 @@
-import { getNextDuty, getUpcomingEvents, getScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
+import {
+  getNextDuty,
+  getUpcomingEvents,
+  getScheduleDisplaySettings,
+  getTrainingCityForEvent,
+} from "@/app/frontier/pilots/portal/schedule/actions";
+import { iataToCityName } from "@/lib/family-view/translate-schedule";
 import { scheduleCardLegDateHelpers, withLegsToShow } from "@/lib/schedule-card-legs";
 import type { ScheduleEvent, ScheduleEventLeg } from "@/app/frontier/pilots/portal/schedule/actions";
 import { getProfile } from "@/lib/profile";
@@ -290,6 +296,17 @@ export async function PortalScheduleUpcoming({ tenant, portal }: { tenant: strin
 
   if (upcomingEvents.length === 0) return null;
 
+  const trainingLocationByEventId = new Map<string, string>();
+  await Promise.all(
+    upcomingEvents
+      .filter((row) => row.event.event_type === "training")
+      .map(async (row) => {
+        const e = row.event;
+        const iata = await getTrainingCityForEvent(e.title ?? null, e.start_time, e.end_time, e);
+        if (iata) trainingLocationByEventId.set(e.id, iataToCityName(iata));
+      })
+  );
+
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-emerald-400/30 dark:border-white/5 dark:bg-slate-950 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03)] dark:hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] dark:hover:border-emerald-400/20">
       <div className="border-b border-slate-200 pb-2 dark:border-white/5">
@@ -311,10 +328,11 @@ export async function PortalScheduleUpcoming({ tenant, portal }: { tenant: strin
               reportTimeOverride={row.reportTimeOverride ?? undefined}
               headerTitleOverride={row.headerTitleOverride}
               creditMinutesDisplayOverride={
-                row.event.event_type === "trip"
+                row.event.event_type === "trip" || row.event.event_type === "training"
                   ? (row.event.baseline_credit_minutes ?? row.event.credit_minutes ?? null)
                   : null
               }
+              upcomingTrainingLocationLine={trainingLocationByEventId.get(row.event.id) ?? null}
             />
           </li>
         ))}

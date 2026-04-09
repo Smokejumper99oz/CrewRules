@@ -71,6 +71,10 @@ type Props = {
   redEyeReportDateLong?: string | null;
   /** When set, use these minutes for the Credit line only (e.g. Upcoming: baseline / upload credit). */
   creditMinutesDisplayOverride?: number | null;
+  /**
+   * Compact + training only: when set, shown instead of the start–end time span (e.g. training city from FLICA companion trip).
+   */
+  upcomingTrainingLocationLine?: string | null;
 };
 
 export function ScheduleEventCard({
@@ -86,6 +90,7 @@ export function ScheduleEventCard({
   postDutyRelease,
   redEyeReportDateLong,
   creditMinutesDisplayOverride,
+  upcomingTrainingLocationLine,
 }: Props) {
   if (isRdPlaceholderEvent(event)) return null;
 
@@ -169,7 +174,10 @@ export function ScheduleEventCard({
 
   const borderStyle =
     reportNightClass ?? (EVENT_STYLES[event.event_type] ?? EVENT_STYLES.other);
-  const showDateRange = event.event_type === "vacation" || event.event_type === "off";
+  const showDateRange =
+    event.event_type === "vacation" ||
+    event.event_type === "off" ||
+    (event.event_type === "training" && !displayDateStr);
   const dateLabel = showDateRange
     ? formatDayRangeLabel(event.start_time, event.end_time, displaySettings.baseTimezone)
     : displayDateStr
@@ -287,7 +295,19 @@ export function ScheduleEventCard({
             <span className="text-xs text-slate-400">Credit {creditDisplay}</span>
           </>
         )}
-        {!showReportCredit && !hideDutyRangeFallback && <span className="text-xs text-slate-400">{dutyRange}</span>}
+        {event.event_type === "training" && !hideDutyRangeFallback && (
+          <span className="text-xs text-slate-400">
+            {upcomingTrainingLocationLine?.trim()
+              ? upcomingTrainingLocationLine.trim()
+              : dutyRange}
+          </span>
+        )}
+        {event.event_type === "training" && (
+          <span className="text-xs text-slate-400">Credit {creditDisplay}</span>
+        )}
+        {!showReportCredit &&
+          event.event_type !== "training" &&
+          !hideDutyRangeFallback && <span className="text-xs text-slate-400">{dutyRange}</span>}
       </div>
     );
   }
@@ -327,7 +347,15 @@ export function ScheduleEventCard({
           <span className="text-sm text-slate-400">Credit {creditDisplay}</span>
         </>
       )}
-      {!showReportCredit && !hideDutyRangeFallback && <span className="text-sm text-slate-400">{dutyRange}</span>}
+      {event.event_type === "training" && !hideDutyRangeFallback && (
+        <span className="text-sm text-slate-400">{dutyRange}</span>
+      )}
+      {event.event_type === "training" && (
+        <span className="text-sm text-slate-400">Credit {creditDisplay}</span>
+      )}
+      {!showReportCredit &&
+        event.event_type !== "training" &&
+        !hideDutyRangeFallback && <span className="text-sm text-slate-400">{dutyRange}</span>}
     </div>
   );
 }
