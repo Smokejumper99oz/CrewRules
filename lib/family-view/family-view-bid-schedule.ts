@@ -130,19 +130,3 @@ export function getNextBidPeriodForFamilyView(todayYmd: string): {
   }
   return { name: nextBounds.name, startStr: nextBounds.startStr, endStr: nextBounds.endStr };
 }
-
-/** Current Frontier bid period for "today" in the Family View timezone (for lightweight UI copy). */
-export function getCurrentBidPeriodForFamilyView(
-  todayYmd: string,
-  timezone: string
-): { name: string; startStr: string; endStr: string } | null {
-  const year = Number(todayYmd.slice(0, 4));
-  if (!Number.isFinite(year)) {
-    return null;
-  }
-  const current = getBidPeriodForDate(todayYmd, year);
-  if (!current) {
-    return null;
-  }
-  return { name: current.name, startStr: current.startStr, endStr: current.endStr };
-}

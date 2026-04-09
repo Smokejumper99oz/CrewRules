@@ -133,8 +133,6 @@ export type FamilyViewStrings = {
   // Empty state
   nothingScheduled: string;
 
-  /** One-line context: Frontier bid periods vs calendar months. */
-  currentBidPeriodNote: (bidName: string, dateRangeLabel: string) => string;
   /** Small footer under Upcoming: next date block not shown yet (family-friendly; pilot first name). */
   upcomingFooterNextBidWaiting: (
     pilotFirstName: string | null | undefined,
@@ -234,9 +232,6 @@ const en: FamilyViewStrings = {
   familyViewDisabledSuffix: "to start sharing your schedule with family.",
 
   nothingScheduled: "Nothing scheduled",
-
-  currentBidPeriodNote: (bidName, dateRangeLabel) =>
-    `Frontier bid period: ${bidName} (${dateRangeLabel}). Schedules follow bid months, not calendar months.`,
 
   upcomingFooterNextBidWaiting: (pilotFirstName, bidMonthLabel) => {
     const name = (pilotFirstName ?? "").trim();
@@ -340,9 +335,6 @@ const es: FamilyViewStrings = {
 
   nothingScheduled: "Nada programado",
 
-  currentBidPeriodNote: (bidName, dateRangeLabel) =>
-    `Período de bid Frontier: ${bidName} (${dateRangeLabel}). Los horarios siguen los meses de bid, no los meses naturales.`,
-
   upcomingFooterNextBidWaiting: (pilotFirstName, bidMonthLabel) => {
     const name = (pilotFirstName ?? "").trim();
     const clause = name
@@ -444,9 +436,6 @@ const de: FamilyViewStrings = {
   familyViewDisabledSuffix: "um deinen Zeitplan mit der Familie zu teilen.",
 
   nothingScheduled: "Nichts geplant",
-
-  currentBidPeriodNote: (bidName, dateRangeLabel) =>
-    `Frontier-Bid-Zeitraum: ${bidName} (${dateRangeLabel}). Zeitpläne folgen Bid-Monaten, nicht kalendermonatlich.`,
 
   upcomingFooterNextBidWaiting: (pilotFirstName, bidMonthLabel) => {
     const name = (pilotFirstName ?? "").trim();

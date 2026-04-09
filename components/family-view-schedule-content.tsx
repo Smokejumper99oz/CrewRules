@@ -41,7 +41,6 @@ import { isCommuter, getCommuteInfoForTrip } from "@/lib/family-view/commute-inf
 import { addDay } from "@/lib/schedule-time";
 import {
   computeFamilyViewBidGap,
-  getCurrentBidPeriodForFamilyView,
   getNextBidPeriodForFamilyView,
 } from "@/lib/family-view/family-view-bid-schedule";
 
@@ -116,20 +115,6 @@ export async function FamilyViewScheduleContent({
       return `${dayName} • ${monthName} ${d}`;
     }
     return englishLabel;
-  }
-
-  function formatBidDateRangeLabel(startYmd: string, endYmd: string): string {
-    const locale = lang === "de" ? "de-DE" : lang === "es" ? "es-ES" : "en-US";
-    const [y0, m0, d0] = startYmd.split("-").map(Number);
-    const [y1, m1, d1] = endYmd.split("-").map(Number);
-    const a = new Date(y0, (m0 ?? 1) - 1, d0 ?? 1);
-    const b = new Date(y1, (m1 ?? 1) - 1, d1 ?? 1);
-    const optsShort: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
-    const optsFull: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
-    if (y0 === y1) {
-      return `${a.toLocaleDateString(locale, optsShort)} – ${b.toLocaleDateString(locale, optsFull)}`;
-    }
-    return `${a.toLocaleDateString(locale, optsFull)} – ${b.toLocaleDateString(locale, optsFull)}`;
   }
 
   const baseTimezone = displaySettings.baseTimezone ?? "America/Denver";
@@ -517,16 +502,6 @@ export async function FamilyViewScheduleContent({
         <FamilyViewGlossary lang={lang} s={s} />
       ) : (
       <>
-      {(() => {
-        const curBid = getCurrentBidPeriodForFamilyView(todayYmd, baseTimezone);
-        if (!curBid) return null;
-        const rangeLabel = formatBidDateRangeLabel(curBid.startStr, curBid.endStr);
-        return (
-          <p className="mb-4 rounded-lg border border-[#E8E3DA] bg-[#FAFAF8] px-3 py-2 text-center text-xs leading-relaxed text-[#5C5C5C]">
-            {s.currentBidPeriodNote(curBid.name, rangeLabel)}
-          </p>
-        );
-      })()}
       {/* Section 1: Today */}
       <section className="rounded-2xl border border-[#E8E3DA] bg-[#F4F1EA]/50 p-4 sm:p-5 shadow-sm">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-[#6F6F6F] mb-3">

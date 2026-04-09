@@ -19,7 +19,7 @@ function escapeHtml(input: unknown): string {
 export async function sendFamilyViewInviteEmail(params: {
   /** Invitee email address. */
   to: string;
-  /** Pilot's first name, shown in the body. */
+  /** Pilot's first name, used in the subject and body. */
   pilotFirstName: string;
   /** Full magic-link share URL (https://www.crewrules.com/family-view/v/{rawToken}). */
   shareUrl: string;
@@ -33,17 +33,17 @@ export async function sendFamilyViewInviteEmail(params: {
   const safeName = escapeHtml(pilotFirstName);
   const safeUrl = escapeHtml(shareUrl);
 
-  const subject = "You're invited to view a CrewRules™ Family View ✈️";
+  const subject = `${pilotFirstName} shared a schedule with you — CrewRules™ Family View`;
 
   const text = [
-    `${pilotFirstName} has shared their flight schedule with you using CrewRules™.`,
+    `${pilotFirstName} has shared a schedule with you using CrewRules™.`,
     "",
-    "You can view when they are working, traveling, and home — in a simple format designed for family.",
+    `You can easily see when ${pilotFirstName} is working, traveling, or back home — all in a simple view designed for family.`,
     "",
-    "Open Family View:",
+    "Tap below to open your private Family View.",
     shareUrl,
     "",
-    "This link is private and meant only for you.",
+    "This link is personal and meant just for you.",
   ].join("\n");
 
   const html = `<!DOCTYPE html>
@@ -66,18 +66,21 @@ export async function sendFamilyViewInviteEmail(params: {
               <td style="padding:32px 28px 24px 28px;background:#ffffff;">
                 <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;color:#111827;line-height:1.65;">
                   <p style="margin:0 0 18px 0;">
-                    <strong>${safeName}</strong> has shared their flight schedule with you using CrewRules™.
+                    <strong>${safeName}</strong> has shared a schedule with you using CrewRules™.
                   </p>
                   <p style="margin:0 0 24px 0;color:#374151;">
-                    You can view when they are working, traveling, and home — in a simple format designed for family.
+                    You can easily see when ${safeName} is working, traveling, or back home — all in a simple view designed for family.
+                  </p>
+                  <p style="margin:0 0 10px 0;color:#374151;">
+                    Tap below to open your private Family View.
                   </p>
                   <p style="margin:0 0 28px 0;">
                     <a href="${safeUrl}" style="display:inline-block;background:#75C043;color:#0f172a;text-decoration:none;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-weight:700;font-size:14px;padding:12px 20px;border-radius:12px;">
-                      Open Family View ✈️
+                      Open your private Family View ✈️
                     </a>
                   </p>
                   <p style="margin:0;font-size:12px;color:#9ca3af;">
-                    This link is private and meant only for you. Do not share it with others.
+                    This link is personal and meant just for you.
                   </p>
                 </div>
               </td>
