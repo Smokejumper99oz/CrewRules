@@ -38,6 +38,12 @@ import {
   sortMentorRegistryCategories,
 } from "@/lib/mentoring/mentor-registry-admin-options";
 import type { UpdateMentorAssignmentHireDateFormState } from "@/lib/super-admin/actions";
+import { sendMentorAssignmentEmail } from "@/lib/email/send-mentor-assignment-email";
+import { formatUsPhoneStored } from "@/lib/format-us-phone";
+import {
+  loadFrontierMentoringEmailCenterRowByAssignmentId,
+  type FrontierMentoringEmailCenterRow,
+} from "@/lib/mentoring/frontier-mentoring-email-center-load";
 
 export type {
   MentoringCsvImportMeta,
@@ -353,6 +359,456 @@ async function assertAssignmentMentorInTenantScope(
     return { error: "Unauthorized" };
   }
   return {};
+}
+
+/**
+ * Frontier pilots tenant admin: verify `mentor_assignments` row is in scope for this mentoring admin.
+ * Supports live mentees, staged mentees (employee_number on assignment), live mentors, and staged mentors
+ * (`mentor_preload`), unlike `assertAssignmentMentorInTenantScope` which requires a linked mentor profile.
+ */
+async function assertFrontierPilotMentoringAssignmentInAdminScope(
+  admin: ReturnType<typeof createAdminClient>,
+  assignmentId: string
+): Promise<{ error?: string }> {
+  const { data: row, error } = await admin
+    .from("mentor_assignments")
+    .select("mentee_user_id, mentor_user_id, mentor_employee_number, employee_number")
+    .eq("id", assignmentId)
+    .maybeSingle();
+
+  if (error) {
+    return { error: error.message };
+  }
+  if (!row) {
+    return { error: "Assignment not found." };
+  }
+
+  const menteeUserId = row.mentee_user_id as string | null | undefined;
+  const menteeEmpRaw = row.employee_number as string | null | undefined;
+  const menteeEmp = menteeEmpRaw != null ? String(menteeEmpRaw).trim() : "";
+  const mentorUserId = row.mentor_user_id as string | null | undefined;
+  const mentorEmpRaw = row.mentor_employee_number as string | null | undefined;
+  const mentorEmp = mentorEmpRaw != null ? String(mentorEmpRaw).trim() : "";
+
+  if (menteeUserId) {
+    const { data: prof, error: pErr } = await admin
+      .from("profiles")
+      .select("tenant, portal")
+      .eq("id", menteeUserId)
+      .maybeSingle();
+    if (pErr) {
+      return { error: pErr.message };
+    }
+    if (prof?.tenant === TENANT && prof?.portal === PORTAL) {
+      return {};
+    }
+  }
+
+  if (menteeEmp) {
+    const { data: prof, error: pErr } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("tenant", TENANT)
+      .eq("portal", PORTAL)
+      .eq("employee_number", menteeEmp)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (pErr) {
+      return { error: pErr.message };
+    }
+    if (prof?.id) {
+      return {};
+    }
+  }
+
+  if (mentorUserId) {
+    const { data: prof, error: pErr } = await admin
+      .from("profiles")
+      .select("tenant, portal")
+      .eq("id", mentorUserId)
+      .maybeSingle();
+    if (pErr) {
+      return { error: pErr.message };
+    }
+    if (prof?.tenant === TENANT && prof?.portal === PORTAL) {
+      return {};
+    }
+  }
+
+  if (mentorEmp) {
+    const { data: preload, error: preErr } = await admin
+      .from("mentor_preload")
+      .select("id")
+      .eq("tenant", TENANT)
+      .eq("employee_number", mentorEmp)
+      .maybeSingle();
+    if (preErr) {
+      return { error: preErr.message };
+    }
+    if (preload?.id) {
+      return {};
+    }
+  }
+
+  const menteeUidAbsent = menteeUserId == null || String(menteeUserId).trim() === "";
+  const mentorUidAbsent = mentorUserId == null || String(mentorUserId).trim() === "";
+  /**
+   * Staged/unlinked mentee assignment (mentoring import): valid rows can exist with mentee `employee_number` set,
+   * `mentee_user_id` null (mentee not signed up yet), and no mentor (`mentor_user_id` / `mentor_employee_number` null).
+   * Caller must already pass `ensureFrontierPilotsTenantAdmin`; this is only used from the Frontier pilots mentoring
+   * admin path on existing `mentor_assignments`. Without this fallback, those imported unassigned rows cannot be
+   * reassigned even though the product already supports pre-signup mentees via import.
+   */
+  if (menteeUidAbsent && menteeEmp.length > 0 && mentorUidAbsent && mentorEmp.length === 0) {
+    return {};
+  }
+
+  return { error: "Unauthorized" };
+}
+
+export type ReassignFrontierPilotAdminMentorAssignmentInput = {
+  assignmentId: string;
+  /** Live mentor: `profiles.id` in this tenant/portal. */
+  newMentorUserId?: string | null;
+  /**
+   * Mentor employee number: used alone for staged (`mentor_preload`) mentors, or with `newMentorUserId`
+   * to verify the profile matches. Resolution order matches `runFrontierMentoringCsvImport` (profile first).
+   */
+  newMentorEmployeeNumber?: string | null;
+};
+
+/**
+ * Frontier pilots tenant admin: reassign mentor on an existing `mentor_assignments` row (update by id only;
+ * no insert, no CSV). Mirrors tenant gating and id-based update pattern of hire-date edits.
+ */
+export async function reassignFrontierPilotAdminMentorAssignment(
+  params: ReassignFrontierPilotAdminMentorAssignmentInput
+): Promise<{ error?: string }> {
+  const gate = await ensureFrontierPilotsTenantAdmin();
+  if (gate.error) {
+    return { error: gate.error };
+  }
+
+  const id = params.assignmentId.trim();
+  if (!id) {
+    return { error: "Invalid assignment." };
+  }
+
+  const uidRaw = params.newMentorUserId != null ? String(params.newMentorUserId).trim() : "";
+  const empParamRaw =
+    params.newMentorEmployeeNumber != null ? String(params.newMentorEmployeeNumber).trim() : "";
+
+  const admin = createAdminClient();
+  const scope = await assertFrontierPilotMentoringAssignmentInAdminScope(admin, id);
+  if (scope.error) {
+    return { error: scope.error };
+  }
+
+  const { data: assignmentRow, error: asgErr } = await admin
+    .from("mentor_assignments")
+    .select("employee_number, mentee_user_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (asgErr) {
+    return { error: asgErr.message };
+  }
+  if (!assignmentRow) {
+    return { error: "Assignment not found." };
+  }
+
+  const menteeEmpOnAssignment =
+    assignmentRow.employee_number != null ? String(assignmentRow.employee_number).trim() : "";
+  const menteeUserId = assignmentRow.mentee_user_id as string | null | undefined;
+
+  let nextMentorUserId: string | null = null;
+  let nextMentorEmployeeNumber: string | null = null;
+
+  if (!uidRaw && !empParamRaw) {
+    nextMentorUserId = null;
+    nextMentorEmployeeNumber = null;
+  } else if (uidRaw) {
+    const { data: mentorProfile, error: mentorErr } = await admin
+      .from("profiles")
+      .select("id, employee_number")
+      .eq("id", uidRaw)
+      .eq("tenant", TENANT)
+      .eq("portal", PORTAL)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (mentorErr) {
+      return { error: mentorErr.message };
+    }
+    if (!mentorProfile?.id) {
+      return { error: "Mentor profile not found in this tenant." };
+    }
+
+    const empFromProfile =
+      mentorProfile.employee_number != null ? String(mentorProfile.employee_number).trim() : "";
+    if (empParamRaw && empParamRaw !== empFromProfile) {
+      return { error: "Mentor employee number does not match selected profile." };
+    }
+
+    nextMentorUserId = mentorProfile.id;
+    nextMentorEmployeeNumber = empFromProfile.length > 0 ? empFromProfile : null;
+  } else {
+    const { data: mentorProfile, error: mentorErr } = await admin
+      .from("profiles")
+      .select("id, employee_number")
+      .eq("tenant", TENANT)
+      .eq("portal", PORTAL)
+      .eq("employee_number", empParamRaw)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (mentorErr) {
+      return { error: mentorErr.message };
+    }
+
+    if (mentorProfile?.id) {
+      nextMentorUserId = mentorProfile.id;
+      const emp = mentorProfile.employee_number != null ? String(mentorProfile.employee_number).trim() : "";
+      nextMentorEmployeeNumber = emp.length > 0 ? emp : null;
+    } else {
+      const { data: preloadRow, error: preloadErr } = await admin
+        .from("mentor_preload")
+        .select("id, employee_number")
+        .eq("tenant", TENANT)
+        .eq("employee_number", empParamRaw)
+        .maybeSingle();
+
+      if (preloadErr) {
+        return { error: preloadErr.message };
+      }
+      if (!preloadRow?.id) {
+        return {
+          error: `No mentor with employee_number "${empParamRaw}" in this tenant (no live profile or mentor roster row).`,
+        };
+      }
+
+      const preEmp =
+        preloadRow.employee_number != null ? String(preloadRow.employee_number).trim() : empParamRaw;
+      nextMentorUserId = null;
+      nextMentorEmployeeNumber = preEmp.length > 0 ? preEmp : null;
+    }
+  }
+
+  const mentorEmpForSameCheck =
+    nextMentorEmployeeNumber != null && nextMentorEmployeeNumber.trim() !== ""
+      ? nextMentorEmployeeNumber.trim()
+      : null;
+  if (mentorEmpForSameCheck && menteeEmpOnAssignment && mentorEmpForSameCheck === menteeEmpOnAssignment) {
+    return { error: "Mentor and mentee cannot be the same employee number." };
+  }
+
+  if (nextMentorUserId && menteeUserId && nextMentorUserId === menteeUserId) {
+    return { error: "Mentor and mentee cannot be the same user." };
+  }
+
+  const { error: updErr } = await admin
+    .from("mentor_assignments")
+    .update({
+      mentor_user_id: nextMentorUserId,
+      mentor_employee_number: nextMentorEmployeeNumber,
+    })
+    .eq("id", id);
+
+  if (updErr) {
+    return { error: updErr.message };
+  }
+
+  revalidatePath("/frontier/pilots/admin/mentoring");
+  revalidatePath("/super-admin/mentoring");
+
+  return {};
+}
+
+export type ReassignFrontierPilotAdminMentorAssignmentFormState = {
+  error: string | null;
+  success?: boolean;
+};
+
+/**
+ * Frontier pilots tenant admin: FormData adapter for `reassignFrontierPilotAdminMentorAssignment`
+ * (same useActionState pattern as hire-date edits). `mentorSelection`: `__UNASSIGN__`, `profile:<profiles.id>`,
+ * or `preload:<mentor_preload.id>` matching `MenteeRosterMentorOption.optionKey`.
+ */
+export async function reassignFrontierPilotAdminMentorAssignmentFormState(
+  _prev: ReassignFrontierPilotAdminMentorAssignmentFormState,
+  formData: FormData
+): Promise<ReassignFrontierPilotAdminMentorAssignmentFormState> {
+  const assignmentId = String(formData.get("assignmentId") ?? "").trim();
+  const mentorSelection = String(formData.get("mentorSelection") ?? "").trim();
+
+  if (!assignmentId) {
+    return { error: "Invalid assignment." };
+  }
+  if (!mentorSelection) {
+    return { error: "Select a mentor or unassign." };
+  }
+
+  let params: ReassignFrontierPilotAdminMentorAssignmentInput;
+
+  if (mentorSelection === "__UNASSIGN__") {
+    params = {
+      assignmentId,
+      newMentorUserId: null,
+      newMentorEmployeeNumber: null,
+    };
+  } else if (mentorSelection.startsWith("profile:")) {
+    const uid = mentorSelection.slice("profile:".length).trim();
+    if (!uid) {
+      return { error: "Invalid selection." };
+    }
+    const adminProfile = createAdminClient();
+    const { data: prof, error: profErr } = await adminProfile
+      .from("profiles")
+      .select("employee_number")
+      .eq("id", uid)
+      .eq("tenant", TENANT)
+      .eq("portal", PORTAL)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (profErr) {
+      return { error: profErr.message };
+    }
+    const empNorm =
+      prof?.employee_number != null ? String(prof.employee_number).trim() : "";
+    params = {
+      assignmentId,
+      newMentorUserId: uid,
+      newMentorEmployeeNumber: empNorm.length > 0 ? empNorm : null,
+    };
+  } else if (mentorSelection.startsWith("preload:")) {
+    const preloadId = mentorSelection.slice("preload:".length).trim();
+    if (!preloadId) {
+      return { error: "Invalid selection." };
+    }
+    const admin = createAdminClient();
+    const { data: pre, error: preErr } = await admin
+      .from("mentor_preload")
+      .select("employee_number")
+      .eq("id", preloadId)
+      .eq("tenant", TENANT)
+      .maybeSingle();
+    if (preErr) {
+      return { error: preErr.message };
+    }
+    const emp = pre?.employee_number != null ? String(pre.employee_number).trim() : "";
+    if (!emp) {
+      return { error: "Invalid staged mentor." };
+    }
+    params = { assignmentId, newMentorUserId: null, newMentorEmployeeNumber: emp };
+  } else {
+    return { error: "Invalid selection." };
+  }
+
+  const result = await reassignFrontierPilotAdminMentorAssignment(params);
+  if (result.error) {
+    return { error: result.error };
+  }
+
+  revalidatePath("/frontier/pilots/admin/mentoring/mentee-roster");
+  return { error: null, success: true };
+}
+
+/** Same derivation as Email Center `statusFromRow` (serialized `status` is usually enough). */
+function rosterStatusForEmailCenterMentorSend(
+  r: FrontierMentoringEmailCenterRow
+): "live" | "not_live" | "unassigned" {
+  if (r.status === "live" || r.status === "not_live" || r.status === "unassigned") {
+    return r.status;
+  }
+  const hasMentor =
+    (r.mentor_name != null && r.mentor_name.trim() !== "") ||
+    r.mentor_account === "active" ||
+    r.mentor_account === "not_joined";
+  if (!hasMentor) return "unassigned";
+  if (r.mentee_account === "active" && r.mentor_account === "active") return "live";
+  return "not_live";
+}
+
+export type SendFrontierPilotAdminMentorAssignmentEmailFormState = {
+  error: string | null;
+  success?: boolean;
+};
+
+/** Same DOH display as Email Center / mentee roster table cells (YYYY/MM/DD when stored YYYY-MM-DD). */
+function formatMenteeDohForAssignmentEmail(value: string | null | undefined): string {
+  if (value == null || !String(value).trim()) return "—";
+  const s = String(value).trim().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.replace(/-/g, "/");
+  return s;
+}
+
+/**
+ * Email Center: send one mentor assignment notification per submit (`assignmentId` in FormData).
+ * Uses Email Center loader enrichment for `resolved_mentor_email` (no duplicate resolution rules).
+ */
+export async function sendFrontierPilotAdminMentorAssignmentEmailFormState(
+  _prev: SendFrontierPilotAdminMentorAssignmentEmailFormState,
+  formData: FormData
+): Promise<SendFrontierPilotAdminMentorAssignmentEmailFormState> {
+  const gate = await ensureFrontierPilotsTenantAdmin();
+  if (gate.error) {
+    return { error: gate.error };
+  }
+
+  const assignmentId = String(formData.get("assignmentId") ?? "").trim();
+  if (!assignmentId) {
+    return { error: "Invalid assignment." };
+  }
+
+  const row = await loadFrontierMentoringEmailCenterRowByAssignmentId(assignmentId);
+  if (!row) {
+    return { error: "Assignment not found or not in this roster." };
+  }
+
+  if (!row.assignment_id || row.assignment_id !== assignmentId) {
+    return { error: "Not an assignment-backed row." };
+  }
+
+  if (rosterStatusForEmailCenterMentorSend(row) === "unassigned") {
+    return { error: "No mentor assigned for this row." };
+  }
+
+  const toEmail = row.resolved_mentor_email?.trim() ?? "";
+  if (!toEmail) {
+    return { error: "No resolved mentor email for this row." };
+  }
+
+  const mentorName = (row.mentor_name?.trim() || "there").trim();
+  const menteeName = (row.name?.trim() && row.name.trim() !== "—" ? row.name.trim() : "Mentee").trim();
+  const menteeEmployeeNumber = (row.employee_number?.trim() && row.employee_number.trim() !== "—"
+    ? row.employee_number.trim()
+    : "—"
+  ).trim();
+
+  const menteeDohDisplay = formatMenteeDohForAssignmentEmail(row.hire_date);
+  const menteePrivateEmail = (row.mentee_email?.trim() && row.mentee_email.trim().length > 0
+    ? row.mentee_email.trim()
+    : "—"
+  ).trim();
+  const menteePhoneFmt = formatUsPhoneStored(row.mentee_phone);
+  const menteePrivatePhone = menteePhoneFmt ?? "—";
+
+  const sent = await sendMentorAssignmentEmail({
+    toEmail,
+    mentorName,
+    menteeName,
+    menteeEmployeeNumber,
+    menteeDohDisplay,
+    menteePrivateEmail,
+    menteePrivatePhone,
+  });
+
+  if (!sent.ok) {
+    return { error: sent.error };
+  }
+
+  revalidatePath("/frontier/pilots/admin/mentoring/email-center");
+  return { error: null, success: true };
 }
 
 /**

@@ -427,6 +427,7 @@ export async function loadFrontierPilotMenteeRosterPageData(options: LoadFrontie
         : "not_live";
     roster.push({
       key: a.id,
+      assignment_id: a.id,
       name,
       employee_number: emp || "—",
       hire_date: hireDate,
@@ -471,6 +472,7 @@ export async function loadFrontierPilotMenteeRosterPageData(options: LoadFrontie
     }
     roster.push({
       key: `unassigned-${pr.id}`,
+      assignment_id: null,
       name: pr.full_name?.trim() || "—",
       employee_number: emp,
       hire_date: synHire,

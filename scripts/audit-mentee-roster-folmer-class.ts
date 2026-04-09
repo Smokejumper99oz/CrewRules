@@ -27,10 +27,10 @@ function hireDateToYyyyMmDdLikeTable(value: string | null | undefined): string |
 }
 
 function findAuditForRosterRow(r: MenteeRosterRow, audit: DohAuditEntry[]): DohAuditEntry | undefined {
-  if (r.key.startsWith("unassigned-")) {
+  if (r.assignment_id == null) {
     return audit.find((a) => a.rowKind === "synthetic" && a.employee_number.trim() === r.employee_number.trim());
   }
-  return audit.find((a) => a.assignment_id === r.key);
+  return audit.find((a) => a.assignment_id === r.assignment_id);
 }
 
 async function main() {

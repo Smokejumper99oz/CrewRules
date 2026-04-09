@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ClipboardList,
   LayoutDashboard,
+  Mail,
   Upload,
   UserCheck,
   Users,
@@ -18,6 +19,7 @@ const TABS: readonly { href: string; label: string; Icon: LucideIcon }[] = [
   { href: `${BASE}/assignments`, label: "Assignments", Icon: ClipboardList },
   { href: `${BASE}/mentee-roster`, label: "Mentee Roster", Icon: Users },
   { href: `${BASE}/mentor-roster`, label: "Mentor Roster", Icon: UserCheck },
+  { href: `${BASE}/email-center`, label: "Email Center", Icon: Mail },
   { href: `${BASE}/mentee-import`, label: "Mentee Imports", Icon: Upload },
   { href: `${BASE}/mentor-import`, label: "Mentor Imports", Icon: Upload },
 ];

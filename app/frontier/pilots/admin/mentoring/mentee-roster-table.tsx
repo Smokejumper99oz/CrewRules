@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { formatUsPhoneStored } from "@/lib/format-us-phone";
+import type { MenteeRosterMentorOption } from "@/app/frontier/pilots/admin/mentoring/mentee-roster/mentee-roster-mentor-options";
+import { MenteeRosterReassignMentor } from "@/app/frontier/pilots/admin/mentoring/mentee-roster-reassign-mentor";
 
 /** Admin table: show DOH as YYYY/MM/DD when stored as YYYY-MM-DD. */
 function formatDohCell(value: string | null | undefined): string {
@@ -57,6 +59,8 @@ function statusFromRow(r: MenteeRosterRow): MenteeRosterStatus {
 
 export type MenteeRosterRow = {
   key: string;
+  /** `mentor_assignments.id` when this row is assignment-backed; null for synthetic first-year rows without an assignment. */
+  assignment_id: string | null;
   name: string;
   employee_number: string;
   hire_date: string | null;
@@ -75,6 +79,8 @@ export type MenteeRosterRow = {
 type Props = {
   roster: MenteeRosterRow[];
   counts: { live: number; not_live: number; unassigned: number };
+  /** Mentor picker data (reassignment UI); reserved until controls are wired. */
+  mentorOptions: MenteeRosterMentorOption[];
 };
 
 type MenteeStatusFilter = "all" | MenteeRosterStatus;
@@ -82,7 +88,7 @@ type MenteeStatusFilter = "all" | MenteeRosterStatus;
 const ROSTER_FILTER_INPUT_CLASS =
   "h-6 w-full max-w-full min-w-0 rounded border border-white/[0.07] bg-white/[0.03] px-1.5 text-[10px] leading-none text-slate-300 placeholder:text-slate-600 transition-colors hover:border-white/11 hover:bg-white/[0.055] focus:border-[#75C043]/35 focus:outline-none focus:ring-1 focus:ring-[#75C043]/18";
 
-export function MenteeRosterTable({ roster, counts: _countsFromServer }: Props) {
+export function MenteeRosterTable({ roster, counts: _countsFromServer, mentorOptions }: Props) {
   void _countsFromServer;
   const searchFieldId = useId();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -233,14 +239,15 @@ export function MenteeRosterTable({ roster, counts: _countsFromServer }: Props) 
         <table className="table-fixed w-full max-w-full text-sm">
           <colgroup>
             <col className="w-[5%]" />
-            <col className="w-[16%]" />
-            <col className="w-[10%]" />
-            <col className="w-[10%]" />
-            <col className="w-[12%]" />
-            <col className="w-[16%]" />
+            <col className="w-[14%]" />
+            <col className="w-[9%]" />
+            <col className="w-[9%]" />
             <col className="w-[11%]" />
+            <col className="w-[14%]" />
+            <col className="w-[10%]" />
             <col className="w-[5%]" />
-            <col className="w-[15%]" />
+            <col className="w-[13%]" />
+            <col className="w-[10%]" />
           </colgroup>
           <thead className="border-b border-white/5 bg-white/[0.03] text-slate-400">
             <tr>
@@ -258,9 +265,10 @@ export function MenteeRosterTable({ roster, counts: _countsFromServer }: Props) 
               </th>
               <th className="py-2 px-2 text-center font-medium">Status</th>
               <th className="py-2 text-center">CRA</th>
-              <th className="min-w-0 overflow-hidden whitespace-nowrap truncate py-2 pl-2 pr-3 text-left font-medium">
+              <th className="min-w-0 overflow-hidden whitespace-nowrap truncate py-2 pl-2 pr-2 text-left font-medium">
                 Mentor
               </th>
+              <th className="min-w-0 py-2 pl-1 pr-3 text-left font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -377,6 +385,18 @@ export function MenteeRosterTable({ roster, counts: _countsFromServer }: Props) 
                     </div>
                   ) : (
                     <span>—</span>
+                  )}
+                </td>
+                <td className="min-w-0 overflow-visible align-top py-2 pl-1 pr-3 text-slate-200">
+                  {r.assignment_id ? (
+                    <MenteeRosterReassignMentor
+                      key={`reassign-${r.assignment_id}-${r.mentor_name ?? ""}`}
+                      assignmentId={r.assignment_id}
+                      currentMentorName={r.mentor_name}
+                      mentorOptions={mentorOptions}
+                    />
+                  ) : (
+                    <span className="text-[10px] text-slate-500">No assignment</span>
                   )}
                 </td>
               </tr>
