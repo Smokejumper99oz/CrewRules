@@ -136,6 +136,11 @@ export async function FamilyViewScheduleContent({
       ? commuteHomeLineAfterLanding(s, todayStatus.dutyEndIsoUtc, baseTimezone, settings) ?? (settings.showCommuteEstimates ? s.timingDepends : null)
       : null;
   const nextTrip = getNextTripSummary(events, profile, baseTimezone, settings);
+  /** Calendar days (base TZ) covered by the Current/Next Trip hero — exclude from Week Ahead & Upcoming. */
+  const heroTripCalendarDays =
+    nextTrip != null
+      ? new Set(getTripDateStrings(nextTrip.event.start_time, nextTrip.event.end_time, baseTimezone))
+      : new Set<string>();
   const thisWeek = getThisWeekDays(events, profile, baseTimezone, settings);
   // Week Ahead is T+1…T+7; Upcoming starts after that window (T+8) to avoid gaps or duplicates.
   const upcomingAll = getUpcomingDays(events, profile, baseTimezone, settings, 8, 28);
@@ -155,10 +160,11 @@ export async function FamilyViewScheduleContent({
     lastForwardDayYmd,
   });
 
-  const weekAheadDays =
+  const weekAheadDays = (
     bidGap.active && bidGap.hideDayRowsFromYmd
       ? thisWeek.filter((d) => d.dateStr < bidGap.hideDayRowsFromYmd)
-      : thisWeek;
+      : thisWeek
+  ).filter((d) => !heroTripCalendarDays.has(d.dateStr));
 
   const isEnabled = profile?.family_view_enabled ?? false;
 
@@ -907,7 +913,7 @@ export async function FamilyViewScheduleContent({
         </div>
       )}
 
-      {/* Section 3: Week Ahead — all 7 days, no trip days filtered out */}
+      {/* Section 3: Week Ahead — T+1…T+7 minus hero trip days (same calendar span as Current/Next Trip card) */}
       {(() => {
         const remainingWeek = weekAheadDays;
         if (remainingWeek.length === 0) return null;
@@ -1026,11 +1032,8 @@ export async function FamilyViewScheduleContent({
 
       {/* Section 4: Upcoming — every day in order, no gaps */}
       {(() => {
-        const currentTripDatesUpcoming = nextTrip
-          ? new Set(getTripDateStrings(nextTrip.event.start_time, nextTrip.event.end_time, baseTimezone))
-          : new Set<string>();
         const upcoming = upcomingAll.filter((day) => {
-          if (currentTripDatesUpcoming.has(day.dateStr)) return false;
+          if (heroTripCalendarDays.has(day.dateStr)) return false;
           if (bidGap.active && day.dateStr >= bidGap.hideDayRowsFromYmd) return false;
           return true;
         });
