@@ -4,7 +4,7 @@ import { flightAwareUrl } from "@/lib/airlines";
 import { FamilyViewPhoneFrame } from "@/components/family-view-phone-frame";
 import { FamilyViewGlossary } from "@/components/family-view-glossary";
 import { FamilyViewTodayCommuteFlights } from "@/components/family-view-today-commute-flights";
-import { resolveLang, getStrings } from "@/lib/family-view/family-view-i18n";
+import { resolveLang, getStrings, familyViewBidMonthFamilyLabel } from "@/lib/family-view/family-view-i18n";
 import { getCommuteFlights } from "@/app/frontier/pilots/portal/commute/actions";
 import type { CommuteFlight } from "@/lib/aviationstack";
 import {
@@ -38,6 +38,12 @@ import { addDays, differenceInCalendarDays } from "date-fns";
 import { getTripDateStrings, todayStr } from "@/lib/leg-dates";
 import { getDaysAwayFromHome } from "@/lib/family-view/days-away-from-home";
 import { isCommuter, getCommuteInfoForTrip } from "@/lib/family-view/commute-inference";
+import { addDay } from "@/lib/schedule-time";
+import {
+  computeFamilyViewBidGap,
+  getCurrentBidPeriodForFamilyView,
+  getNextBidPeriodForFamilyView,
+} from "@/lib/family-view/family-view-bid-schedule";
 
 const iconClass = "size-4 shrink-0 text-[#7A7A7A]";
 
@@ -111,8 +117,24 @@ export async function FamilyViewScheduleContent({
     }
     return englishLabel;
   }
+
+  function formatBidDateRangeLabel(startYmd: string, endYmd: string): string {
+    const locale = lang === "de" ? "de-DE" : lang === "es" ? "es-ES" : "en-US";
+    const [y0, m0, d0] = startYmd.split("-").map(Number);
+    const [y1, m1, d1] = endYmd.split("-").map(Number);
+    const a = new Date(y0, (m0 ?? 1) - 1, d0 ?? 1);
+    const b = new Date(y1, (m1 ?? 1) - 1, d1 ?? 1);
+    const optsShort: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+    const optsFull: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+    if (y0 === y1) {
+      return `${a.toLocaleDateString(locale, optsShort)} – ${b.toLocaleDateString(locale, optsFull)}`;
+    }
+    return `${a.toLocaleDateString(locale, optsFull)} – ${b.toLocaleDateString(locale, optsFull)}`;
+  }
+
   const baseTimezone = displaySettings.baseTimezone ?? "America/Denver";
   const settings = getFamilyViewSettings(profile);
+  const todayYmd = todayStr(baseTimezone);
 
   const todayStatus = getTodayStatus(events, profile, baseTimezone, settings);
   const todayTripDayMatch = todayStatus.tripDayLabel?.match(/^Day (\d+) of (\d+)$/);
@@ -132,6 +154,26 @@ export async function FamilyViewScheduleContent({
   const thisWeek = getThisWeekDays(events, profile, baseTimezone, settings);
   // Week Ahead is T+1…T+7; Upcoming starts after that window (T+8) to avoid gaps or duplicates.
   const upcomingAll = getUpcomingDays(events, profile, baseTimezone, settings, 8, 28);
+
+  const firstForwardDayYmd = thisWeek[0]?.dateStr ?? addDay(todayYmd);
+  const allForwardDates = [...thisWeek.map((d) => d.dateStr), ...upcomingAll.map((d) => d.dateStr)];
+  const lastForwardDayYmd =
+    allForwardDates.length > 0
+      ? allForwardDates.reduce((a, b) => (a > b ? a : b))
+      : firstForwardDayYmd;
+
+  const bidGap = computeFamilyViewBidGap({
+    todayYmd,
+    timezone: baseTimezone,
+    events,
+    firstForwardDayYmd,
+    lastForwardDayYmd,
+  });
+
+  const weekAheadDays =
+    bidGap.active && bidGap.hideDayRowsFromYmd
+      ? thisWeek.filter((d) => d.dateStr < bidGap.hideDayRowsFromYmd)
+      : thisWeek;
 
   const isEnabled = profile?.family_view_enabled ?? false;
 
@@ -474,7 +516,18 @@ export async function FamilyViewScheduleContent({
       {activeTab === "glossary" ? (
         <FamilyViewGlossary lang={lang} s={s} />
       ) : (
-      <>{/* Section 1: Today */}
+      <>
+      {(() => {
+        const curBid = getCurrentBidPeriodForFamilyView(todayYmd, baseTimezone);
+        if (!curBid) return null;
+        const rangeLabel = formatBidDateRangeLabel(curBid.startStr, curBid.endStr);
+        return (
+          <p className="mb-4 rounded-lg border border-[#E8E3DA] bg-[#FAFAF8] px-3 py-2 text-center text-xs leading-relaxed text-[#5C5C5C]">
+            {s.currentBidPeriodNote(curBid.name, rangeLabel)}
+          </p>
+        );
+      })()}
+      {/* Section 1: Today */}
       <section className="rounded-2xl border border-[#E8E3DA] bg-[#F4F1EA]/50 p-4 sm:p-5 shadow-sm">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-[#6F6F6F] mb-3">
           {s.sectionToday}
@@ -881,7 +934,7 @@ export async function FamilyViewScheduleContent({
 
       {/* Section 3: Week Ahead — all 7 days, no trip days filtered out */}
       {(() => {
-        const remainingWeek = thisWeek;
+        const remainingWeek = weekAheadDays;
         if (remainingWeek.length === 0) return null;
         const pilotIsCommuter = isCommuter(profile);
         const baseCity = settings.showOvernightCities && profile?.base_airport
@@ -1001,7 +1054,11 @@ export async function FamilyViewScheduleContent({
         const currentTripDatesUpcoming = nextTrip
           ? new Set(getTripDateStrings(nextTrip.event.start_time, nextTrip.event.end_time, baseTimezone))
           : new Set<string>();
-        const upcoming = upcomingAll.filter((day) => !currentTripDatesUpcoming.has(day.dateStr));
+        const upcoming = upcomingAll.filter((day) => {
+          if (currentTripDatesUpcoming.has(day.dateStr)) return false;
+          if (bidGap.active && day.dateStr >= bidGap.hideDayRowsFromYmd) return false;
+          return true;
+        });
         const pilotIsCommuterUpcoming = isCommuter(profile);
         const baseCityUpcoming = settings.showOvernightCities && profile?.base_airport
           ? iataToCityName((profile.base_airport ?? "").trim().toUpperCase())
@@ -1127,6 +1184,26 @@ export async function FamilyViewScheduleContent({
               {s.nothingScheduled}
             </p>
           )}
+          {(() => {
+            const nextBid = getNextBidPeriodForFamilyView(todayYmd);
+            if (!nextBid) return null;
+            const bidMonthLabel = familyViewBidMonthFamilyLabel(nextBid.name, lang);
+            const waiting = bidGap.active;
+            const note = waiting
+              ? s.upcomingFooterNextBidWaiting(firstName, bidMonthLabel)
+              : s.upcomingFooterNextBidTeaser(firstName, bidMonthLabel);
+            return (
+              <div
+                className={
+                  waiting
+                    ? "mt-3 rounded-2xl border border-yellow-200/90 bg-yellow-50 px-4 py-3 text-center text-[11px] leading-relaxed text-yellow-950 sm:text-xs sm:px-5"
+                    : "mt-3 rounded-xl border border-[#D4E4D0] bg-[#F4FAF4] px-3 py-3 text-[11px] leading-relaxed text-[#2F4F46] sm:text-xs"
+                }
+              >
+                {note}
+              </div>
+            );
+          })()}
         </section>
         );
       })()}

@@ -7,6 +7,33 @@ export function resolveLang(raw: string | undefined | null): FamilyViewLang {
   return "en";
 }
 
+/** Frontier bid period `name` (JAN…DEC) → localized calendar month label for family-facing copy. */
+const BID_NAME_TO_MONTH_INDEX: Record<string, number> = {
+  JAN: 0,
+  FEB: 1,
+  MAR: 2,
+  APR: 3,
+  MAY: 4,
+  JUN: 5,
+  JUL: 6,
+  AUG: 7,
+  SEP: 8,
+  OCT: 9,
+  NOV: 10,
+  DEC: 11,
+};
+
+export function familyViewBidMonthFamilyLabel(bidName: string, lang: FamilyViewLang): string {
+  const code = bidName.trim().toUpperCase();
+  const monthIndex = BID_NAME_TO_MONTH_INDEX[code];
+  if (monthIndex == null) {
+    return bidName.trim();
+  }
+  const locale = lang === "de" ? "de-DE" : lang === "es" ? "es-ES" : "en-US";
+  const d = new Date(Date.UTC(2000, monthIndex, 1));
+  return new Intl.DateTimeFormat(locale, { month: "long", timeZone: "UTC" }).format(d);
+}
+
 export type FamilyViewStrings = {
   // Header / navigation
   familyView: string;
@@ -106,6 +133,20 @@ export type FamilyViewStrings = {
   // Empty state
   nothingScheduled: string;
 
+  /** One-line context: Frontier bid periods vs calendar months. */
+  currentBidPeriodNote: (bidName: string, dateRangeLabel: string) => string;
+  /** Small footer under Upcoming: next date block not shown yet (family-friendly; pilot first name). */
+  upcomingFooterNextBidWaiting: (
+    pilotFirstName: string | null | undefined,
+    /** Localized month from next bid `name` (e.g. May), via {@link familyViewBidMonthFamilyLabel}. */
+    bidMonthLabel: string
+  ) => string;
+  /** Small footer under Upcoming: more dates may still appear (family-friendly). */
+  upcomingFooterNextBidTeaser: (
+    pilotFirstName: string | null | undefined,
+    bidMonthLabel: string
+  ) => string;
+
   // Glossary
   glossaryTitle: string;
   glossaryDescription: string;
@@ -194,6 +235,24 @@ const en: FamilyViewStrings = {
 
   nothingScheduled: "Nothing scheduled",
 
+  currentBidPeriodNote: (bidName, dateRangeLabel) =>
+    `Frontier bid period: ${bidName} (${dateRangeLabel}). Schedules follow bid months, not calendar months.`,
+
+  upcomingFooterNextBidWaiting: (pilotFirstName, bidMonthLabel) => {
+    const name = (pilotFirstName ?? "").trim();
+    const updateClause = name
+      ? `once ${name} updates the schedule`
+      : `once the schedule is updated`;
+    return `The ${bidMonthLabel} schedule isn’t available yet. More days will appear ${updateClause} in CrewRules™ (most airlines release the next month around mid-month).`;
+  },
+  upcomingFooterNextBidTeaser: (pilotFirstName, bidMonthLabel) => {
+    const name = (pilotFirstName ?? "").trim();
+    const whenClause = name
+      ? `when ${name} updates the schedule`
+      : `when the schedule is updated`;
+    return `More days for the ${bidMonthLabel} schedule may appear ${whenClause} in CrewRules™. Those blocks often don’t line up with a normal calendar month.`;
+  },
+
   glossaryTitle: "Aviation Terms",
   glossaryDescription: "A plain-English guide to the words you'll see on this schedule.",
 };
@@ -281,6 +340,24 @@ const es: FamilyViewStrings = {
 
   nothingScheduled: "Nada programado",
 
+  currentBidPeriodNote: (bidName, dateRangeLabel) =>
+    `Período de bid Frontier: ${bidName} (${dateRangeLabel}). Los horarios siguen los meses de bid, no los meses naturales.`,
+
+  upcomingFooterNextBidWaiting: (pilotFirstName, bidMonthLabel) => {
+    const name = (pilotFirstName ?? "").trim();
+    const clause = name
+      ? `cuando ${name} actualice el horario`
+      : `cuando se actualice el horario`;
+    return `El horario de ${bidMonthLabel} aún no está disponible. Aparecerán más días ${clause} en CrewRules™ (la mayoría de las aerolíneas publican el mes siguiente hacia mediados de mes).`;
+  },
+  upcomingFooterNextBidTeaser: (pilotFirstName, bidMonthLabel) => {
+    const name = (pilotFirstName ?? "").trim();
+    const clause = name
+      ? `cuando ${name} actualice el horario`
+      : `cuando se actualice el horario`;
+    return `Pueden aparecer más días en el horario de ${bidMonthLabel} ${clause} en CrewRules™. Esos bloques a menudo no coinciden con un mes natural.`;
+  },
+
   glossaryTitle: "Términos de Aviación",
   glossaryDescription: "Guía en español de las palabras que verás en este horario.",
 };
@@ -367,6 +444,24 @@ const de: FamilyViewStrings = {
   familyViewDisabledSuffix: "um deinen Zeitplan mit der Familie zu teilen.",
 
   nothingScheduled: "Nichts geplant",
+
+  currentBidPeriodNote: (bidName, dateRangeLabel) =>
+    `Frontier-Bid-Zeitraum: ${bidName} (${dateRangeLabel}). Zeitpläne folgen Bid-Monaten, nicht kalendermonatlich.`,
+
+  upcomingFooterNextBidWaiting: (pilotFirstName, bidMonthLabel) => {
+    const name = (pilotFirstName ?? "").trim();
+    const clause = name
+      ? `sobald ${name} den Zeitplan in CrewRules™ aktualisiert`
+      : `sobald der Zeitplan in CrewRules™ aktualisiert wird`;
+    return `Der Zeitplan für ${bidMonthLabel} ist noch nicht verfügbar. Es erscheinen mehr Tage, ${clause} (die meisten Airlines veröffentlichen den nächsten Monat etwa Mitte des Vormonats).`;
+  },
+  upcomingFooterNextBidTeaser: (pilotFirstName, bidMonthLabel) => {
+    const name = (pilotFirstName ?? "").trim();
+    const clause = name
+      ? `wenn ${name} den Zeitplan in CrewRules™ aktualisiert`
+      : `wenn der Zeitplan in CrewRules™ aktualisiert wird`;
+    return `Es können noch weitere Tage für den Zeitplan ${bidMonthLabel} dazukommen, ${clause}. Solche Blöcke entsprechen oft nicht dem gewöhnlichen Kalendermonat.`;
+  },
 
   glossaryTitle: "Luftfahrtbegriffe",
   glossaryDescription: "Ein verständlicher Leitfaden zu den Begriffen in diesem Zeitplan.",
