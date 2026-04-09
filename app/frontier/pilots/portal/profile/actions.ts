@@ -13,6 +13,11 @@ import {
   isProfileEmployeeNumberTaken,
   PROFILE_EMPLOYEE_NUMBER_TAKEN_ERROR,
 } from "@/lib/profiles/employee-number-taken";
+import {
+  generateFamilyViewInviteTokenPair,
+  normalizeFamilyViewInviteEmail,
+} from "@/lib/family-view/invite-token";
+import { sendFamilyViewInviteEmail } from "@/lib/email/send-family-view-invite";
 
 // IANA format: Region/City or Region/Country/City (e.g. America/Puerto_Rico, America/Argentina/Buenos_Aires)
 const VALID_TZ = /^[A-Za-z0-9_+-]+(\/[A-Za-z0-9_+-]+)+$/;
@@ -453,4 +458,260 @@ export async function markWelcomeModalSeen(): Promise<MarkWelcomeModalSeenResult
 
   revalidatePath("/frontier/pilots/portal");
   return { success: true };
+}
+
+// --- Family View invites (Phase 2 backend; raw token returned only from create for internal testing) ---
+
+const FAMILY_VIEW_INVITE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LOOSE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type FamilyViewInviteListItem = {
+  id: string;
+  email: string;
+  status: "pending" | "revoked";
+  expires_at: string;
+  revoked_at: string | null;
+  created_at: string;
+};
+
+export type CreateFamilyViewInviteResult =
+  | {
+      ok: true;
+      invite: {
+        id: string;
+        email: string;
+        status: "pending";
+        expires_at: string;
+        created_at: string;
+        /** Raw secret for magic link; never stored in DB. */
+        rawToken: string;
+      };
+      /** Set when invite was saved but the email send failed. Show as a non-blocking warning. */
+      emailWarning?: string;
+    }
+  | { error: string };
+
+export type ListFamilyViewInvitesResult =
+  | { ok: true; invites: FamilyViewInviteListItem[] }
+  | { error: string };
+
+export type RevokeFamilyViewInviteResult =
+  | { ok: true }
+  | { ok: true; alreadyRevoked: true }
+  | { error: string };
+
+function revalidateFamilyViewInvitePaths() {
+  revalidatePath("/frontier/pilots/portal/settings/family-view");
+  revalidatePath("/frontier/pilots/portal/settings", "layout");
+}
+
+/**
+ * Create or rotate a pending Family View invite for the given email (normalized).
+ * If a pending invite already exists for this pilot + email, updates token_hash and extends expires_at.
+ */
+export async function createFamilyViewInvite(email: string): Promise<CreateFamilyViewInviteResult> {
+  const profile = await getProfile();
+  if (!profile) return { error: "Not signed in" };
+  if (!profile.family_view_enabled) {
+    return { error: "Turn on Family View in Sharing settings before creating invites." };
+  }
+
+  const normalized = normalizeFamilyViewInviteEmail(email);
+  if (!normalized || !FAMILY_VIEW_INVITE_EMAIL_RE.test(normalized)) {
+    return { error: "Enter a valid email address." };
+  }
+
+  const { rawToken, tokenHash } = generateFamilyViewInviteTokenPair();
+  const expiresAt = addDays(new Date(), 30).toISOString();
+  const nowIso = new Date().toISOString();
+  const supabase = await createClient();
+
+  const { data: pending, error: pendingErr } = await supabase
+    .from("family_view_invites")
+    .select("id")
+    .eq("pilot_profile_id", profile.id)
+    .eq("email", normalized)
+    .eq("status", "pending")
+    .maybeSingle();
+
+  if (pendingErr) return { error: pendingErr.message };
+
+  if (pending?.id) {
+    const { data: updated, error: updErr } = await supabase
+      .from("family_view_invites")
+      .update({
+        token_hash: tokenHash,
+        expires_at: expiresAt,
+        updated_at: nowIso,
+      })
+      .eq("id", pending.id)
+      .eq("pilot_profile_id", profile.id)
+      .eq("status", "pending")
+      .select("id, email, status, expires_at, created_at")
+      .single();
+
+    if (updErr) return { error: updErr.message };
+    if (!updated || updated.status !== "pending") return { error: "Could not update invite." };
+
+    revalidateFamilyViewInvitePaths();
+    const emailRes = await sendFamilyViewInviteEmail({
+      to: updated.email,
+      pilotFirstName: profile.full_name?.trim().split(/\s+/)[0] ?? "Your pilot",
+      shareUrl: `https://www.crewrules.com/family-view/v/${rawToken}`,
+    });
+    return {
+      ok: true,
+      invite: {
+        id: updated.id,
+        email: updated.email,
+        status: "pending",
+        expires_at: updated.expires_at,
+        created_at: updated.created_at,
+        rawToken,
+      },
+      emailWarning: emailRes.ok ? undefined : "Invite saved — the email could not be sent.",
+    };
+  }
+
+  const { data: inserted, error: insErr } = await supabase
+    .from("family_view_invites")
+    .insert({
+      pilot_profile_id: profile.id,
+      email: normalized,
+      token_hash: tokenHash,
+      status: "pending",
+      expires_at: expiresAt,
+      updated_at: nowIso,
+    })
+    .select("id, email, status, expires_at, created_at")
+    .single();
+
+  if (insErr) {
+    if (insErr.code === "23505") {
+      const { data: again } = await supabase
+        .from("family_view_invites")
+        .select("id")
+        .eq("pilot_profile_id", profile.id)
+        .eq("email", normalized)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (again?.id) {
+        const { data: updated, error: updErr2 } = await supabase
+          .from("family_view_invites")
+          .update({
+            token_hash: tokenHash,
+            expires_at: expiresAt,
+            updated_at: nowIso,
+          })
+          .eq("id", again.id)
+          .eq("pilot_profile_id", profile.id)
+          .eq("status", "pending")
+          .select("id, email, status, expires_at, created_at")
+          .single();
+
+        if (updErr2) return { error: updErr2.message };
+        if (!updated || updated.status !== "pending") return { error: "Could not update invite after conflict." };
+
+        revalidateFamilyViewInvitePaths();
+        const emailRes2 = await sendFamilyViewInviteEmail({
+          to: updated.email,
+          pilotFirstName: profile.full_name?.trim().split(/\s+/)[0] ?? "Your pilot",
+          shareUrl: `https://www.crewrules.com/family-view/v/${rawToken}`,
+        });
+        return {
+          ok: true,
+          invite: {
+            id: updated.id,
+            email: updated.email,
+            status: "pending",
+            expires_at: updated.expires_at,
+            created_at: updated.created_at,
+            rawToken,
+          },
+          emailWarning: emailRes2.ok ? undefined : "Invite saved — the email could not be sent.",
+        };
+      }
+    }
+    return { error: insErr.message };
+  }
+
+  if (!inserted || inserted.status !== "pending") return { error: "Could not create invite." };
+
+  revalidateFamilyViewInvitePaths();
+  const emailRes3 = await sendFamilyViewInviteEmail({
+    to: inserted.email,
+    pilotFirstName: profile.full_name?.trim().split(/\s+/)[0] ?? "Your pilot",
+    shareUrl: `https://www.crewrules.com/family-view/v/${rawToken}`,
+  });
+  return {
+    ok: true,
+    invite: {
+      id: inserted.id,
+      email: inserted.email,
+      status: "pending",
+      expires_at: inserted.expires_at,
+      created_at: inserted.created_at,
+      rawToken,
+    },
+    emailWarning: emailRes3.ok ? undefined : "Invite saved — the email could not be sent.",
+  };
+}
+
+export async function listFamilyViewInvites(): Promise<ListFamilyViewInvitesResult> {
+  const profile = await getProfile();
+  if (!profile) return { error: "Not signed in" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("family_view_invites")
+    .select("id, email, status, expires_at, revoked_at, created_at")
+    .eq("pilot_profile_id", profile.id)
+    .order("created_at", { ascending: false });
+
+  if (error) return { error: error.message };
+
+  const invites = (data ?? []) as FamilyViewInviteListItem[];
+  return { ok: true, invites };
+}
+
+export async function revokeFamilyViewInvite(inviteId: string): Promise<RevokeFamilyViewInviteResult> {
+  const profile = await getProfile();
+  if (!profile) return { error: "Not signed in" };
+
+  const id = inviteId.trim();
+  if (!id || !LOOSE_UUID_RE.test(id)) return { error: "Invalid invite id." };
+
+  const supabase = await createClient();
+
+  const { data: row, error: fetchErr } = await supabase
+    .from("family_view_invites")
+    .select("id, status")
+    .eq("id", id)
+    .eq("pilot_profile_id", profile.id)
+    .maybeSingle();
+
+  if (fetchErr) return { error: fetchErr.message };
+  if (!row) return { error: "Invite not found." };
+  if (row.status === "revoked") {
+    revalidateFamilyViewInvitePaths();
+    return { ok: true, alreadyRevoked: true };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error: updErr } = await supabase
+    .from("family_view_invites")
+    .update({
+      status: "revoked",
+      revoked_at: nowIso,
+      updated_at: nowIso,
+    })
+    .eq("id", id)
+    .eq("pilot_profile_id", profile.id)
+    .eq("status", "pending");
+
+  if (updErr) return { error: updErr.message };
+
+  revalidateFamilyViewInvitePaths();
+  return { ok: true };
 }

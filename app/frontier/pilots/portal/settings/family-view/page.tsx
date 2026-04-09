@@ -1,6 +1,13 @@
 import { getProfile, isProActive } from "@/lib/profile";
 import { FamilyViewSettingsForm } from "@/components/family-view-settings-form";
 
+function showInternalFamilyViewInvitesTest(): boolean {
+  return (
+    process.env.NODE_ENV === "development" ||
+    process.env.CREWRULES_FAMILY_VIEW_INVITES_TEST === "1"
+  );
+}
+
 export default async function FamilyViewSettingsPage() {
   const profile = await getProfile();
 
@@ -10,5 +17,11 @@ export default async function FamilyViewSettingsPage() {
     );
   }
 
-  return <FamilyViewSettingsForm profile={profile} proActive={isProActive(profile)} />;
+  return (
+    <FamilyViewSettingsForm
+      profile={profile}
+      proActive={isProActive(profile)}
+      showInternalInviteTestPanel={showInternalFamilyViewInvitesTest()}
+    />
+  );
 }

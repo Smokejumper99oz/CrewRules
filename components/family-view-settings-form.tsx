@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, Users } from "lucide-react";
 import { updateProfilePreferences } from "@/app/frontier/pilots/portal/profile/actions";
 import { SettingsProfilePreserveFields } from "@/components/settings-profile-preserve-fields";
 import { useSettingsAutoSave } from "@/hooks/use-settings-auto-save";
 import { DEFAULT_TIMEZONE } from "@/lib/airport-timezone";
 import type { Profile } from "@/lib/profile";
+import { FamilyViewInvitesInternalTestPanel } from "@/components/family-view-invites-internal-test-panel";
+import { FamilyViewInvitesPanel } from "@/components/family-view-invites-panel";
 
 const FAMILY_VIEW_FIELD_KEYS = {
   family_view_enabled: "family_view_enabled",
@@ -15,36 +16,6 @@ const FAMILY_VIEW_FIELD_KEYS = {
   family_view_show_overnight_cities: "family_view_show_overnight_cities",
   family_view_show_commute_estimates: "family_view_show_commute_estimates",
 } as const;
-
-/**
- * Reads viewer email fields if present on the raw `profiles` row (`select("*")`).
- * There is no dedicated column in current migrations; the list is usually empty until backend adds storage.
- */
-function familyViewSharedViewerEmailsFromProfile(profile: Profile): string[] {
-  const row = profile as unknown as Record<string, unknown>;
-  const gather = (v: unknown): string[] => {
-    if (typeof v === "string") {
-      const t = v.trim();
-      return t.includes("@") ? [t] : [];
-    }
-    if (Array.isArray(v)) {
-      return v
-        .filter((x): x is string => typeof x === "string" && x.includes("@"))
-        .map((x) => x.trim());
-    }
-    return [];
-  };
-  const keys = [
-    "family_view_invited_emails",
-    "family_view_shared_emails",
-    "family_view_viewer_emails",
-  ] as const;
-  const emails: string[] = [];
-  for (const k of keys) {
-    emails.push(...gather(row[k]));
-  }
-  return [...new Set(emails)];
-}
 
 type FieldFeedback = {
   activeKey: string | null;
@@ -168,9 +139,11 @@ function PilotPersonalFieldsPreserve({ profile }: { profile: Profile }) {
 type Props = {
   profile: Profile;
   proActive: boolean;
+  /** Dev / explicit server env only; see settings/family-view/page.tsx */
+  showInternalInviteTestPanel?: boolean;
 };
 
-export function FamilyViewSettingsForm({ profile, proActive }: Props) {
+export function FamilyViewSettingsForm({ profile, proActive, showInternalInviteTestPanel }: Props) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement | null>(null);
 
@@ -214,8 +187,6 @@ export function FamilyViewSettingsForm({ profile, proActive }: Props) {
     status,
     errorMessage,
   };
-
-  const sharedViewerEmails = familyViewSharedViewerEmailsFromProfile(profile);
 
   return (
     <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 md:p-6 dark:border-white/5 dark:bg-slate-950 dark:bg-gradient-to-b dark:from-slate-900/60 dark:to-slate-950/80 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
@@ -359,77 +330,12 @@ export function FamilyViewSettingsForm({ profile, proActive }: Props) {
             Viewers
           </h3>
         </div>
-        <div className="mt-4 space-y-6">
-          <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-            Anyone you&apos;ve approved for Family View will be listed here once invitations are available.
-          </p>
-
-          {sharedViewerEmails.length === 0 ? (
-            <div className="flex gap-4 rounded-xl border border-slate-200/80 bg-white/75 px-4 py-4 shadow-[0_1px_0_rgba(0,0,0,0.03)] sm:px-5 sm:py-5 dark:border-white/10 dark:bg-slate-900/35 dark:shadow-none">
-              <div
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 shadow-[inset_0_1px_1px_rgba(0,0,0,0.04)] dark:bg-slate-800/90 dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]"
-                aria-hidden
-              >
-                <Users className="h-5 w-5 text-slate-400 dark:text-slate-500" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">No shared viewers yet</p>
-                <p className="mt-1.5 text-pretty text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-                  You don&apos;t have any invited viewers on file. When invites go live, each person you add will appear in
-                  this list so you know who can see your schedule.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <ul className="space-y-2">
-              {sharedViewerEmails.map((email) => (
-                <li
-                  key={email}
-                  className="flex items-start gap-2.5 rounded-xl border border-slate-200/80 bg-white/90 px-3.5 py-3 text-sm text-slate-800 shadow-[0_1px_0_rgba(0,0,0,0.03)] dark:border-white/10 dark:bg-slate-900/45 dark:text-slate-200 dark:shadow-none [overflow-wrap:anywhere]"
-                >
-                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden />
-                  <span>{email}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="rounded-xl border border-slate-200/90 bg-gradient-to-b from-white/90 via-slate-50/50 to-slate-50/80 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] sm:p-5 dark:border-white/10 dark:from-slate-900/50 dark:via-slate-950/40 dark:to-slate-950/60 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <h4 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">Add a family member</h4>
-              <span className="inline-flex items-center rounded-full border border-slate-200/90 bg-white/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-400">
-                Coming next
-              </span>
-            </div>
-            <p className="mt-2 max-w-prose text-pretty text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-              Email invitations are on the roadmap. The layout below is a non-interactive preview: nothing is sent and
-              nothing is saved.
-            </p>
-            <div className="mt-5 space-y-2">
-              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Email</span>
-              <div
-                className="rounded-lg border border-dashed border-slate-300/80 bg-white/70 px-3 py-3 text-sm text-slate-400 dark:border-white/15 dark:bg-slate-900/30 dark:text-slate-500"
-                aria-hidden
-              >
-                <span className="select-none">Enter an email to invite</span>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
-              <button
-                type="button"
-                disabled
-                aria-disabled="true"
-                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200/90 bg-slate-100/90 px-4 py-2 text-sm font-medium text-slate-500 cursor-not-allowed opacity-80 dark:border-white/10 dark:bg-slate-900/60 dark:text-slate-500"
-              >
-                Invite Family Member
-              </button>
-              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                Preview only · not available yet
-              </p>
-            </div>
-          </div>
+        <div className="mt-4">
+          <FamilyViewInvitesPanel proActive={proActive} />
         </div>
       </section>
+
+      {showInternalInviteTestPanel ? <FamilyViewInvitesInternalTestPanel /> : null}
     </div>
   );
 }

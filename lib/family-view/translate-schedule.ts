@@ -31,14 +31,16 @@ export type FamilyViewSettings = {
   showCommuteEstimates: boolean;
 };
 
-/** Build settings from profile. Defaults match migration defaults. */
+/** Build settings from profile. Missing values default to false (most private). */
 export function getFamilyViewSettings(profile: Profile | null): FamilyViewSettings {
   return {
-    showExactTimes: profile?.family_view_show_exact_times ?? true,
-    showOvernightCities: profile?.family_view_show_overnight_cities ?? true,
-    showCommuteEstimates: profile?.family_view_show_commute_estimates ?? true,
+    showExactTimes: profile?.family_view_show_exact_times === true,
+    showOvernightCities: profile?.family_view_show_overnight_cities === true,
+    showCommuteEstimates: profile?.family_view_show_commute_estimates === true,
   };
 }
+
+const FAMILY_VIEW_GENERIC_TRAVEL_ROUTE = "Travel";
 
 /** IATA/ICAO → plain-English city name for Family View. */
 const IATA_TO_CITY: Record<string, string> = {
@@ -361,8 +363,10 @@ export function landingTimeOfDayPeriod(isoUtc: string, timezone: string): TimeOf
 export function commuteHomeLineAfterLanding(
   s: FamilyViewStrings,
   isoUtc: string | null | undefined,
-  baseTimezone: string
+  baseTimezone: string,
+  settings: FamilyViewSettings
 ): string | null {
+  if (!settings.showCommuteEstimates) return null;
   if (!isoUtc?.trim()) return null;
   const period = landingTimeOfDayPeriod(isoUtc, baseTimezone);
   const inThe =
@@ -391,6 +395,66 @@ function formatIsoToTimeOfDay(isoUtc: string, timezone: string): string {
   } catch {
     return "";
   }
+}
+
+/** Leg HH:MM → exact clock or Morning/Afternoon/Evening (no numeric time when exact times off). */
+export function formatLegHhmmForFamilyView(
+  hhmm: string | null | undefined,
+  settings: FamilyViewSettings,
+  prefer24h?: boolean
+): string {
+  if (!hhmm?.trim()) return "";
+  if (settings.showExactTimes) {
+    if (prefer24h) {
+      const s2 = hhmm.trim().replace(":", "");
+      if (!/^\d{3,4}$/.test(s2)) return hhmm.trim();
+      const h = parseInt(s2.slice(0, -2) || "0", 10);
+      const m = parseInt(s2.slice(-2), 10);
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    }
+    return formatReportTime12h(hhmm);
+  }
+  const min = reportTimeToMinutes(hhmm);
+  if (min == null) return "";
+  const tod = minutesToTimeOfDay(min);
+  return tod.charAt(0).toUpperCase() + tod.slice(1);
+}
+
+/** ISO UTC instant → exact local clock or “sometime in the …” when exact times off. */
+export function formatFamilyViewInstantForDisplay(
+  isoUtc: string,
+  timezone: string,
+  settings: FamilyViewSettings,
+  prefer24h?: boolean
+): string {
+  if (settings.showExactTimes) {
+    try {
+      const date = new Date(isoUtc);
+      if (isNaN(date.getTime())) return "";
+      return formatInTimeZone(date, timezone, prefer24h ? "HH:mm" : "h:mm a");
+    } catch {
+      return "";
+    }
+  }
+  return formatIsoToTimeOfDay(isoUtc, timezone);
+}
+
+/**
+ * Last-day trip end line: local end time + optional city (city omitted when overnight cities off).
+ */
+export function formatTripEndDetailForFamilyView(
+  tripEndIsoUtc: string,
+  lastLegDestinationIata: string | null | undefined,
+  baseTimezone: string,
+  settings: FamilyViewSettings,
+  prefer24h?: boolean
+): string {
+  const timePart = formatFamilyViewInstantForDisplay(tripEndIsoUtc, baseTimezone, settings, prefer24h);
+  if (!settings.showOvernightCities) return timePart;
+  const iata = (lastLegDestinationIata ?? "").trim().toUpperCase();
+  if (!iata) return timePart;
+  const city = iataToCityName(iata);
+  return city ? `${timePart} in ${city}` : timePart;
 }
 
 /** Format report time for display: exact ("at 7:00 AM") or time-of-day ("in the morning") based on settings. */
@@ -630,7 +694,8 @@ function getStatusForDay(
     const companion = findCompanionTripForTraining(primary, events);
     const legs = (companion?.legs ?? []) as ScheduleEventLeg[];
     const trainingCityIata = extractTrainingCityIataFromLegs(legs, baseIata);
-    const trainingCityName = trainingCityIata ? iataToCityName(trainingCityIata) : null;
+    const trainingCityName =
+      settings.showOvernightCities && trainingCityIata ? iataToCityName(trainingCityIata) : null;
 
     const companionTripDates =
       companion && legs.length > 0
@@ -638,7 +703,7 @@ function getStatusForDay(
         : [];
     const todayFlightRoute =
       companion && legs.length > 0 && companionTripDates.length > 0
-        ? computeDayFlightRoute(legs, companionTripDates, dateStr, baseTimezone)
+        ? computeDayFlightRoute(legs, companionTripDates, dateStr, baseTimezone, settings)
         : null;
 
     const n = trainingDates.length;
@@ -753,7 +818,9 @@ function getStatusForDay(
         const shortGap = sameDay || under18h;
 
         if (shortGap) {
-          const cityLabel = iataToCityName(lastArrivalIata);
+          const cityLabel = settings.showOvernightCities
+            ? iataToCityName(lastArrivalIata)
+            : "Overnight";
           const landedTime = settings.showExactTimes
             ? formatTime12h(lastArrivalIso, baseTimezone)
             : formatIsoToTimeOfDay(lastArrivalIso, baseTimezone);
@@ -761,11 +828,12 @@ function getStatusForDay(
             ? formatReportTime12h(nextTrip!.report_time)
             : formatReportTimeOfDay(nextTrip!.report_time);
           if (landedTime && nextReportTime) {
+            const tail = settings.showCommuteEstimates ? " • Likely staying in base" : "";
             shortTurnaroundAway = {
               dateStr,
               dayLabel,
               status: "Overnight Away",
-              detail: `Landed ${cityLabel} ${landedTime} • Next report ${nextReportTime} • Likely staying in base`,
+              detail: `Landed ${cityLabel} ${landedTime} • Next report ${nextReportTime}${tail}`,
               reportTime: null,
             };
           }
@@ -780,7 +848,7 @@ function getStatusForDay(
     const detail = formatExpectedHomeForDisplay(primary.end_time, baseTimezone, settings);
     const lastDayLegs = primary.legs ?? [];
     const lastDayRoute = lastDayLegs.length > 0
-      ? computeDayFlightRoute(lastDayLegs, tripDates, dateStr, baseTimezone)
+      ? computeDayFlightRoute(lastDayLegs, tripDates, dateStr, baseTimezone, settings)
       : null;
 
     // Detect home-base trips: commuter whose trip's last leg lands at home airport.
@@ -803,8 +871,12 @@ function getStatusForDay(
         .filter((ld) => ld.departureDate === dateStr);
       const firstLegOfDay = lastDayLegDates.length > 0 ? (lastDayLegDates[0]!.leg as ScheduleEventLeg) : null;
       const lastLegOfDay = lastDayLegDates.length > 0 ? (lastDayLegDates[lastDayLegDates.length - 1]!.leg as ScheduleEventLeg) : null;
-      const depStr = firstLegOfDay?.depTime ? formatReportTime12h(firstLegOfDay.depTime) : null;
-      const arrStr = lastLegOfDay?.arrTime ? formatReportTime12h(lastLegOfDay.arrTime) : null;
+      const depStr = firstLegOfDay?.depTime
+        ? formatLegHhmmForFamilyView(firstLegOfDay.depTime, settings)
+        : null;
+      const arrStr = lastLegOfDay?.arrTime
+        ? formatLegHhmmForFamilyView(lastLegOfDay.arrTime, settings)
+        : null;
       if (depStr && arrStr) homeBaseTripDetail = `Departs ${depStr} · Arrives ${arrStr}`;
       else if (arrStr) homeBaseTripDetail = `Arrives ${arrStr}`;
     }
@@ -825,7 +897,7 @@ function getStatusForDay(
   if (isFirstDay) {
     const firstDayLegs = primary.legs ?? [];
     const firstDayRoute = firstDayLegs.length > 0
-      ? computeDayFlightRoute(firstDayLegs, tripDates, dateStr, baseTimezone)
+      ? computeDayFlightRoute(firstDayLegs, tripDates, dateStr, baseTimezone, settings)
       : null;
     // Detect home-base departures: commuter whose first leg departs from home airport.
     const homeIataFirst = (profile?.home_airport ?? "").trim().toUpperCase();
@@ -867,7 +939,7 @@ function getStatusForDay(
 
     const departingToday = legDates.filter((ld) => ld.departureDate === dateStr);
     if (departingToday.length > 0) {
-      todayFlightRoute = computeDayFlightRoute(middleLegs, tripDates, dateStr, baseTimezone);
+      todayFlightRoute = computeDayFlightRoute(middleLegs, tripDates, dateStr, baseTimezone, settings);
 
       todayLegs = departingToday
         .map((ld) => {
@@ -878,10 +950,10 @@ function getStatusForDay(
           const rawOrigin = (leg.origin ?? "").trim().toUpperCase();
           const rawDest = (leg.destination ?? "").trim().toUpperCase();
           return {
-            origin: iataToCityName(rawOrigin),
+            origin: settings.showOvernightCities ? iataToCityName(rawOrigin) : FAMILY_VIEW_GENERIC_TRAVEL_ROUTE,
             originIata: rawOrigin,
             depTime: leg.depTime ?? "",
-            destination: iataToCityName(rawDest),
+            destination: settings.showOvernightCities ? iataToCityName(rawDest) : FAMILY_VIEW_GENERIC_TRAVEL_ROUTE,
             destIata: rawDest,
             arrTime: leg.arrTime ?? "",
             departureDate: ld.departureDate ?? dateStr,
@@ -900,7 +972,12 @@ function getStatusForDay(
     dateStr,
     dayLabel,
     status: "Overnight Away",
-    detail: overnightCity ? `in ${iataToCityName(overnightCity)}` : null,
+    detail:
+      settings.showOvernightCities && overnightCity
+        ? `in ${iataToCityName(overnightCity)}`
+        : !settings.showOvernightCities
+          ? "Overnight"
+          : null,
     tripDayLabel,
     todayFlightRoute,
     todayLegs: todayLegs?.length ? todayLegs : null,
@@ -967,7 +1044,8 @@ function buildReportTimeDisplay(
     const baseWithAirport = baseAirport ? `${baseTime} ${baseAirport}` : baseTime;
     const base = `at ${baseWithAirport}`;
     const showHome = baseTime !== homeTime;
-    const homeLabel = showHome && homeAirport ? iataToCityName(homeAirport) : null;
+    const homeLabel =
+      showHome && homeAirport && settings.showOvernightCities ? iataToCityName(homeAirport) : null;
     return {
       base,
       baseAirport,
@@ -1156,12 +1234,14 @@ function computeDayFlightRoute(
   legs: ScheduleEventLeg[],
   tripDates: string[],
   dateStr: string,
-  baseTimezone: string
+  baseTimezone: string,
+  settings: FamilyViewSettings
 ): string | null {
   if (!legs.length || !tripDates.length) return null;
   const legDates = computeLegDates(legs, tripDates, baseTimezone);
   const departingToday = legDates.filter((ld) => ld.departureDate === dateStr);
   if (!departingToday.length) return null;
+  if (!settings.showOvernightCities) return FAMILY_VIEW_GENERIC_TRAVEL_ROUTE;
   const stops: string[] = [];
   const firstLeg = departingToday[0]!.leg as ScheduleEventLeg;
   stops.push(iataToCityName((firstLeg.origin ?? "").trim().toUpperCase()));
@@ -1231,7 +1311,8 @@ export function getBetweenTripStatus(
   events: ScheduleEvent[],
   profile: Profile | null,
   baseTimezone: string,
-  firstName: string | null
+  firstName: string | null,
+  settings: FamilyViewSettings
 ): BetweenTripStatus {
   const filtered = filterScheduleEvents(events);
   const futureTrips = filtered
@@ -1249,6 +1330,10 @@ export function getBetweenTripStatus(
   const homeAirport = (profile?.home_airport ?? "").trim().toUpperCase();
   const baseAirport = (profile?.base_airport ?? "").trim().toUpperCase();
   const commuter = isCommuter(profile);
+
+  if (!settings.showCommuteEstimates) {
+    return { gapHours, likelyComesHome: true, warningMessage: null, nextTripStartLabel: null };
+  }
 
   if (!commuter) {
     return { gapHours, likelyComesHome: true, warningMessage: null, nextTripStartLabel: null };
