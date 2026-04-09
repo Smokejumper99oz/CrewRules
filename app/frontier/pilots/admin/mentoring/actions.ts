@@ -811,6 +811,114 @@ export async function sendFrontierPilotAdminMentorAssignmentEmailFormState(
   return { error: null, success: true };
 }
 
+export type SendFrontierPilotAdminMentorAssignmentEmailsBulkResult = {
+  successCount: number;
+  skippedNoAssignment: number;
+  skippedNoMentor: number;
+  skippedNoEmail: number;
+  errors: string[];
+};
+
+/**
+ * Email Center: send mentor assignment notifications for many assignment IDs in one call.
+ * Same load/gate/send rules as {@link sendFrontierPilotAdminMentorAssignmentEmailFormState} per id.
+ */
+export async function sendFrontierPilotAdminMentorAssignmentEmailsBulk(
+  assignmentIds: string[]
+): Promise<SendFrontierPilotAdminMentorAssignmentEmailsBulkResult> {
+  const gate = await ensureFrontierPilotsTenantAdmin();
+  if (gate.error) {
+    return {
+      successCount: 0,
+      skippedNoAssignment: 0,
+      skippedNoMentor: 0,
+      skippedNoEmail: 0,
+      errors: [gate.error],
+    };
+  }
+
+  let successCount = 0;
+  let skippedNoAssignment = 0;
+  let skippedNoMentor = 0;
+  let skippedNoEmail = 0;
+  const errors: string[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of assignmentIds) {
+    const assignmentId = String(raw ?? "").trim();
+    if (!assignmentId) {
+      skippedNoAssignment++;
+      continue;
+    }
+    if (seen.has(assignmentId)) {
+      continue;
+    }
+    seen.add(assignmentId);
+
+    const row = await loadFrontierMentoringEmailCenterRowByAssignmentId(assignmentId);
+    if (!row) {
+      skippedNoAssignment++;
+      continue;
+    }
+    if (!row.assignment_id || row.assignment_id !== assignmentId) {
+      skippedNoAssignment++;
+      continue;
+    }
+
+    if (rosterStatusForEmailCenterMentorSend(row) === "unassigned") {
+      skippedNoMentor++;
+      continue;
+    }
+
+    const toEmail = row.resolved_mentor_email?.trim() ?? "";
+    if (!toEmail) {
+      skippedNoEmail++;
+      continue;
+    }
+
+    const mentorName = (row.mentor_name?.trim() || "there").trim();
+    const menteeName = (row.name?.trim() && row.name.trim() !== "—" ? row.name.trim() : "Mentee").trim();
+    const menteeEmployeeNumber = (row.employee_number?.trim() && row.employee_number.trim() !== "—"
+      ? row.employee_number.trim()
+      : "—"
+    ).trim();
+
+    const menteeDohDisplay = formatMenteeDohForAssignmentEmail(row.hire_date);
+    const menteePrivateEmail = (row.mentee_email?.trim() && row.mentee_email.trim().length > 0
+      ? row.mentee_email.trim()
+      : "—"
+    ).trim();
+    const menteePhoneFmt = formatUsPhoneStored(row.mentee_phone);
+    const menteePrivatePhone = menteePhoneFmt ?? "—";
+
+    const sent = await sendMentorAssignmentEmail({
+      toEmail,
+      mentorName,
+      menteeName,
+      menteeEmployeeNumber,
+      menteeDohDisplay,
+      menteePrivateEmail,
+      menteePrivatePhone,
+    });
+
+    if (!sent.ok) {
+      errors.push(sent.error);
+      continue;
+    }
+
+    successCount++;
+  }
+
+  revalidatePath("/frontier/pilots/admin/mentoring/email-center");
+  return {
+    successCount,
+    skippedNoAssignment,
+    skippedNoMentor,
+    skippedNoEmail,
+    errors,
+  };
+}
+
 /**
  * Frontier pilots tenant admin: set `mentor_assignments.hire_date` when assignment mentor is in this tenant,
  * then recalculate milestone `due_date` values for that assignment (same rules as seed; no inserts/deletes,

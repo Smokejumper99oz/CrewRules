@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useActionState, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FrontierMentoringEmailCenterRow } from "@/lib/mentoring/frontier-mentoring-email-center-load";
 import {
   sendFrontierPilotAdminMentorAssignmentEmailFormState,
+  sendFrontierPilotAdminMentorAssignmentEmailsBulk,
   type SendFrontierPilotAdminMentorAssignmentEmailFormState,
 } from "@/app/frontier/pilots/admin/mentoring/actions";
 
@@ -204,13 +205,30 @@ type Props = {
   roster: FrontierMentoringEmailCenterRow[];
 };
 
+type ClassBulkSendResultSummary = {
+  classLabel: string;
+  /** Raw `classFilter` value at send time (`"all"` or hire-date YYYY-MM-DD). */
+  classKey: string;
+  requestedCount: number;
+  successCount: number;
+  skippedNoAssignment: number;
+  skippedNoMentor: number;
+  skippedNoEmail: number;
+  errorCount: number;
+};
+
 export function MentoringEmailCenterTable({ roster }: Props) {
+  const router = useRouter();
   const searchFieldId = useId();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState<string>("all");
   /** Same interaction idea as `openContactId` in mentee-roster-table: `${rowKey}:mentee-email` | `:mentor-email`. */
   const [openEmailDetailKey, setOpenEmailDetailKey] = useState<string | null>(null);
+  const [isClassBulkSending, setIsClassBulkSending] = useState(false);
+  const [classBulkResult, setClassBulkResult] = useState<ClassBulkSendResultSummary | null>(null);
+  const [classBulkError, setClassBulkError] = useState<string | null>(null);
+  const [isClassBulkConfirmOpen, setIsClassBulkConfirmOpen] = useState(false);
 
   function toggleEmailDetail(key: string) {
     setOpenEmailDetailKey((prev) => (prev === key ? null : key));
@@ -265,6 +283,163 @@ export function MentoringEmailCenterTable({ roster }: Props) {
     return list;
   }, [roster, search, classFilter]);
 
+  /** Class cohort only (hire date); search must not affect mentor-email preview totals. */
+  const classPreviewRows = useMemo(() => {
+    if (classFilter === "all") return roster;
+    return roster.filter((r) => hireDateToYyyyMmDd(r.hire_date) === classFilter);
+  }, [roster, classFilter]);
+
+  /**
+   * Single pass over `classPreviewRows`: bucket counts + valid trimmed assignment IDs for future bulk send.
+   * `assignment_id` counts as present only when `String(r.assignment_id).trim()` is non-empty.
+   * Same priority as MentorAssignmentEmailSendCell: no assignment → no mentor → no mentor email → eligible.
+   */
+  const classPreviewMentorEmailBuckets = useMemo(() => {
+    let noAssignment = 0;
+    let noMentorAssigned = 0;
+    let noMentorEmail = 0;
+    const eligibleAssignmentIds: string[] = [];
+    for (const r of classPreviewRows) {
+      const assignmentIdTrim = String(r.assignment_id ?? "").trim();
+      if (!assignmentIdTrim) {
+        noAssignment++;
+        continue;
+      }
+      if (statusFromRow(r) === "unassigned") {
+        noMentorAssigned++;
+        continue;
+      }
+      if (!r.resolved_mentor_email?.trim()) {
+        noMentorEmail++;
+        continue;
+      }
+      eligibleAssignmentIds.push(assignmentIdTrim);
+    }
+    return { noAssignment, noMentorAssigned, noMentorEmail, eligibleAssignmentIds };
+  }, [classPreviewRows]);
+
+  const classMentorEmailPreview = useMemo(
+    () => ({
+      classLabel:
+        classFilter === "all" ? "All classes" : formatClassOptionLabel(classFilter),
+      rowCount: classPreviewRows.length,
+      eligible: classPreviewMentorEmailBuckets.eligibleAssignmentIds.length,
+      noAssignment: classPreviewMentorEmailBuckets.noAssignment,
+      noMentorAssigned: classPreviewMentorEmailBuckets.noMentorAssigned,
+      noMentorEmail: classPreviewMentorEmailBuckets.noMentorEmail,
+    }),
+    [classPreviewMentorEmailBuckets, classPreviewRows, classFilter]
+  );
+
+  const classPreviewEligibleAssignmentIds = classPreviewMentorEmailBuckets.eligibleAssignmentIds;
+
+  /** Content key for eligible IDs (order-independent); not affected by search-only changes. */
+  const classBulkEligibleIdsKey = useMemo(
+    () => [...classPreviewEligibleAssignmentIds].sort().join("\u0001"),
+    [classPreviewEligibleAssignmentIds]
+  );
+
+  useEffect(() => {
+    if (isClassBulkSending) {
+      return;
+    }
+    setClassBulkResult(null);
+    setClassBulkError(null);
+    // Only class filter or eligible-ID set should reset feedback—not send completion (`isClassBulkSending` flip).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- omit isClassBulkSending from deps on purpose
+  }, [classFilter, classBulkEligibleIdsKey]);
+
+  useEffect(() => {
+    setIsClassBulkConfirmOpen(false);
+  }, [classFilter, classBulkEligibleIdsKey]);
+
+  const onClassBulkPrimaryClick = useCallback(() => {
+    if (classFilter === "all") {
+      return;
+    }
+    const ids = classPreviewEligibleAssignmentIds;
+    if (ids.length === 0 || isClassBulkSending || isClassBulkConfirmOpen) {
+      return;
+    }
+    setIsClassBulkConfirmOpen(true);
+  }, [
+    classFilter,
+    classPreviewEligibleAssignmentIds,
+    isClassBulkConfirmOpen,
+    isClassBulkSending,
+  ]);
+
+  const onClassBulkCancelConfirm = useCallback(() => {
+    setIsClassBulkConfirmOpen(false);
+  }, []);
+
+  const onClassBulkConfirmSendClick = useCallback(() => {
+    if (classFilter === "all") {
+      return;
+    }
+    const ids = classPreviewEligibleAssignmentIds;
+    if (ids.length === 0 || isClassBulkSending) {
+      return;
+    }
+    const classLabelAtClick = classMentorEmailPreview.classLabel;
+    const classKeyAtClick = classFilter;
+    const assignmentIdsToSend = [...ids];
+    const requestedCount = assignmentIdsToSend.length;
+    void (async () => {
+      setIsClassBulkSending(true);
+      setClassBulkError(null);
+      try {
+        const result = await sendFrontierPilotAdminMentorAssignmentEmailsBulk(assignmentIdsToSend);
+        setClassBulkResult({
+          classLabel: classLabelAtClick,
+          classKey: classKeyAtClick,
+          requestedCount,
+          successCount: result.successCount,
+          skippedNoAssignment: result.skippedNoAssignment,
+          skippedNoMentor: result.skippedNoMentor,
+          skippedNoEmail: result.skippedNoEmail,
+          errorCount: result.errors.length,
+        });
+        setClassBulkError(null);
+        router.refresh();
+      } catch (e) {
+        setClassBulkError(
+          e instanceof Error ? e.message : "Bulk send failed. Please try again."
+        );
+      } finally {
+        setIsClassBulkSending(false);
+        setIsClassBulkConfirmOpen(false);
+      }
+    })();
+  }, [
+    classFilter,
+    classMentorEmailPreview.classLabel,
+    classPreviewEligibleAssignmentIds,
+    isClassBulkSending,
+    router,
+  ]);
+
+  const isAllClassesSelected = classFilter === "all";
+
+  const classBulkPrimaryDisabled =
+    isAllClassesSelected ||
+    classPreviewEligibleAssignmentIds.length === 0 ||
+    isClassBulkSending ||
+    isClassBulkConfirmOpen;
+
+  const classBulkSameContextAsLastResult = useMemo(() => {
+    if (!classBulkResult) {
+      return false;
+    }
+    return (
+      classBulkResult.classKey === classFilter &&
+      classBulkResult.requestedCount === classPreviewEligibleAssignmentIds.length
+    );
+  }, [classBulkResult, classFilter, classPreviewEligibleAssignmentIds.length]);
+
+  const classBulkLastSuccessAppliesToCurrentContext =
+    classBulkSameContextAsLastResult && (classBulkResult?.successCount ?? 0) > 0;
+
   return (
     <div className="space-y-4">
       <div className="mb-3 rounded-lg border border-white/5 bg-slate-950/35 px-2.5 py-1.5 lg:mb-2 lg:px-3 lg:py-1">
@@ -318,6 +493,141 @@ export function MentoringEmailCenterTable({ roster }: Props) {
               <span className="text-slate-600"> in roster</span>
             </span>
           </div>
+        </div>
+
+        <div className="mt-2 border-t border-white/5 pt-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+            <div className="min-w-0 flex-1 space-y-1">
+              <span className="mb-px block text-[8px] font-semibold uppercase leading-none tracking-wide text-slate-500">
+                Class-level mentor email preview
+              </span>
+              <p className="text-[10px] leading-snug text-slate-600">
+                Selected class:{" "}
+                <span className="font-medium text-slate-400">{classMentorEmailPreview.classLabel}</span>
+                <span className="text-slate-600"> · </span>
+                <span className="tabular-nums text-slate-500">
+                  {classMentorEmailPreview.rowCount} row{classMentorEmailPreview.rowCount === 1 ? "" : "s"} in scope
+                </span>
+                <span className="text-slate-600"> — </span>
+                <span className="text-slate-600">ignores search (table above still reflects search).</span>
+              </p>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] tabular-nums leading-snug text-slate-500">
+                <span>
+                  <span className="font-medium text-emerald-400">{classMentorEmailPreview.eligible}</span> eligible
+                </span>
+                <span>
+                  <span className="font-medium text-slate-400">{classMentorEmailPreview.noAssignment}</span> no assignment
+                </span>
+                <span>
+                  <span className="font-medium text-slate-400">{classMentorEmailPreview.noMentorAssigned}</span> no
+                  mentor assigned
+                </span>
+                <span>
+                  <span className="font-medium text-slate-400">{classMentorEmailPreview.noMentorEmail}</span> no mentor
+                  email
+                </span>
+              </div>
+              <p className="text-[10px] tabular-nums leading-snug text-slate-500">
+                Eligible assignment IDs ready:{" "}
+                <span className="font-medium text-slate-400">{classPreviewEligibleAssignmentIds.length}</span>
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1 sm:pb-px">
+              <button
+                type="button"
+                disabled={classBulkPrimaryDisabled}
+                onClick={onClassBulkPrimaryClick}
+                className={
+                  classBulkPrimaryDisabled
+                    ? "w-full cursor-not-allowed rounded-md border border-white/10 bg-white/[0.02] px-2.5 py-1.5 text-center text-[10px] font-semibold leading-none text-slate-500 opacity-60 sm:w-auto"
+                    : "w-full cursor-pointer rounded-md border border-emerald-500/40 bg-emerald-500/20 px-2.5 py-1.5 text-center text-[10px] font-semibold leading-none text-emerald-200 transition-colors hover:bg-emerald-500/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:w-auto"
+                }
+                aria-disabled={classBulkPrimaryDisabled}
+              >
+                {isAllClassesSelected
+                  ? "Select One Class to Send"
+                  : classPreviewEligibleAssignmentIds.length === 0
+                    ? "No Eligible Emails"
+                    : isClassBulkSending
+                      ? "Sending..."
+                      : isClassBulkConfirmOpen
+                        ? "Reviewing..."
+                        : classBulkLastSuccessAppliesToCurrentContext
+                          ? "Send Again"
+                          : "Prepare Class Email Send"}
+              </button>
+              {!isAllClassesSelected && classBulkLastSuccessAppliesToCurrentContext ? (
+                <p className="max-w-[11rem] text-right text-[9px] leading-tight text-emerald-400/85">
+                  Last send completed for this class context.
+                </p>
+              ) : null}
+            </div>
+          </div>
+          {isAllClassesSelected ? (
+            <div
+              className="mt-2 w-full rounded-lg border-2 border-amber-500/55 bg-amber-950/50 px-3 py-2.5 shadow-[inset_0_1px_0_0_rgba(251,191,36,0.12)]"
+              role="status"
+            >
+              <p className="text-[9px] font-bold uppercase tracking-wide text-amber-200">Bulk Send Blocked</p>
+              <p className="mt-1.5 text-[10px] font-medium leading-snug text-amber-100/90">
+                Bulk send is disabled while All classes is selected. Choose a specific class before continuing.
+              </p>
+            </div>
+          ) : null}
+          {!isAllClassesSelected && isClassBulkConfirmOpen ? (
+            <div className="mt-2 rounded-md border border-white/[0.07] bg-white/[0.02] px-2.5 py-2">
+              <p className="text-[10px] leading-snug text-slate-400">
+                You are about to send an email to all mentors for new mentee assignments in this class. Are you
+                sure?
+              </p>
+              <div className="mt-2 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={isClassBulkSending}
+                  onClick={onClassBulkCancelConfirm}
+                  className="rounded-md border border-white/15 bg-white/[0.03] px-2 py-1 text-[10px] font-medium text-slate-300 transition-colors hover:border-white/25 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isClassBulkSending}
+                  onClick={onClassBulkConfirmSendClick}
+                  className="rounded-md border border-emerald-500/45 bg-emerald-500/20 px-2 py-1 text-[10px] font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/28 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Click to Confirm
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {classBulkError ? (
+            <p className="mt-2 text-[10px] leading-snug text-red-400">{classBulkError}</p>
+          ) : null}
+          {classBulkResult ? (
+            <div className="mt-2 space-y-0.5 rounded-md border border-white/[0.07] bg-white/[0.02] px-2 py-1.5 text-[10px] tabular-nums leading-snug text-slate-500">
+              <p className="font-medium text-slate-400">
+                Last bulk send — {classBulkResult.classLabel} · requested {classBulkResult.requestedCount}
+              </p>
+              <p>
+                Sent: <span className="font-medium text-slate-300">{classBulkResult.successCount}</span>
+              </p>
+              <p>
+                Skipped no assignment:{" "}
+                <span className="font-medium text-slate-300">{classBulkResult.skippedNoAssignment}</span>
+              </p>
+              <p>
+                Skipped no mentor:{" "}
+                <span className="font-medium text-slate-300">{classBulkResult.skippedNoMentor}</span>
+              </p>
+              <p>
+                Skipped no email:{" "}
+                <span className="font-medium text-slate-300">{classBulkResult.skippedNoEmail}</span>
+              </p>
+              <p>
+                Errors: <span className="font-medium text-slate-300">{classBulkResult.errorCount}</span>
+              </p>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -427,7 +737,9 @@ export function MentoringEmailCenterTable({ roster }: Props) {
                           No email
                         </span>
                       )}
-                      <MentorAssignmentEmailSendCell row={r} />
+                      {mentorUnassigned && String(r.assignment_id ?? "").trim() ? null : (
+                        <MentorAssignmentEmailSendCell row={r} />
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3">
