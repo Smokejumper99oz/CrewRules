@@ -521,10 +521,8 @@ export async function createFamilyViewInvite(email: string): Promise<CreateFamil
     return { error: "Enter a valid email address." };
   }
 
-  const { rawToken, tokenHash } = generateFamilyViewInviteTokenPair();
-  const expiresAt = addDays(new Date(), 30).toISOString();
-  const nowIso = new Date().toISOString();
   const supabase = await createClient();
+  const nowIso = new Date().toISOString();
 
   const { data: pending, error: pendingErr } = await supabase
     .from("family_view_invites")
@@ -535,6 +533,25 @@ export async function createFamilyViewInvite(email: string): Promise<CreateFamil
     .maybeSingle();
 
   if (pendingErr) return { error: pendingErr.message };
+
+  if (!pending?.id) {
+    const tier = profile.subscription_tier;
+    const inviteLimit = tier === "pro" || tier === "enterprise" ? 5 : 1;
+    const { count, error: countErr } = await supabase
+      .from("family_view_invites")
+      .select("*", { count: "exact", head: true })
+      .eq("pilot_profile_id", profile.id)
+      .eq("status", "pending")
+      .gt("expires_at", nowIso);
+
+    if (countErr) return { error: countErr.message };
+    if ((count ?? 0) >= inviteLimit) {
+      return { error: "You've reached your Family View limit." };
+    }
+  }
+
+  const { rawToken, tokenHash } = generateFamilyViewInviteTokenPair();
+  const expiresAt = addDays(new Date(), 30).toISOString();
 
   if (pending?.id) {
     const { data: updated, error: updErr } = await supabase
