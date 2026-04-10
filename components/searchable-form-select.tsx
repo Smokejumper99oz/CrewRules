@@ -48,8 +48,15 @@ function optionMatches(queryNorm: string, opt: SearchableFormSelectOption): bool
 
 type PanelBox = { top: number; left: number; width: number };
 
-function computePanelBox(trigger: DOMRect): PanelBox {
+/** Used before the portaled panel has been measured; real height is applied on the next layout pass. */
+const PANEL_HEIGHT_FALLBACK_PX = 320;
+
+function computePanelBox(
+  trigger: DOMRect,
+  panelHeightPx: number
+): PanelBox {
   const vw = typeof window !== "undefined" ? window.innerWidth : PANEL_MAX_WIDTH_PX;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
   const maxW = Math.min(
     PANEL_MAX_WIDTH_PX,
     vw - PANEL_VIEWPORT_MARGIN * 2
@@ -65,7 +72,18 @@ function computePanelBox(trigger: DOMRect): PanelBox {
       vw - PANEL_VIEWPORT_MARGIN - width
     );
   }
-  const top = trigger.bottom + PANEL_GAP_PX;
+
+  const panelH = Math.max(1, panelHeightPx);
+  let top = trigger.bottom + PANEL_GAP_PX;
+  const maxTop = vh - PANEL_VIEWPORT_MARGIN - panelH;
+  if (top > maxTop) {
+    const aboveTop = trigger.top - PANEL_GAP_PX - panelH;
+    if (aboveTop >= PANEL_VIEWPORT_MARGIN) {
+      top = aboveTop;
+    } else {
+      top = Math.max(PANEL_VIEWPORT_MARGIN, maxTop);
+    }
+  }
   return { top, left, width };
 }
 
@@ -117,7 +135,22 @@ export function SearchableFormSelect({
   const updatePanelBox = useCallback(() => {
     const trig = triggerRef.current;
     if (!trig) return;
-    setPanelBox(computePanelBox(trig.getBoundingClientRect()));
+    const measured =
+      panelRef.current && panelRef.current.offsetHeight > 0
+        ? panelRef.current.offsetHeight
+        : PANEL_HEIGHT_FALLBACK_PX;
+    const next = computePanelBox(trig.getBoundingClientRect(), measured);
+    setPanelBox((prev) => {
+      if (
+        prev &&
+        prev.top === next.top &&
+        prev.left === next.left &&
+        prev.width === next.width
+      ) {
+        return prev;
+      }
+      return next;
+    });
   }, []);
 
   useLayoutEffect(() => {
@@ -127,6 +160,13 @@ export function SearchableFormSelect({
     }
     updatePanelBox();
   }, [open, updatePanelBox]);
+
+  /** After the portaled panel mounts, measure real height and flip above the trigger if needed. */
+  useLayoutEffect(() => {
+    if (!open || !panelBox) return;
+    const id = requestAnimationFrame(() => updatePanelBox());
+    return () => cancelAnimationFrame(id);
+  }, [open, panelBox, filteredOptions.length, updatePanelBox]);
 
   useEffect(() => {
     if (!open) return;
