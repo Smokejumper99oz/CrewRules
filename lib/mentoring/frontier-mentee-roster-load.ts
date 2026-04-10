@@ -14,6 +14,47 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+function mergeLatestFollowUpDate(prev: string | null, incoming: string | null): string | null {
+  if (incoming && (!prev || incoming > prev)) return incoming;
+  return prev;
+}
+
+/**
+ * Batched load of admin follow-up check-ins per assignment. Chunked queries only; not per row.
+ */
+async function buildFollowUpMapForAssignmentIds(
+  admin: ReturnType<typeof createAdminClient>,
+  assignmentIds: string[]
+): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  if (assignmentIds.length === 0) return out;
+
+  const unique = [...new Set(assignmentIds.filter(Boolean))];
+  for (const part of chunk(unique, IN_CHUNK)) {
+    const { data, error } = await admin
+      .from("mentorship_check_ins")
+      .select("assignment_id, follow_up_date")
+      .eq("follow_up_category", "needs_admin_follow_up")
+      .in("assignment_id", part);
+    if (error) continue;
+    for (const raw of data ?? []) {
+      const aid = String((raw as { assignment_id: string }).assignment_id ?? "").trim();
+      if (!aid) continue;
+      const fdRaw = (raw as { follow_up_date: string | null }).follow_up_date;
+      const head =
+        fdRaw != null && String(fdRaw).trim() !== "" ? String(fdRaw).trim().slice(0, 10) : null;
+      const validYmd = head && /^\d{4}-\d{2}-\d{2}$/.test(head) ? head : null;
+      const prev = out.get(aid);
+      if (prev === undefined) {
+        out.set(aid, validYmd);
+      } else {
+        out.set(aid, mergeLatestFollowUpDate(prev, validYmd));
+      }
+    }
+  }
+  return out;
+}
+
 const normalize = (v: string | null | undefined) => (v ?? "").trim();
 
 /** Same normalization as mentee-roster-table Class filter (grouping key). TEMP: used only for DOH audit log. */
@@ -342,6 +383,9 @@ export async function loadFrontierPilotMenteeRosterPageData(options: LoadFrontie
     return map[type] ?? type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
+  const assignmentIdsForFollowUp = [...new Set((assignments ?? []).map((a) => a.id).filter(Boolean))];
+  const followUpLatestByAssignment = await buildFollowUpMapForAssignmentIds(admin, assignmentIdsForFollowUp);
+
   const roster: MenteeRosterRow[] = [];
   const dohAudit: DohAuditEntry[] = [];
 
@@ -442,6 +486,8 @@ export async function loadFrontierPilotMenteeRosterPageData(options: LoadFrontie
       mentee_phone: menteeProfile?.phone?.trim() || (a.mentee_phone?.trim() ?? null) || null,
       mentor_email: mentorEmail,
       mentor_phone: mentorPhone,
+      has_admin_follow_up: followUpLatestByAssignment.has(a.id),
+      follow_up_date: followUpLatestByAssignment.get(a.id) ?? null,
     });
   }
 
@@ -486,6 +532,8 @@ export async function loadFrontierPilotMenteeRosterPageData(options: LoadFrontie
       mentee_phone: pr.phone?.trim() || null,
       mentor_email: null,
       mentor_phone: null,
+      has_admin_follow_up: false,
+      follow_up_date: null,
     });
   }
 

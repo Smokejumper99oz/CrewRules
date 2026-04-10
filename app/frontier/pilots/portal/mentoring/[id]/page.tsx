@@ -138,7 +138,8 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function MenteeDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const { detail, milestones, checkIns, menteeMilestoneUpdates, error } = await getMenteeDetail(id);
+  const { detail, milestones, checkIns, menteeMilestoneUpdates, milestoneFailedAttempts, error } =
+    await getMenteeDetail(id);
 
   if (error || !detail) {
     return (
@@ -254,8 +255,10 @@ export default async function MenteeDetailPage({ params }: PageProps) {
           showMenteeCheckIn={detail.isMentorView}
           checkIns={detail.isMentorView ? checkIns : []}
           menteeMilestoneUpdates={menteeMilestoneUpdates}
+          milestoneFailedAttempts={milestoneFailedAttempts}
           items={milestones.map((m) => {
             const base = {
+              milestone_id: m.id,
               milestone_type: m.milestone_type,
               due_date: m.due_date,
               completed_date: m.completed_date,

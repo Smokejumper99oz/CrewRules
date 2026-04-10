@@ -15,6 +15,11 @@ export type MentoringOverviewStats = {
   stagedMentors: number;
   /** Active assignment rows whose mentee profile has completed welcome onboarding. */
   liveMentees: number;
+  /**
+   * Frontier pilots tenant only: distinct active assignments with ≥1 check-in
+   * `follow_up_category = needs_admin_follow_up`. Always 0 for platform and other tenants.
+   */
+  menteesNeedingFollowUp: number;
 };
 
 const IN_CHUNK = 120;
@@ -50,6 +55,53 @@ function hasMentorContactRow(p: {
 }
 
 /**
+ * Frontier pilots admin: count distinct active `mentor_assignments.id` whose mentor is in tenant scope
+ * and that have at least one `mentorship_check_ins` row with `follow_up_category = needs_admin_follow_up`.
+ * Platform and non-Frontier tenants: 0.
+ */
+async function fetchMenteesNeedingFollowUpCount(
+  admin: SupabaseClient,
+  scope: MentoringOverviewScope,
+  mentorIdsInScope: string[] | null
+): Promise<number> {
+  if (scope.kind !== "tenant" || !isFrontierPilotTenantScope(scope)) {
+    return 0;
+  }
+  const ids = mentorIdsInScope ?? [];
+  if (ids.length === 0) return 0;
+
+  const assignmentIds = new Set<string>();
+  for (const part of chunk(ids, IN_CHUNK)) {
+    const { data, error } = await admin
+      .from("mentor_assignments")
+      .select("id")
+      .in("mentor_user_id", part)
+      .eq("active", true);
+    if (error) return 0;
+    for (const r of data ?? []) {
+      assignmentIds.add(String((r as { id: string }).id));
+    }
+  }
+  if (assignmentIds.size === 0) return 0;
+
+  const distinctWithFlag = new Set<string>();
+  const assignmentIdList = [...assignmentIds];
+  for (const part of chunk(assignmentIdList, IN_CHUNK)) {
+    const { data, error } = await admin
+      .from("mentorship_check_ins")
+      .select("assignment_id")
+      .eq("follow_up_category", "needs_admin_follow_up")
+      .in("assignment_id", part);
+    if (error) return 0;
+    for (const r of data ?? []) {
+      const aid = String((r as { assignment_id: string }).assignment_id ?? "");
+      if (aid) distinctWithFlag.add(aid);
+    }
+  }
+  return distinctWithFlag.size;
+}
+
+/**
  * Read-only aggregates for Super Admin (platform) or tenant Admin dashboards.
  * Uses service-role client; callers must gate access first.
  */
@@ -65,6 +117,7 @@ export async function getMentoringOverviewStats(
     openMentorshipProgramRequests: 0,
     stagedMentors: 0,
     liveMentees: 0,
+    menteesNeedingFollowUp: 0,
   };
 
   let mentorIdsInScope: string[] | null = null;
@@ -154,7 +207,11 @@ export async function getMentoringOverviewStats(
     return total;
   };
 
-  const [stagedMentors, liveMentees] = await Promise.all([fetchStagedMentors(), fetchLiveMentees()]);
+  const [stagedMentors, liveMentees, menteesNeedingFollowUp] = await Promise.all([
+    fetchStagedMentors(),
+    fetchLiveMentees(),
+    fetchMenteesNeedingFollowUpCount(admin, scope, mentorIdsInScope),
+  ]);
 
   const countAssignments = async (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase filter builder chain
@@ -215,6 +272,7 @@ export async function getMentoringOverviewStats(
         openMentorshipProgramRequests,
         stagedMentors,
         liveMentees,
+        menteesNeedingFollowUp,
       };
     }
     for (const r of data ?? []) {
@@ -231,6 +289,7 @@ export async function getMentoringOverviewStats(
         openMentorshipProgramRequests,
         stagedMentors,
         liveMentees,
+        menteesNeedingFollowUp,
       };
     }
     for (const part of chunk(ids, IN_CHUNK)) {
@@ -247,6 +306,7 @@ export async function getMentoringOverviewStats(
           openMentorshipProgramRequests,
           stagedMentors,
           liveMentees,
+          menteesNeedingFollowUp,
         };
       }
       for (const r of data ?? []) {
@@ -268,6 +328,7 @@ export async function getMentoringOverviewStats(
       openMentorshipProgramRequests,
       stagedMentors,
       liveMentees,
+      menteesNeedingFollowUp,
     };
   }
 
@@ -305,5 +366,6 @@ export async function getMentoringOverviewStats(
     openMentorshipProgramRequests,
     stagedMentors,
     liveMentees,
+    menteesNeedingFollowUp,
   };
 }

@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { format, isValid, parse, parseISO } from "date-fns";
 import {
   completeMentorshipMilestone,
+  createFailedMilestoneAttempt,
   createMentorshipCheckIn,
   deleteLatestMenteeMilestoneUpdate,
   deleteMentorshipCheckIn,
   submitMenteeMilestoneUpdate,
   updateCompletedMentorshipMilestone,
   updateMentorshipCheckIn,
+  type MentorshipMilestoneAttemptRow,
 } from "@/app/frontier/pilots/portal/mentoring/actions";
 
 export type MentoringCheckInItem = {
@@ -18,6 +20,8 @@ export type MentoringCheckInItem = {
   occurred_on: string;
   note: string;
   created_at: string;
+  follow_up_category?: "none" | "needs_admin_follow_up";
+  follow_up_date?: string | null;
 };
 
 export type MentoringMenteeMilestoneUpdateItem = {
@@ -28,6 +32,7 @@ export type MentoringMenteeMilestoneUpdateItem = {
 };
 
 export type MentoringMilestoneTimelineItem = {
+  milestone_id?: string;
   milestone_type: string;
   due_date: string;
   completed_date: string | null;
@@ -46,12 +51,13 @@ type Props = {
   items: MentoringMilestoneTimelineItem[];
   checkIns: MentoringCheckInItem[];
   menteeMilestoneUpdates?: ReadonlyArray<MentoringMenteeMilestoneUpdateItem>;
+  milestoneFailedAttempts?: ReadonlyArray<MentorshipMilestoneAttemptRow>;
   /** When true, mentor can edit completion note/date on completed rows and add check-ins. */
   canEditMilestones?: boolean;
   showMenteeCheckIn?: boolean;
 };
 
-type MilestoneModal = { milestoneType: string; mode: "complete" | "edit" };
+type MilestoneModal = { milestoneType: string; mode: "complete" | "edit"; milestoneId?: string };
 
 type TimelineSegment =
   | { kind: "standalone"; ci: MentoringCheckInItem }
@@ -88,6 +94,9 @@ const checkInNoteActionPillClass =
 
 const checkInDeletePillClass =
   "inline-flex h-6 min-h-6 shrink-0 items-center justify-center rounded-md border border-red-500/35 bg-red-950/25 px-2 text-xs font-semibold leading-none text-red-200/90 antialiased transition-colors duration-200 hover:border-red-400/45 hover:bg-red-950/40 active:bg-red-950/50 disabled:opacity-50";
+
+const checkInFollowUpBadgeClass =
+  "inline-flex shrink-0 items-center rounded-md border border-sky-500/35 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-200/90";
 
 /** Edit beside Completed: height matches Completed via parent `items-stretch`. */
 const editBesideCompletedClass =
@@ -246,11 +255,13 @@ export function MentoringMilestoneTimeline({
   items,
   checkIns,
   menteeMilestoneUpdates = [],
+  milestoneFailedAttempts = [],
   canEditMilestones = false,
   showMenteeCheckIn = false,
 }: Props) {
   const router = useRouter();
   const [modal, setModal] = useState<MilestoneModal | null>(null);
+  const [milestoneModalOutcome, setMilestoneModalOutcome] = useState<"passed" | "failed">("passed");
   const [note, setNote] = useState("");
   const [completedDateInput, setCompletedDateInput] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -259,6 +270,8 @@ export function MentoringMilestoneTimeline({
   const [checkInNote, setCheckInNote] = useState("");
   const [checkInDateInput, setCheckInDateInput] = useState("");
   const [checkInError, setCheckInError] = useState<string | null>(null);
+  const [checkInNeedsFollowUp, setCheckInNeedsFollowUp] = useState(false);
+  const [checkInFollowUpDateYmd, setCheckInFollowUpDateYmd] = useState("");
   const [deleteCheckInConfirm, setDeleteCheckInConfirm] = useState<MentoringCheckInItem | null>(null);
   const [deleteCheckInError, setDeleteCheckInError] = useState<string | null>(null);
   const [menteeUpdateOpenFor, setMenteeUpdateOpenFor] = useState<string | null>(null);
@@ -286,6 +299,8 @@ export function MentoringMilestoneTimeline({
         setMenteeUpdateOpenFor(null);
         setMenteeUpdateMessage("");
         setMenteeUpdateError(null);
+        setCheckInNeedsFollowUp(false);
+        setCheckInFollowUpDateYmd("");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -297,16 +312,20 @@ export function MentoringMilestoneTimeline({
   const closeModal = () => {
     setModal(null);
     setFormError(null);
+    setMilestoneModalOutcome("passed");
   };
 
   const closeCheckInModal = () => {
     setCheckInOpen(false);
     setCheckInEditId(null);
     setCheckInError(null);
+    setCheckInNeedsFollowUp(false);
+    setCheckInFollowUpDateYmd("");
   };
 
-  const openComplete = (milestoneType: string) => {
-    setModal({ milestoneType, mode: "complete" });
+  const openComplete = (milestoneType: string, milestoneId?: string) => {
+    setModal({ milestoneType, mode: "complete", milestoneId });
+    setMilestoneModalOutcome("passed");
     setNote("");
     setCompletedDateInput(ymdToDohDisplay(defaultCompletedDateYmd()));
     setFormError(null);
@@ -314,6 +333,7 @@ export function MentoringMilestoneTimeline({
 
   const openEdit = (m: MentoringMilestoneTimelineItem) => {
     setModal({ milestoneType: m.milestone_type, mode: "edit" });
+    setMilestoneModalOutcome("passed");
     setNote(m.completion_note ?? "");
     setCompletedDateInput(ymdToDohDisplay(milestoneCompletedYmd(m)));
     setFormError(null);
@@ -325,6 +345,8 @@ export function MentoringMilestoneTimeline({
     setCheckInNote("");
     setCheckInDateInput(ymdToDohDisplay(defaultCompletedDateYmd()));
     setCheckInError(null);
+    setCheckInNeedsFollowUp(false);
+    setCheckInFollowUpDateYmd("");
   };
 
   const openEditCheckIn = (ci: MentoringCheckInItem) => {
@@ -333,6 +355,10 @@ export function MentoringMilestoneTimeline({
     setCheckInNote(ci.note);
     setCheckInDateInput(ymdToDohDisplay(occurredYmd(ci)));
     setCheckInError(null);
+    const needs = ci.follow_up_category === "needs_admin_follow_up";
+    setCheckInNeedsFollowUp(needs);
+    const fu = ci.follow_up_date?.trim().slice(0, 10) ?? "";
+    setCheckInFollowUpDateYmd(/^\d{4}-\d{2}-\d{2}$/.test(fu) ? fu : "");
   };
 
   const normalizeDateFieldOnBlur = () => {
@@ -354,6 +380,32 @@ export function MentoringMilestoneTimeline({
     }
     setFormError(null);
     const { milestoneType, mode } = modal;
+    const itemForModal = items.find((x) => x.milestone_type === milestoneType);
+    const milestoneIdForAction = modal.milestoneId ?? itemForModal?.milestone_id;
+
+    if (mode === "complete" && milestoneModalOutcome === "failed") {
+      if (!milestoneIdForAction?.trim()) {
+        setFormError("Milestone could not be saved. Refresh and try again.");
+        return;
+      }
+      startTransition(async () => {
+        const result = await createFailedMilestoneAttempt({
+          assignmentId,
+          milestoneId: milestoneIdForAction.trim(),
+          milestoneType,
+          occurredOn: ymd,
+          note,
+        });
+        if (result.error) {
+          setFormError(result.error);
+          return;
+        }
+        closeModal();
+        router.refresh();
+      });
+      return;
+    }
+
     startTransition(async () => {
       const result =
         mode === "edit"
@@ -375,10 +427,25 @@ export function MentoringMilestoneTimeline({
       return;
     }
     setCheckInError(null);
+    const followUpYmdForServer =
+      checkInNeedsFollowUp && checkInFollowUpDateYmd.trim() ? checkInFollowUpDateYmd.trim() : null;
     startTransition(async () => {
       const result = checkInEditId
-        ? await updateMentorshipCheckIn(assignmentId, checkInEditId, ymd, checkInNote)
-        : await createMentorshipCheckIn(assignmentId, ymd, checkInNote);
+        ? await updateMentorshipCheckIn(
+            assignmentId,
+            checkInEditId,
+            ymd,
+            checkInNote,
+            checkInNeedsFollowUp,
+            followUpYmdForServer
+          )
+        : await createMentorshipCheckIn(
+            assignmentId,
+            ymd,
+            checkInNote,
+            checkInNeedsFollowUp,
+            followUpYmdForServer
+          );
       if (result.error) {
         setCheckInError(result.error);
         return;
@@ -418,12 +485,27 @@ export function MentoringMilestoneTimeline({
     });
   };
 
+  const renderCheckInFollowUpRow = (ci: MentoringCheckInItem) =>
+    ci.follow_up_category === "needs_admin_follow_up" ? (
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <span className={checkInFollowUpBadgeClass}>Follow-up</span>
+        {ci.follow_up_date && /^\d{4}-\d{2}-\d{2}$/.test(ci.follow_up_date.slice(0, 10)) ? (
+          <span className="text-[11px] tabular-nums text-slate-500">
+            {ymdToDohDisplay(ci.follow_up_date.slice(0, 10))}
+          </span>
+        ) : null}
+      </div>
+    ) : null;
+
   const renderAttachedCheckIns = (attached: MentoringCheckInItem[]) =>
     attached.map((ci) => (
       <div key={ci.id} className="mt-2 flex min-w-0 flex-row flex-wrap items-center justify-between gap-2">
-        <p className="min-w-0 flex-1 text-xs leading-relaxed text-amber-200/90">
-          <span className="font-semibold text-amber-400/90">Check-in:</span> {ci.note}
-        </p>
+        <div className="min-w-0 flex-1">
+          {renderCheckInFollowUpRow(ci)}
+          <p className="text-xs leading-relaxed text-amber-200/90">
+            <span className="font-semibold text-amber-400/90">Check-in:</span> {ci.note}
+          </p>
+        </div>
         {canEditMilestones ? (
           <div className="flex shrink-0 flex-nowrap items-center gap-1.5">
             <button type="button" onClick={() => openDeleteCheckInConfirm(ci)} className={checkInDeletePillClass}>
@@ -709,7 +791,7 @@ export function MentoringMilestoneTimeline({
               {canEditMilestones && !modalOpenHere ? (
                 <button
                   type="button"
-                  onClick={() => openComplete(m.milestone_type)}
+                  onClick={() => openComplete(m.milestone_type, m.milestone_id)}
                   className={`${timelineActionSizeClass} border-emerald-500/40 bg-emerald-500/15 text-emerald-200 antialiased transition-colors duration-200 hover:border-emerald-400/50 hover:bg-emerald-500/25 active:bg-emerald-500/20`}
                 >
                   Mark complete
@@ -725,6 +807,34 @@ export function MentoringMilestoneTimeline({
             </div>
           ) : null}
           {renderAttachedCheckIns(attached)}
+          {(() => {
+            const failedForMilestone = milestoneFailedAttempts.filter((a) =>
+              m.milestone_id ? a.milestone_id === m.milestone_id : a.milestone_type === m.milestone_type
+            );
+            if (failedForMilestone.length === 0) return null;
+            return (
+              <ul className="mt-2 space-y-2 border-t border-white/5 pt-2">
+                {failedForMilestone.map((att) => (
+                  <li
+                    key={att.id}
+                    className="rounded-md border border-red-500/25 bg-red-950/20 px-2.5 py-2 text-left"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-red-300/95">
+                        Failed attempt
+                      </span>
+                      <span className="text-xs tabular-nums text-red-200/85">
+                        {ymdToDohDisplay(String(att.occurred_on).trim().slice(0, 10))}
+                      </span>
+                    </div>
+                    {att.note?.trim() ? (
+                      <p className="mt-1 text-xs leading-relaxed text-slate-400">{att.note.trim()}</p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
         </div>
       </div>
     );
@@ -735,6 +845,7 @@ export function MentoringMilestoneTimeline({
       <p className="text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-amber-400/80">
         Check-in note
       </p>
+      {renderCheckInFollowUpRow(ci)}
       <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-nowrap sm:items-start sm:gap-3">
         <span className="min-w-0 w-full break-words text-sm leading-snug text-amber-50/95 sm:flex-1">
           {ci.note}
@@ -803,9 +914,43 @@ export function MentoringMilestoneTimeline({
               {modal.mode === "edit" ? `Edit completion · ${modalItem.title}` : modalItem.title}
             </h3>
 
+            {modal.mode === "complete" ? (
+              <div className="mt-3" role="group" aria-label="Milestone outcome">
+                <span className="text-xs font-medium text-slate-400">Outcome</span>
+                <div className="mt-1.5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMilestoneModalOutcome("passed")}
+                    disabled={isPending}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                      milestoneModalOutcome === "passed"
+                        ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200"
+                        : "border-white/10 bg-slate-950/50 text-slate-400 hover:border-white/15"
+                    }`}
+                  >
+                    Passed
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMilestoneModalOutcome("failed")}
+                    disabled={isPending}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                      milestoneModalOutcome === "failed"
+                        ? "border-red-500/45 bg-red-950/35 text-red-200"
+                        : "border-white/10 bg-slate-950/50 text-slate-400 hover:border-white/15"
+                    }`}
+                  >
+                    Failed
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="mt-3 flex flex-col gap-1.5 text-left">
               <label htmlFor="milestone-dialog-note" className="text-xs font-medium text-slate-400">
-                Note (optional)
+                {modal.mode === "complete" && milestoneModalOutcome === "failed"
+                  ? "Failure note (optional)"
+                  : "Note (optional)"}
               </label>
               <textarea
                 id="milestone-dialog-note"
@@ -820,7 +965,9 @@ export function MentoringMilestoneTimeline({
 
             <div className="mt-3 flex flex-col gap-1.5 text-left">
               <label htmlFor="milestone-dialog-date" className="text-xs font-medium text-slate-400">
-                Completed date
+                {modal.mode === "complete" && milestoneModalOutcome === "failed"
+                  ? "Occurred on"
+                  : "Completed date"}
               </label>
               <input
                 id="milestone-dialog-date"
@@ -855,7 +1002,11 @@ export function MentoringMilestoneTimeline({
                 type="button"
                 onClick={saveModal}
                 disabled={isPending}
-                className="min-h-[44px] rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-200 antialiased transition-colors duration-200 hover:border-emerald-400/55 hover:bg-emerald-500/25 active:bg-emerald-500/30 disabled:opacity-50 sm:order-2 sm:min-w-[6rem]"
+                className={`min-h-[44px] rounded-lg border px-4 py-2.5 text-sm font-semibold antialiased transition-colors duration-200 disabled:opacity-50 sm:order-2 sm:min-w-[6rem] ${
+                  modal.mode === "complete" && milestoneModalOutcome === "failed"
+                    ? "border-red-500/40 bg-red-950/30 text-red-200 hover:border-red-400/50 hover:bg-red-950/45 active:bg-red-950/50"
+                    : "border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:border-emerald-400/55 hover:bg-emerald-500/25 active:bg-emerald-500/30"
+                }`}
               >
                 {isPending ? "Saving…" : "Save"}
               </button>
@@ -900,6 +1051,38 @@ export function MentoringMilestoneTimeline({
                 placeholder="What did you cover or notice?"
                 className="min-h-[4.5rem] w-full resize-y rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/40 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 disabled:opacity-50"
               />
+            </div>
+
+            <div className="mt-3 flex flex-col gap-2 text-left">
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={checkInNeedsFollowUp}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setCheckInNeedsFollowUp(on);
+                    if (!on) setCheckInFollowUpDateYmd("");
+                  }}
+                  disabled={isPending}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/20 bg-slate-950/60 text-emerald-500 focus:ring-emerald-500/30 disabled:opacity-50"
+                />
+                <span className="text-xs font-medium leading-snug text-slate-300">Needs follow-up</span>
+              </label>
+              {checkInNeedsFollowUp ? (
+                <div className="flex flex-col gap-1.5 pl-0 sm:pl-6">
+                  <label htmlFor="check-in-follow-up-date" className="text-xs font-medium text-slate-400">
+                    Follow-up date (optional)
+                  </label>
+                  <input
+                    id="check-in-follow-up-date"
+                    type="date"
+                    value={checkInFollowUpDateYmd}
+                    onChange={(e) => setCheckInFollowUpDateYmd(e.target.value)}
+                    disabled={isPending}
+                    className="min-h-[44px] w-full rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-200 focus:border-emerald-500/40 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 disabled:opacity-50"
+                  />
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-3 flex flex-col gap-1.5 text-left">

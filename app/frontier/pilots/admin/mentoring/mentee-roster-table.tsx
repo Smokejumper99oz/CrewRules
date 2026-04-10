@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { formatUsPhoneStored } from "@/lib/format-us-phone";
 import type { MenteeRosterMentorOption } from "@/app/frontier/pilots/admin/mentoring/mentee-roster/mentee-roster-mentor-options";
@@ -74,6 +75,10 @@ export type MenteeRosterRow = {
   mentee_phone: string | null;
   mentor_email: string | null;
   mentor_phone: string | null;
+  /** Present when loader found ≥1 check-in with `follow_up_category = needs_admin_follow_up` for this assignment. */
+  has_admin_follow_up?: boolean;
+  /** Latest `follow_up_date` among flagged check-ins for this assignment, or null if none set. */
+  follow_up_date?: string | null;
 };
 
 type Props = {
@@ -81,6 +86,8 @@ type Props = {
   counts: { live: number; not_live: number; unassigned: number };
   /** Mentor picker data (reassignment UI); reserved until controls are wired. */
   mentorOptions: MenteeRosterMentorOption[];
+  /** When true (e.g. `?follow_up=1`), table shows only rows with `has_admin_follow_up`. */
+  initialFollowUpOnly?: boolean;
 };
 
 type MenteeStatusFilter = "all" | MenteeRosterStatus;
@@ -88,7 +95,12 @@ type MenteeStatusFilter = "all" | MenteeRosterStatus;
 const ROSTER_FILTER_INPUT_CLASS =
   "h-6 w-full max-w-full min-w-0 rounded border border-white/[0.07] bg-white/[0.03] px-1.5 text-[10px] leading-none text-slate-300 placeholder:text-slate-600 transition-colors hover:border-white/11 hover:bg-white/[0.055] focus:border-[#75C043]/35 focus:outline-none focus:ring-1 focus:ring-[#75C043]/18";
 
-export function MenteeRosterTable({ roster, counts: _countsFromServer, mentorOptions }: Props) {
+export function MenteeRosterTable({
+  roster,
+  counts: _countsFromServer,
+  mentorOptions,
+  initialFollowUpOnly = false,
+}: Props) {
   void _countsFromServer;
   const searchFieldId = useId();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -139,6 +151,9 @@ export function MenteeRosterTable({ roster, counts: _countsFromServer, mentorOpt
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = roster;
+    if (initialFollowUpOnly) {
+      list = list.filter((r) => r.has_admin_follow_up === true);
+    }
     if (q) {
       list = list.filter((r) => {
         const name = (r.name ?? "").toLowerCase();
@@ -154,7 +169,7 @@ export function MenteeRosterTable({ roster, counts: _countsFromServer, mentorOpt
       list = list.filter((r) => statusFromRow(r) === statusFilter);
     }
     return list;
-  }, [roster, search, classFilter, statusFilter]);
+  }, [roster, initialFollowUpOnly, search, classFilter, statusFilter]);
 
   const toggleContactId = (id: string) => {
     setOpenContactId((prev) => (prev === id ? null : id));
@@ -163,6 +178,19 @@ export function MenteeRosterTable({ roster, counts: _countsFromServer, mentorOpt
   return (
     <div className="min-w-0">
       <div className="mb-3 rounded-lg border border-white/5 bg-slate-950/35 px-2.5 py-1.5 lg:mb-2 lg:px-3 lg:py-1">
+        {initialFollowUpOnly ? (
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2 lg:mb-1.5 lg:pb-1.5">
+            <span className="inline-flex items-center rounded-md border border-sky-500/35 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-200/90">
+              Follow-up only
+            </span>
+            <Link
+              href="/frontier/pilots/admin/mentoring/mentee-roster"
+              className="shrink-0 text-[10px] font-medium text-slate-400 underline-offset-2 transition hover:text-slate-200 hover:underline"
+            >
+              Show all
+            </Link>
+          </div>
+        ) : null}
         <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-3">
           <div className="grid min-w-0 flex-1 grid-cols-1 gap-x-1.5 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3 sm:items-end">
             <div className="min-w-0 sm:max-w-[16rem] lg:max-w-[14rem]">

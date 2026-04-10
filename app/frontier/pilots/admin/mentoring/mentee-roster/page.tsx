@@ -163,7 +163,21 @@ async function loadMenteeRosterMentorPickerOptions(): Promise<MenteeRosterMentor
   return options;
 }
 
-export default async function FrontierPilotAdminMentoringMenteeRosterPage() {
+function followUpQueryMeansOnly(raw: string | string[] | undefined): boolean {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  if (v == null) return false;
+  const t = String(v).trim();
+  return t === "1" || t.toLowerCase() === "true";
+}
+
+type MenteeRosterPageProps = {
+  searchParams: Promise<{ follow_up?: string | string[] }>;
+};
+
+export default async function FrontierPilotAdminMentoringMenteeRosterPage({ searchParams }: MenteeRosterPageProps) {
+  const sp = await searchParams;
+  const initialFollowUpOnly = followUpQueryMeansOnly(sp.follow_up);
+
   const collectDohAudit = process.env.MENTEE_ROSTER_DOH_AUDIT === "1";
   const [{ roster, counts }, mentorOptions] = await Promise.all([
     loadFrontierPilotMenteeRosterPageData({
@@ -191,7 +205,12 @@ export default async function FrontierPilotAdminMentoringMenteeRosterPage() {
       {roster.length === 0 ? (
         <p className="text-sm text-slate-500">No roster rows yet.</p>
       ) : (
-        <MenteeRosterTable roster={roster} counts={counts} mentorOptions={mentorOptions} />
+        <MenteeRosterTable
+          roster={roster}
+          counts={counts}
+          mentorOptions={mentorOptions}
+          initialFollowUpOnly={initialFollowUpOnly}
+        />
       )}
     </div>
   );

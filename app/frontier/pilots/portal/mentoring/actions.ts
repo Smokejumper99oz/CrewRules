@@ -751,6 +751,7 @@ export type MenteeDetailRow = {
 };
 
 export type MenteeMilestoneRow = {
+  id: string;
   assignment_id: string;
   milestone_type: string;
   due_date: string;
@@ -759,11 +760,24 @@ export type MenteeMilestoneRow = {
   completed_at: string | null;
 };
 
+export type MentorshipMilestoneAttemptRow = {
+  id: string;
+  milestone_id: string;
+  assignment_id: string;
+  milestone_type: string;
+  outcome: "failed";
+  occurred_on: string;
+  note: string | null;
+  created_at: string;
+};
+
 export type MentorshipCheckInRow = {
   id: string;
   occurred_on: string;
   note: string;
   created_at: string;
+  follow_up_category: "none" | "needs_admin_follow_up";
+  follow_up_date: string | null;
 };
 
 export type MenteeMilestoneUpdateRow = {
@@ -779,11 +793,19 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
   milestones: MenteeMilestoneRow[];
   checkIns: MentorshipCheckInRow[];
   menteeMilestoneUpdates: MenteeMilestoneUpdateRow[];
+  milestoneFailedAttempts: MentorshipMilestoneAttemptRow[];
   error?: string;
 }> {
   const profile = await getProfile();
   if (!profile)
-    return { detail: null, milestones: [], checkIns: [], menteeMilestoneUpdates: [], error: "Not signed in" };
+    return {
+      detail: null,
+      milestones: [],
+      checkIns: [],
+      menteeMilestoneUpdates: [],
+      milestoneFailedAttempts: [],
+      error: "Not signed in",
+    };
 
   await linkMenteeToAssignments(profile.id, profile.employee_number);
   await linkMentorToAssignments(profile.id, profile.employee_number);
@@ -823,6 +845,7 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
         milestones: [],
         checkIns: [],
         menteeMilestoneUpdates: [],
+        milestoneFailedAttempts: [],
         error: assignmentError?.message ?? "Not found",
       };
     }
@@ -855,10 +878,19 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
       } | null;
     };
 
-    const [milestonesResInitial, interactionsRes, notesRes, checkInsRes, menteeUpdatesRes] = await Promise.all([
+    const [
+      milestonesResInitial,
+      interactionsRes,
+      notesRes,
+      checkInsRes,
+      menteeUpdatesRes,
+      milestoneAttemptsRes,
+    ] = await Promise.all([
       supabase
         .from("mentorship_milestones")
-        .select("assignment_id, milestone_type, due_date, completed_date, completion_note, completed_at")
+        .select(
+          "id, assignment_id, milestone_type, due_date, completed_date, completion_note, completed_at"
+        )
         .eq("assignment_id", assignmentId)
         .order("due_date", { ascending: true }),
       supabase
@@ -875,7 +907,7 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
         .limit(1),
       supabase
         .from("mentorship_check_ins")
-        .select("id, occurred_on, note, created_at")
+        .select("id, occurred_on, note, created_at, follow_up_category, follow_up_date")
         .eq("assignment_id", assignmentId)
         .order("occurred_on", { ascending: true })
         .order("created_at", { ascending: true }),
@@ -885,6 +917,14 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
         .eq("assignment_id", assignmentId)
         .in("milestone_type", ["type_rating", "oe_complete"])
         .order("created_at", { ascending: true }),
+      supabase
+        .from("mentorship_milestone_attempts")
+        .select(
+          "id, milestone_id, assignment_id, milestone_type, outcome, occurred_on, note, created_at"
+        )
+        .eq("assignment_id", assignmentId)
+        .order("occurred_on", { ascending: false })
+        .order("created_at", { ascending: false }),
     ]);
 
     let milestonesRaw: MenteeMilestoneRow[];
@@ -893,7 +933,7 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
     } else if (milestonesResInitial.error) {
       const fallback = await supabase
         .from("mentorship_milestones")
-        .select("assignment_id, milestone_type, due_date, completed_date, completion_note")
+        .select("id, assignment_id, milestone_type, due_date, completed_date, completion_note")
         .eq("assignment_id", assignmentId)
         .order("due_date", { ascending: true });
       milestonesRaw =
@@ -915,7 +955,9 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
     if (repairedIoeDue) {
       const { data: refetched, error: refetchErr } = await supabase
         .from("mentorship_milestones")
-        .select("assignment_id, milestone_type, due_date, completed_date, completion_note, completed_at")
+        .select(
+          "id, assignment_id, milestone_type, due_date, completed_date, completion_note, completed_at"
+        )
         .eq("assignment_id", assignmentId);
       if (!refetchErr && refetched) {
         milestonesRaw = refetched as MenteeMilestoneRow[];
@@ -925,12 +967,28 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
     const milestones = sortMilestonesByProgramOrder(milestonesRaw);
     const checkIns: MentorshipCheckInRow[] =
       !checkInsRes.error && checkInsRes.data
-        ? (checkInsRes.data as MentorshipCheckInRow[])
+        ? (checkInsRes.data as MentorshipCheckInRow[]).map((row) => ({
+            ...row,
+            follow_up_category:
+              row.follow_up_category === "needs_admin_follow_up" ? "needs_admin_follow_up" : "none",
+            follow_up_date:
+              row.follow_up_date != null && String(row.follow_up_date).trim() !== ""
+                ? String(row.follow_up_date).trim().slice(0, 10)
+                : null,
+          }))
         : [];
 
     const menteeMilestoneUpdates: MenteeMilestoneUpdateRow[] =
       !menteeUpdatesRes.error && menteeUpdatesRes.data
         ? (menteeUpdatesRes.data as MenteeMilestoneUpdateRow[])
+        : [];
+
+    const milestoneFailedAttempts: MentorshipMilestoneAttemptRow[] =
+      !milestoneAttemptsRes.error && milestoneAttemptsRes.data
+        ? (milestoneAttemptsRes.data as MentorshipMilestoneAttemptRow[]).map((row) => ({
+            ...row,
+            outcome: "failed" as const,
+          }))
         : [];
 
     const fromInteractions =
@@ -1077,13 +1135,14 @@ export async function getMenteeDetail(assignmentId: string): Promise<{
       staged_mentor_account_pending: isStagedMenteeDetail,
     };
 
-    return { detail, milestones, checkIns, menteeMilestoneUpdates };
+    return { detail, milestones, checkIns, menteeMilestoneUpdates, milestoneFailedAttempts };
   } catch (e) {
     return {
       detail: null,
       milestones: [],
       checkIns: [],
       menteeMilestoneUpdates: [],
+      milestoneFailedAttempts: [],
       error: e instanceof Error ? e.message : "Unknown error",
     };
   }
@@ -1199,10 +1258,34 @@ export async function deleteLatestMenteeMilestoneUpdate(input: {
   return { ok: true };
 }
 
+function resolveMentorshipCheckInFollowUpFields(
+  needsFollowUp: boolean | undefined,
+  followUpDateYmd: string | null | undefined
+):
+  | { follow_up_category: "none" | "needs_admin_follow_up"; follow_up_date: string | null }
+  | { error: string } {
+  if (!needsFollowUp) {
+    return { follow_up_category: "none", follow_up_date: null };
+  }
+  const raw = (followUpDateYmd ?? "").trim();
+  if (!raw) {
+    return { follow_up_category: "needs_admin_follow_up", follow_up_date: null };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return { error: "Invalid follow-up date." };
+  }
+  if (Number.isNaN(new Date(`${raw}T12:00:00.000Z`).getTime())) {
+    return { error: "Invalid follow-up date." };
+  }
+  return { follow_up_category: "needs_admin_follow_up", follow_up_date: raw };
+}
+
 export async function createMentorshipCheckIn(
   assignmentId: string,
   occurredOnYmd: string,
-  note: string
+  note: string,
+  needsFollowUp?: boolean,
+  followUpDateYmd?: string | null
 ): Promise<{ ok?: true; error?: string }> {
   const trimmedNote = note.trim();
   if (!trimmedNote) return { error: "Note cannot be empty." };
@@ -1212,6 +1295,9 @@ export async function createMentorshipCheckIn(
   if (Number.isNaN(new Date(`${ymd}T12:00:00.000Z`).getTime())) {
     return { error: "Invalid date." };
   }
+
+  const follow = resolveMentorshipCheckInFollowUpFields(needsFollowUp, followUpDateYmd);
+  if ("error" in follow) return { error: follow.error };
 
   const profile = await getProfile();
   if (!profile) return { error: "Not signed in" };
@@ -1234,6 +1320,8 @@ export async function createMentorshipCheckIn(
     assignment_id: assignmentId,
     occurred_on: ymd,
     note: trimmedNote,
+    follow_up_category: follow.follow_up_category,
+    follow_up_date: follow.follow_up_date,
   });
 
   if (insErr) return { error: insErr.message };
@@ -1247,7 +1335,9 @@ export async function updateMentorshipCheckIn(
   assignmentId: string,
   checkInId: string,
   occurredOnYmd: string,
-  note: string
+  note: string,
+  needsFollowUp?: boolean,
+  followUpDateYmd?: string | null
 ): Promise<{ ok?: true; error?: string }> {
   const trimmedNote = note.trim();
   if (!trimmedNote) return { error: "Note cannot be empty." };
@@ -1257,6 +1347,9 @@ export async function updateMentorshipCheckIn(
   if (Number.isNaN(new Date(`${ymd}T12:00:00.000Z`).getTime())) {
     return { error: "Invalid date." };
   }
+
+  const follow = resolveMentorshipCheckInFollowUpFields(needsFollowUp, followUpDateYmd);
+  if ("error" in follow) return { error: follow.error };
 
   const profile = await getProfile();
   if (!profile) return { error: "Not signed in" };
@@ -1288,7 +1381,12 @@ export async function updateMentorshipCheckIn(
 
   const { error: updErr } = await supabase
     .from("mentorship_check_ins")
-    .update({ occurred_on: ymd, note: trimmedNote })
+    .update({
+      occurred_on: ymd,
+      note: trimmedNote,
+      follow_up_category: follow.follow_up_category,
+      follow_up_date: follow.follow_up_date,
+    })
     .eq("id", checkInId);
 
   if (updErr) return { error: updErr.message };
@@ -1410,6 +1508,52 @@ export async function completeMentorshipMilestoneFormState(
   return { error: null };
 }
 
+/** Service role: resolve open admin reviews when the milestone is passed (does not touch attempts or milestones). */
+async function autoResolveOpenFailedMilestoneReviewsAfterPass(
+  assignmentId: string,
+  milestoneType: string
+): Promise<void> {
+  const aid = assignmentId.trim();
+  const mtype = milestoneType.trim();
+  const admin = createAdminClient();
+
+  const { data: milestoneRow, error: milestoneErr } = await admin
+    .from("mentorship_milestones")
+    .select("id")
+    .eq("assignment_id", aid)
+    .eq("milestone_type", mtype)
+    .maybeSingle();
+
+  if (milestoneErr) {
+    console.error("autoResolveOpenFailedMilestoneReviewsAfterPass: milestone lookup", milestoneErr);
+    return;
+  }
+  if (!milestoneRow?.id) return;
+
+  const { data: attemptRows, error: attemptsErr } = await admin
+    .from("mentorship_milestone_attempts")
+    .select("id")
+    .eq("milestone_id", milestoneRow.id);
+
+  if (attemptsErr) {
+    console.error("autoResolveOpenFailedMilestoneReviewsAfterPass: attempts lookup", attemptsErr);
+    return;
+  }
+
+  const attemptIds = (attemptRows ?? []).map((r) => r.id).filter(Boolean);
+  if (attemptIds.length === 0) return;
+
+  const { error: updateErr } = await admin.from("mentorship_milestone_attempt_reviews").update({
+    status: "resolved",
+    resolved_at: new Date().toISOString(),
+    resolved_note: "Auto-resolved: milestone passed.",
+  }).in("attempt_id", attemptIds).eq("status", "open");
+
+  if (updateErr) {
+    console.error("autoResolveOpenFailedMilestoneReviewsAfterPass: review update", updateErr);
+  }
+}
+
 export async function completeMentorshipMilestone(
   assignmentId: string,
   milestoneType: string,
@@ -1458,6 +1602,110 @@ export async function completeMentorshipMilestone(
   });
 
   if (rpcErr) return { error: milestoneCompletionErrorMessage(rpcErr.message) };
+
+  await autoResolveOpenFailedMilestoneReviewsAfterPass(aid, mtype);
+
+  revalidatePath("/frontier/pilots/portal/mentoring");
+  revalidatePath(`/frontier/pilots/portal/mentoring/${aid}`);
+  return { ok: true };
+}
+
+/** Mentor only: record a failed milestone attempt without changing `mentorship_milestones` or calling completion RPCs. */
+export async function createFailedMilestoneAttempt(input: {
+  assignmentId: string;
+  milestoneId: string;
+  milestoneType: string;
+  occurredOn: string;
+  note?: string | null;
+}): Promise<{ ok?: true; error?: string }> {
+  const aid = input.assignmentId.trim();
+  const mid = input.milestoneId.trim();
+  const mtype = input.milestoneType.trim();
+  if (!aid) return { error: "Assignment not found." };
+  if (!mid) return { error: "Milestone not found." };
+  if (!mtype) return { error: "Milestone not found." };
+
+  const rawOccurred = (input.occurredOn ?? "").trim();
+  if (!rawOccurred) return { error: "Occurred date is required." };
+  const occurredResolved = resolveMilestoneCompletedDate(rawOccurred);
+  if ("error" in occurredResolved) return { error: occurredResolved.error };
+
+  const noteTrim = (input.note ?? "").trim();
+  const noteValue = noteTrim.length > 0 ? noteTrim : null;
+
+  const profile = await getProfile();
+  if (!profile) return { error: "Not signed in" };
+
+  await linkMenteeToAssignments(profile.id, profile.employee_number);
+  await linkMentorToAssignments(profile.id, profile.employee_number);
+  if (profile.employee_number?.trim() && profile.tenant?.trim()) {
+    await linkMentorToPreload(profile.id, profile.employee_number, profile.tenant);
+  }
+
+  const supabase = await createClient();
+
+  const { data: assignmentRow, error: assignmentError } = await supabase
+    .from("mentor_assignments")
+    .select("id, mentor_user_id")
+    .eq("id", aid)
+    .maybeSingle();
+
+  if (assignmentError) return { error: assignmentError.message };
+  if (!assignmentRow?.id) return { error: "Assignment not found." };
+  if (assignmentRow.mentor_user_id !== profile.id) {
+    return { error: "Only the assigned mentor can record a failed attempt." };
+  }
+
+  const { data: milestoneRow, error: milestoneErr } = await supabase
+    .from("mentorship_milestones")
+    .select("id, assignment_id, milestone_type")
+    .eq("id", mid)
+    .eq("assignment_id", aid)
+    .maybeSingle();
+
+  if (milestoneErr) return { error: milestoneErr.message };
+  if (!milestoneRow) return { error: "Milestone not found." };
+  if (milestoneRow.milestone_type !== mtype) {
+    return { error: "Milestone not found." };
+  }
+
+  const { data: insertedAttempt, error: insertErr } = await supabase
+    .from("mentorship_milestone_attempts")
+    .insert({
+      milestone_id: mid,
+      assignment_id: aid,
+      milestone_type: mtype,
+      outcome: "failed",
+      occurred_on: occurredResolved.date,
+      note: noteValue,
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (insertErr) return { error: insertErr.message };
+  const attemptId = insertedAttempt?.id?.trim();
+  if (!attemptId) return { error: "Failed to record attempt." };
+
+  const admin = createAdminClient();
+  const { error: reviewErr } = await admin.from("mentorship_milestone_attempt_reviews").insert({
+    attempt_id: attemptId,
+    status: "open",
+  });
+
+  if (reviewErr) {
+    const code = (reviewErr as { code?: string }).code;
+    if (code === "23505") {
+      // Duplicate review row: treat as success (idempotent with existing review).
+    } else {
+      // Attempt and review are separate commits; without this delete a failed review insert leaves an
+      // orphan attempt and breaks the admin dashboard (open reviews are inner-joined to attempts).
+      const { error: rollbackErr } = await admin.from("mentorship_milestone_attempts").delete().eq("id", attemptId);
+      if (rollbackErr) {
+        console.error("createFailedMilestoneAttempt: rollback delete failed", rollbackErr);
+      }
+      return { error: reviewErr.message };
+    }
+  }
 
   revalidatePath("/frontier/pilots/portal/mentoring");
   revalidatePath(`/frontier/pilots/portal/mentoring/${aid}`);

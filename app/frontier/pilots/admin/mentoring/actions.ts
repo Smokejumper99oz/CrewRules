@@ -1390,3 +1390,95 @@ export async function updateFrontierPilotAdminMentorPreloadFromRoster(
   revalidatePath("/frontier/pilots/admin/mentoring/mentor-roster");
   return {};
 }
+
+/** Tenant admin: mark an open failed-milestone review as resolved (review row only). */
+export async function resolveFailedMilestoneReview(input: {
+  attemptId: string;
+  note?: string | null;
+}): Promise<{ ok?: true; error?: string }> {
+  const gate = await ensureFrontierPilotsTenantAdmin();
+  if (gate.error) return { error: gate.error };
+
+  const attemptId = input.attemptId.trim();
+  if (!attemptId) return { error: "Invalid attempt." };
+
+  const noteTrim = (input.note ?? "").trim();
+  const resolvedNote = noteTrim.length > 0 ? noteTrim : null;
+
+  const admin = createAdminClient();
+  const nowIso = new Date().toISOString();
+
+  const { data: review, error: fetchErr } = await admin
+    .from("mentorship_milestone_attempt_reviews")
+    .select("attempt_id, status")
+    .eq("attempt_id", attemptId)
+    .maybeSingle();
+
+  if (fetchErr) return { error: fetchErr.message };
+  if (!review) return { error: "Review not found." };
+  if (String((review as { status: string }).status) !== "open") {
+    return { error: "Review is not open." };
+  }
+
+  const { error: updErr } = await admin
+    .from("mentorship_milestone_attempt_reviews")
+    .update({
+      status: "resolved",
+      resolved_at: nowIso,
+      resolved_note: resolvedNote,
+    })
+    .eq("attempt_id", attemptId)
+    .eq("status", "open");
+
+  if (updErr) return { error: updErr.message };
+
+  revalidatePath("/frontier/pilots/admin");
+  revalidatePath("/frontier/pilots/admin/mentoring");
+  return { ok: true };
+}
+
+/** Tenant admin: archive an open failed-milestone review (review row only). */
+export async function archiveFailedMilestoneReview(input: {
+  attemptId: string;
+  reason?: string | null;
+}): Promise<{ ok?: true; error?: string }> {
+  const gate = await ensureFrontierPilotsTenantAdmin();
+  if (gate.error) return { error: gate.error };
+
+  const attemptId = input.attemptId.trim();
+  if (!attemptId) return { error: "Invalid attempt." };
+
+  const reasonTrim = (input.reason ?? "").trim();
+  const archivedReason = reasonTrim.length > 0 ? reasonTrim : null;
+
+  const admin = createAdminClient();
+  const nowIso = new Date().toISOString();
+
+  const { data: review, error: fetchErr } = await admin
+    .from("mentorship_milestone_attempt_reviews")
+    .select("attempt_id, status")
+    .eq("attempt_id", attemptId)
+    .maybeSingle();
+
+  if (fetchErr) return { error: fetchErr.message };
+  if (!review) return { error: "Review not found." };
+  if (String((review as { status: string }).status) !== "open") {
+    return { error: "Review is not open." };
+  }
+
+  const { error: updErr } = await admin
+    .from("mentorship_milestone_attempt_reviews")
+    .update({
+      status: "archived",
+      archived_at: nowIso,
+      archived_reason: archivedReason,
+    })
+    .eq("attempt_id", attemptId)
+    .eq("status", "open");
+
+  if (updErr) return { error: updErr.message };
+
+  revalidatePath("/frontier/pilots/admin");
+  revalidatePath("/frontier/pilots/admin/mentoring");
+  return { ok: true };
+}
