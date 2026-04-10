@@ -85,6 +85,7 @@ export default async function WeatherBriefPage() {
       : null;
   const filedRoute = filedResult?.route ?? null;
   const liveStatus = filedResult?.status ?? null;
+  const filedRouteState = filedResult?.filedRouteState ?? "unavailable";
 
   if (
     nextFlight.status === "flight" &&
@@ -151,7 +152,7 @@ export default async function WeatherBriefPage() {
       <WeatherRefreshTrigger departureIso={departureIso ?? null} />
       <FlightHeader flight={flightWithLiveStatus} />
       {nextFlight.status === "flight" && (
-        <FiledRouteCard flight={nextFlight} routeText={filedRoute} />
+        <FiledRouteCard flight={nextFlight} routeText={filedRoute} filedRouteState={filedRouteState} />
       )}
       <PilotSummary lines={pilotSummary.lines} />
       <RiskSummary

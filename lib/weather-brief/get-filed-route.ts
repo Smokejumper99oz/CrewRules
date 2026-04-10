@@ -2,6 +2,9 @@ import { fetchFiledRouteWithFallback, buildIdent } from "@/lib/filed-route/fligh
 import type { FlightLiveStatus } from "./types";
 import { getCachedRoute, storeRouteInCache } from "./flight-route-cache";
 
+/** Weather Brief filed-route UX state; does not affect fetch or cache behavior. */
+export type FiledRouteState = "ok" | "pending_in_feed" | "unavailable";
+
 export type RouteLookup = {
   flightNumber: string | null;
   origin: string;
@@ -34,13 +37,23 @@ function lastCheckedWithinCooldown(lastChecked: string): boolean {
   return elapsed < REFRESH_COOLDOWN_MS;
 }
 
+function filedRouteStateFor(
+  route: string | null | undefined,
+  pendingInFeed: boolean
+): FiledRouteState {
+  if (route && String(route).trim()) return "ok";
+  if (pendingInFeed) return "pending_in_feed";
+  return "unavailable";
+}
+
 export async function getFiledRoute(
   lookup: RouteLookup
-): Promise<{ route: string | null; status: FlightLiveStatus | null }> {
-  if (!lookup.flightNumber) return { route: null, status: null };
+): Promise<{ route: string | null; status: FlightLiveStatus | null; filedRouteState: FiledRouteState }> {
+  if (!lookup.flightNumber)
+    return { route: null, status: null, filedRouteState: "unavailable" };
 
   const ident = buildIdent(lookup);
-  if (!ident) return { route: null, status: null };
+  if (!ident) return { route: null, status: null, filedRouteState: "unavailable" };
 
   const departureIso = lookup.departureIso ?? null;
 
@@ -53,7 +66,8 @@ export async function getFiledRoute(
     departureIso,
   });
 
-  if (!process.env.FLIGHTAWARE_API_KEY) return { route: null, status: null };
+  if (!process.env.FLIGHTAWARE_API_KEY)
+    return { route: null, status: null, filedRouteState: "unavailable" };
 
   if (departureIso) {
     const departed = isDeparted(departureIso);
@@ -61,23 +75,37 @@ export async function getFiledRoute(
 
     if (cached) {
       if (departed && !isWithinAllowedWindow(departureIso)) {
-        return { route: cached.route, status: null };
+        return { route: cached.route, status: null, filedRouteState: "ok" };
       }
       if (lastCheckedWithinCooldown(cached.last_checked)) {
-        return { route: cached.route, status: null };
+        return { route: cached.route, status: null, filedRouteState: "ok" };
       }
       if (!isWithinAllowedWindow(departureIso)) {
-        return { route: cached.route, status: null };
+        return { route: cached.route, status: null, filedRouteState: "ok" };
       }
     }
 
-    if (departed && !isWithinAllowedWindow(departureIso)) return { route: cached?.route ?? null, status: null };
-    if (!isWithinAllowedWindow(departureIso)) return { route: cached?.route ?? null, status: null };
+    if (departed && !isWithinAllowedWindow(departureIso)) {
+      const route = cached?.route ?? null;
+      return {
+        route,
+        status: null,
+        filedRouteState: filedRouteStateFor(route, false),
+      };
+    }
+    if (!isWithinAllowedWindow(departureIso)) {
+      const route = cached?.route ?? null;
+      return {
+        route,
+        status: null,
+        filedRouteState: filedRouteStateFor(route, false),
+      };
+    }
   } else {
-    return { route: null, status: null };
+    return { route: null, status: null, filedRouteState: "unavailable" };
   }
 
-  const { route, status } = await fetchFiledRouteWithFallback(lookup);
+  const { route, status, routeNullKind } = await fetchFiledRouteWithFallback(lookup);
   if (route && departureIso) {
     await storeRouteInCache(
       ident,
@@ -87,5 +115,10 @@ export async function getFiledRoute(
       route
     );
   }
-  return { route: route ?? null, status };
+  const r = route ?? null;
+  return {
+    route: r,
+    status,
+    filedRouteState: filedRouteStateFor(r, routeNullKind === "pending_in_feed"),
+  };
 }

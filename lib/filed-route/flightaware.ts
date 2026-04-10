@@ -64,9 +64,15 @@ function logFlightAwareUsage(lookup: RouteLookup, ident: string): void {
   })();
 }
 
+export type FlightAwareRouteNullKind = "pending_in_feed";
+
 export async function fetchFiledRouteFromFlightAware(
   lookup: RouteLookup
-): Promise<{ route: string | null; status: FlightLiveStatus | null }> {
+): Promise<{
+  route: string | null;
+  status: FlightLiveStatus | null;
+  routeNullKind?: FlightAwareRouteNullKind;
+}> {
   const apiKey = process.env.FLIGHTAWARE_API_KEY;
 
   if (!apiKey || !lookup.flightNumber) return { route: null, status: null };
@@ -235,7 +241,7 @@ export async function fetchFiledRouteFromFlightAware(
       targetDepartureIso,
       matchedDeparture: matchedDep,
     });
-    return { route: null, status };
+    return { route: null, status, routeNullKind: "pending_in_feed" };
   } catch (error) {
     console.log("[flightaware] lookup error:", error);
     return { route: null, status: null };
@@ -318,11 +324,16 @@ async function tryAeroDataBoxFallback(
  */
 export async function fetchFiledRouteWithFallback(
   lookup: RouteLookup
-): Promise<{ route: string | null; status: FlightLiveStatus | null }> {
+): Promise<{
+  route: string | null;
+  status: FlightLiveStatus | null;
+  routeNullKind?: FlightAwareRouteNullKind;
+}> {
   const faResult = await fetchFiledRouteFromFlightAware(lookup);
   const adbStatus = faResult.status === null ? await tryAeroDataBoxFallback(lookup) : null;
   return {
     route: faResult.route ?? null,
     status: adbStatus ?? faResult.status ?? null,
+    routeNullKind: faResult.routeNullKind,
   };
 }

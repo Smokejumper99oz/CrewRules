@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { NextFlight } from "@/lib/weather-brief/types";
+import type { FiledRouteState } from "@/lib/weather-brief/get-filed-route";
 import { Route, Copy, Check } from "lucide-react";
 import { normalizeRoute } from "@/lib/filed-route/normalize-route";
 
@@ -9,9 +10,17 @@ type Props = {
   flight: NextFlight;
   routeText?: string | null;
   loading?: boolean;
+  /** When `routeText` is empty, chooses fallback copy. Defaults to `unavailable`. */
+  filedRouteState?: FiledRouteState;
 };
 
-export default function FiledRouteCard({ flight, routeText, loading }: Props) {
+const PENDING_IN_FEED_COPY =
+  "Route not yet available from FlightAware. Public route data may appear late even when flight status is available. Verify routing in dispatch release or ForeFlight.";
+
+const UNAVAILABLE_COPY =
+  "Unable to load route data. Please verify routing via dispatch or ForeFlight.";
+
+export default function FiledRouteCard({ flight, routeText, loading, filedRouteState = "unavailable" }: Props) {
   const [copied, setCopied] = useState(false);
   const raw = (flight.flightNumber ?? "").trim();
   const numeric = raw.replace(/^(F9|FFT)\s*/i, "").replace(/\D/g, "") || raw.replace(/\D/g, "");
@@ -53,7 +62,7 @@ export default function FiledRouteCard({ flight, routeText, loading }: Props) {
             displayRoute
           ) : (
             <span className="text-slate-400">
-              {"Filed route not yet available. Routes typically appear closer to departure time."}
+              {filedRouteState === "pending_in_feed" ? PENDING_IN_FEED_COPY : UNAVAILABLE_COPY}
             </span>
           )}
         </span>
