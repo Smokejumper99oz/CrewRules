@@ -593,6 +593,31 @@ function findCompanionTripForTraining(
   return candidates[0] ?? null;
 }
 
+/**
+ * True when this trip row is the deadhead/leg carrier for a `training` event (same pairing title + overlap).
+ * Those rows must not be picked as their own "next duty" hero — the training row represents the block.
+ */
+export function isScheduleTripTrainingCompanion(trip: ScheduleEvent, allEvents: ScheduleEvent[]): boolean {
+  if (trip.event_type !== "trip") return false;
+  return allEvents.some((t) => {
+    if (t.event_type !== "training") return false;
+    const c = findCompanionTripForTraining(t, allEvents);
+    return c?.id === trip.id;
+  });
+}
+
+/** Legs for hero card overnight/route: training credit row often has legs on the companion trip. */
+export function getScheduleEventLegsForHero(
+  event: ScheduleEvent,
+  allEvents: ScheduleEvent[]
+): ScheduleEventLeg[] {
+  if (event.event_type === "training") {
+    const companion = findCompanionTripForTraining(event, allEvents);
+    return ((companion?.legs ?? event.legs ?? []) as ScheduleEventLeg[]) ?? [];
+  }
+  return (event.legs ?? []) as ScheduleEventLeg[];
+}
+
 /** Training city IATA from deadhead legs (furthest non-base destination by block time). */
 function extractTrainingCityIataFromLegs(
   legs: ScheduleEventLeg[] | null | undefined,
@@ -783,7 +808,10 @@ function getStatusForDay(
 
       const nextTrips = events
         .filter(
-          (e) => e.event_type === "trip" && e.start_time > primary.end_time
+          (e) =>
+            e.event_type === "trip" &&
+            e.start_time > primary.end_time &&
+            !isScheduleTripTrainingCompanion(e, events)
         )
         .sort((a, b) => a.start_time.localeCompare(b.start_time));
       const nextTrip = nextTrips[0];
@@ -1067,11 +1095,16 @@ export function getNextTripSummary(
   const filtered = filterScheduleEvents(events);
   const now = new Date().toISOString();
 
-  const upcomingTrips = filtered
-    .filter((e) => e.event_type === "trip" && e.end_time > now)
-    .sort((a, b) => a.start_time.localeCompare(b.start_time));
-
-  const next = upcomingTrips[0];
+  const upcomingTraining = filtered.filter((e) => e.event_type === "training" && e.end_time > now);
+  const upcomingTrips = filtered.filter(
+    (e) =>
+      e.event_type === "trip" &&
+      e.end_time > now &&
+      !isScheduleTripTrainingCompanion(e, filtered)
+  );
+  const next = [...upcomingTraining, ...upcomingTrips].sort((a, b) =>
+    a.start_time.localeCompare(b.start_time)
+  )[0];
   if (!next) return null;
 
   const tripDates = getTripDateStrings(next.start_time, next.end_time, baseTimezone);
@@ -1082,11 +1115,13 @@ export function getNextTripSummary(
   const baseIata = (profile?.base_airport ?? "").trim().toUpperCase();
   const homeIata = (profile?.home_airport ?? "").trim().toUpperCase();
 
+  const heroLegs = getScheduleEventLegsForHero(next, filtered);
+
   let overnightCities: string[] = [];
   let overnightNightsCount = 0;
-  if (settings.showOvernightCities && next.legs?.length) {
+  if (settings.showOvernightCities && heroLegs.length) {
     const { overnightCities: rawCities, nightsByCity } = getOvernightCitiesAndNightsFromLegs(
-      next.legs,
+      heroLegs,
       tripDates,
       baseTimezone
     );
@@ -1099,7 +1134,9 @@ export function getNextTripSummary(
   }
 
   const commuteInfo =
-    settings.showCommuteEstimates ? getCommuteInfoForTrip(next, profile, baseTimezone) : null;
+    settings.showCommuteEstimates && next.event_type === "trip"
+      ? getCommuteInfoForTrip(next, profile, baseTimezone)
+      : null;
 
   const baseAirport = (profile?.base_airport ?? "").trim() || null;
   const homeAirport = (profile?.home_airport ?? "").trim() || null;
@@ -1316,7 +1353,12 @@ export function getBetweenTripStatus(
 ): BetweenTripStatus {
   const filtered = filterScheduleEvents(events);
   const futureTrips = filtered
-    .filter((e) => e.event_type === "trip" && e.start_time > currentTrip.end_time)
+    .filter(
+      (e) =>
+        e.event_type === "trip" &&
+        e.start_time > currentTrip.end_time &&
+        !isScheduleTripTrainingCompanion(e, filtered)
+    )
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
   const nextTrip = futureTrips[0];
 
@@ -1341,7 +1383,7 @@ export function getBetweenTripStatus(
 
   // Home-base trip: if the current trip's last leg lands at home airport,
   // the pilot is already home when the trip ends — no commute needed.
-  const currentTripLegs = (currentTrip.legs ?? []) as ScheduleEventLeg[];
+  const currentTripLegs = getScheduleEventLegsForHero(currentTrip, filtered);
   const lastCurrentTripLeg = currentTripLegs.length > 0 ? currentTripLegs[currentTripLegs.length - 1] : null;
   if (homeAirport.length === 3 && (lastCurrentTripLeg?.destination ?? "").trim().toUpperCase() === homeAirport) {
     return { gapHours, likelyComesHome: true, warningMessage: null, nextTripStartLabel: null };

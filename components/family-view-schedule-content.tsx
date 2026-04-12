@@ -25,6 +25,8 @@ import {
   getFamilyViewSettings,
   getTripDayItems,
   getBetweenTripStatus,
+  getScheduleEventLegsForHero,
+  isScheduleTripTrainingCompanion,
   formatStatusForDisplay,
   formatLegHhmmForFamilyView,
   formatFamilyViewInstantForDisplay,
@@ -136,6 +138,7 @@ export async function FamilyViewScheduleContent({
       ? commuteHomeLineAfterLanding(s, todayStatus.dutyEndIsoUtc, baseTimezone, settings) ?? (settings.showCommuteEstimates ? s.timingDepends : null)
       : null;
   const nextTrip = getNextTripSummary(events, profile, baseTimezone, settings);
+  const heroScheduleLegs = nextTrip ? getScheduleEventLegsForHero(nextTrip.event, events) : [];
   /** Calendar days (base TZ) covered by the Current/Next Trip hero — exclude from Week Ahead & Upcoming. */
   const heroTripCalendarDays =
     nextTrip != null
@@ -190,6 +193,7 @@ export async function FamilyViewScheduleContent({
   const daysAway = nextTrip
     ? await getDaysAwayFromHome({
         trip: nextTrip.event,
+        allEvents: events,
         profile,
         baseTimezone,
         settings,
@@ -271,7 +275,12 @@ export async function FamilyViewScheduleContent({
 
   // Used to localize the "Next trip starts …" label in the between-trip warning
   const afterCurrentTripEvent = nextTrip
-    ? events.find((e) => e.event_type === "trip" && e.start_time > nextTrip.event.end_time) ?? null
+    ? events.find(
+        (e) =>
+          e.event_type === "trip" &&
+          e.start_time > nextTrip.event.end_time &&
+          !isScheduleTripTrainingCompanion(e, events)
+      ) ?? null
     : null;
   const afterCurrentTripFirstDayStr = afterCurrentTripEvent
     ? formatInTimeZone(new Date(afterCurrentTripEvent.start_time), baseTimezone, "yyyy-MM-dd")
@@ -378,11 +387,11 @@ export async function FamilyViewScheduleContent({
     todayStatus.status === "Likely Commuting" &&
     nextTrip?.commuteInfo &&
     profile?.home_airport &&
-    (profile?.base_airport || nextTrip.event.legs?.[0]?.origin)
+    (profile?.base_airport || heroScheduleLegs[0]?.origin)
   ) {
     const origin = (profile.home_airport ?? "").trim().toUpperCase();
     const destination = (
-      nextTrip.event.legs?.[0]?.origin ?? profile.base_airport ?? ""
+      heroScheduleLegs[0]?.origin ?? profile.base_airport ?? ""
     )
       .trim()
       .toUpperCase();
@@ -804,7 +813,7 @@ export async function FamilyViewScheduleContent({
                     ? formatFamilyViewInstantForDisplay(nextTrip.event.start_time, baseTimezone, settings, lang === "de")
                     : null;
                   // Last duty day — toggle-aware end time + city via helper
-                  const tripLegs = nextTrip.event.legs ?? [];
+                  const tripLegs = heroScheduleLegs;
                   const lastLegDestIata = tripLegs.length > 0
                     ? (tripLegs[tripLegs.length - 1]!.destination ?? "").trim().toUpperCase()
                     : null;

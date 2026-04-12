@@ -8,9 +8,9 @@ import { subMinutes, addMinutes, differenceInCalendarDays } from "date-fns";
 import { getTripDateStrings } from "@/lib/leg-dates";
 import { addDay } from "@/lib/schedule-time";
 import { isCommuter, getCommuteInfoForTrip } from "./commute-inference";
-import type { ScheduleEvent } from "@/app/frontier/pilots/portal/schedule/actions";
+import type { ScheduleEvent, ScheduleEventLeg } from "@/app/frontier/pilots/portal/schedule/actions";
 import type { Profile } from "@/lib/profile";
-import type { FamilyViewSettings } from "./translate-schedule";
+import { getScheduleEventLegsForHero, type FamilyViewSettings } from "./translate-schedule";
 
 /** Parse report_time (HH:MM or HHMM) to minutes since midnight. */
 function reportTimeToMinutes(reportTime: string | undefined | null): number | null {
@@ -62,6 +62,8 @@ function getReturnHomeDateFromFlights(
 
 type GetDaysAwayInput = {
   trip: ScheduleEvent;
+  /** Full schedule (non-muted events); used to resolve training companion legs for `event_type === "training"`. */
+  allEvents?: ScheduleEvent[];
   profile: Profile | null;
   baseTimezone: string;
   settings: FamilyViewSettings;
@@ -77,12 +79,17 @@ type GetDaysAwayInput = {
  * Returns inclusive count (e.g. Mar 13–16 = 4 days). Always >= 1.
  */
 export async function getDaysAwayFromHome(input: GetDaysAwayInput): Promise<number> {
-  const { trip, profile, baseTimezone, settings, getCommuteFlights } = input;
+  const { trip, allEvents, profile, baseTimezone, settings, getCommuteFlights } = input;
   const tripDates = getTripDateStrings(trip.start_time, trip.end_time, baseTimezone);
   if (tripDates.length === 0) return 1;
 
   const firstDutyDate = tripDates[0];
   const lastDutyDate = tripDates[tripDates.length - 1];
+
+  const legs: ScheduleEventLeg[] =
+    allEvents?.length != null && allEvents.length > 0
+      ? getScheduleEventLegsForHero(trip, allEvents)
+      : ((trip.legs ?? []) as ScheduleEventLeg[]);
 
   let leaveHomeDate = firstDutyDate;
   let returnHomeDate = lastDutyDate;
@@ -93,9 +100,9 @@ export async function getDaysAwayFromHome(input: GetDaysAwayInput): Promise<numb
   } else {
     const homeAirport = (profile?.home_airport ?? "").trim().toUpperCase();
     const baseAirport = (profile?.base_airport ?? "").trim().toUpperCase();
-    const dutyStartAirport = trip.legs?.[0]?.origin?.trim().toUpperCase() ?? baseAirport;
-    const dutyEndAirport = trip.legs?.length
-      ? (trip.legs[trip.legs.length - 1]?.destination?.trim().toUpperCase() ?? baseAirport)
+    const dutyStartAirport = legs[0]?.origin?.trim().toUpperCase() ?? baseAirport;
+    const dutyEndAirport = legs.length
+      ? (legs[legs.length - 1]?.destination?.trim().toUpperCase() ?? baseAirport)
       : baseAirport;
 
     const arrivalBuffer = profile?.commute_arrival_buffer_minutes ?? 60;
