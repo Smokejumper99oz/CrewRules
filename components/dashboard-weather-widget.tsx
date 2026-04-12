@@ -4,6 +4,8 @@ import type { HomeBaseMetar } from "@/lib/weather-brief/get-home-base-metar";
 type Props = {
   metar: HomeBaseMetar;
   weatherBriefHref: string;
+  /** Shown when weather comes from device geolocation (e.g. "Near you"). */
+  sourceLabel?: string | null;
 };
 
 function formatWind(
@@ -18,7 +20,7 @@ function formatWind(
   return `${dir} / ${windKt}${gust} kt`;
 }
 
-export function DashboardWeatherWidget({ metar, weatherBriefHref }: Props) {
+export function DashboardWeatherWidget({ metar, weatherBriefHref, sourceLabel }: Props) {
   const wind = formatWind(metar.windKt, metar.windDir, metar.gustKt);
   const hasFeelsLike = metar.feelsLikeF != null;
 
@@ -67,9 +69,12 @@ export function DashboardWeatherWidget({ metar, weatherBriefHref }: Props) {
               <span className="truncate">💨 {wind}</span>
             )}
           </div>
-          {metar.locationName && (
-            <span className="text-[11px] text-slate-500 shrink-0 text-right leading-none group-hover:text-slate-400 transition">
-              {metar.locationName}
+          {(sourceLabel || metar.locationName) && (
+            <span className="text-[11px] text-slate-500 shrink-0 text-right leading-tight group-hover:text-slate-400 transition flex flex-col items-end gap-0.5">
+              {sourceLabel ? (
+                <span className="text-[10px] text-slate-500">{sourceLabel}</span>
+              ) : null}
+              {metar.locationName ? <span>{metar.locationName}</span> : null}
             </span>
           )}
         </div>

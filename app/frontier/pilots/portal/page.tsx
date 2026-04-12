@@ -6,7 +6,7 @@ import { PortalNextDuty } from "@/components/portal-next-duty";
 import { PortalScheduleUpcoming } from "@/components/portal-schedule-upcoming";
 import { PortalMonthStats } from "@/components/portal-month-stats-wrapper";
 import { DashboardAskBox } from "@/components/dashboard-ask-box";
-import { DashboardWeatherWidget } from "@/components/dashboard-weather-widget";
+import { DashboardWeatherWidgetClient } from "@/components/dashboard-weather-widget-client";
 import { DashboardCrewRulesAnniversary } from "@/components/dashboard-crewrules-anniversary";
 import { getHomeBaseMetar } from "@/lib/weather-brief/get-home-base-metar";
 
@@ -43,12 +43,10 @@ export default async function PortalDashboard() {
           <p className="text-[0.9375rem] text-slate-500">{greetingPart}</p>
           <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{namePart}</p>
         </div>
-        {homeBaseMetar && (
-          <DashboardWeatherWidget
-            metar={homeBaseMetar}
-            weatherBriefHref={`/${TENANT}/${PORTAL}/portal/weather-brief`}
-          />
-        )}
+        <DashboardWeatherWidgetClient
+          fallbackMetar={homeBaseMetar}
+          weatherBriefHref={`/${TENANT}/${PORTAL}/portal/weather-brief`}
+        />
       </div>
 
       <DashboardCrewRulesAnniversary />

@@ -17,6 +17,15 @@ export type SystemUpdateEntry = {
  */
 export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   {
+    date: "2026-04-12",
+    title: "Geo-aware Dashboard weather",
+    type: "improvement",
+    bullets: [
+      "The dashboard weather chip now uses your actual device location first when permitted, showing METAR-based conditions from the nearest suitable reporting station (U.S. NWS coverage).",
+      "If location is denied, unavailable, or times out, the widget automatically falls back to the existing logic: active trip first-leg origin, then crew base from profile.",
+    ],
+  },
+  {
     date: "2026-04-08",
     title: "Recurrent Training — Commute deviation preference",
     type: "new_feature",

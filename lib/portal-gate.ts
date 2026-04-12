@@ -47,18 +47,22 @@ async function getRequestPathnameForPortalGate(): Promise<string | null> {
   return normalizeRequestPathname(h.get(CREWRULES_PATHNAME_HEADER));
 }
 
+export type PortalAccessFailureCode =
+  | "not_signed_in"
+  | "company_email_required"
+  | "no_tenant_profile"
+  | "role_not_allowed"
+  | "incomplete_onboarding"
+  | "pending_deletion";
+
+export type PortalAccessResult =
+  | { ok: true; user: { id: string; email?: string }; profile: Profile }
+  | { ok: false; code: PortalAccessFailureCode };
+
 /**
- * Fail-closed portal gate. Redirects to login with error param if:
- * - No auth session
- * - Missing/invalid email (not company domain)
- * - No profile row for this tenant+portal (redirect: complete-profile)
- * - profile.role not in allowed roles for portal
- * Do NOT render portal if any of these fail.
+ * Same rules as {@link gateUserForPortal} without redirects — for API routes and tests.
  */
-export async function gateUserForPortal(
-  tenant: string,
-  portal: string
-): Promise<{ user: { id: string; email?: string }; profile: Profile }> {
+export async function resolvePortalAccess(tenant: string, portal: string): Promise<PortalAccessResult> {
   const loginPath = `/${tenant}/${portal}/login`;
   const completeProfilePath = `/${tenant}/${portal}/complete-profile`;
   /** Only path where pending-deletion users may use the portal (restore / Danger Zone). */
@@ -70,7 +74,7 @@ export async function gateUserForPortal(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect(`${loginPath}?error=not_signed_in`);
+    return { ok: false, code: "not_signed_in" };
   }
 
   const email = (user.email ?? "").toLowerCase().trim();
@@ -86,6 +90,7 @@ export async function gateUserForPortal(
 
   if (minimalProfile && (minimalProfile.role === "super_admin" || isAllowlisted)) {
     return {
+      ok: true,
       user: { id: user.id, email: user.email ?? undefined },
       profile: minimalProfile as Profile,
     };
@@ -100,7 +105,7 @@ export async function gateUserForPortal(
   const requiredDomain = TENANT_EMAIL_DOMAIN[tenant];
   if (requiredDomain && !isTenantAdmin) {
     if (!email || !email.endsWith(requiredDomain.toLowerCase())) {
-      redirect(`${loginPath}?error=company_email_required`);
+      return { ok: false, code: "company_email_required" };
     }
   }
 
@@ -115,14 +120,14 @@ export async function gateUserForPortal(
     .single();
 
   if (error || !profile) {
-    redirect(completeProfilePath);
+    return { ok: false, code: "no_tenant_profile" };
   }
 
   const p = profile as Profile;
 
   const allowed = PORTAL_ALLOWED_ROLES[portal] ?? PORTAL_ALLOWED_ROLES.pilots;
   if (!allowed.includes(p.role)) {
-    redirect(`${loginPath}?error=role_not_allowed`);
+    return { ok: false, code: "role_not_allowed" };
   }
 
   // tenant_admin and is_admin users are invited externally; they skip pilot onboarding.
@@ -135,7 +140,7 @@ export async function gateUserForPortal(
     !!String(p.home_airport ?? "").trim();
 
   if (!hasRequiredOnboarding && !isAdminUser) {
-    redirect(completeProfilePath);
+    return { ok: false, code: "incomplete_onboarding" };
   }
 
   const pendingDeletion = p.deleted_at != null || p.deletion_scheduled_for != null;
@@ -143,12 +148,52 @@ export async function gateUserForPortal(
     const path = await getRequestPathnameForPortalGate();
     const onAccountSettings = path != null && path === accountSettingsPathNormalized;
     if (!onAccountSettings) {
-      redirect(accountSettingsPath);
+      return { ok: false, code: "pending_deletion" };
     }
   }
 
   return {
+    ok: true,
     user: { id: user.id, email: user.email ?? undefined },
     profile: p,
   };
+}
+
+/**
+ * Fail-closed portal gate. Redirects to login with error param if:
+ * - No auth session
+ * - Missing/invalid email (not company domain)
+ * - No profile row for this tenant+portal (redirect: complete-profile)
+ * - profile.role not in allowed roles for portal
+ * Do NOT render portal if any of these fail.
+ */
+export async function gateUserForPortal(
+  tenant: string,
+  portal: string
+): Promise<{ user: { id: string; email?: string }; profile: Profile }> {
+  const loginPath = `/${tenant}/${portal}/login`;
+  const completeProfilePath = `/${tenant}/${portal}/complete-profile`;
+  const accountSettingsPath = `/${tenant}/${portal}/portal/settings/account`;
+
+  const r = await resolvePortalAccess(tenant, portal);
+  if (r.ok) {
+    return { user: r.user, profile: r.profile };
+  }
+
+  switch (r.code) {
+    case "not_signed_in":
+      redirect(`${loginPath}?error=not_signed_in`);
+    case "company_email_required":
+      redirect(`${loginPath}?error=company_email_required`);
+    case "no_tenant_profile":
+      redirect(completeProfilePath);
+    case "role_not_allowed":
+      redirect(`${loginPath}?error=role_not_allowed`);
+    case "incomplete_onboarding":
+      redirect(completeProfilePath);
+    case "pending_deletion":
+      redirect(accountSettingsPath);
+    default:
+      redirect(`${loginPath}?error=not_signed_in`);
+  }
 }
