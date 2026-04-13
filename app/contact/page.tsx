@@ -14,8 +14,15 @@ export default function ContactPage() {
     const form = e.currentTarget;
     const formData = new FormData(form);
     const data = Object.fromEntries(formData.entries());
-    const { companyWebsite, ...payload } = data as Record<string, string>;
-    if (companyWebsite) return; // honeypot
+    const { contact_time_check, ...payload } = data as Record<string, string>;
+    if (contact_time_check) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[contact] Honeypot field filled; submission blocked.");
+      }
+      setSuccess(false);
+      setError("Form submission was blocked. Please refresh and try again.");
+      return;
+    }
 
     setError(null);
     setSuccess(false);
@@ -108,14 +115,15 @@ export default function ContactPage() {
               />
             </label>
 
-            <input
-              type="text"
-              name="companyWebsite"
-              tabIndex={-1}
-              autoComplete="off"
-              className="absolute -left-[9999px]"
-              aria-hidden="true"
-            />
+            <div aria-hidden="true" className="pointer-events-none absolute opacity-0">
+              <input
+                type="text"
+                name="contact_time_check"
+                tabIndex={-1}
+                autoComplete="nope"
+                defaultValue=""
+              />
+            </div>
 
             {success && (
               <p className="text-sm text-emerald-400">
