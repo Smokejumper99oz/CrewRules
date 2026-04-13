@@ -19,6 +19,7 @@ const ADMIN_NAV_BASE = [
   { label: "Library", href: "library" },
   { label: "Users", href: "users" },
   { label: "Mentoring", href: "mentoring" },
+  { label: "Settings", href: "settings" },
 ];
 
 function getAdminNav(isSuperAdmin: boolean) {
@@ -111,6 +112,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                   email={userProfile.email ?? null}
                   roleLabel={userMenuRoleLabel}
                   signOut={signOut}
+                  profileHref="/frontier/pilots/admin/profile"
                 />
               </div>
             </div>

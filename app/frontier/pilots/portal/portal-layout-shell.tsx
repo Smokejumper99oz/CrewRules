@@ -228,6 +228,7 @@ export function PortalLayoutShell({
                     email={profile.email ?? user.email ?? null}
                     roleLabel={roleLabel}
                     signOut={signOut}
+                    profileHref="/frontier/pilots/portal/settings/account"
                     isFoundingPilot={isFoundingPilot}
                     foundingPilotNumber={foundingPilotNumber}
                   />

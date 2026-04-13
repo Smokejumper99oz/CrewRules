@@ -25,7 +25,11 @@ export function getAccountRoleDisplay({
   }
 
   const base =
-    role === "flight_attendant" ? "Flight Attendant" : "Pilot";
+    role === "tenant_admin"
+      ? "Tenant Admin"
+      : role === "flight_attendant"
+        ? "Flight Attendant"
+        : "Pilot";
 
   const badges: string[] = [];
 
@@ -56,7 +60,11 @@ export function getAccountRoleBadges({
   }
 
   const baseLabel =
-    role === "flight_attendant" ? "Flight Attendant" : "Pilot";
+    role === "tenant_admin"
+      ? "Tenant Admin"
+      : role === "flight_attendant"
+        ? "Flight Attendant"
+        : "Pilot";
 
   const badges: string[] = [];
   if (is_admin) badges.push("Admin");

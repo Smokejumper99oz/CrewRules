@@ -1,9 +1,12 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { FOUNDING_PILOT_CAP } from "@/lib/founding-pilot-constants";
+
+const DEFAULT_PROFILE_HREF = "/frontier/pilots/portal/settings/account";
 
 function emailToDisplayName(email: string | null): string {
   if (!email) return "User";
@@ -18,12 +21,15 @@ export function PortalUserMenu({
   email,
   roleLabel,
   signOut,
+  profileHref = DEFAULT_PROFILE_HREF,
   isFoundingPilot = false,
   foundingPilotNumber = null,
 }: {
   email: string | null;
   roleLabel: string;
   signOut: () => Promise<void>;
+  /** Pilot portal account vs Frontier pilot admin profile. */
+  profileHref?: string;
   isFoundingPilot?: boolean;
   foundingPilotNumber?: number | null;
 }) {
@@ -117,6 +123,14 @@ export function PortalUserMenu({
             ) : null}
           </div>
           <div className="border-t border-slate-200 p-2 dark:border-white/10">
+            <Link
+              href={profileHref}
+              role="menuitem"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-white hover:bg-white/5 transition touch-manipulation"
+              onClick={() => setOpen(false)}
+            >
+              <span className="flex-1">Profile</span>
+            </Link>
             <SignOutButton signOut={signOut} buttonClassName="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-white hover:bg-white/5 transition touch-manipulation disabled:opacity-50" role="menuitem">
               <span className="flex-1">Sign Out</span>
               <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

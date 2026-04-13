@@ -350,7 +350,7 @@ export function SuperAdminUsersPageClient({
                         <span
                           className={`${usersTablePill} border-sky-400/35 bg-sky-500/15 text-sky-200`}
                         >
-                          Tenant admin
+                          Tenant Admin
                         </span>
                         {u.is_mentor && (
                           <span
