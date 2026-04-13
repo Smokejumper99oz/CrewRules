@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/profile";
 import { canManageUsersInTenant } from "@/lib/rbac";
 import type { Role } from "@/lib/rbac";
+import { sendTenantAdminInviteEmail } from "@/lib/email/send-tenant-admin-invite";
 
 const TENANT = "frontier";
 
@@ -58,33 +59,57 @@ export async function inviteUser(formData: FormData): Promise<{ error?: string }
   }
 
   const portalValue = portal === "fa" ? "fa" : "pilots";
-  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL ?? process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"}/auth/callback`;
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  const redirectTo = `${appUrl}/auth/callback`;
 
   try {
     const admin = createAdminClient();
-    const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(
+    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+      type: "invite",
       email,
-      {
+      options: {
         redirectTo,
         data: { tenant: TENANT, portal: portalValue, role },
-      }
-    );
-    if (inviteError) return { error: inviteError.message };
-    if (inviteData?.user?.id) {
-      const { error: upsertError } = await admin
-        .from("profiles")
-        .upsert(
-          {
-            id: inviteData.user.id,
-            email,
-            tenant: TENANT,
-            portal: portalValue,
-            role,
-          },
-          { onConflict: "id", ignoreDuplicates: false }
-        );
-      if (upsertError) return { error: upsertError.message };
+      },
+    });
+    if (linkError) return { error: linkError.message };
+
+    const actionLink = linkData?.properties?.action_link;
+    const inviteUrl = typeof actionLink === "string" && actionLink.length > 0 ? actionLink : null;
+    if (!inviteUrl) {
+      return { error: "Invite link could not be generated" };
     }
+
+    const userId = linkData?.user?.id;
+    if (!userId) {
+      return { error: "Invite could not create a user record" };
+    }
+
+    const { error: upsertError } = await admin
+      .from("profiles")
+      .upsert(
+        {
+          id: userId,
+          email,
+          tenant: TENANT,
+          portal: portalValue,
+          role,
+        },
+        { onConflict: "id", ignoreDuplicates: false }
+      );
+    if (upsertError) return { error: upsertError.message };
+
+    const sendResult = await sendTenantAdminInviteEmail({
+      to: email,
+      fullName: null,
+      airlineName: "Frontier Airlines",
+      inviteUrl,
+      supportEmail: "sven.folmer@flyfrontier.com",
+    });
+    if (!sendResult.ok) return { error: sendResult.error };
+
     return {};
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to invite" };

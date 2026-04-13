@@ -331,3 +331,16 @@ export async function isAdmin(tenant = "frontier", portal = "pilots"): Promise<b
     return true;
   return false;
 }
+
+/** Document-management / Storage RLS alignment: super_admin or tenant_admin for this tenant+portal only (ignores `is_admin`). */
+export async function canManageDocumentsByRole(
+  tenant = "frontier",
+  portal = "pilots"
+): Promise<boolean> {
+  const profile = await getProfile();
+  if (!profile) return false;
+  if (profile.role === "super_admin") return true;
+  if (profile.role === "tenant_admin" && profile.tenant === tenant && profile.portal === portal)
+    return true;
+  return false;
+}

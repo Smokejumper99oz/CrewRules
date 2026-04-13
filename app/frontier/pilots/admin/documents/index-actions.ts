@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { isAdmin } from "@/lib/profile";
+import { canManageDocumentsByRole } from "@/lib/profile";
 import { getEmbeddings } from "@/lib/ai/embed";
 import { extractTextFromBufferWithPages, chunkTextWithPageNumbers } from "@/lib/ai/docs";
 
@@ -9,8 +9,8 @@ import { extractTextFromBufferWithPages, chunkTextWithPageNumbers } from "@/lib/
 const PORTALS_TO_INDEX: string[] = ["pilots", "flight-attendants"];
 
 export async function indexDocuments(): Promise<{ error?: string; success?: string }> {
-  const admin = await isAdmin();
-  if (!admin) {
+  const allowed = await canManageDocumentsByRole();
+  if (!allowed) {
     return { error: "Admin access required" };
   }
 

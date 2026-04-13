@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { isAdmin } from "@/lib/profile";
+import { canManageDocumentsByRole, isAdmin } from "@/lib/profile";
 
 export type LibraryDocument = {
   path: string;
@@ -66,8 +66,8 @@ export async function listDocuments(): Promise<{ docs: LibraryDocument[]; error?
 }
 
 export async function deleteDocument(path: string): Promise<{ error?: string }> {
-  const admin = await isAdmin();
-  if (!admin) return { error: "Admin access required" };
+  const allowed = await canManageDocumentsByRole();
+  if (!allowed) return { error: "Admin access required" };
   try {
     const supabase = await createClient();
     const { error } = await supabase.storage.from("documents").remove([path]);
@@ -85,8 +85,8 @@ export async function renameDocument(
   oldPath: string,
   newDisplayName: string
 ): Promise<{ error?: string }> {
-  const admin = await isAdmin();
-  if (!admin) return { error: "Admin access required" };
+  const allowed = await canManageDocumentsByRole();
+  if (!allowed) return { error: "Admin access required" };
   if (!newDisplayName?.trim()) return { error: "Name is required" };
   const safe = newDisplayName.replace(/[^a-zA-Z0-9. \-]/g, "_").replace(/\s+/g, " ").trim();
   if (!safe) return { error: "Invalid name" };
@@ -124,8 +124,8 @@ export async function replaceDocument(
   path: string,
   formData: FormData
 ): Promise<{ error?: string }> {
-  const admin = await isAdmin();
-  if (!admin) return { error: "Admin access required" };
+  const canWrite = await canManageDocumentsByRole();
+  if (!canWrite) return { error: "Admin access required" };
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Please select a file" };
   const allowed = [

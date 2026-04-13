@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { isAdmin } from "@/lib/profile";
+import { canManageDocumentsByRole } from "@/lib/profile";
 import { sanitizeDisplayNameForPath } from "@/lib/document-utils";
 
 export async function checkDuplicateDocument(
@@ -9,8 +9,8 @@ export async function checkDuplicateDocument(
   fileName: string,
   displayName?: string
 ): Promise<{ duplicate: boolean; error?: string }> {
-  const admin = await isAdmin();
-  if (!admin) return { duplicate: false };
+  const allowed = await canManageDocumentsByRole();
+  if (!allowed) return { duplicate: false };
   try {
     const supabase = await createClient();
     const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -51,8 +51,8 @@ export async function uploadDocument(
   _prev: { error?: string; success?: string } | null,
   formData: FormData
 ) {
-  const admin = await isAdmin();
-  if (!admin) {
+  const allowed = await canManageDocumentsByRole();
+  if (!allowed) {
     return { error: "Admin access required" };
   }
 
@@ -109,8 +109,8 @@ export async function uploadDocument(
 }
 
 export async function setDocumentDisplayName(path: string, displayName: string): Promise<{ error?: string }> {
-  const admin = await isAdmin();
-  if (!admin) return { error: "Admin access required" };
+  const allowed = await canManageDocumentsByRole();
+  if (!allowed) return { error: "Admin access required" };
   if (!displayName?.trim()) return { error: "Display name is required" };
   try {
     const supabase = await createClient();
@@ -128,8 +128,8 @@ export async function setDocumentAISetting(
   path: string,
   aiEnabled: boolean
 ): Promise<{ error?: string }> {
-  const admin = await isAdmin();
-  if (!admin) return { error: "Admin access required" };
+  const allowed = await canManageDocumentsByRole();
+  if (!allowed) return { error: "Admin access required" };
   try {
     const supabase = await createClient();
     const { error } = await supabase
