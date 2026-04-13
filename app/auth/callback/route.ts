@@ -4,8 +4,26 @@ import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const code = searchParams.get("code")?.trim() ?? "";
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type");
+
+  if (code) {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      console.error("[Auth callback] exchangeCodeForSession error:", error);
+      return NextResponse.redirect(
+        new URL(
+          `/frontier/pilots/login?error=${encodeURIComponent(error.message)}`,
+          request.url
+        )
+      );
+    }
+    return NextResponse.redirect(
+      new URL("/frontier/pilots/reset-password", request.url)
+    );
+  }
 
   if (!token_hash || !type) {
     return NextResponse.redirect(
