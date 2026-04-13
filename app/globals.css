@@ -32,6 +32,14 @@
   }
 }
 
+/* Landing / marketing: horizontal safe area (notch / island in landscape) while keeping px-6 minimum gutter */
+@layer utilities {
+  .cr-px-safe {
+    padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+  }
+}
+
 @layer components {
   select option {
     background-color: #f8fafc;

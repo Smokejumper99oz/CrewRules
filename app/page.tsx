@@ -32,7 +32,7 @@ export default function HomePage() {
   ];
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-slate-950 text-white pb-[env(safe-area-inset-bottom,0px)]">
       {/* Background glows */}
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-40 left-1/2 h-[520px] w-[820px] -translate-x-1/2 rounded-full bg-emerald-500/12 blur-3xl" />
@@ -62,7 +62,7 @@ export default function HomePage() {
 
         {/* Hero */}
         <section className="relative z-10 w-full min-h-[78vh] lg:min-h-[84vh] xl:min-h-[78vh] 2xl:min-h-[74vh]">
-        <div className="relative mx-auto max-w-6xl px-6 pt-16 pb-12 lg:pt-20 lg:pb-14 xl:pt-16 xl:pb-10 2xl:pt-14 2xl:pb-8">
+        <div className="relative mx-auto max-w-6xl cr-px-safe pt-16 pb-12 lg:pt-20 lg:pb-14 xl:pt-16 xl:pb-10 2xl:pt-14 2xl:pb-8">
           <div className="max-w-xl rounded-2xl bg-slate-950/75 border border-white/10 ring-1 ring-black/20 px-8 py-8">
               <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
                 <span className="md:whitespace-nowrap">
@@ -114,7 +114,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <section id="current-trip" className="scroll-mt-24 mx-auto max-w-6xl px-6 py-20">
+      <section id="current-trip" className="scroll-mt-24 mx-auto max-w-6xl cr-px-safe py-20">
         <div className="grid gap-10 items-start lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div>
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
@@ -172,7 +172,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <section id="commute-assist" className="scroll-mt-24 mx-auto max-w-6xl px-6 py-20">
+      <section id="commute-assist" className="scroll-mt-24 mx-auto max-w-6xl cr-px-safe py-20">
         <div className="grid gap-10 items-start lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div>
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
@@ -226,7 +226,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <section id="pay" className="scroll-mt-24 mx-auto max-w-6xl px-6 py-20">
+      <section id="pay" className="scroll-mt-24 mx-auto max-w-6xl cr-px-safe py-20">
         <div className="grid gap-10 items-start lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div>
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
@@ -281,7 +281,7 @@ export default function HomePage() {
       </div>
 
       {/* Features */}
-      <section id="features" className="scroll-mt-24 mx-auto max-w-6xl px-6 py-16">
+      <section id="features" className="scroll-mt-24 mx-auto max-w-6xl cr-px-safe py-16">
         <div className="flex flex-col items-center text-center">
           <h2 className="text-3xl font-bold tracking-tight">More Tools for Airline Crew</h2>
           <p className="mt-3 max-w-2xl text-slate-300">
@@ -353,7 +353,7 @@ export default function HomePage() {
       </div>
 
       {/* Levels */}
-      <section id="levels" className="scroll-mt-24 mx-auto max-w-6xl px-6 py-16">
+      <section id="levels" className="scroll-mt-24 mx-auto max-w-6xl cr-px-safe py-16">
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight">Crew<span className="text-[#75C043]">Rules</span>™ Access Levels</h2>
         </div>
@@ -504,7 +504,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="border-t border-white/5 bg-slate-950">
-        <div className="mx-auto max-w-6xl px-6 py-10">
+        <div className="mx-auto max-w-6xl cr-px-safe py-10">
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="font-semibold">
