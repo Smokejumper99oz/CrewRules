@@ -41,41 +41,44 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.06),transparent_55%)]" />
       </div>
 
-      <LandingHeader />
-
-      {/* Hero */}
-      <section className="relative w-full overflow-hidden min-h-[60vh] lg:min-h-[65vh] xl:min-h-[60vh] 2xl:min-h-[55vh]">
-        <div className="absolute inset-0 z-0">
+      <div className="relative isolate overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
           <Image
-            src="/hero/crewrules-bg.png"
+            src="/hero/crewrules-bg3.png"
             alt="CrewRules background"
             fill
             priority
-            className="object-cover object-center opacity-90"
+            quality={100}
+            sizes="100vw"
+            className="object-cover object-[52%_34%] opacity-100"
           />
-          <div className="absolute inset-0 bg-slate-950/40" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,rgba(2,6,23,0.4)_70%,rgba(2,6,23,0.75)_100%)]" />
-          <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent" />
+          <div
+            className="absolute inset-x-0 bottom-0 z-[1] h-48 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent"
+            aria-hidden
+          />
         </div>
 
-        <div className="relative z-10 mx-auto max-w-6xl px-6 pt-16 pb-12 lg:pt-20 lg:pb-14 xl:pt-16 xl:pb-10 2xl:pt-14 2xl:pb-8">
-          <div className="grid gap-10 md:grid-cols-2 md:items-start">
-            <div className="max-w-xl">
+        <LandingHeader />
+
+        {/* Hero */}
+        <section className="relative z-10 w-full min-h-[78vh] lg:min-h-[84vh] xl:min-h-[78vh] 2xl:min-h-[74vh]">
+        <div className="relative mx-auto max-w-6xl px-6 pt-16 pb-12 lg:pt-20 lg:pb-14 xl:pt-16 xl:pb-10 2xl:pt-14 2xl:pb-8">
+          <div className="max-w-xl rounded-2xl bg-slate-950/75 border border-white/10 ring-1 ring-black/20 px-8 py-8">
               <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
                 <span className="md:whitespace-nowrap">
                   Crew<span className="text-[#75C043]">Rules</span>
                   <span className="align-super text-base">™</span> —
                 </span>
                 <br className="hidden md:block" />
-                <span className="md:whitespace-nowrap">The Smart Platform</span>{" "}
+                <span className="text-white md:whitespace-nowrap">The Smart Platform</span>{" "}
                 <br className="hidden md:block" />
-                <span className="text-slate-300 md:whitespace-nowrap">for Airline Crew</span>
+                <span className="text-white md:whitespace-nowrap">for Airline Crew</span>
               </h1>
 
-              <p className="mt-5 text-lg text-slate-300">
+              <p className="mt-5 text-lg text-slate-200">
                 Developed by airline pilots for real Part 121 operations — delivering operational clarity with tools that extend to Part 135 and Part 91 flying.
               </p>
-              <p className="mt-2 text-lg text-slate-400">
+              <p className="mt-2 text-lg text-slate-200">
                 From FAR 117 compliance to contract interpretation, commute planning, and real-world mentoring — built for how crews actually operate.
               </p>
 
@@ -99,70 +102,10 @@ export default function HomePage() {
                   Join Waitlist
                 </Link>
               </div>
-            </div>
-
-            {/* Hero "product" mock */}
-            <div className="flex w-full justify-end min-w-0">
-              <div className="relative w-full max-w-[520px]">
-                <div className="absolute -inset-6 rounded-[28px] bg-gradient-to-br from-emerald-500/20 via-cyan-500/10 to-indigo-500/10 blur-2xl" />
-                <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-slate-900/60 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2.5 w-2.5 rounded-full bg-red-400/80" />
-                    <div className="h-2.5 w-2.5 rounded-full bg-yellow-300/80" />
-                    <div className="h-2.5 w-2.5 rounded-full bg-green-400/80" />
-                  </div>
-                  <div className="text-xs text-slate-400">CrewRules™ • Contract AI</div>
-                  <div className="text-xs text-slate-400">Secure</div>
-                </div>
-
-                <div className="p-5">
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <div className="text-xs text-slate-400">Pilot question</div>
-                    <div className="mt-2 text-sm text-white">
-                      &quot;I&apos;m on short call reserve on my last day — can scheduling extend me past midnight?&quot;
-                    </div>
-                  </div>
-
-                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-semibold">Answer</div>
-                      <div className="text-xs text-emerald-300">Citations included</div>
-                    </div>
-                    <p className="mt-2 text-sm text-slate-200 leading-relaxed">
-                      Crew<span className="text-[#75C043]">Rules</span>™ returns a plain-English answer and links it back to the specific
-                      contract paragraph(s) so you can verify instantly.
-                    </p>
-
-                    <div className="mt-3 rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/20 p-3">
-                      <div className="text-xs text-emerald-200">
-                        Reference example: Section 25.X • Page ### (sample)
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-3 gap-3">
-                    {[
-                      { t: "Reserve", s: "Rules + buckets" },
-                      { t: "Pay", s: "Credits explained" },
-                      { t: "Mentor", s: "Notes & tracking" },
-                    ].map((x) => (
-                      <div
-                        key={x.t}
-                        className="rounded-2xl border border-white/10 bg-slate-950/30 p-3"
-                      >
-                        <div className="text-xs font-semibold text-white">{x.t}</div>
-                        <div className="mt-1 text-[11px] text-slate-400">{x.s}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
-      </section>
+        </section>
+      </div>
 
       <div className="my-16">
         <div className="relative h-px w-full">
@@ -208,7 +151,7 @@ export default function HomePage() {
               <div className="relative">
                 <div className="pointer-events-none absolute -inset-6 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-purple-500/10 blur-2xl opacity-70" />
 
-                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 backdrop-blur-md shadow-[0_0_60px_-20px_rgba(16,185,129,0.25)]">
+                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 shadow-[0_0_60px_-20px_rgba(16,185,129,0.25)]">
                   <img
                     src="/hero/crewrules-current-trip-feature.png"
                     alt="CrewRules Current Trip and Commute Assist preview"
@@ -262,7 +205,7 @@ export default function HomePage() {
               <div className="relative">
                 <div className="pointer-events-none absolute -inset-6 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-purple-500/10 blur-2xl opacity-70" />
 
-                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 backdrop-blur-md shadow-[0_0_60px_-20px_rgba(16,185,129,0.25)]">
+                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 shadow-[0_0_60px_-20px_rgba(16,185,129,0.25)]">
                   <img
                     src="/hero/commute-assist-feature.png"
                     alt="CrewRules Commute Assist preview"
@@ -316,7 +259,7 @@ export default function HomePage() {
               <div className="relative">
                 <div className="pointer-events-none absolute -inset-6 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-purple-500/10 blur-2xl opacity-70" />
 
-                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 backdrop-blur-md shadow-[0_0_60px_-20px_rgba(16,185,129,0.25)]">
+                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 shadow-[0_0_60px_-20px_rgba(16,185,129,0.25)]">
                   <img
                     src="/hero/pay-month-overview-feature.png"
                     alt="CrewRules Month Overview and pay estimate preview"
@@ -350,12 +293,12 @@ export default function HomePage() {
           {[
             {
               title: "AI Contract Insights",
-              desc: "Ask contract questions in plain English and get cited answers back to the source text.",
+              desc: "Upload your CBA, store it securely, and search it instantly. Ask contract questions in plain English and get clear answers with direct citations to the source.",
               icon: "/icons/contract-ai.png",
             },
             {
               title: "Mentoring",
-              desc: "Support new hires, upgrades, and career progression with structured mentoring tools and notes.",
+              desc: "Run a structured mentorship program with real visibility. Track mentee progress, manage milestones like IOE Complete and 3 Months On Line, and give mentors the tools to guide new hires and upgrades with clarity and accountability.",
               icon: "/icons/mentor.png",
               sectionId: "mentoring",
             },
@@ -383,7 +326,7 @@ export default function HomePage() {
                   <p className="mt-2 text-sm text-slate-300 leading-relaxed">{c.desc}</p>
                 </div>
                 {c.icon ? (
-                  <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur transition-all duration-200 group-hover:border-[#75C043]/30 group-hover:bg-white/10">
+                  <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition-all duration-200 group-hover:border-[#75C043]/30 group-hover:bg-white/10">
                     <div className="absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-hover:shadow-[0_0_28px_rgba(117,192,67,0.18)]" />
                     <Image
                       src={c.icon}

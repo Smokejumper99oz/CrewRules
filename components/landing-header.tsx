@@ -27,14 +27,14 @@ export function LandingHeader() {
   const linkMuted = "text-sm text-slate-300 hover:text-white transition-colors";
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/5 bg-slate-950/30 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-white/5 bg-slate-950/60">
       <PortalFeedbackModal
         open={feedbackModalOpen}
         onClose={() => setFeedbackModalOpen(false)}
         onSubmitted={() => {}}
         optionalPublicContactEmail
       />
-      <div className="relative mx-auto flex max-w-6xl items-center justify-between px-6 pt-4 pb-6">
+      <div className="relative mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
         <div className="flex items-center gap-3">
           <div className="leading-tight">
             <div className="text-lg font-semibold tracking-tight">
@@ -89,7 +89,7 @@ export function LandingHeader() {
 
       {/* Mobile slide-down */}
       {menuOpen ? (
-        <div className="border-t border-white/5 bg-slate-950/95 px-6 py-4 backdrop-blur-md md:hidden">
+        <div className="border-t border-white/5 bg-slate-950/95 px-6 py-3 md:hidden">
           <nav className="flex flex-col gap-1">
             <Link
               href="/contact"
