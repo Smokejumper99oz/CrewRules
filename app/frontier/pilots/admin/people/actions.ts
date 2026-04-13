@@ -62,7 +62,7 @@ export async function inviteUser(formData: FormData): Promise<{ error?: string }
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-  const redirectTo = `${appUrl}/auth/callback`;
+  const redirectTo = `${appUrl}/frontier/pilots/reset-password`;
 
   try {
     const admin = createAdminClient();
