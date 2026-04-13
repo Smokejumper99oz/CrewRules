@@ -21,8 +21,12 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const isPortalRoute = request.nextUrl.pathname.startsWith("/frontier/pilots/portal");
-  const isPortalRoot = request.nextUrl.pathname === "/frontier/pilots/portal";
+  const pathname = request.nextUrl.pathname;
+  /** Strict pilots portal prefix (avoids matching accidental `/frontier/pilots/portalfoo`). */
+  const isFrontierPilotsPortalPath =
+    pathname === "/frontier/pilots/portal" || pathname.startsWith("/frontier/pilots/portal/");
+  const isPortalRoute = pathname.startsWith("/frontier/pilots/portal");
+  const isPortalRoot = pathname === "/frontier/pilots/portal";
   const isAdminRoute = request.nextUrl.pathname.startsWith("/frontier/pilots/admin");
   const isSuperAdminRoute = request.nextUrl.pathname.startsWith("/super-admin");
   const isAuthRoute =
@@ -44,6 +48,12 @@ export async function updateSession(request: NextRequest) {
   let user: { id: string } | null = null;
   let isAdmin = false;
   let isSuperAdmin = false;
+  /** Profile row for login/sign-up redirect (aligned with app/api/auth/login/route.ts). */
+  let loginGateProfile: {
+    role: string | null;
+    tenant: string | null;
+    portal: string | null;
+  } | null = null;
   let supabase: ReturnType<typeof createServerClient> | null = null;
 
   try {
@@ -81,12 +91,19 @@ export async function updateSession(request: NextRequest) {
       user = null;
     }
 
-    if (user && (isAdminRoute || isSuperAdminRoute || redirectLoggedInToPortal || isPortalRoot)) {
+    if (user && (isAdminRoute || isSuperAdminRoute || redirectLoggedInToPortal || isFrontierPilotsPortalPath)) {
       const { data: profile } = await supabase
         .from("profiles")
         .select("role, tenant, portal, is_admin")
         .eq("id", user.id)
         .single();
+      if (profile) {
+        loginGateProfile = {
+          role: profile.role ?? null,
+          tenant: profile.tenant ?? null,
+          portal: profile.portal ?? null,
+        };
+      }
       const email = (user as { email?: string }).email ?? "";
       const isAllowlisted = isSuperAdminAllowlistedEmail(email);
       isSuperAdmin = profile?.role === "super_admin" || isAllowlisted;
@@ -104,6 +121,13 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/frontier/pilots/login";
     url.searchParams.set("error", "not_signed_in");
+    return NextResponse.redirect(url);
+  }
+
+  if (user && isFrontierPilotsPortalPath && loginGateProfile?.role === "tenant_admin") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/frontier/pilots/admin";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
@@ -130,6 +154,13 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     if (isSuperAdmin) {
       url.pathname = "/super-admin";
+      url.search = "";
+    } else if (
+      loginGateProfile?.role === "tenant_admin" &&
+      loginGateProfile.tenant &&
+      loginGateProfile.portal
+    ) {
+      url.pathname = `/${loginGateProfile.tenant}/${loginGateProfile.portal}/admin`;
       url.search = "";
     } else {
       url.pathname = "/frontier/pilots/portal";
