@@ -62,6 +62,7 @@ export async function inviteUser(formData: FormData): Promise<{ error?: string }
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  // redirectTo for Supabase's action_link — used after the user clicks "Accept" on our intermediate page.
   const redirectTo = `${appUrl}/frontier/pilots/reset-password`;
 
   try {
@@ -77,8 +78,7 @@ export async function inviteUser(formData: FormData): Promise<{ error?: string }
     if (linkError) return { error: linkError.message };
 
     const actionLink = linkData?.properties?.action_link;
-    const inviteUrl = typeof actionLink === "string" && actionLink.length > 0 ? actionLink : null;
-    if (!inviteUrl) {
+    if (typeof actionLink !== "string" || !actionLink) {
       return { error: "Invite link could not be generated" };
     }
 
@@ -101,11 +101,25 @@ export async function inviteUser(formData: FormData): Promise<{ error?: string }
       );
     if (upsertError) return { error: upsertError.message };
 
+    // Store the action_link server-side so email scanners (e.g. Mimecast) cannot
+    // pre-consume the one-time Supabase invite token by following the URL in the email.
+    const { data: tokenRow, error: tokenError } = await admin
+      .from("tenant_admin_invite_tokens")
+      .insert({ action_link: actionLink, email, tenant: TENANT, portal: portalValue, role })
+      .select("id")
+      .single();
+    if (tokenError || !tokenRow?.id) {
+      return { error: tokenError?.message ?? "Failed to store invite token" };
+    }
+
+    // The email contains a link to our accept-invite page (safe for email scanners).
+    const acceptInviteUrl = `${appUrl}/frontier/pilots/accept-invite?id=${tokenRow.id}`;
+
     const sendResult = await sendTenantAdminInviteEmail({
       to: email,
       fullName: null,
       airlineName: "Frontier Airlines",
-      inviteUrl,
+      inviteUrl: acceptInviteUrl,
       supportEmail: "sven.folmer@flyfrontier.com",
     });
     if (!sendResult.ok) return { error: sendResult.error };

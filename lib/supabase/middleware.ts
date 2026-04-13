@@ -32,6 +32,7 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname === "/frontier/pilots/sign-up" ||
     request.nextUrl.pathname === "/frontier/pilots/forgot-password" ||
     request.nextUrl.pathname === "/frontier/pilots/reset-password" ||
+    request.nextUrl.pathname === "/frontier/pilots/accept-invite" ||
     request.nextUrl.pathname.startsWith("/auth/");
 
   // Redirect logged-in users away from login/sign-up (but not reset-password - they need to set new password)
