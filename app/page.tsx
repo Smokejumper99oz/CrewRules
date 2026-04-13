@@ -99,9 +99,6 @@ export default function HomePage() {
                   Join Waitlist
                 </Link>
               </div>
-              <p className="mt-3 max-w-xl text-xs leading-relaxed text-slate-400">
-                Frontier Airlines pilots can create an account. All others can join the waitlist.
-              </p>
             </div>
 
             {/* Hero "product" mock */}
