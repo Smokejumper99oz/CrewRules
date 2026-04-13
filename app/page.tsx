@@ -3,7 +3,15 @@ import Link from "next/link";
 import { LandingHeader } from "@/components/landing-header";
 import { Button } from "@/components/ui/button";
 
+/** First year shown in the landing footer © notice; range expands through the current calendar year. */
+const CREWRULES_COPYRIGHT_START_YEAR = 2026;
+
 export default function HomePage() {
+  const year = new Date().getFullYear();
+  const copyrightYearLabel =
+    year <= CREWRULES_COPYRIGHT_START_YEAR
+      ? String(CREWRULES_COPYRIGHT_START_YEAR)
+      : `${CREWRULES_COPYRIGHT_START_YEAR} - ${year}`;
   const levelsFlightCrewFeatures = [
     "Decoded schedule with trips, duty & timelines",
     "Current trip, next duty & upcoming trips",
@@ -496,10 +504,14 @@ export default function HomePage() {
           </div>
         </div>
 
-        <p className="mt-8 text-center text-xs text-slate-500">
-          CrewRules™ is an independent pilot resource and is not affiliated with any airline, union, or regulatory authority.
-          Always consult official documents for authoritative guidance.
-        </p>
+        <div className="mt-8 space-y-2 text-center text-xs text-slate-500">
+          <p>
+            CrewRules™ is an independent platform for aviation professionals and is not affiliated with any airline, operator, union, or regulatory authority (including Part 121, 135, or 91 operations).
+          </p>
+          <p>
+            All information is provided for reference only. Always consult official documents for authoritative guidance.
+          </p>
+        </div>
       </section>
 
       {/* Footer */}
@@ -521,11 +533,16 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="mt-8 text-xs text-slate-500 leading-relaxed">
-            © {new Date().getFullYear()} CrewRules™. All rights reserved. <br />
-            CrewRules™ is an independent pilot resource and is not affiliated with any airline, union, or regulatory authority.
-            Information provided is for reference only.<br />
-            Always consult official documents for authoritative guidance.
+          <div className="mt-8 space-y-3 text-xs text-slate-500 leading-relaxed">
+            <p>
+              © {copyrightYearLabel} CrewRules™. All rights reserved. CrewRules™ is a product of Marvella Group LLC.
+            </p>
+            <p>
+              CrewRules™ is an independent platform for aviation professionals and is not affiliated with any airline, operator, union, or regulatory authority (including Part 121, 135, or 91 operations).
+            </p>
+            <p>
+              All information is provided for reference only. Always consult official documents for authoritative guidance.
+            </p>
           </div>
         </div>
       </footer>
