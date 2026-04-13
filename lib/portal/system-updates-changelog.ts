@@ -18,6 +18,15 @@ export type SystemUpdateEntry = {
 export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   {
     date: "2026-04-12",
+    title: "FLICA import now removes stale traded trips later in the month",
+    type: "fix",
+    bullets: [
+      "Fixed a FLICA import issue where an old trip could remain on the schedule after it was traded earlier and removed from a newer monthly export.",
+      "CrewRules now uses the imported schedule's covered month window more accurately when clearing stale flica_import trips, so removed later-month trips no longer linger after upload.",
+    ],
+  },
+  {
+    date: "2026-04-12",
     title: "Geo-aware Dashboard weather",
     type: "improvement",
     bullets: [

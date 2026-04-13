@@ -5,6 +5,7 @@
 
 import { strict as assert } from "assert";
 import {
+  computeFlicaImportDeletionCandidateStartUpperBound,
   getTripInstanceDedupeKey,
   normalizeTrainingSplitRows,
   type TrainingSplitScheduleRow,
@@ -113,6 +114,27 @@ test("trip instance dedupe key: same pairing + different local start date → di
 
 test("trip instance dedupe key: no extractable pairing → null (guard skipped)", () => {
   assert.equal(getTripInstanceDedupeKey("OFF", "2026-04-02T12:00:00.000Z", TZ), null);
+});
+
+test("FLICA deletion window: last trip starts Apr 27, no Apr 30 row — upper bound still includes Apr 30 stale start", () => {
+  const tz = "America/Puerto_Rico";
+  const newImportRows = [
+    {
+      start_time: "2026-04-27T18:19:00.000Z",
+      end_time: "2026-04-28T03:03:00.000Z",
+    },
+  ];
+  const upper = computeFlicaImportDeletionCandidateStartUpperBound(newImportRows, tz);
+  const staleApr30TripStart = "2026-04-30T12:00:00.000Z";
+  assert.ok(
+    new Date(upper).getTime() >= new Date(staleApr30TripStart).getTime(),
+    `expected deletion upper bound to include Apr 30 stale trip start, got ${upper}`
+  );
+  const maxImportedStartOnly = newImportRows[0]!.start_time;
+  assert.ok(
+    new Date(upper).getTime() > new Date(maxImportedStartOnly).getTime(),
+    "upper bound must exceed max imported start_time alone (previous bug cap)"
+  );
 });
 
 test("simulate batch dedupe: second trip with same pairing+date key would be dropped", () => {

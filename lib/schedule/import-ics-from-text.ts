@@ -5,7 +5,7 @@
 
 import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { parseIcs } from "@/lib/ics-parse";
 import { computeTripCredit, expandEventToDaySegmentsInRange } from "@/lib/schedule-time";
 import { getReserveCreditPerDay } from "@/lib/tenant-config";
@@ -21,6 +21,46 @@ import {
 } from "@/lib/schedule/schedule-import-protected";
 
 const FLICA_SOURCE = "flica_import";
+
+/** Last inclusive instant (23:59:59.999) of the calendar month containing maxLocalYmd, in sourceTimezone. */
+function endOfLocalCalendarMonthLastMsIso(maxLocalYmd: string, sourceTimezone: string): string {
+  const y = parseInt(maxLocalYmd.slice(0, 4), 10);
+  const m = parseInt(maxLocalYmd.slice(5, 7), 10);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const mm = String(m).padStart(2, "0");
+  const dd = String(lastDay).padStart(2, "0");
+  return fromZonedTime(`${y}-${mm}-${dd}T23:59:59.999`, sourceTimezone).toISOString();
+}
+
+/**
+ * Upper bound on schedule_events.start_time for FLICA baseline-delete candidate selection.
+ * Extends past max imported start_time so trips removed from a later calendar day (e.g. last pairing
+ * traded earlier within the same month) are still inside the deletion window.
+ */
+export function computeFlicaImportDeletionCandidateStartUpperBound(
+  rows: Array<{ start_time: string; end_time: string }>,
+  sourceTimezone: string
+): string {
+  if (rows.length === 0) {
+    throw new Error("computeFlicaImportDeletionCandidateStartUpperBound: rows must be non-empty");
+  }
+  let maxStartMs = new Date(rows[0]!.start_time).getTime();
+  let maxEndMs = new Date(rows[0]!.end_time).getTime();
+  let maxLocalEndYmd = formatInTimeZone(new Date(rows[0]!.end_time), sourceTimezone, "yyyy-MM-dd");
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i]!;
+    const s = new Date(r.start_time).getTime();
+    const e = new Date(r.end_time).getTime();
+    if (s > maxStartMs) maxStartMs = s;
+    if (e > maxEndMs) maxEndMs = e;
+    const ymd = formatInTimeZone(new Date(r.end_time), sourceTimezone, "yyyy-MM-dd");
+    if (ymd > maxLocalEndYmd) maxLocalEndYmd = ymd;
+  }
+  const monthEndMs = new Date(
+    endOfLocalCalendarMonthLastMsIso(maxLocalEndYmd, sourceTimezone)
+  ).getTime();
+  return new Date(Math.max(maxStartMs, maxEndMs, monthEndMs)).toISOString();
+}
 
 /**
  * FLICA trip titles usually start with a pairing id (e.g. S3120, S3126B). The same code appears on many
@@ -611,11 +651,10 @@ export async function importIcsFromText(
   }
 
   let rangeMin = rows[0]!.start_time;
-  let rangeMax = rows[0]!.start_time;
   for (const r of rows) {
     if (r.start_time < rangeMin) rangeMin = r.start_time;
-    if (r.start_time > rangeMax) rangeMax = r.start_time;
   }
+  const rangeMax = computeFlicaImportDeletionCandidateStartUpperBound(rows, sourceTimezone);
 
   const { data: candidates, error: selectDelError } = await supabase
     .from("schedule_events")
