@@ -43,6 +43,31 @@ test("cancelled: provider status canceled (US spelling) -> label cancelled", () 
   assert.equal(r.label, "cancelled");
 });
 
+test("completed: provider status landed -> label completed (before delay logic)", () => {
+  const r = deriveOperationalStatus(
+    {
+      depUtc: DEP_UTC,
+      arrUtc: ARR_UTC,
+      status: "landed",
+      dep_delay_min: 45,
+      arr_delay_min: 0,
+    },
+    TZ,
+    TZ
+  );
+  assert.equal(r.label, "completed");
+  assert.equal(r.delay_minutes, 0);
+  assert.equal(r.source_of_truth, "provider_status");
+  assert.equal(operationalStatusToDisplayLabel(r.label), "Completed");
+});
+
+test("completed: provider status arrived / completed", () => {
+  const a = deriveOperationalStatus({ depUtc: DEP_UTC, arrUtc: ARR_UTC, status: "arrived" }, TZ, TZ);
+  assert.equal(a.label, "completed");
+  const c = deriveOperationalStatus({ depUtc: DEP_UTC, arrUtc: ARR_UTC, status: "completed" }, TZ, TZ);
+  assert.equal(c.label, "completed");
+});
+
 test("numeric delay: dep_delay_min >= 1 -> delayed", () => {
   const r = deriveOperationalStatus(
     {
@@ -212,6 +237,7 @@ test("every status returns sort_dep_utc and sort_arr_utc", () => {
       TZ
     ),
     deriveOperationalStatus({ depUtc: DEP_UTC, arrUtc: ARR_UTC }, TZ, TZ),
+    deriveOperationalStatus({ depUtc: DEP_UTC, arrUtc: ARR_UTC, status: "landed" }, TZ, TZ),
   ];
   for (const r of cases) {
     assert.ok(r.sort_dep_utc && !Number.isNaN(new Date(r.sort_dep_utc).getTime()));

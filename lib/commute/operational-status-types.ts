@@ -3,7 +3,7 @@
  * Zero runtime deps - safe for client and server.
  */
 
-export type OperationalStatusLabel = "cancelled" | "delayed" | "on_time" | "unknown";
+export type OperationalStatusLabel = "cancelled" | "delayed" | "on_time" | "completed" | "unknown";
 
 export type OperationalStatusSource =
   | "provider_status"
@@ -38,6 +38,8 @@ export function operationalStatusToDisplayLabel(label: OperationalStatusLabel): 
       return "Delayed";
     case "on_time":
       return "On time";
+    case "completed":
+      return "Completed";
     case "unknown":
       return "Scheduled";
     default:

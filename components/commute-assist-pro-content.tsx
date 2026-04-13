@@ -575,6 +575,8 @@ function getStatusBadgeClass(label: OperationalStatus["label"]): string {
       return base + "bg-amber-500/20 text-amber-400 border border-amber-500/40";
     case "on_time":
       return base + "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30";
+    case "completed":
+      return base + "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30";
     case "unknown":
       return base + "bg-slate-500/20 text-slate-300 border border-slate-500/40";
     default:

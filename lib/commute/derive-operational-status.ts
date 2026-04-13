@@ -73,7 +73,7 @@ function statusIndicatesDelay(status: string | undefined): boolean {
 
 /**
  * Derive canonical operational status from merged flight data.
- * Priority: cancelled -> numeric delay -> timestamp delay -> proven on_time -> provider status -> unknown.
+ * Priority: cancelled -> landed/arrived/completed -> numeric delay -> timestamp delay -> proven on_time -> provider status -> unknown.
  * Provider textual status cannot override stronger timing evidence (proven no-delay).
  */
 export function deriveOperationalStatus(
@@ -92,7 +92,7 @@ export function deriveOperationalStatus(
     input._debug.destination === "CLT";
 
   // a. cancelled/canceled provider status -> cancelled
-  const statusLower = input.status?.toLowerCase();
+  const statusLower = (input.status ?? "").toLowerCase();
   if (statusLower === "cancelled" || statusLower === "canceled") {
     let depSched = formatInTimeZone(new Date(input.depUtc), depTz, "HH:mm");
     let depSortD = new Date(input.depUtc);
@@ -121,6 +121,18 @@ export function deriveOperationalStatus(
       arr: { scheduled: arrSched, actual: arrSched },
       sort_dep_utc: depSortD.toISOString(),
       sort_arr_utc: arrSortD.toISOString(),
+    };
+  }
+
+  // a2. landed / arrived / completed -> completed
+  if (statusLower === "landed" || statusLower === "arrived" || statusLower === "completed") {
+    return {
+      label: "completed",
+      delay_minutes: 0,
+      source_of_truth: "provider_status",
+      confidence: "high",
+      sort_dep_utc: input.depUtc,
+      sort_arr_utc: input.arrUtc,
     };
   }
 
