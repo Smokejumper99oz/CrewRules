@@ -24,6 +24,9 @@ import {
 
 type CommuteFlightsOk = Extract<Awaited<ReturnType<typeof getCommuteFlights>>, { ok: true }>;
 
+/** Shown in Commute Assist when to_base + training deviation scores against end-of-commute-day (no clock cutoff). */
+const TRAINING_COMMUTE_ARRIVE_BY_LABEL = "Arrive anytime on commute day";
+
 /**
  * Report calendar day (yyyy-MM-dd) in base TZ for commute anchoring — from trip `start_time` + FLICA report_time red-eye rule.
  * Must not use progressive-leg / card `displayDateStr` (that can be the first departure date, next calendar day).
@@ -368,6 +371,11 @@ type Props = {
   dutyStartAirportOverride?: string | null;
   /** When set (e.g. from legsToShow[last].destination), use as duty end airport for to_home. */
   dutyEndAirportOverride?: string | null;
+  /**
+   * When true (training + pilot chose home→training-city commute), to_base flight search must end at
+   * training city from `dutyEndAirportOverride`, not at `dutyStartAirportOverride` (which is forced to home).
+   */
+  commuteAssistTrainingDeviationToBase?: boolean;
   /** When set (e.g. 05:15 when out of base = first leg dep - 45 min), use for arrive-by. */
   reportTimeOverride?: string | null;
   /** Set when post_duty_release and next trip starts within 32h — commute home is likely impractical. */
@@ -1039,6 +1047,7 @@ export function CommuteAssistProContent({
   commuteAssistSuppressFlightSearch,
   dutyStartAirportOverride,
   dutyEndAirportOverride,
+  commuteAssistTrainingDeviationToBase,
   reportTimeOverride,
   shortTurnAtBase,
 }: Props) {
@@ -1092,6 +1101,13 @@ export function CommuteAssistProContent({
     : isInPairing !== undefined
       ? (isInPairing ? "to_home" : "to_base")
       : (label === "on_duty" ? "to_home" : "to_base");
+
+  const trainingCityIataForCommute = dutyEndAirportOverride?.trim().toUpperCase() ?? "";
+  const isTrainingDeviationToBaseCommute =
+    commuteAssistTrainingDeviationToBase === true &&
+    direction === "to_base" &&
+    trainingCityIataForCommute.length === 3;
+
   const dutyStart = new Date(event.start_time);
   const dutyOk = !Number.isNaN(dutyStart.getTime());
 
@@ -1104,14 +1120,27 @@ export function CommuteAssistProContent({
   const dutyDateBase = formatInTimeZone(dutyDateTime, baseTz, "yyyy-MM-dd");
   const arriveBy = dutyOk ? subMinutes(dutyDateTime, arrivalBuffer) : null;
 
-  // Search date for to_base: if arriveBy is before noon in base TZ, use the prior calendar day.
+  // Search date for to_base: training deviation uses the report's calendar date at the training station (same-day commute).
+  // Otherwise: if arriveBy is before noon in base TZ, use the prior calendar day.
   // Early-morning reports (e.g. 05:00) require prior-evening departures — no same-day flight can arrive by 04:00.
   const toBaseCommuteSearchDate = (() => {
     if (!dutyOk || !arriveBy) return new Date().toISOString().slice(0, 10);
+    if (isTrainingDeviationToBaseCommute) {
+      const trainingTz = getTimezoneFromAirport(trainingCityIataForCommute);
+      return formatInTimeZone(dutyDateTime, trainingTz, "yyyy-MM-dd");
+    }
     const arriveByHour = parseInt(formatInTimeZone(arriveBy, baseTz, "HH"), 10);
     const searchDay = arriveByHour < 12 ? subDays(arriveBy, 1) : arriveBy;
     return formatInTimeZone(searchDay, baseTz, "yyyy-MM-dd");
   })();
+
+  /** End of commute calendar day at training station (23:59:59 local); to_base + deviation scoring anchor only. */
+  const trainingArrivalDeadlineIso = useMemo(() => {
+    if (!isTrainingDeviationToBaseCommute || !dutyOk) return null;
+    const trainingTz = getTimezoneFromAirport(trainingCityIataForCommute);
+    const dayStr = formatInTimeZone(dutyDateTime, trainingTz, "yyyy-MM-dd");
+    return fromZonedTime(`${dayStr}T23:59:59`, trainingTz).toISOString();
+  }, [isTrainingDeviationToBaseCommute, dutyOk, dutyDateTime, trainingCityIataForCommute]);
 
   const [commuteExpiryTick, setCommuteExpiryTick] = useState(0);
   const arriveByTimeForExpiry = arriveBy?.getTime();
@@ -1132,6 +1161,11 @@ export function CommuteAssistProContent({
 
   const dutyStartAirport = dutyStartAirportOverride?.trim() || parseDutyStartAirport(event.route);
   const dutyEndAirport = (dutyEndAirportOverride?.trim() || baseAirport) ?? null;
+
+  /** Report / training airport for to_base searches (TPA→DEN when deviating), not the override used for timing. */
+  const toBaseCommuteDestinationAirport = isTrainingDeviationToBaseCommute
+    ? trainingCityIataForCommute
+    : (dutyStartAirport ?? baseAirport)?.toUpperCase() ?? "";
   const dutyEndTime = event.end_time ? new Date(event.end_time) : null;
   const dutyEndDateBase = dutyEndTime && !Number.isNaN(dutyEndTime.getTime())
     ? formatInTimeZone(dutyEndTime, baseTz, "yyyy-MM-dd")
@@ -1147,7 +1181,7 @@ export function CommuteAssistProContent({
         : dutyEndDateBase ?? new Date().toISOString().slice(0, 10);
 
     if (direction === "to_base") {
-      const dest = (dutyStartAirport ?? baseAirport)?.toUpperCase() ?? "";
+      const dest = toBaseCommuteDestinationAirport;
       const result: { origin: string; destination: string; label: "home" | "alternate"; commuteDate: string }[] = [
         { origin: homeAirport?.toUpperCase() ?? "", destination: dest, label: "home", commuteDate },
       ];
@@ -1170,7 +1204,7 @@ export function CommuteAssistProContent({
     homeAirport,
     alternateHomeAirport,
     baseAirport,
-    dutyStartAirport,
+    toBaseCommuteDestinationAirport,
     dutyEndAirport,
     toBaseCommuteSearchDate,
     dutyEndDateBase,
@@ -1229,7 +1263,7 @@ export function CommuteAssistProContent({
         : dutyEndDateBase ?? new Date().toISOString().slice(0, 10);
 
     if (direction === "to_base") {
-      const dest = (dutyStartAirport ?? baseAirport)?.toUpperCase() ?? "";
+      const dest = toBaseCommuteDestinationAirport;
       if (!dest || dest.length !== 3) return [];
       const result: { origin: string; stop: string; destination: string; label: "home" | "alternate"; commuteDate: string }[] = [];
       const home = homeAirport?.trim().toUpperCase();
@@ -1264,7 +1298,7 @@ export function CommuteAssistProContent({
     dutyEndDateBase,
     homeAirport,
     alternateHomeAirport,
-    dutyStartAirport,
+    toBaseCommuteDestinationAirport,
     dutyEndAirport,
     baseAirport,
     commuteTwoLegEnabled,
@@ -1275,8 +1309,10 @@ export function CommuteAssistProContent({
   const noCommuteNeeded =
     direction === "to_base" &&
     !!homeAirport &&
-    !!dutyStartAirport &&
-    dutyStartAirport.toUpperCase() === homeAirport.toUpperCase();
+    (isTrainingDeviationToBaseCommute
+      ? !!toBaseCommuteDestinationAirport &&
+        toBaseCommuteDestinationAirport === homeAirport.toUpperCase()
+      : !!dutyStartAirport && dutyStartAirport.toUpperCase() === homeAirport.toUpperCase());
 
   /** Apply flights + metadata to state. Reused for API response and sessionStorage restore. */
   const applyFlightsToState = useCallback(
@@ -1291,7 +1327,9 @@ export function CommuteAssistProContent({
       const dutyStart = new Date(event.start_time);
       const dutyOkLocal = !Number.isNaN(dutyStart.getTime());
       const dutyDateBaseLocal = formatInTimeZone(dutyStart, baseTz, "yyyy-MM-dd");
-      const reportAtIso = dutyOkLocal ? dutyDateTime.toISOString() : `${dutyDateBaseLocal}T12:00:00Z`;
+      const reportAtIso = dutyOkLocal
+        ? (trainingArrivalDeadlineIso ?? dutyDateTime.toISOString())
+        : `${dutyDateBaseLocal}T12:00:00Z`;
       const isReturn = direction === "to_home";
       const releaseEarliestDepIso =
         isReturn && event.end_time
@@ -1326,7 +1364,9 @@ export function CommuteAssistProContent({
         (o) => o.arr_estimated_raw || o.arr_actual_raw || o.dep_estimated_raw || o.dep_actual_raw
       );
       const arriveByFormatted = dutyOkLocal
-        ? formatInTimeZone(subMinutes(dutyDateTime, arrivalBuffer), baseTz, "HH:mm")
+        ? trainingArrivalDeadlineIso != null
+          ? TRAINING_COMMUTE_ARRIVE_BY_LABEL
+          : formatInTimeZone(subMinutes(dutyDateTime, arrivalBuffer), baseTz, "HH:mm")
         : "";
       setOriginTz((prev) => (prev === "UTC" ? originTzVal : prev));
       setDestTz((prev) => (prev === "UTC" ? destTzVal : prev));
@@ -1338,7 +1378,7 @@ export function CommuteAssistProContent({
       setHomePage(1);
       setAlternatePage(1);
     },
-    [direction, dutyOk, event.start_time, event.end_time, baseTz, arrivalBuffer, dutyDateTime]
+    [direction, dutyOk, event.start_time, event.end_time, baseTz, arrivalBuffer, dutyDateTime, trainingArrivalDeadlineIso]
   );
 
   const loadFlights = useCallback(
@@ -1427,7 +1467,9 @@ export function CommuteAssistProContent({
         );
         setCommuteCoverageBanner(mergedBanner);
         const arriveByFormatted = dutyOk
-          ? formatInTimeZone(subMinutes(dutyDateTime, arrivalBuffer), baseTz, "HH:mm")
+          ? trainingArrivalDeadlineIso != null
+            ? TRAINING_COMMUTE_ARRIVE_BY_LABEL
+            : formatInTimeZone(subMinutes(dutyDateTime, arrivalBuffer), baseTz, "HH:mm")
           : "";
         setCommuteMeta({ showInfo: dutyOk, arriveByFormatted, dutyOk });
         if (results.every((r) => r.flights === null) && routes.length > 0) {
@@ -1457,6 +1499,7 @@ export function CommuteAssistProContent({
       dutyOk,
       arrivalBuffer,
       dutyDateTime,
+      trainingArrivalDeadlineIso,
       applyFlightsToState,
     ]
   );
@@ -1475,9 +1518,7 @@ export function CommuteAssistProContent({
       try {
       const groups: Record<string, CommuteFlightOption[]> = {};
       const allOptions: TwoLegOption[] = [];
-      const crewBase = (direction === "to_base"
-        ? (dutyStartAirport ?? baseAirport)?.toUpperCase() ?? ""
-        : "").trim();
+      const crewBase = (direction === "to_base" ? toBaseCommuteDestinationAirport : "").trim();
       const home = homeAirport?.trim().toUpperCase();
       const alternate = alternateHomeAirport?.trim().toUpperCase();
 
@@ -1607,7 +1648,7 @@ export function CommuteAssistProContent({
         if (forceRefresh) setRefreshing(false);
       }
     },
-    [twoLegFirstLegRoutes, direction, dutyStartAirport, baseAirport, homeAirport, alternateHomeAirport]
+    [twoLegFirstLegRoutes, direction, toBaseCommuteDestinationAirport, homeAirport, alternateHomeAirport]
   );
 
   const loadTwoLegFlights = useCallback(
@@ -1793,10 +1834,13 @@ export function CommuteAssistProContent({
 
   useEffect(() => {
     if (commuteTwoLegEnabled && dutyOk && !commuteMeta) {
-      const arriveByFormatted = formatInTimeZone(subMinutes(dutyDateTime, arrivalBuffer), baseTz, "HH:mm");
+      const arriveByFormatted =
+        trainingArrivalDeadlineIso != null
+          ? TRAINING_COMMUTE_ARRIVE_BY_LABEL
+          : formatInTimeZone(subMinutes(dutyDateTime, arrivalBuffer), baseTz, "HH:mm");
       setCommuteMeta({ showInfo: dutyOk, arriveByFormatted, dutyOk });
     }
-  }, [commuteTwoLegEnabled, dutyOk, commuteMeta, dutyDateTime, arrivalBuffer, baseTz]);
+  }, [commuteTwoLegEnabled, dutyOk, commuteMeta, dutyDateTime, arrivalBuffer, baseTz, trainingArrivalDeadlineIso]);
 
   useEffect(() => {
     if (
@@ -2099,7 +2143,13 @@ export function CommuteAssistProContent({
   const commuteDateFormatted = formatInTimeZone(commuteDateObj, baseTz, "EEE MMMM d, yyyy");
   const tzMissing = originTz === "UTC" || destTz === "UTC";
   const commuteWindowValue = direction === "to_base"
-    ? (dutyOk ? (toBaseCommuteSearchDate === dutyDateBase ? "Same Day" : "Day Prior") : "Same-day flights")
+    ? (dutyOk
+        ? isTrainingDeviationToBaseCommute
+          ? "Same Day"
+          : toBaseCommuteSearchDate === dutyDateBase
+            ? "Same Day"
+            : "Day Prior"
+        : "Same-day flights")
     : (dutyEndDateBase ? "Day of Release" : "Same-day flights");
 
   return (
@@ -2154,7 +2204,7 @@ export function CommuteAssistProContent({
                     clearCommuteCache(getCommuteCacheKey(r.origin, r.destination, r.commuteDate, direction));
                     const [labelPart] = r.routeKey.split("-");
                     const leg2Dest = direction === "to_base"
-                      ? (dutyStartAirport ?? baseAirport)?.toUpperCase() ?? ""
+                      ? toBaseCommuteDestinationAirport
                       : (labelPart === "home" ? homeAirport : alternateHomeAirport)?.toUpperCase() ?? "";
                     if (leg2Dest.length === 3) {
                       clearCommuteCache(getCommuteCacheKey(r.destination, leg2Dest, r.commuteDate, direction));
@@ -2205,7 +2255,17 @@ export function CommuteAssistProContent({
           </p>
           {direction === "to_base" && (
             <p className="text-xs text-slate-400">
-              Arrive by: {arriveByFormatted} ({(baseAirport ?? "base").toUpperCase()})
+              {arriveByFormatted === TRAINING_COMMUTE_ARRIVE_BY_LABEL ? (
+                arriveByFormatted
+              ) : (
+                <>
+                  Arrive by: {arriveByFormatted} (
+                  {isTrainingDeviationToBaseCommute
+                    ? toBaseCommuteDestinationAirport
+                    : (baseAirport ?? "base").toUpperCase()}
+                  )
+                </>
+              )}
             </p>
           )}
         </>
@@ -2233,7 +2293,13 @@ export function CommuteAssistProContent({
             <div className="rounded-xl border border-slate-600/50 bg-slate-900/40 px-4 py-4">
               <p className="text-sm font-semibold text-slate-200">Commute window closed</p>
               <p className="mt-2 text-xs text-slate-400">
-                This commute needed arrival by {arriveByFormatted} ({(baseAirport ?? "base").toUpperCase()}).
+                {arriveByFormatted === TRAINING_COMMUTE_ARRIVE_BY_LABEL ? (
+                  <>{arriveByFormatted}.</>
+                ) : (
+                  <>
+                    This commute needed arrival by {arriveByFormatted} ({(baseAirport ?? "base").toUpperCase()}).
+                  </>
+                )}
               </p>
             </div>
           ) : (
@@ -2482,7 +2548,7 @@ export function CommuteAssistProContent({
                         2-Leg Commute Options{sectionLabel}
                       </p>
                       <p className="text-xs text-slate-400">
-                        {firstRoute.origin} → {firstRoute.destination} → {direction === "to_base" ? ((dutyStartAirport ?? baseAirport) ?? "").toUpperCase() : (firstRoute.routeKey.startsWith("home") ? homeAirport : alternateHomeAirport) ?? ""}
+                        {firstRoute.origin} → {firstRoute.destination} → {direction === "to_base" ? toBaseCommuteDestinationAirport : (firstRoute.routeKey.startsWith("home") ? homeAirport : alternateHomeAirport) ?? ""}
                       </p>
                       <div className="min-w-0 space-y-2">
                         {twoLegFirstLegPageItems.map((opt) => {

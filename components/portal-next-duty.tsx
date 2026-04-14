@@ -710,6 +710,9 @@ export async function PortalNextDuty({
                   ? event.legs[event.legs.length - 1]?.destination
                   : undefined
             }
+            commuteAssistTrainingDeviationToBase={
+              isTrainingEvent && trainingDeviationHomeCommute === true
+            }
             reportTimeOverride={reportTimeOverride}
             dutyStartTime={reportTimeOverride ?? event?.start_time ?? null}
             shortTurnAtBase={shortTurnAtBase}

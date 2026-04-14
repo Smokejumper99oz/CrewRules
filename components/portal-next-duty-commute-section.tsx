@@ -25,6 +25,8 @@ type Props = {
   commuteAssistSuppressFlightSearch?: boolean;
   dutyStartAirportOverride?: string | null;
   dutyEndAirportOverride?: string | null;
+  /** Training + home→training-city commute: use training IATA as to_base destination in Commute Assist. */
+  commuteAssistTrainingDeviationToBase?: boolean;
   reportTimeOverride?: string | null;
   dutyStartTime?: string | null;
   shortTurnAtBase?: { nextReportIso: string; nextReportDisplay: string; hoursUntilNextReport: number };
@@ -45,6 +47,7 @@ export function PortalNextDutyCommuteSection({
   commuteAssistSuppressFlightSearch,
   dutyStartAirportOverride,
   dutyEndAirportOverride,
+  commuteAssistTrainingDeviationToBase,
   reportTimeOverride,
   dutyStartTime,
   shortTurnAtBase,
@@ -142,6 +145,7 @@ export function PortalNextDutyCommuteSection({
             commuteAssistSuppressFlightSearch={commuteAssistSuppressFlightSearch}
             dutyStartAirportOverride={dutyStartAirportOverride}
             dutyEndAirportOverride={dutyEndAirportOverride}
+            commuteAssistTrainingDeviationToBase={commuteAssistTrainingDeviationToBase}
             reportTimeOverride={reportTimeOverride}
             shortTurnAtBase={shortTurnAtBase}
           />
