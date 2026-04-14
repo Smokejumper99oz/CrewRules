@@ -354,15 +354,15 @@ export function AdminClassOverviewSection({
               >
                 <div className={`min-w-0 px-1.5 py-1 ${h.header}`}>
                   <p
-                    className={`truncate text-[12px] font-bold leading-tight text-white sm:text-[13px] ${h.headerTitleClass}`}
+                    className={`flex w-full min-w-0 flex-row flex-nowrap items-center justify-between gap-2 text-[12px] font-bold leading-tight text-white sm:text-[13px] ${h.headerTitleClass}`}
                   >
-                    {c.label}
+                    <span className="min-w-0 truncate">{c.label}</span>
                     {isTestCohort ? (
                       <span
                         className={
                           c.health === "watch"
-                            ? "ml-1 text-amber-950"
-                            : "ml-1 text-amber-200 sm:text-amber-100"
+                            ? "shrink-0 text-amber-950"
+                            : "shrink-0 text-amber-200 sm:text-amber-100"
                         }
                       >
                         TEST
