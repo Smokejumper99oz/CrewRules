@@ -29,7 +29,7 @@ export default async function FrontierPilotAdminMentoringEmailCenterPage() {
 
       <section className="mt-6">
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="px-4 py-3">
+          <div className="rounded-t-xl bg-slate-100 px-4 py-3">
             <h2 className="text-sm font-semibold tracking-wide text-slate-900">Assignment Email Status</h2>
             <p className="mt-1 text-xs text-slate-500">
               Shows sent, opened, and pending mentor assignment emails.

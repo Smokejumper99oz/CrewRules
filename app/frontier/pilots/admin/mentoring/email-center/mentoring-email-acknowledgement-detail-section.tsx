@@ -11,14 +11,18 @@ function formatSentOpened(iso: string | null): string {
   if (iso == null || !String(iso).trim()) return "—";
   const d = new Date(String(iso).trim());
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  const local = d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  const utcH = d.getUTCHours();
+  const utcM = d.getUTCMinutes();
+  const utcTime = `${String(utcH).padStart(2, "0")}:${String(utcM).padStart(2, "0")} UTC`;
+  return `${local} (${utcTime})`;
 }
 
 function statusPillClass(status: MentorEmailDetailRow["status"]): string {
   if (status === "opened") {
-    return "inline-flex min-w-[4.5rem] items-center justify-center rounded-full border border-emerald-600/40 bg-emerald-50 px-2 py-0.5 text-center text-xs font-medium capitalize text-emerald-900";
+    return "inline-flex min-w-[4.5rem] items-center justify-center rounded-md border border-emerald-600/40 bg-emerald-50 px-2 py-0.5 text-center text-xs font-medium capitalize text-emerald-900";
   }
-  return "inline-flex min-w-[4.5rem] items-center justify-center rounded-full border border-amber-600/40 bg-amber-50 px-2 py-0.5 text-center text-xs font-medium capitalize text-amber-900";
+  return "inline-flex min-w-[4.5rem] items-center justify-center rounded-md border border-amber-600/40 bg-amber-50 px-2 py-0.5 text-center text-xs font-medium capitalize text-amber-900";
 }
 
 type Props = {

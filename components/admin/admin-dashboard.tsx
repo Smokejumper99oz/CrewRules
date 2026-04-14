@@ -29,6 +29,7 @@ import { MissingMentorContactMetricHelpPopover } from "@/components/admin/missin
 import { ProgramHealthScoreMetricHelpPopover } from "@/components/admin/program-health-score-metric-help-popover";
 import type { FrontierAdminFailedMilestoneAttemptRow } from "@/lib/mentoring/frontier-admin-failed-milestone-attempts";
 import { FailedMilestoneReviewRowActions } from "@/components/admin/failed-milestone-review-row-actions";
+import { AdoptionProgramHealthCollapsible } from "@/components/admin/adoption-program-health-collapsible";
 import type { MentorActivityRow } from "@/lib/mentoring/mentor-activity";
 import type { TenantFeature } from "@/lib/tenant-features";
 
@@ -83,8 +84,8 @@ function pctRounded(part: number, whole: number): string | null {
 const adoptionHealthCardRoot =
   "flex min-h-0 h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm";
 const adoptionHealthCardHeader =
-  "border-b border-slate-200/90 bg-slate-50 px-4 py-2.5 sm:px-4";
-const adoptionHealthCardBody = "flex min-h-0 flex-1 flex-col px-4 py-3";
+  "border-b border-slate-200/90 bg-slate-50 px-3 py-2 sm:px-3.5";
+const adoptionHealthCardBody = "flex min-h-0 flex-1 flex-col px-3 py-2.5";
 
 function AdoptionHealthCard({
   title,
@@ -117,7 +118,7 @@ function AdoptionHealthCard({
           {title}
         </h3>
         {headerSubtitle != null && headerSubtitle !== "" && (
-          <p className="mt-1 text-[10px] leading-snug normal-case text-slate-500">{headerSubtitle}</p>
+          <p className="mt-0.5 text-[10px] leading-snug normal-case text-slate-500">{headerSubtitle}</p>
         )}
       </div>
       <div
@@ -126,7 +127,7 @@ function AdoptionHealthCard({
         {footer != null ? (
           <>
             <div className="min-h-0 flex-1">{children}</div>
-            <div className="mt-3 shrink-0 border-t border-slate-200 pt-2.5">{footer}</div>
+            <div className="mt-2 shrink-0 border-t border-slate-200 pt-2">{footer}</div>
           </>
         ) : (
           children
@@ -172,7 +173,7 @@ function AdoptionProgramHealthGrid({
     emailAcknowledgementStats;
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
       <AdoptionHealthCard
         title="Onboarding needed"
         headerSubtitle="Not Yet on CrewRules™"
@@ -186,32 +187,32 @@ function AdoptionProgramHealthGrid({
           </Link>
         }
       >
-        <dl className="space-y-2.5">
+        <dl className="space-y-2">
           <div className="flex items-baseline justify-between gap-2">
             <dt className="text-xs text-slate-600">Mentees</dt>
-            <dd className="text-lg font-light tabular-nums text-slate-900">{overview.menteeRosterNotLive}</dd>
+            <dd className="text-base font-light tabular-nums text-slate-900">{overview.menteeRosterNotLive}</dd>
           </div>
           <div className="flex items-baseline justify-between gap-2">
             <dt className="text-xs text-slate-600">Mentors</dt>
-            <dd className="text-lg font-light tabular-nums text-slate-900">{overview.stagedMentors}</dd>
+            <dd className="text-base font-light tabular-nums text-slate-900">{overview.stagedMentors}</dd>
           </div>
         </dl>
       </AdoptionHealthCard>
 
       <AdoptionHealthCard title="Adoption" headerSubtitle="Active CrewRules™ users.">
-        <dl className="space-y-2.5">
+        <dl className="space-y-2">
           <div className="flex items-baseline justify-between gap-2">
             <dt className="text-xs text-slate-600">Mentees Active</dt>
-            <dd className="text-lg font-light tabular-nums text-slate-900">{menteesActiveAdoption}</dd>
+            <dd className="text-base font-light tabular-nums text-slate-900">{menteesActiveAdoption}</dd>
           </div>
           <div className="flex items-baseline justify-between gap-2">
             <dt className="text-xs text-slate-600">Mentors Active</dt>
-            <dd className="text-lg font-light tabular-nums text-slate-900">{mentorsActiveAdoption}</dd>
+            <dd className="text-base font-light tabular-nums text-slate-900">{mentorsActiveAdoption}</dd>
           </div>
         </dl>
-        <div className="mt-3 border-t border-slate-200 pt-3">
+        <div className="mt-2 border-t border-slate-200 pt-2">
           <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="text-2xl font-light tabular-nums text-slate-900">
+            <span className="text-xl font-light tabular-nums text-slate-900">
               {programAdoptionPctRounded != null ? `${programAdoptionPctRounded}%` : "—"}
             </span>
             <span className="text-[11px] font-medium tracking-wide text-slate-500 normal-case">
@@ -232,13 +233,13 @@ function AdoptionProgramHealthGrid({
           <p className="text-[11px] font-medium leading-snug text-slate-600">
             Mentor–Mentee Engagement
           </p>
-          <p className="mt-1 text-2xl font-light tabular-nums text-slate-900">{engagementHeadline}</p>
-          <p className="mt-1 text-xs tabular-nums text-slate-600">
+          <p className="mt-0.5 text-xl font-light tabular-nums text-slate-900">{engagementHeadline}</p>
+          <p className="mt-0.5 text-xs tabular-nums text-slate-600">
             {overview.activeMentees > 0
               ? `${overview.menteeAssignmentsWithCheckInLast14d} of ${overview.activeMentees} mentees engaged`
               : "No active mentees in scope"}
           </p>
-          <p className="mt-1 text-[11px] text-slate-500">Past 14 days</p>
+          <p className="mt-0.5 text-[11px] text-slate-500">Past 14 days</p>
         </div>
       </AdoptionHealthCard>
 
@@ -255,22 +256,22 @@ function AdoptionProgramHealthGrid({
           </Link>
         }
       >
-        <div className="space-y-3">
-          <dl className="space-y-2">
+        <div className="space-y-2">
+          <dl className="space-y-1.5">
             <div className="flex items-baseline justify-between gap-2">
               <dt className="text-xs text-slate-600">Assignment Emails Sent</dt>
-              <dd className="text-lg font-light tabular-nums text-slate-900">{emailsSent}</dd>
+              <dd className="text-base font-light tabular-nums text-slate-900">{emailsSent}</dd>
             </div>
             <div className="flex items-baseline justify-between gap-2">
               <dt className="text-xs text-slate-600">Acknowledged</dt>
-              <dd className="text-lg font-light tabular-nums text-slate-900">{emailsAcknowledged}</dd>
+              <dd className="text-base font-light tabular-nums text-slate-900">{emailsAcknowledged}</dd>
             </div>
             <div className="flex items-baseline justify-between gap-2">
               <dt className="text-xs text-slate-600">Pending</dt>
-              <dd className="text-lg font-light tabular-nums text-slate-900">{emailsPending}</dd>
+              <dd className="text-base font-light tabular-nums text-slate-900">{emailsPending}</dd>
             </div>
           </dl>
-          <p className="mt-2 text-sm font-medium tabular-nums text-slate-900">{confirmedPct}% Confirmed</p>
+          <p className="mt-1.5 text-sm font-medium tabular-nums text-slate-900">{confirmedPct}% Confirmed</p>
         </div>
       </AdoptionHealthCard>
     </div>
@@ -452,63 +453,88 @@ function sortMentorActivityRows(rows: MentorActivityRow[]): MentorActivityRow[] 
   });
 }
 
-const ACTIVITY_BADGE: Record<
-  MentorActivityRow["activity_tier"],
-  { label: string; className: string }
-> = {
-  today: {
-    label: "Active today",
-    className:
-      "border border-emerald-600/40 bg-emerald-50 text-emerald-900",
-  },
-  this_week: {
-    label: "This week",
-    className: "border border-blue-600/40 bg-blue-50 text-blue-900",
-  },
-  this_month: {
-    label: "This month",
-    className: "border border-amber-600/35 bg-amber-50/90 text-amber-900",
-  },
-  stale: {
-    label: "30+ days",
-    className: "border border-red-600/40 bg-red-50 text-red-900",
-  },
-  never: {
-    label: "None yet",
-    className: "border border-slate-300/90 bg-slate-100 text-slate-700",
-  },
+/** Relative age from `last_milestone_at` (same string the loader uses for the winning milestone). */
+function formatMentorActivityRelativeAge(lastAt: string | null): string {
+  if (lastAt == null || !String(lastAt).trim()) return "None yet";
+  const d = new Date(String(lastAt).trim());
+  if (Number.isNaN(d.getTime())) return "None yet";
+  return formatDistanceToNow(d, { addSuffix: true });
+}
+
+type LastActivityPillBucket = "none" | "green" | "amber" | "red";
+
+/**
+ * Last activity pill colors from age of `last_milestone_at`:
+ * 0–7 days green, 8–29 days amber, 30+ days red, none / invalid gray.
+ */
+function lastActivityPillBucket(lastAt: string | null): LastActivityPillBucket {
+  if (lastAt == null || !String(lastAt).trim()) return "none";
+  const d = new Date(String(lastAt).trim());
+  if (Number.isNaN(d.getTime())) return "none";
+  const diffMs = Date.now() - d.getTime();
+  const day = 86_400_000;
+  if (diffMs < 8 * day) return "green";
+  if (diffMs < 30 * day) return "amber";
+  return "red";
+}
+
+const LAST_ACTIVITY_PILL_CLASS: Record<LastActivityPillBucket, string> = {
+  green: "border border-emerald-600/40 bg-emerald-50 text-emerald-900",
+  amber: "border border-amber-600/35 bg-amber-50/90 text-amber-900",
+  red: "border border-red-600/40 bg-red-50 text-red-900",
+  none: "border border-slate-300/90 bg-slate-100 text-slate-700",
 };
 
-function formatLastMilestoneActivityLine(lastAt: string | null): string {
-  if (lastAt == null || !String(lastAt).trim()) return "No milestone activity yet";
-  const d = new Date(String(lastAt).trim());
-  if (Number.isNaN(d.getTime())) return "No milestone activity yet";
-  return `Last milestone activity ${formatDistanceToNow(d, { addSuffix: true })}`;
+/** Fixed width so every Last activity pill matches ~“21 days ago” + horizontal padding. */
+const MENTOR_ACTIVITY_RELATIVE_PILL_W = "w-[7.25rem]";
+
+function mentorLastMilestoneLine1(row: MentorActivityRow): string {
+  if (row.last_milestone_at == null || !String(row.last_milestone_at).trim()) {
+    return "No milestone activity yet";
+  }
+  const type = row.last_milestone_milestone_type?.trim();
+  return type ? formatMilestoneTypeLabel(type) : "—";
 }
 
 function MentorActivityRow({ row }: { row: MentorActivityRow }) {
-  const badge = ACTIVITY_BADGE[row.activity_tier];
   const name = row.full_name?.trim() || "—";
   const emp = row.employee_number ? `#${row.employee_number}` : null;
+  const menteeLine = row.mentee_count === 1 ? "1 mentee" : `${row.mentee_count} mentees`;
+  const relativeAge = formatMentorActivityRelativeAge(row.last_milestone_at);
+  const lastActivityPill = LAST_ACTIVITY_PILL_CLASS[lastActivityPillBucket(row.last_milestone_at)];
+
+  const winningMenteeName = row.last_milestone_mentee_name?.trim() || null;
 
   return (
-    <div className="flex items-center gap-3 py-2.5">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-medium text-slate-700">
-        {name.charAt(0).toUpperCase()}
+    <div className="flex flex-col gap-0.5 py-1.5 sm:grid sm:grid-cols-[repeat(14,minmax(0,1fr))] sm:items-start sm:gap-x-3 sm:gap-y-0 sm:py-1.5">
+      <div className="min-w-0 sm:col-span-2">
+        <span className="block truncate text-sm font-medium leading-tight text-slate-800">{name}</span>
+        {emp ? <span className="mt-0.5 text-xs tabular-nums text-slate-500 sm:hidden">{emp}</span> : null}
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm text-slate-800">{name}</span>
-          {emp && <span className="shrink-0 text-xs text-slate-500">{emp}</span>}
-        </div>
-        <div className="text-xs text-slate-600">
-          {row.mentee_count === 1 ? "1 mentee" : `${row.mentee_count} mentees`}
-        </div>
-        <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{formatLastMilestoneActivityLine(row.last_milestone_at)}</p>
+      <div className="hidden min-w-0 sm:col-span-2 sm:block">
+        {emp ? (
+          <span className="block truncate font-mono text-xs tabular-nums text-slate-600">{emp}</span>
+        ) : (
+          <span className="text-xs text-slate-400">—</span>
+        )}
       </div>
-      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}>
-        {badge.label}
-      </span>
+      <div className="text-xs leading-snug text-slate-600 sm:col-span-2">{menteeLine}</div>
+      <div className="min-w-0 text-[11px] leading-snug text-slate-500 sm:col-span-4">
+        <p className="line-clamp-2">{mentorLastMilestoneLine1(row)}</p>
+      </div>
+      <div className="min-w-0 text-[11px] leading-snug text-slate-600 sm:col-span-2">
+        <span className="block truncate sm:pt-0.5" title={winningMenteeName ?? undefined}>
+          {winningMenteeName ?? "—"}
+        </span>
+      </div>
+      <div className="flex justify-end text-right sm:col-span-2 sm:justify-end">
+        <span
+          className={`inline-block shrink-0 truncate rounded-md px-1.5 py-0.5 text-center text-[11px] font-medium leading-tight sm:mt-0.5 ${MENTOR_ACTIVITY_RELATIVE_PILL_W} ${lastActivityPill}`}
+          title={relativeAge}
+        >
+          {relativeAge}
+        </span>
+      </div>
     </div>
   );
 }
@@ -592,8 +618,34 @@ export function AdminDashboard({
     ).length,
   };
 
+  /** Same math as AdoptionProgramHealthGrid — one-line hint when the block is collapsed. */
+  const totalActiveAdoptionSummary = overview.liveMentees + overview.mentors;
+  const totalUsersAdoptionSummary =
+    totalActiveAdoptionSummary + overview.menteeRosterNotLive + overview.stagedMentors;
+  const adoptionPctSummary =
+    totalUsersAdoptionSummary > 0
+      ? `${Math.round((100 * totalActiveAdoptionSummary) / totalUsersAdoptionSummary)}%`
+      : "—";
+  const engagementSummary =
+    overview.activeMentees > 0 && engagementPct != null ? engagementPct : "—";
+  const emailsPart =
+    emailAcknowledgementStats.sent === 0
+      ? "Emails: none pending"
+      : `Emails ${emailAcknowledgementStats.confirmedPct}%`;
+  const adoptionHealthCollapsedSummary = `Adoption ${adoptionPctSummary} · Engagement ${engagementSummary} · ${emailsPart}`;
+
   return (
     <div className="space-y-8">
+      {/* ── CREWRULES ADOPTION & PROGRAM HEALTH (collapsible; default closed) ── */}
+      <AdoptionProgramHealthCollapsible collapsedSummary={adoptionHealthCollapsedSummary}>
+        <AdoptionProgramHealthGrid
+          overview={overview}
+          inviteListHref={`${base}/users`}
+          emailAcknowledgementHref={`${base}/mentoring/email-center`}
+          emailAcknowledgementStats={emailAcknowledgementStats}
+        />
+      </AdoptionProgramHealthCollapsible>
+
       {/* ── PROGRAM SNAPSHOT (7 KPI cards) ─────────────────── */}
       <section aria-labelledby="admin-program-snapshot-heading" className="space-y-3">
         <h2
@@ -693,31 +745,6 @@ export function AdminDashboard({
             subTextClassName="text-[11px] font-bold text-slate-700"
             barClass="bg-lime-400"
             valueClassName={programHealthValueClass}
-          />
-        </div>
-      </section>
-
-      {/* ── CREWRULES ADOPTION & PROGRAM HEALTH ───────────── */}
-      <section
-        className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
-        aria-labelledby="adoption-program-health-heading"
-      >
-        <div className="border-b border-[#75C043]/40 bg-slate-950 px-4 py-3 sm:px-5">
-          <p className="text-[11px] uppercase tracking-wide text-slate-400">Mentorship program</p>
-          <h2 id="adoption-program-health-heading" className="mt-1 text-base font-semibold tracking-tight text-white">
-            Crew<span className="text-[#75C043]">Rules</span>™{" "}
-            <span className="font-normal text-white/70" aria-hidden="true">
-              •
-            </span>{" "}
-            Adoption & Program Health
-          </h2>
-        </div>
-        <div className="p-4 sm:p-5">
-          <AdoptionProgramHealthGrid
-            overview={overview}
-            inviteListHref={`${base}/users`}
-            emailAcknowledgementHref={`${base}/mentoring/email-center`}
-            emailAcknowledgementStats={emailAcknowledgementStats}
           />
         </div>
       </section>
@@ -836,7 +863,7 @@ export function AdminDashboard({
       {mentorEnabled && mentorActivitySorted.length > 0 && (
         <section aria-label="Mentor Activity">
           <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3 sm:px-5">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 sm:px-5">
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 sm:gap-x-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-slate-600 ring-1 ring-slate-200/80">
                   <GraduationCap className="h-4 w-4" aria-hidden />
@@ -851,26 +878,53 @@ export function AdminDashboard({
               </Link>
             </div>
 
-            <div className="border-b border-slate-100 px-4 py-2.5 sm:px-5">
-              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[11px] text-slate-600">
-                <span>
-                  <span className="font-semibold tabular-nums text-slate-900">
+            <div className="border-b border-slate-100 bg-slate-50/40 px-3 py-2 sm:px-5">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 shadow-sm">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Active today</p>
+                  <p className="mt-0.5 text-base font-semibold tabular-nums leading-none text-slate-900">
                     {mentorActivitySummary.activeToday}
-                  </span>{" "}
-                  Active today
-                </span>
-                <span>
-                  <span className="font-semibold tabular-nums text-slate-900">{mentorActivitySummary.thisWeek}</span>{" "}
-                  This week
-                </span>
-                <span>
-                  <span className="font-semibold tabular-nums text-slate-900">{mentorActivitySummary.thisMonth}</span>{" "}
-                  This month
-                </span>
-                <span>
-                  <span className="font-semibold tabular-nums text-red-800">{mentorActivitySummary.needsAttention}</span>{" "}
-                  Needs attention
-                </span>
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 shadow-sm">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">This week</p>
+                  <p className="mt-0.5 text-base font-semibold tabular-nums leading-none text-slate-900">
+                    {mentorActivitySummary.thisWeek}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 shadow-sm">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">This month</p>
+                  <p className="mt-0.5 text-base font-semibold tabular-nums leading-none text-slate-900">
+                    {mentorActivitySummary.thisMonth}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 shadow-sm">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Needs attention</p>
+                  <p className="mt-0.5 text-base font-semibold tabular-nums leading-none text-red-800">
+                    {mentorActivitySummary.needsAttention}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden border-b border-slate-200 bg-slate-50/80 px-4 py-2 sm:grid sm:grid-cols-[repeat(14,minmax(0,1fr))] sm:gap-x-3 sm:px-5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:col-span-2">
+                MENTOR NAME
+              </div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:col-span-2">
+                Employee #
+              </div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:col-span-2">
+                Mentees assigned
+              </div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:col-span-4">
+                LAST MILESTONE UPDATE
+              </div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:col-span-2">
+                MENTEE NAME
+              </div>
+              <div className="text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:col-span-2">
+                LAST ACTIVITY
               </div>
             </div>
 

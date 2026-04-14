@@ -278,5 +278,5 @@ export async function getMentorEmailDetailRows(): Promise<MentorEmailDetailRow[]
     return ty - tx;
   });
 
-  return rows;
+  return rows.filter((r) => r.openedAt === null);
 }
