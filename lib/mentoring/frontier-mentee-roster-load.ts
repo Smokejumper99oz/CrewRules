@@ -1,6 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isWithinFirstYearSinceDateOfHire } from "@/lib/profile";
 import { pickNextMilestoneAmongPending } from "@/lib/mentoring/milestone-program-order";
+import {
+  buildFrontierProgramProgressFromAssignments,
+  type FrontierProgramProgressItem,
+} from "@/lib/mentoring/frontier-admin-program-progress";
 import type { MenteeRosterRow } from "@/app/frontier/pilots/admin/mentoring/mentee-roster-table";
 
 const TENANT = "frontier";
@@ -172,6 +176,7 @@ export async function loadFrontierPilotMenteeRosterPageData(options: LoadFrontie
   roster: MenteeRosterRow[];
   counts: { live: number; not_live: number; unassigned: number };
   dohAudit: DohAuditEntry[];
+  programProgress: FrontierProgramProgressItem[];
 }> {
   const { collectDohAudit, emitDohAuditToConsole } = options;
   const admin = createAdminClient();
@@ -592,5 +597,7 @@ export async function loadFrontierPilotMenteeRosterPageData(options: LoadFrontie
     return (a.name ?? "").localeCompare(b.name ?? "");
   });
 
-  return { roster, counts, dohAudit };
+  const programProgress = buildFrontierProgramProgressFromAssignments(assignments);
+
+  return { roster, counts, dohAudit, programProgress };
 }

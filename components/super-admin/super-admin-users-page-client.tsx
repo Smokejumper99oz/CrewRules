@@ -54,18 +54,99 @@ const usersTablePill =
 /** Same width for single-line Active in the Status column (~fits `Active` at text-xs + padding). */
 const usersTableCompactStatusWidth = "w-[3.75rem] min-w-[3.75rem] max-w-[3.75rem] box-border";
 
-/** Never signed in (Auth `last_sign_in_at` null when loaded); same amber family as before. */
-const notJoinedStatusPill =
-  "inline-flex h-6 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-amber-400/30 bg-amber-500/15 px-2 text-[10px] font-semibold leading-none text-amber-200";
+/** Never signed in (Auth `last_sign_in_at` null when loaded). */
+function notJoinedStatusPillClass(lightSurface: boolean): string {
+  return lightSurface
+    ? "inline-flex h-6 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-amber-300 bg-amber-50 px-2 text-[10px] font-semibold leading-none text-amber-900"
+    : "inline-flex h-6 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-amber-400/30 bg-amber-500/15 px-2 text-[10px] font-semibold leading-none text-amber-200";
+}
+
+function activeStatusPillClass(lightSurface: boolean): string {
+  return lightSurface
+    ? `${usersTablePill} ${usersTableCompactStatusWidth} border-emerald-300 bg-emerald-50 text-emerald-800`
+    : `${usersTablePill} ${usersTableCompactStatusWidth} border-slate-400/30 bg-slate-500/18 text-slate-200`;
+}
+
+function pilotBasePillClass(lightSurface: boolean): string {
+  return `${usersTablePill} ${
+    lightSurface
+      ? "border-slate-300 bg-slate-100 text-slate-800"
+      : "border-slate-400/35 bg-slate-500/20 text-slate-200"
+  }`;
+}
+
+function adminRolePillClass(lightSurface: boolean): string {
+  return `${usersTablePill} ${
+    lightSurface
+      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+      : "border-emerald-400/35 bg-emerald-500/15 text-emerald-200"
+  }`;
+}
+
+function mentorRolePillClass(lightSurface: boolean): string {
+  return `${usersTablePill} ${
+    lightSurface
+      ? "border-cyan-300 bg-cyan-50 text-cyan-900"
+      : "border-cyan-400/35 bg-cyan-500/15 text-cyan-200"
+  }`;
+}
+
+function menteeRolePillClass(lightSurface: boolean): string {
+  return `${usersTablePill} ${
+    lightSurface
+      ? "border-violet-300 bg-violet-50 text-violet-900"
+      : "border-violet-400/35 bg-violet-500/15 text-violet-200"
+  }`;
+}
+
+function tenantAdminPillClass(lightSurface: boolean): string {
+  return `${usersTablePill} ${
+    lightSurface
+      ? "border-sky-300 bg-sky-50 text-sky-900"
+      : "border-sky-400/35 bg-sky-500/15 text-sky-200"
+  }`;
+}
+
+function platformOwnerPillClass(lightSurface: boolean): string {
+  return `${usersTablePill} ${
+    lightSurface
+      ? "border-amber-300 bg-amber-50 text-amber-900"
+      : "border-amber-400/35 bg-amber-500/15 text-amber-200"
+  }`;
+}
+
+function milLeavePillClass(lightSurface: boolean): string {
+  return `${usersTablePill} ${
+    lightSurface
+      ? "border-lime-700/40 bg-lime-100 text-lime-950"
+      : "border-[#556b3a]/40 bg-[#2f3a23]/25 text-[#cdd6a3]"
+  }`;
+}
+
+function unassignedMentoringPillClass(lightSurface: boolean): string {
+  return `${usersTablePill} ${
+    lightSurface
+      ? "border-slate-300 bg-slate-100 text-slate-700"
+      : "border-slate-400/35 bg-slate-500/15 text-slate-300"
+  }`;
+}
+
+function pendingDeletionPillClass(lightSurface: boolean): string {
+  return `${usersTablePill} ${
+    lightSurface
+      ? "border-orange-300 bg-orange-50 text-orange-900"
+      : "border-orange-400/30 bg-orange-500/15 text-orange-200"
+  }`;
+}
 
 /**
  * Status column: Auth `last_sign_in_at` when available; never infer "Not Joined" from welcome alone.
  */
-function usersTablePrimaryStatusNode(u: SuperAdminUserRow): ReactNode {
+function usersTablePrimaryStatusNode(u: SuperAdminUserRow, lightSurface: boolean): ReactNode {
   if (isAccountPendingDeletion(u)) {
     return (
       <span
-        className={`${usersTablePill} border-orange-400/30 bg-orange-500/15 text-orange-200`}
+        className={pendingDeletionPillClass(lightSurface)}
         title={deletionScheduledTitle(u.deletion_scheduled_for)}
       >
         Pending Deletion
@@ -77,24 +158,12 @@ function usersTablePrimaryStatusNode(u: SuperAdminUserRow): ReactNode {
 
   if (authLoaded) {
     if (u.last_sign_in_at == null) {
-      return <span className={notJoinedStatusPill}>Not Joined</span>;
+      return <span className={notJoinedStatusPillClass(lightSurface)}>Not Joined</span>;
     }
-    return (
-      <span
-        className={`${usersTablePill} ${usersTableCompactStatusWidth} border-slate-400/30 bg-slate-500/18 text-slate-200`}
-      >
-        Active
-      </span>
-    );
+    return <span className={activeStatusPillClass(lightSurface)}>Active</span>;
   }
 
-  return (
-    <span
-      className={`${usersTablePill} ${usersTableCompactStatusWidth} border-slate-400/30 bg-slate-500/18 text-slate-200`}
-    >
-      Active
-    </span>
-  );
+  return <span className={activeStatusPillClass(lightSurface)}>Active</span>;
 }
 
 /** Frontier `/admin/users`: hide platform identity from tenant admins (display only; super-admin page unchanged). */
@@ -254,6 +323,44 @@ export function SuperAdminUsersPageClient({
     }
   }, [editing, pending]);
 
+  const lightUsersTable = isFrontier;
+
+  const searchInputClass = lightUsersTable
+    ? "w-full max-w-md rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 [color-scheme:light] focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/25"
+    : "w-full max-w-md rounded-lg border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none";
+
+  const tableShellClass = lightUsersTable
+    ? "overflow-x-auto rounded-xl border border-slate-200"
+    : "overflow-x-auto rounded-xl border border-white/5";
+
+  const theadRowClass = lightUsersTable
+    ? "border-b border-slate-200 bg-slate-50"
+    : "border-b border-white/5 bg-white/5";
+
+  const thClass = lightUsersTable
+    ? "px-4 py-3 text-left font-medium text-slate-600"
+    : "px-4 py-3 text-left font-medium text-slate-300";
+
+  const tbodyRowClass = lightUsersTable
+    ? "border-b border-slate-100 last:border-0 even:bg-slate-50/50 hover:bg-slate-100/70"
+    : "border-b border-white/5 last:border-0 hover:bg-white/[0.02]";
+
+  const tdNameClass = lightUsersTable
+    ? "align-middle px-4 py-3 font-medium text-slate-900"
+    : "align-middle px-4 py-3 text-slate-200";
+
+  const tdBodyClass = lightUsersTable
+    ? "align-middle px-4 py-3 text-slate-700"
+    : "align-middle px-4 py-3 text-slate-300";
+
+  const editBtnClass = lightUsersTable
+    ? "inline-flex items-center gap-1.5 rounded px-2 py-1 text-slate-600 hover:bg-slate-100 hover:text-emerald-800"
+    : "inline-flex items-center gap-1.5 rounded px-2 py-1 text-slate-400 hover:bg-slate-700/50 hover:text-slate-200";
+
+  const emptyHintClass = lightUsersTable ? "text-sm text-slate-600" : "text-sm text-slate-500";
+
+  const editDashClass = lightUsersTable ? "text-xs text-slate-400" : "text-xs text-slate-500";
+
   return (
     <div className="space-y-3">
       <div>
@@ -266,145 +373,88 @@ export function SuperAdminUsersPageClient({
           }
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-md rounded-lg border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-[#75C043]/50 focus:outline-none"
+          className={searchInputClass}
         />
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-white/5">
+      <div className={tableShellClass}>
         <table className="w-full min-w-[780px] text-sm">
           <thead>
-            <tr className="border-b border-white/5 bg-white/5">
-              <th className="px-4 py-3 text-left font-medium text-slate-300">Name</th>
-              <th className="px-4 py-3 text-left font-medium text-slate-300">Email</th>
-              {!isFrontier ? (
-                <th className="px-4 py-3 text-left font-medium text-slate-300">Tenant</th>
-              ) : null}
-              <th className="px-4 py-3 text-left font-medium text-slate-300">Role</th>
-              <th className="px-4 py-3 text-left font-medium text-slate-300">Status</th>
-              <th className="px-4 py-3 text-left font-medium text-slate-300">Emp #</th>
-              <th className="px-4 py-3 text-left font-medium text-slate-300">Phone</th>
-              <th className="px-4 py-3 text-right font-medium text-slate-300">Edit</th>
+            <tr className={theadRowClass}>
+              <th className={thClass}>Name</th>
+              <th className={thClass}>Email</th>
+              {!isFrontier ? <th className={thClass}>Tenant</th> : null}
+              <th className={thClass}>Role</th>
+              <th className={thClass}>Status</th>
+              <th className={thClass}>Emp #</th>
+              <th className={thClass}>Phone</th>
+              <th className={`${thClass} text-right`}>Edit</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((u) => (
-              <tr
-                key={u.id}
-                className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]"
-              >
-                <td className="align-middle px-4 py-3 text-slate-200">{formatDisplayName(u.full_name) || "—"}</td>
-                <td className="align-middle px-4 py-3 text-slate-300">
+              <tr key={u.id} className={tbodyRowClass}>
+                <td className={tdNameClass}>{formatDisplayName(u.full_name) || "—"}</td>
+                <td className={tdBodyClass}>
                   {emailDisplayedOnFrontierTenantUsersTable(isFrontier, currentUserRole, u)}
                 </td>
-                {!isFrontier ? (
-                  <td className="align-middle px-4 py-3 text-slate-300">{tenantLabel(u.tenant)}</td>
-                ) : null}
-                <td className="align-middle px-4 py-3 text-slate-300">
+                {!isFrontier ? <td className={tdBodyClass}>{tenantLabel(u.tenant)}</td> : null}
+                <td className={tdBodyClass}>
                   <span className="inline-flex max-w-full flex-wrap items-center gap-1.5 sm:flex-nowrap">
                     {frontierTenantViewerMasksPlatformOwnerRow(isFrontier, currentUserRole, u) ? (
                       <>
-                        <span
-                          className={`${usersTablePill} border-slate-400/35 bg-slate-500/20 text-slate-200`}
-                        >
-                          {baseRoleLabel(u)}
-                        </span>
+                        <span className={pilotBasePillClass(lightUsersTable)}>{baseRoleLabel(u)}</span>
                         {u.is_admin && (
-                          <span
-                            className={`${usersTablePill} border-emerald-400/35 bg-emerald-500/15 text-emerald-200`}
-                          >
-                            Admin
-                          </span>
+                          <span className={adminRolePillClass(lightUsersTable)}>Admin</span>
                         )}
                         {u.is_mentor && (
-                          <span
-                            className={`${usersTablePill} border-cyan-400/35 bg-cyan-500/15 text-cyan-200`}
-                          >
-                            Mentor
-                          </span>
+                          <span className={mentorRolePillClass(lightUsersTable)}>Mentor</span>
                         )}
                         {showMenteeRolePill(isFrontier, u) && (
-                          <span
-                            className={`${usersTablePill} border-violet-400/35 bg-violet-500/15 text-violet-200`}
-                          >
-                            Mentee
-                          </span>
+                          <span className={menteeRolePillClass(lightUsersTable)}>Mentee</span>
                         )}
                       </>
                     ) : u.role === "super_admin" ? (
                       <>
-                        <span
-                          className={`${usersTablePill} border-amber-400/35 bg-amber-500/15 text-amber-200`}
-                        >
+                        <span className={platformOwnerPillClass(lightUsersTable)}>
                           Platform Owner
                         </span>
                         {showMenteeRolePill(isFrontier, u) && (
-                          <span
-                            className={`${usersTablePill} border-violet-400/35 bg-violet-500/15 text-violet-200`}
-                          >
-                            Mentee
-                          </span>
+                          <span className={menteeRolePillClass(lightUsersTable)}>Mentee</span>
                         )}
                       </>
                     ) : u.role === "tenant_admin" ? (
                       <>
-                        <span
-                          className={`${usersTablePill} border-sky-400/35 bg-sky-500/15 text-sky-200`}
-                        >
-                          Tenant Admin
-                        </span>
+                        <span className={tenantAdminPillClass(lightUsersTable)}>Tenant Admin</span>
                         {u.is_mentor && (
-                          <span
-                            className={`${usersTablePill} border-cyan-400/35 bg-cyan-500/15 text-cyan-200`}
-                          >
-                            Mentor
-                          </span>
+                          <span className={mentorRolePillClass(lightUsersTable)}>Mentor</span>
                         )}
                         {showMenteeRolePill(isFrontier, u) && (
-                          <span
-                            className={`${usersTablePill} border-violet-400/35 bg-violet-500/15 text-violet-200`}
-                          >
-                            Mentee
-                          </span>
+                          <span className={menteeRolePillClass(lightUsersTable)}>Mentee</span>
                         )}
                       </>
                     ) : (
                       <>
-                        <span
-                          className={`${usersTablePill} border-slate-400/35 bg-slate-500/20 text-slate-200`}
-                        >
-                          {baseRoleLabel(u)}
-                        </span>
+                        <span className={pilotBasePillClass(lightUsersTable)}>{baseRoleLabel(u)}</span>
                         {u.is_admin && (
-                          <span
-                            className={`${usersTablePill} border-emerald-400/35 bg-emerald-500/15 text-emerald-200`}
-                          >
-                            Admin
-                          </span>
+                          <span className={adminRolePillClass(lightUsersTable)}>Admin</span>
                         )}
                         {u.is_mentor && (
-                          <span
-                            className={`${usersTablePill} border-cyan-400/35 bg-cyan-500/15 text-cyan-200`}
-                          >
-                            Mentor
-                          </span>
+                          <span className={mentorRolePillClass(lightUsersTable)}>Mentor</span>
                         )}
                         {showMenteeRolePill(isFrontier, u) && (
-                          <span
-                            className={`${usersTablePill} border-violet-400/35 bg-violet-500/15 text-violet-200`}
-                          >
-                            Mentee
-                          </span>
+                          <span className={menteeRolePillClass(lightUsersTable)}>Mentee</span>
                         )}
                       </>
                     )}
                   </span>
                 </td>
-                <td className="align-middle px-4 py-3 text-slate-300">
+                <td className={tdBodyClass}>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    {usersTablePrimaryStatusNode(u)}
+                    {usersTablePrimaryStatusNode(u, lightUsersTable)}
                     {u.mentoring_military_leave ? (
                       <span
-                        className={`${usersTablePill} border-[#556b3a]/40 bg-[#2f3a23]/25 text-[#cdd6a3]`}
+                        className={milLeavePillClass(lightUsersTable)}
                         title="Military Leave"
                       >
                         MIL LEAVE
@@ -412,7 +462,7 @@ export function SuperAdminUsersPageClient({
                     ) : null}
                     {isFrontier && u.mentoring_first_year_hire && !u.isMentee ? (
                       <span
-                        className={`${usersTablePill} border-slate-400/35 bg-slate-500/15 text-slate-300`}
+                        className={unassignedMentoringPillClass(lightUsersTable)}
                         title="First-year hire; no active mentor assignment in CrewRules yet"
                       >
                         Unassigned
@@ -420,8 +470,8 @@ export function SuperAdminUsersPageClient({
                     ) : null}
                   </div>
                 </td>
-                <td className="align-middle px-4 py-3 text-slate-300">{u.employee_number ?? "—"}</td>
-                <td className="align-middle px-4 py-3 text-slate-300">
+                <td className={tdBodyClass}>{u.employee_number ?? "—"}</td>
+                <td className={tdBodyClass}>
                   <span className="whitespace-nowrap tabular-nums">
                     {formatUsPhoneStored(u.phone) ?? "—"}
                   </span>
@@ -431,13 +481,13 @@ export function SuperAdminUsersPageClient({
                     <button
                       type="button"
                       onClick={() => openEdit(u)}
-                      className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-slate-400 hover:bg-slate-700/50 hover:text-slate-200"
+                      className={editBtnClass}
                     >
                       <Pencil className="size-3.5" />
                       Edit
                     </button>
                   ) : (
-                    <span className="text-xs text-slate-500">—</span>
+                    <span className={editDashClass}>—</span>
                   )}
                 </td>
               </tr>
@@ -447,7 +497,7 @@ export function SuperAdminUsersPageClient({
       </div>
 
       {filtered.length === 0 && (
-        <p className="text-sm text-slate-500">
+        <p className={emptyHintClass}>
           {users.length === 0 ? "No users yet." : "No users match your search."}
         </p>
       )}

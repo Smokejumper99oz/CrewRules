@@ -6,7 +6,7 @@
   --cr-green: #75C043; /* CrewRules green */
 }
 
-/* Hide scrollbar but keep scroll (sidebar) */
+/* Hide scrollbar but keep scroll (wheel / touch / trackpad still work) */
 .sidebar-scrollbar-hide {
   scrollbar-width: none;
   -ms-overflow-style: none;

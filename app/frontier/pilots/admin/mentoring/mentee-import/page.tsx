@@ -9,7 +9,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const sectionCard = "rounded-lg border border-slate-700/50 bg-slate-800/50 p-4 sm:p-5";
+const sectionCard = "rounded-lg border border-slate-200 bg-white p-4 sm:p-5 shadow-sm";
 
 const TENANT = "frontier";
 
@@ -55,45 +55,45 @@ export default async function FrontierPilotAdminMentoringMenteeImportPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold tracking-tight border-b border-white/5 pb-3">Mentee Imports</h1>
+      <h1 className="text-xl font-semibold tracking-tight border-b border-slate-200 pb-3 text-[#1a2b4b]">Mentee Imports</h1>
 
       <section className={sectionCard} aria-labelledby="mentee-import-csv-heading">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h2 id="mentee-import-csv-heading" className="text-base font-semibold text-slate-200">
+          <h2 id="mentee-import-csv-heading" className="text-base font-semibold text-slate-800">
             Upload Mentees in Bulk (Download Excel Template to the right)
           </h2>
           <a
             href="/frontier-mentee-roster-import-template.xlsx"
             download="frontier-mentee-roster-import-template.xlsx"
-            className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-emerald-400/30 bg-slate-800/50 px-3 text-xs font-medium text-emerald-300 transition hover:border-emerald-400/50 hover:bg-emerald-400/10"
+            className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-emerald-300 bg-emerald-50 px-3 text-xs font-medium text-emerald-900 transition hover:border-emerald-400 hover:bg-emerald-100"
           >
             Download template
           </a>
         </div>
-        <div className="mt-2 text-sm leading-snug text-slate-400">
+        <div className="mt-2 text-sm leading-snug text-slate-600">
           <p>Bulk import mentees using the template for Frontier Airlines mentoring.</p>
 
-          <p className="mt-3 text-sm font-semibold text-slate-200">Required fields</p>
+          <p className="mt-3 text-sm font-semibold text-slate-800">Required fields</p>
           <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
             <li>mentee_full_name</li>
             <li>mentee_employee_number</li>
             <li>hire_date</li>
           </ul>
 
-          <p className="mt-3 text-sm font-semibold text-slate-200">Email (optional)</p>
+          <p className="mt-3 text-sm font-semibold text-slate-800">Email (optional)</p>
           <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
             <li>mentee_email@private (optional)</li>
             <li>mentee_email@flyfrontier.com (optional)</li>
           </ul>
 
-          <p className="mt-3 text-sm font-semibold text-slate-200">Recommended fields</p>
+          <p className="mt-3 text-sm font-semibold text-slate-800">Recommended fields</p>
           <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
             <li>mentor_employee_number (leave blank to import as unassigned)</li>
             <li>mentee_phone</li>
             <li>notes</li>
           </ul>
 
-          <p className="mt-3 text-sm font-semibold text-slate-200">How it works</p>
+          <p className="mt-3 text-sm font-semibold text-slate-800">How it works</p>
           <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
             <li>All rows in one mentee class upload must use the same Hire Date</li>
             <li>If multiple hire dates are detected, the import will stop (no partial writes)</li>
@@ -105,8 +105,8 @@ export default async function FrontierPilotAdminMentoringMenteeImportPage() {
             <li>Data can be corrected later by the mentee after signup</li>
           </ul>
 
-          <div className="mt-4 rounded-md border border-slate-700/60 bg-slate-900/40 p-3 text-xs text-slate-300">
-            <p className="mb-2 text-xs font-semibold text-slate-200">Example row</p>
+          <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            <p className="mb-2 text-xs font-semibold text-slate-800">Example row</p>
             <div className="space-y-0.5 font-mono text-[11px] leading-relaxed">
               <div>mentee_full_name: Jane Test</div>
               <div>mentee_employee_number: 123456</div>

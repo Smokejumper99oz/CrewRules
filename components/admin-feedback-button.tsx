@@ -30,7 +30,7 @@ export function AdminFeedbackButton() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex touch-manipulation items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-slate-300 hover:bg-white/10 hover:text-white transition min-h-[44px]"
+          className="flex touch-manipulation items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition min-h-[44px]"
           aria-label="Send feedback"
         >
           <MessageSquare className="h-4 w-4 shrink-0 text-[#75C043]" aria-hidden />

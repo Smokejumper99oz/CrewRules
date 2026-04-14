@@ -60,15 +60,15 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-6">
-        <h2 className="text-xl font-semibold tracking-tight border-b border-white/5 pb-2">
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold tracking-tight border-b border-slate-200 pb-2 text-[#1a2b4b]">
           Connect FLICA onboarding (profile card)
         </h2>
-        <p className="mt-3 text-sm text-slate-400">
+        <p className="mt-3 text-sm text-slate-600">
           When off, pilots do not see the Connect FLICA section on Profile. Missing row defaults to on (same as app).
         </p>
         <div className="mt-4 space-y-3">
-          <p className="text-sm text-slate-300">
+          <p className="text-sm text-slate-700">
             Current:{" "}
             {flicaEnabled === null && !flicaError ? (
               <span className="text-slate-500">Loading…</span>
@@ -94,18 +94,18 @@ export default function AdminSettingsPage() {
               type="button"
               onClick={() => handleFlicaSet(false)}
               disabled={flicaSaving || (flicaEnabled === null && !flicaError) || flicaEnabled === false}
-              className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-200 transition disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Turn off
             </button>
           </div>
         </div>
       </div>
-      <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 p-6">
-        <h2 className="text-xl font-semibold tracking-tight border-b border-white/5 pb-2">
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold tracking-tight border-b border-slate-200 pb-2 text-[#1a2b4b]">
           Tenant Settings
         </h2>
-        <p className="mt-3 text-sm text-slate-400">
+        <p className="mt-3 text-sm text-slate-600">
           Seed or update tenant-level configuration. Admin only.
         </p>
         <div className="mt-4 flex items-center gap-3">

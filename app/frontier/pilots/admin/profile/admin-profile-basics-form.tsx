@@ -35,19 +35,19 @@ export function AdminProfileBasicsForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200"
+      className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200"
     >
-      <h2 className="text-lg font-semibold tracking-tight border-b border-white/5 pb-2 text-white">
+      <h2 className="text-lg font-semibold tracking-tight border-b border-slate-200 pb-2 text-[#1a2b4b]">
         Account basics
       </h2>
-      <p className="mt-3 text-sm text-slate-400">
+      <p className="mt-3 text-sm text-slate-600">
         Your name and phone are stored on your CrewRules profile and may appear in admin or crew-facing
         features where applicable.
       </p>
 
       <div className="mt-6 space-y-4">
         <div>
-          <label htmlFor="admin-profile-full-name" className="block text-xs font-medium text-slate-400">
+          <label htmlFor="admin-profile-full-name" className="block text-xs font-medium text-slate-600">
             Full Name
           </label>
           <input
@@ -57,7 +57,7 @@ export function AdminProfileBasicsForm({
             autoComplete="name"
             defaultValue={fullNameDefault}
             disabled={pending}
-            className="mt-2 w-full max-w-md rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:border-[#75C043]/50"
+            className="mt-2 w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 outline-none focus:border-emerald-600/50 focus:ring-1 focus:ring-emerald-600/20"
             placeholder="Your full name"
           />
           <p className="mt-1 text-xs text-slate-500">
@@ -66,7 +66,7 @@ export function AdminProfileBasicsForm({
         </div>
 
         <div>
-          <label htmlFor="admin-profile-phone" className="block text-xs font-medium text-slate-400">
+          <label htmlFor="admin-profile-phone" className="block text-xs font-medium text-slate-600">
             Phone Number
           </label>
           <input
@@ -77,7 +77,7 @@ export function AdminProfileBasicsForm({
             value={phoneValue}
             onChange={(e) => setPhoneValue(formatUsPhoneDisplay(e.target.value))}
             disabled={pending}
-            className="mt-2 w-full max-w-md rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:border-[#75C043]/50"
+            className="mt-2 w-full max-w-md rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 outline-none focus:border-emerald-600/50 focus:ring-1 focus:ring-emerald-600/20"
             placeholder="(XXX) XXX-XXXX"
           />
         </div>
@@ -85,7 +85,7 @@ export function AdminProfileBasicsForm({
 
       {message && (
         <p
-          className={`mt-4 text-sm ${message.type === "success" ? "text-emerald-400" : "text-red-400"}`}
+          className={`mt-4 text-sm font-medium ${message.type === "success" ? "text-emerald-800" : "text-red-700"}`}
         >
           {message.text}
         </p>
@@ -94,7 +94,7 @@ export function AdminProfileBasicsForm({
       <button
         type="submit"
         disabled={pending}
-        className="mt-6 rounded-xl bg-[#75C043] px-4 py-2 text-sm font-semibold text-slate-950 hover:brightness-110 transition disabled:opacity-60"
+        className="mt-6 rounded-xl bg-emerald-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-900 disabled:opacity-60"
       >
         {pending ? "Saving…" : "Save"}
       </button>

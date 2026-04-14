@@ -21,7 +21,7 @@ export function FrontierPilotAdminMentorCsvUploadForm() {
           accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           required
           disabled={isPending}
-          className="block w-full text-[11px] leading-none text-slate-400 file:mr-2 file:inline-flex file:h-7 file:w-44 file:shrink-0 file:items-center file:justify-center file:rounded-md file:border file:border-slate-600 file:bg-slate-800/80 file:px-2.5 file:text-[11px] file:font-semibold file:text-slate-200 hover:file:bg-slate-700/80 disabled:opacity-50"
+          className="block w-full text-[11px] leading-none text-slate-600 file:mr-2 file:inline-flex file:h-7 file:w-44 file:shrink-0 file:items-center file:justify-center file:rounded-md file:border file:border-slate-300 file:bg-slate-100 file:px-2.5 file:text-[11px] file:font-semibold file:text-slate-800 hover:file:bg-slate-200 disabled:opacity-50"
         />
         <button
           type="submit"

@@ -1,8 +1,8 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
   Users,
-  CheckCircle2,
   Clock,
   Wifi,
   UploadCloud,
@@ -12,12 +12,20 @@ import {
   CalendarRange,
   Lock,
   ArrowRight,
-  UserCheck,
-  UserX,
-  ClipboardList,
-  Phone,
 } from "lucide-react";
 import type { MentoringOverviewStats } from "@/lib/mentoring/admin-overview-stats";
+import type { MentorEmailAcknowledgementStats } from "@/lib/mentoring/mentor-email-acknowledgement-stats";
+import type { AdminClassOverviewRow } from "@/lib/mentoring/frontier-admin-class-overview";
+import type { FrontierProgramProgressItem } from "@/lib/mentoring/frontier-admin-program-progress";
+import { AdminClassOverviewSection } from "@/components/admin/admin-class-overview-section";
+import { AdminProgramProgressSection } from "@/components/admin/admin-program-progress-section";
+import { ActiveMentorsMetricHelpPopover } from "@/components/admin/active-mentors-metric-help-popover";
+import { MentorCoverageMetricHelpPopover } from "@/components/admin/mentor-coverage-metric-help-popover";
+import { UnmatchedMenteesMetricHelpPopover } from "@/components/admin/unmatched-mentees-metric-help-popover";
+import { EngagementRateMetricHelpPopover } from "@/components/admin/engagement-rate-metric-help-popover";
+import { AtRiskMenteesMetricHelpPopover } from "@/components/admin/at-risk-mentees-metric-help-popover";
+import { MissingMentorContactMetricHelpPopover } from "@/components/admin/missing-mentor-contact-metric-help-popover";
+import { ProgramHealthScoreMetricHelpPopover } from "@/components/admin/program-health-score-metric-help-popover";
 import type { FrontierAdminFailedMilestoneAttemptRow } from "@/lib/mentoring/frontier-admin-failed-milestone-attempts";
 import { FailedMilestoneReviewRowActions } from "@/components/admin/failed-milestone-review-row-actions";
 import type { MentorActivityRow } from "@/lib/mentoring/mentor-activity";
@@ -30,6 +38,12 @@ type Props = {
   mentorActivity: MentorActivityRow[];
   tenantFeatures: TenantFeature[];
   failedMilestoneAttempts?: FrontierAdminFailedMilestoneAttemptRow[];
+  /** Hire-date cohorts (same as Mentee Roster “Class”); read-only display. */
+  classOverview: AdminClassOverviewRow[];
+  /** Milestone completion % across active assignment rows from the same roster load. */
+  programProgress: FrontierProgramProgressItem[];
+  /** Mentor assignment email send / open counts (`mentor_email_events`). */
+  emailAcknowledgementStats: MentorEmailAcknowledgementStats;
 };
 
 const MILESTONE_TYPE_LABELS: Record<string, string> = {
@@ -60,89 +74,6 @@ function featureEnabled(features: TenantFeature[], key: string) {
   return features.find((f) => f.feature_key === key)?.enabled === true;
 }
 
-const ATTENTION_SEVERITY_STYLES: Record<
-  "critical" | "amber" | "slate" | "teal" | "info" | "success",
-  { shell: string; count: string; label: string; icon: string; footer: string }
-> = {
-  critical: {
-    shell: "border-red-500/50 bg-red-950/38 transition hover:opacity-90",
-    count: "text-red-200",
-    label: "text-red-200",
-    icon: "text-red-300/90 opacity-90",
-    footer: "text-red-400/80",
-  },
-  amber: {
-    shell: "border-amber-500/40 bg-amber-950/24 transition hover:opacity-90",
-    count: "text-amber-200",
-    label: "text-amber-200",
-    icon: "text-amber-300/90 opacity-90",
-    footer: "text-amber-400/80",
-  },
-  slate: {
-    shell: "border-slate-600/50 bg-slate-800/45 transition hover:opacity-90",
-    count: "text-slate-200",
-    label: "text-slate-200",
-    icon: "text-slate-400 opacity-90",
-    footer: "text-slate-400/95",
-  },
-  teal: {
-    shell: "border-teal-500/40 bg-teal-950/25 transition hover:opacity-90",
-    count: "text-teal-200",
-    label: "text-teal-200",
-    icon: "text-teal-300/90 opacity-90",
-    footer: "text-teal-400/80",
-  },
-  info: {
-    shell: "border-blue-500/40 bg-blue-950/25 transition hover:opacity-90",
-    count: "text-blue-200",
-    label: "text-blue-200",
-    icon: "text-blue-300/90 opacity-90",
-    footer: "text-blue-400/80",
-  },
-  success: {
-    shell: "border-green-500/30 bg-green-950/25 transition hover:opacity-90",
-    count: "text-green-300",
-    label: "text-green-300",
-    icon: "text-green-400/90 opacity-90",
-    footer: "text-green-400/75",
-  },
-};
-
-/** Compact tile (StatPill-style layout) with legacy banner severity colors. */
-function AttentionStatCard({
-  icon: Icon,
-  label,
-  count,
-  href,
-  severity,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  count: number;
-  href: string;
-  severity: "critical" | "amber" | "slate" | "teal" | "info" | "success";
-}) {
-  const s = ATTENTION_SEVERITY_STYLES[severity];
-  return (
-    <Link
-      href={href}
-      className={`group flex min-h-0 flex-col gap-0.5 rounded-xl border px-4 py-3 ${s.shell}`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <span className={`text-xl font-light leading-none tabular-nums ${s.count}`}>
-          {count}
-        </span>
-        <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${s.icon}`} aria-hidden />
-      </div>
-      <span className={`text-xs leading-snug ${s.label}`}>{label}</span>
-      <span className={`mt-1 flex items-center gap-1 text-[11px] ${s.footer}`}>
-        Open
-        <ArrowRight className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
-      </span>
-    </Link>
-  );
-}
-
 function StatPill({
   label,
   value,
@@ -153,10 +84,359 @@ function StatPill({
   sub?: string;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-xl border border-slate-700/50 bg-slate-800/50 px-4 py-3">
-      <span className="text-xl font-light text-slate-100 tabular-nums">{value}</span>
-      <span className="text-xs text-slate-300">{label}</span>
+    <div className="flex flex-col gap-0.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <span className="text-xl font-light text-slate-900 tabular-nums">{value}</span>
+      <span className="text-xs text-slate-600">{label}</span>
       {sub && <span className="text-[11px] text-slate-500">{sub}</span>}
+    </div>
+  );
+}
+
+function pctRounded(part: number, whole: number): string | null {
+  if (whole <= 0) return null;
+  return `${Math.round((100 * part) / whole)}%`;
+}
+
+const adoptionHealthCardRoot =
+  "flex min-h-0 h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm";
+const adoptionHealthCardHeader =
+  "border-b border-slate-200/90 bg-slate-50 px-4 py-2.5 sm:px-4";
+const adoptionHealthCardBody = "flex min-h-0 flex-1 flex-col px-4 py-3";
+
+function AdoptionHealthCard({
+  title,
+  headerSubtitle,
+  headerClassName,
+  children,
+  footer,
+  dashedPlaceholder,
+}: {
+  title: string;
+  /** Small line under the title in the header band (normal sentence case). */
+  headerSubtitle?: string;
+  /** Optional override for the full header strip `className` (border, background, padding). */
+  headerClassName?: string;
+  children: ReactNode;
+  /** Optional action row pinned to the bottom of the card body. */
+  footer?: ReactNode;
+  dashedPlaceholder?: boolean;
+}) {
+  const header = headerClassName ?? adoptionHealthCardHeader;
+  return (
+    <div
+      className={`${adoptionHealthCardRoot} ${dashedPlaceholder ? "border-dashed border-slate-300 bg-slate-50/80" : ""}`}
+      aria-label={dashedPlaceholder ? `${title} (placeholder)` : undefined}
+    >
+      <div className={header}>
+        <h3
+          className={`text-xs font-semibold uppercase tracking-wide ${dashedPlaceholder ? "text-slate-500" : "text-slate-600"}`}
+        >
+          {title}
+        </h3>
+        {headerSubtitle != null && headerSubtitle !== "" && (
+          <p className="mt-1 text-[10px] leading-snug normal-case text-slate-500">{headerSubtitle}</p>
+        )}
+      </div>
+      <div
+        className={`${adoptionHealthCardBody} ${dashedPlaceholder ? "text-slate-500" : ""} ${footer != null ? "justify-between" : ""}`}
+      >
+        {footer != null ? (
+          <>
+            <div className="min-h-0 flex-1">{children}</div>
+            <div className="mt-3 shrink-0 border-t border-slate-200 pt-2.5">{footer}</div>
+          </>
+        ) : (
+          children
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdoptionProgramHealthGrid({
+  overview,
+  inviteListHref,
+  emailAcknowledgementHref,
+  emailAcknowledgementStats,
+}: {
+  overview: MentoringOverviewStats;
+  inviteListHref: string;
+  /** Mentoring email center (pending / acknowledgement UI to be wired). */
+  emailAcknowledgementHref: string;
+  emailAcknowledgementStats: MentorEmailAcknowledgementStats;
+}) {
+  const engagementPct = pctRounded(
+    overview.menteeAssignmentsWithCheckInLast14d,
+    overview.activeMentees
+  );
+  const engagementHeadline =
+    overview.activeMentees > 0
+      ? engagementPct ?? String(overview.menteeAssignmentsWithCheckInLast14d)
+      : "—";
+
+  /** Adoption card: active vs full funnel (active + staged mentees + staged mentors). */
+  const menteesActiveAdoption = overview.liveMentees;
+  const mentorsActiveAdoption = overview.mentors;
+  const totalActiveAdoption = menteesActiveAdoption + mentorsActiveAdoption;
+  const menteesStagedAdoption = overview.menteeRosterNotLive;
+  const mentorsStagedAdoption = overview.stagedMentors;
+  const totalUsersAdoption =
+    totalActiveAdoption + menteesStagedAdoption + mentorsStagedAdoption;
+  const programAdoptionPctRounded =
+    totalUsersAdoption > 0 ? Math.round((100 * totalActiveAdoption) / totalUsersAdoption) : null;
+
+  const { sent: emailsSent, opened: emailsAcknowledged, pending: emailsPending, confirmedPct } =
+    emailAcknowledgementStats;
+
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <AdoptionHealthCard
+        title="Onboarding needed"
+        headerSubtitle="Not Yet on CrewRules™"
+        footer={
+          <Link
+            href={inviteListHref}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-700 underline-offset-2 transition hover:text-slate-950 hover:underline"
+          >
+            Open Invite List
+            <ArrowRight className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+          </Link>
+        }
+      >
+        <dl className="space-y-2.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="text-xs text-slate-600">Mentees</dt>
+            <dd className="text-lg font-light tabular-nums text-slate-900">{overview.menteeRosterNotLive}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="text-xs text-slate-600">Mentors</dt>
+            <dd className="text-lg font-light tabular-nums text-slate-900">{overview.stagedMentors}</dd>
+          </div>
+        </dl>
+      </AdoptionHealthCard>
+
+      <AdoptionHealthCard title="Adoption" headerSubtitle="Active CrewRules™ users.">
+        <dl className="space-y-2.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="text-xs text-slate-600">Mentees Active</dt>
+            <dd className="text-lg font-light tabular-nums text-slate-900">{menteesActiveAdoption}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="text-xs text-slate-600">Mentors Active</dt>
+            <dd className="text-lg font-light tabular-nums text-slate-900">{mentorsActiveAdoption}</dd>
+          </div>
+        </dl>
+        <div className="mt-3 border-t border-slate-200 pt-3">
+          <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="text-2xl font-light tabular-nums text-slate-900">
+              {programAdoptionPctRounded != null ? `${programAdoptionPctRounded}%` : "—"}
+            </span>
+            <span className="text-[11px] font-medium tracking-wide text-slate-500 normal-case">
+              On{" "}
+              <span>Crew</span>
+              <span className="text-[#75C043]">Rules</span>
+              <span>™</span>
+            </span>
+          </p>
+        </div>
+      </AdoptionHealthCard>
+
+      <AdoptionHealthCard
+        title="Engagement"
+        headerSubtitle="Mentor–mentee engagement in CrewRules™"
+      >
+        <div>
+          <p className="text-[11px] font-medium leading-snug text-slate-600">
+            Mentor–Mentee Engagement
+          </p>
+          <p className="mt-1 text-2xl font-light tabular-nums text-slate-900">{engagementHeadline}</p>
+          <p className="mt-1 text-xs tabular-nums text-slate-600">
+            {overview.activeMentees > 0
+              ? `${overview.menteeAssignmentsWithCheckInLast14d} of ${overview.activeMentees} mentees engaged`
+              : "No active mentees in scope"}
+          </p>
+          <p className="mt-1 text-[11px] text-slate-500">Past 14 days</p>
+        </div>
+      </AdoptionHealthCard>
+
+      <AdoptionHealthCard
+        title="Email acknowledgement"
+        headerSubtitle="Track Sent, opened, pending emails."
+        footer={
+          <Link
+            href={emailAcknowledgementHref}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-700 underline-offset-2 transition hover:text-slate-950 hover:underline"
+          >
+            View Pending
+            <ArrowRight className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+          </Link>
+        }
+      >
+        <div className="space-y-3">
+          <dl className="space-y-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-xs text-slate-600">Assignment Emails Sent</dt>
+              <dd className="text-lg font-light tabular-nums text-slate-900">{emailsSent}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-xs text-slate-600">Acknowledged</dt>
+              <dd className="text-lg font-light tabular-nums text-slate-900">{emailsAcknowledged}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-xs text-slate-600">Pending</dt>
+              <dd className="text-lg font-light tabular-nums text-slate-900">{emailsPending}</dd>
+            </div>
+          </dl>
+          <p className="mt-2 text-sm font-medium tabular-nums text-slate-900">{confirmedPct}% Confirmed</p>
+        </div>
+      </AdoptionHealthCard>
+    </div>
+  );
+}
+
+/**
+ * Net mentor **program** movement for the month: new `mentor_registry` rows minus registry rows moved to
+ * inactive/former/archived (same caveats as server JSDoc on `mentorRegistryMarkedInactiveThisMonth`).
+ */
+function ActiveMentorsMonthDeltaSub({
+  registryOnboarded,
+  registryInactive,
+  monthLabel,
+}: {
+  registryOnboarded: number;
+  registryInactive: number;
+  monthLabel: string;
+}) {
+  const net = registryOnboarded - registryInactive;
+  return (
+    <span className="inline-flex flex-wrap items-baseline gap-x-1 text-[11px] font-bold leading-tight text-slate-700">
+      {net === 0 ? (
+        <span className="tabular-nums text-slate-700">0</span>
+      ) : net > 0 ? (
+        <span className="tabular-nums text-emerald-600">+{net}</span>
+      ) : (
+        <span className="tabular-nums text-red-600">-{Math.abs(net)}</span>
+      )}
+      <span className="text-slate-700"> in {monthLabel}</span>
+    </span>
+  );
+}
+
+/** Composite letter from DB-backed inputs (not a stored column). */
+function programHealthSnapshot(o: MentoringOverviewStats): {
+  grade: string;
+  hint: string;
+  score: number;
+} {
+  const m = o.activeMentees;
+  const engagementScore = m > 0 ? (o.menteeAssignmentsWithCheckInLast14d / m) * 100 : 100;
+  const riskScore = m > 0 ? Math.max(0, 100 - (o.menteeAssignmentsAtRiskNoActivity21d / m) * 100) : 100;
+  const contactScore =
+    o.mentors > 0 ? Math.max(0, 100 - (o.missingMentorContact / o.mentors) * 100) : 100;
+
+  if (m === 0 && o.unmatchedMentees === 0 && o.mentors === 0) {
+    return { grade: "—", hint: "No mentoring data in scope", score: -1 };
+  }
+
+  /** Engagement, risk, and mentor contact only (roster / unmatched weighting removed for rework). */
+  const score = Math.round(0.4 * engagementScore + 0.35 * riskScore + 0.25 * contactScore);
+  const clamped = Math.max(0, Math.min(100, score));
+  const grade =
+    clamped >= 93
+      ? "A"
+      : clamped >= 87
+        ? "B+"
+        : clamped >= 80
+          ? "B"
+          : clamped >= 73
+            ? "C+"
+            : clamped >= 65
+              ? "C"
+              : clamped >= 55
+                ? "D"
+                : "F";
+
+  let hint = "Weighted snapshot";
+  if (m > 0) {
+    const riskRt = o.menteeAssignmentsAtRiskNoActivity21d / m;
+    const engRt = o.menteeAssignmentsWithCheckInLast14d / m;
+    if (riskRt > 0.35) hint = "Many mentees inactive 21+ days";
+    else if (engRt < 0.45) hint = "Check-in coverage below half";
+    else if (o.missingMentorContact > 0) hint = "Mentors missing contact info";
+    else if (clamped >= 82) hint = "Improving";
+  }
+
+  return { grade, hint, score: clamped };
+}
+
+function OverviewKpiCard({
+  title,
+  value,
+  sub,
+  barClass,
+  valueClassName,
+  valueSizeClassName,
+  subTextClassName,
+  titleClassName,
+  titleUppercase = true,
+  titleTrailing,
+  /** When true, value and subtitle stay on one row (no flex-wrap). */
+  valueSubNoWrap = false,
+}: {
+  title: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+  barClass: string;
+  valueClassName?: string;
+  /** Overrides default `text-xl font-semibold` for the main KPI value. */
+  valueSizeClassName?: string;
+  /** Overrides default small subtext when `sub` is a string. */
+  subTextClassName?: string;
+  /** Merged after base title styles (e.g. `font-bold`). */
+  titleClassName?: string;
+  /** When false, title shows as written (e.g. "Active Mentors") instead of ALL CAPS. */
+  titleUppercase?: boolean;
+  /** Optional control in the title row (e.g. help popover). */
+  titleTrailing?: React.ReactNode;
+  valueSubNoWrap?: boolean;
+}) {
+  const titleSize = titleUppercase ? "text-[10px]" : "text-xs";
+  const titleCasing = titleUppercase ? "uppercase tracking-wide" : "normal-case tracking-tight";
+  return (
+    <div className="flex h-full min-h-0 min-w-[132px] shrink-0 flex-col self-stretch overflow-visible rounded-lg border border-slate-200 bg-white shadow-sm md:min-w-0 md:w-full">
+      <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-1.5 pt-2">
+        <div className="flex shrink-0 items-start justify-between gap-1.5">
+          <div
+            className={`min-w-0 flex-1 ${titleSize} ${titleCasing} text-slate-600 ${titleClassName ?? "font-semibold"}`}
+          >
+            {title}
+          </div>
+          {titleTrailing ? <div className="shrink-0 pt-px">{titleTrailing}</div> : null}
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col justify-end">
+          <div
+            className={`mt-1.5 flex items-baseline gap-x-1.5 gap-y-0 ${valueSubNoWrap ? "flex-nowrap" : "flex-wrap"}`}
+          >
+            <span
+              className={`${valueSizeClassName ?? "text-xl font-semibold"} leading-none tracking-tight tabular-nums ${valueClassName ?? "text-slate-900"} ${valueSubNoWrap ? "shrink-0" : ""}`}
+            >
+              {value}
+            </span>
+            {sub != null && sub !== "" ? (
+              <span
+                className={`leading-tight ${valueSubNoWrap ? "shrink-0 whitespace-nowrap" : "max-w-[11rem] min-w-0 sm:max-w-none"}`}
+              >
+                {typeof sub === "string" ? (
+                  <span className={subTextClassName ?? "text-[10px] text-slate-600"}>{sub}</span>
+                ) : (
+                  sub
+                )}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      <div className={`h-2 w-full shrink-0 overflow-hidden rounded-b-lg ${barClass}`} />
     </div>
   );
 }
@@ -167,8 +447,8 @@ const ACTIVITY_BADGE: Record<
 > = {
   today: { label: "Active today", className: "bg-[#75C043]/15 text-[#75C043]" },
   this_week: { label: "This week", className: "bg-blue-500/15 text-blue-400" },
-  this_month: { label: "This month", className: "bg-slate-600/60 text-slate-400" },
-  stale: { label: "30+ days ago", className: "bg-slate-700/40 text-slate-400" },
+  this_month: { label: "This month", className: "bg-slate-200 text-slate-600" },
+  stale: { label: "30+ days ago", className: "bg-slate-200 text-slate-600" },
   never: { label: "No activity", className: "bg-red-500/10 text-red-400" },
 };
 
@@ -179,15 +459,15 @@ function MentorActivityRow({ row }: { row: MentorActivityRow }) {
 
   return (
     <div className="flex items-center gap-3 py-2.5">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700/60 text-xs font-medium text-slate-300">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-medium text-slate-700">
         {name.charAt(0).toUpperCase()}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-200 truncate">{name}</span>
+          <span className="text-sm text-slate-800 truncate">{name}</span>
           {emp && <span className="text-xs text-slate-500 shrink-0">{emp}</span>}
         </div>
-        <div className="text-xs text-slate-400">
+        <div className="text-xs text-slate-600">
           {row.mentee_count === 1 ? "1 mentee" : `${row.mentee_count} mentees`}
         </div>
       </div>
@@ -208,16 +488,16 @@ function LockedFeatureCard({
   description: string;
 }) {
   return (
-    <div className="relative flex items-start gap-3 rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-4 opacity-60 select-none">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-700/55 text-slate-500">
+    <div className="relative flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 opacity-75 select-none">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-slate-500">
         <Icon className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-slate-300">{label}</span>
-          <Lock className="h-3 w-3 text-slate-600 shrink-0" />
+          <span className="text-sm font-medium text-slate-700">{label}</span>
+          <Lock className="h-3 w-3 text-slate-500 shrink-0" />
         </div>
-        <p className="mt-0.5 text-xs text-slate-400 leading-relaxed">{description}</p>
+        <p className="mt-0.5 text-xs text-slate-600 leading-relaxed">{description}</p>
       </div>
     </div>
   );
@@ -230,48 +510,40 @@ export function AdminDashboard({
   mentorActivity,
   tenantFeatures,
   failedMilestoneAttempts = [],
+  classOverview,
+  programProgress,
+  emailAcknowledgementStats,
 }: Props) {
   const base = `/${tenant}/${portal}/admin`;
 
-  // Attention items (only show if count > 0)
-  const attentionItems = [
-    overview.unmatchedMentees > 0 && {
-      icon: UserX,
-      label: "Mentees waiting for a mentor match",
-      count: overview.unmatchedMentees,
-      href: `${base}/mentoring/mentee-roster`,
-      severity: "critical" as const,
-    },
-    overview.openMentorshipProgramRequests > 0 && {
-      icon: ClipboardList,
-      label: "Open mentorship program requests",
-      count: overview.openMentorshipProgramRequests,
-      href: `${base}/mentoring`,
-      severity: "amber" as const,
-    },
-    overview.missingMentorContact > 0 && {
-      icon: Phone,
-      label: "Mentors missing contact information",
-      count: overview.missingMentorContact,
-      href: `${base}/mentoring`,
-      severity: "slate" as const,
-    },
-    {
-      icon: MessageSquareMore,
-      label: "Mentees needing follow-up",
-      count: overview.menteesNeedingFollowUp,
-      href: `${base}/mentoring/mentee-roster?follow_up=1`,
-      severity:
-        overview.menteesNeedingFollowUp > 0 ? ("teal" as const) : ("success" as const),
-    },
-    overview.stagedMentors > 0 && {
-      icon: UserCheck,
-      label: "Staged mentors not yet linked to a profile",
-      count: overview.stagedMentors,
-      href: `${base}/mentoring`,
-      severity: "info" as const,
-    },
-  ].filter(Boolean) as React.ComponentProps<typeof AttentionStatCard>[];
+  const engagementPct = pctRounded(overview.menteeAssignmentsWithCheckInLast14d, overview.activeMentees);
+  const mentorCoverageSub =
+    overview.menteeRosterTotal > 0
+      ? `${Math.round((100 * overview.menteeRosterWithMentor) / overview.menteeRosterTotal)}% covered`
+      : "—";
+  const programHealth = programHealthSnapshot(overview);
+  const engagementRate =
+    overview.activeMentees > 0 && engagementPct != null ? engagementPct : "—";
+  const engagementRatio =
+    overview.activeMentees > 0
+      ? overview.menteeAssignmentsWithCheckInLast14d / overview.activeMentees
+      : 0;
+  const engagementValueClass =
+    overview.activeMentees <= 0
+      ? "text-slate-900"
+      : engagementRatio >= 0.7
+        ? "text-emerald-600"
+        : engagementRatio >= 0.45
+          ? "text-slate-900"
+          : "text-amber-800";
+  const programHealthValueClass =
+    programHealth.score < 0
+      ? "text-slate-500"
+      : programHealth.score >= 82
+        ? "text-emerald-600"
+        : programHealth.score >= 68
+          ? "text-slate-900"
+          : "text-amber-800";
 
   const mentorEnabled = featureEnabled(tenantFeatures, "mentoring");
   const inactiveCount = mentorActivity.filter(
@@ -280,118 +552,245 @@ export function AdminDashboard({
 
   return (
     <div className="space-y-8">
-      {/* ── ATTENTION REQUIRED ─────────────────────────────── */}
-      {attentionItems.length > 0 && (
-        <section className="rounded-xl border border-slate-700/50 bg-slate-900/50 p-4 sm:p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-slate-400" />
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
-              Attention Required
-            </h2>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {attentionItems.map((item) => (
-              <AttentionStatCard key={item.label} {...item} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* All clear state */}
-      {attentionItems.length === 0 && (
-        <div className="flex items-center gap-3 rounded-xl border border-green-500/35 bg-green-950/30 px-4 py-3">
-          <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />
-          <span className="text-sm text-green-300">
-            Everything looks good — no items need attention right now.
-          </span>
+      {/* ── PROGRAM SNAPSHOT (7 KPI cards) ─────────────────── */}
+      <section aria-labelledby="admin-program-snapshot-heading" className="space-y-3">
+        <h2
+          id="admin-program-snapshot-heading"
+          className="text-sm font-semibold uppercase tracking-wider text-slate-700"
+        >
+          Program Snapshot
+        </h2>
+        <div className="-mx-1 flex flex-nowrap items-stretch gap-2 overflow-x-auto px-1 pb-0.5 md:mx-0 md:grid md:grid-cols-7 md:gap-2.5 md:overflow-visible md:px-0">
+          <OverviewKpiCard
+            title="Active Mentors"
+            titleUppercase={false}
+            titleClassName="font-bold"
+            valueSizeClassName="text-2xl font-bold"
+            titleTrailing={<ActiveMentorsMetricHelpPopover />}
+            value={overview.mentors}
+            sub={
+              <ActiveMentorsMonthDeltaSub
+                registryOnboarded={overview.mentorRegistryOnboardedThisMonth}
+                registryInactive={overview.mentorRegistryMarkedInactiveThisMonth}
+                monthLabel={overview.mentorJoinMonthLabel}
+              />
+            }
+            barClass="bg-emerald-500"
+          />
+          <OverviewKpiCard
+            title="Mentor Coverage"
+            titleUppercase={false}
+            titleClassName="font-bold"
+            valueSizeClassName="text-2xl font-bold"
+            titleTrailing={<MentorCoverageMetricHelpPopover />}
+            value={overview.menteeRosterTotal}
+            sub={mentorCoverageSub}
+            subTextClassName="text-[11px] font-bold text-slate-700"
+            barClass="bg-blue-600"
+          />
+          <OverviewKpiCard
+            title="Unmatched Mentees"
+            titleUppercase={false}
+            titleClassName="font-bold"
+            valueSizeClassName="text-2xl font-bold"
+            titleTrailing={<UnmatchedMenteesMetricHelpPopover />}
+            valueSubNoWrap
+            value={overview.unmatchedMentees}
+            sub="Needs assignment"
+            subTextClassName="text-[11px] font-bold text-slate-700"
+            barClass={overview.unmatchedMentees > 0 ? "bg-red-500" : "bg-emerald-500"}
+          />
+          <OverviewKpiCard
+            title="Engagement Rate"
+            titleUppercase={false}
+            titleClassName="font-bold"
+            valueSizeClassName="text-xl font-bold"
+            titleTrailing={<EngagementRateMetricHelpPopover />}
+            valueSubNoWrap
+            value={engagementRate}
+            sub="Active last 14 days"
+            subTextClassName="text-[10px] font-bold leading-tight text-slate-700"
+            barClass="bg-emerald-800"
+            valueClassName={engagementValueClass}
+          />
+          <OverviewKpiCard
+            title="At-Risk Mentees"
+            titleUppercase={false}
+            titleClassName="font-bold"
+            valueSizeClassName="text-2xl font-bold"
+            titleTrailing={<AtRiskMenteesMetricHelpPopover />}
+            valueSubNoWrap
+            value={overview.menteeAssignmentsAtRiskNoActivity21d}
+            sub="No check-in 21+ days"
+            subTextClassName="text-[11px] font-bold text-slate-700"
+            barClass="bg-red-500"
+            valueClassName={
+              overview.menteeAssignmentsAtRiskNoActivity21d > 0 ? "text-red-600" : "text-slate-900"
+            }
+          />
+          <OverviewKpiCard
+            title="Missing Mentor Contact"
+            titleUppercase={false}
+            titleClassName="font-bold"
+            valueSizeClassName="text-2xl font-bold"
+            titleTrailing={<MissingMentorContactMetricHelpPopover />}
+            valueSubNoWrap
+            value={overview.missingMentorContact}
+            sub="No phone/email"
+            subTextClassName="text-[11px] font-bold text-slate-700"
+            barClass="bg-slate-400"
+          />
+          <OverviewKpiCard
+            title="Program Health Score"
+            titleUppercase={false}
+            titleClassName="font-bold"
+            valueSizeClassName="text-2xl font-bold"
+            titleTrailing={<ProgramHealthScoreMetricHelpPopover />}
+            value={programHealth.grade}
+            sub={programHealth.hint}
+            subTextClassName="text-[11px] font-bold text-slate-700"
+            barClass="bg-lime-400"
+            valueClassName={programHealthValueClass}
+          />
         </div>
-      )}
+      </section>
+
+      {/* ── CREWRULES ADOPTION & PROGRAM HEALTH ───────────── */}
+      <section
+        className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+        aria-labelledby="adoption-program-health-heading"
+      >
+        <div className="border-b border-[#75C043]/40 bg-slate-950 px-4 py-3 sm:px-5">
+          <p className="text-[11px] uppercase tracking-wide text-slate-400">Mentorship program</p>
+          <h2 id="adoption-program-health-heading" className="mt-1 text-base font-semibold tracking-tight text-white">
+            Crew<span className="text-[#75C043]">Rules</span>™{" "}
+            <span className="font-normal text-white/70" aria-hidden="true">
+              •
+            </span>{" "}
+            Adoption & Program Health
+          </h2>
+        </div>
+        <div className="p-4 sm:p-5">
+          <AdoptionProgramHealthGrid
+            overview={overview}
+            inviteListHref={`${base}/users`}
+            emailAcknowledgementHref={`${base}/mentoring/email-center`}
+            emailAcknowledgementStats={emailAcknowledgementStats}
+          />
+        </div>
+      </section>
 
       {/* ── OPEN FAILED MILESTONE REVIEWS ─────────────────── */}
       {failedMilestoneAttempts.length > 0 ? (
-        <section className="rounded-xl border border-red-500/50 bg-red-950/35 p-4 sm:p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-red-300" aria-hidden />
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-red-200">
-                Open failed milestone reviews
-              </h2>
-            </div>
-            <Link
-              href={`${base}/mentoring/assignments`}
-              className="shrink-0 text-xs text-slate-400 transition hover:text-slate-200"
-            >
-              Open assignments →
-            </Link>
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100">
+          <div className="flex items-center gap-2 bg-red-500 px-4 py-3 sm:px-5">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-white" aria-hidden />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-white">Attention Required</h2>
           </div>
-          <p className="mb-3 text-xs leading-relaxed text-slate-500">
-            Failed attempts with an open admin review on active assignments (mentors in this tenant). Use assignment ID
-            to locate the row on Assignments; mentors and mentees view details in the pilot portal.
-          </p>
-          <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full min-w-[820px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-700/60 text-xs font-medium uppercase tracking-wide text-slate-400">
-                  <th className="py-2 pr-3">Mentee</th>
-                  <th className="py-2 pr-3">Mentor</th>
-                  <th className="py-2 pr-3">Milestone</th>
-                  <th className="py-2 pr-3">Failed date</th>
-                  <th className="py-2 pr-3">Note</th>
-                  <th className="py-2 pl-2 text-right">Assignment ID</th>
-                  <th className="py-2 pl-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700/50">
-                {failedMilestoneAttempts.map((row) => (
-                  <tr key={row.attempt_id} className="text-slate-200">
-                    <td className="max-w-[160px] truncate py-2.5 pr-3 align-top" title={row.mentee_display_name ?? undefined}>
-                      {row.mentee_display_name?.trim() || "—"}
-                    </td>
-                    <td className="max-w-[160px] truncate py-2.5 pr-3 align-top" title={row.mentor_display_name ?? undefined}>
-                      {row.mentor_display_name?.trim() || "—"}
-                    </td>
-                    <td className="max-w-[200px] py-2.5 pr-3 align-top text-slate-300">
-                      <span className="line-clamp-2" title={formatMilestoneTypeLabel(row.milestone_type)}>
-                        {formatMilestoneTypeLabel(row.milestone_type)}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap py-2.5 pr-3 align-top tabular-nums text-slate-300">
-                      {formatAttemptYmd(row.occurred_on)}
-                    </td>
-                    <td className="max-w-[220px] py-2.5 pr-3 align-top text-slate-400">
-                      {row.note?.trim() ? (
-                        <span className="line-clamp-3" title={row.note}>
-                          {row.note}
-                        </span>
-                      ) : (
-                        <span className="text-slate-500">—</span>
-                      )}
-                    </td>
-                    <td className="py-2.5 pl-2 text-right align-top">
-                      <Link
-                        href={`/${tenant}/${portal}/portal/mentoring/${row.assignment_id}`}
-                        title="Open assignment in pilot portal"
-                        className="inline-block max-w-full break-all text-[11px] text-slate-400 underline-offset-2 transition hover:text-slate-200 hover:underline"
-                      >
-                        <code className="break-all text-[11px] text-inherit">{row.assignment_id}</code>
-                      </Link>
-                    </td>
-                    <td className="py-2.5 pl-2 align-top">
-                      <FailedMilestoneReviewRowActions attemptId={row.attempt_id} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="border-l-4 border-l-red-500">
+            <div className="flex flex-col gap-4 px-4 pb-4 pt-4 sm:flex-row sm:items-start sm:justify-between sm:px-5 sm:pb-5 sm:pt-5">
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold tracking-tight text-slate-900">
+                  OPEN{" "}
+                  <span className="font-normal text-slate-400" aria-hidden="true">
+                    •
+                  </span>{" "}
+                  Failed Milestone Review
+                </h3>
+              </div>
+              <Link
+                href={`${base}/mentoring/assignments`}
+                className="inline-flex shrink-0 items-center justify-center self-start rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 sm:self-auto"
+              >
+                Open assignments →
+              </Link>
+            </div>
+
+            <div className="border-t border-slate-200 bg-slate-50/60">
+              <div className="overflow-x-auto px-3 pb-3 pt-0 sm:px-4 sm:pb-4">
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <table className="w-full min-w-[720px] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50/90 text-xs font-medium uppercase tracking-wide text-slate-500">
+                        <th className="px-3 py-2.5 sm:px-4">Mentee</th>
+                        <th className="px-3 py-2.5 sm:px-4">Mentor</th>
+                        <th className="px-3 py-2.5 sm:px-4">Milestone</th>
+                        <th className="px-3 py-2.5 sm:px-4">Failed date</th>
+                        <th className="px-3 py-2.5 sm:px-4">Note</th>
+                        <th className="min-w-[7.5rem] max-w-[10rem] px-3 py-2.5 sm:max-w-[12rem] sm:px-4">
+                          Assignment ID
+                        </th>
+                        <th className="w-[1%] whitespace-nowrap px-3 py-2.5 pl-2 text-right sm:px-4">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {failedMilestoneAttempts.map((row) => (
+                        <tr key={row.attempt_id} className="text-slate-800">
+                          <td
+                            className="max-w-[10rem] truncate px-3 py-2.5 align-top sm:max-w-[12rem] sm:px-4"
+                            title={row.mentee_display_name ?? undefined}
+                          >
+                            {row.mentee_display_name?.trim() || "—"}
+                          </td>
+                          <td
+                            className="max-w-[10rem] truncate px-3 py-2.5 align-top sm:max-w-[12rem] sm:px-4"
+                            title={row.mentor_display_name ?? undefined}
+                          >
+                            {row.mentor_display_name?.trim() || "—"}
+                          </td>
+                          <td className="max-w-[200px] px-3 py-2.5 align-top text-slate-700 sm:max-w-[220px] sm:px-4">
+                            <span className="line-clamp-2" title={formatMilestoneTypeLabel(row.milestone_type)}>
+                              {formatMilestoneTypeLabel(row.milestone_type)}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2.5 align-top tabular-nums text-slate-700 sm:px-4">
+                            {formatAttemptYmd(row.occurred_on)}
+                          </td>
+                          <td className="max-w-[200px] px-3 py-2.5 align-top text-slate-600 sm:max-w-[240px] sm:px-4">
+                            {row.note?.trim() ? (
+                              <span className="line-clamp-3" title={row.note}>
+                                {row.note}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </td>
+                          <td className="max-w-[10rem] px-3 py-2.5 align-top sm:max-w-[12rem] sm:px-4">
+                            <Link
+                              href={`/${tenant}/${portal}/portal/mentoring/${row.assignment_id}`}
+                              title={`Open assignment in pilot portal — ${row.assignment_id}`}
+                              className="block truncate font-mono text-[11px] font-medium text-slate-700 underline decoration-slate-300 underline-offset-2 transition hover:text-slate-950 hover:decoration-slate-500"
+                            >
+                              {row.assignment_id}
+                            </Link>
+                          </td>
+                          <td className="px-3 py-2.5 pl-2 text-right align-top sm:px-4">
+                            <div className="flex justify-end">
+                              <FailedMilestoneReviewRowActions attemptId={row.attempt_id} />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       ) : null}
 
-      {/* ── PROGRAM SNAPSHOT ───────────────────────────────── */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
-          Program Snapshot
-        </h2>
+      {/* ── CLASS OVERVIEW + PROGRAM PROGRESS (70% / 30%, class grid max 4 cols) ─── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[7fr_3fr] lg:items-start">
+        <div className="min-w-0">
+          <AdminClassOverviewSection classOverview={classOverview} base={base} />
+        </div>
+        <div className="min-w-0 w-full lg:self-start">
+          <AdminProgramProgressSection items={programProgress} />
+        </div>
+      </div>
+
+      <section className="space-y-3" aria-label="Program roster snapshot">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatPill
             label="Active mentors"
@@ -402,12 +801,12 @@ export function AdminDashboard({
           <StatPill
             label="Live in portal"
             value={overview.liveMentees}
-            sub="completed onboarding"
+            sub="Completed onboarding"
           />
           <StatPill
             label="Unmatched"
             value={overview.unmatchedMentees}
-            sub="awaiting mentor"
+            sub="Awaiting mentor"
           />
         </div>
       </section>
@@ -417,20 +816,20 @@ export function AdminDashboard({
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <GraduationCap className="h-4 w-4 text-slate-400" />
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
+              <GraduationCap className="h-4 w-4 text-slate-500" />
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700">
                 Mentor Activity
               </h2>
             </div>
             <Link
               href={`${base}/mentoring`}
-              className="text-xs text-slate-400 hover:text-slate-200 transition"
+              className="text-xs text-slate-600 hover:text-slate-900 transition"
             >
               View all →
             </Link>
           </div>
 
-          <div className="rounded-2xl border border-slate-700/50 bg-slate-800/45 px-4 divide-y divide-slate-700/50">
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 divide-y divide-slate-200 shadow-sm">
             {mentorActivity.slice(0, 10).map((row) => (
               <MentorActivityRow key={row.mentor_user_id} row={row} />
             ))}
@@ -439,7 +838,7 @@ export function AdminDashboard({
           {mentorActivity.length > 10 && (
             <p className="text-xs text-slate-500 text-right">
               +{mentorActivity.length - 10} more mentors —{" "}
-              <Link href={`${base}/mentoring`} className="text-slate-400 hover:text-slate-300 transition">
+              <Link href={`${base}/mentoring`} className="text-slate-600 hover:text-slate-900 transition">
                 view all
               </Link>
             </p>
@@ -449,7 +848,7 @@ export function AdminDashboard({
 
       {/* ── QUICK ACTIONS ──────────────────────────────────── */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700">
           Quick Actions
         </h2>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -485,16 +884,16 @@ export function AdminDashboard({
             <Link
               key={label}
               href={href}
-              className="flex items-center gap-3 rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-3 transition hover:border-slate-600/60 hover:bg-slate-800/65 group"
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:border-slate-300 hover:bg-slate-50 group shadow-sm"
             >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-700/55 text-slate-300 group-hover:text-slate-100 transition">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 group-hover:text-slate-900 transition">
                 <Icon className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-medium text-slate-200">{label}</div>
-                <div className="text-xs text-slate-400 truncate">{sub}</div>
+                <div className="text-sm font-medium text-slate-800">{label}</div>
+                <div className="text-xs text-slate-600 truncate">{sub}</div>
               </div>
-              <ArrowRight className="h-3.5 w-3.5 text-slate-500 group-hover:text-slate-300 transition ml-auto shrink-0" />
+              <ArrowRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition ml-auto shrink-0" />
             </Link>
           ))}
         </div>
@@ -505,11 +904,11 @@ export function AdminDashboard({
       {featureEnabled(tenantFeatures, "show_enterprise_programs") && (
         <section className="space-y-3">
           <div className="flex items-center gap-2">
-            <Lock className="h-4 w-4 text-slate-600" />
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+            <Lock className="h-4 w-4 text-slate-500" />
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-600">
               Enterprise Programs
             </h2>
-            <span className="rounded-full border border-slate-600/40 bg-slate-800/50 px-2 py-0.5 text-[11px] text-slate-400">
+            <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
               Contact CrewRules™ to unlock
             </span>
           </div>
@@ -548,7 +947,7 @@ export function AdminDashboard({
       {/* Connection status indicator */}
       <div className="flex items-center gap-1.5 text-xs text-slate-500">
         <Wifi className="h-3 w-3" />
-        <span>Live data · refreshes on page load</span>
+        <span>Live Data · Refreshes on page load</span>
       </div>
     </div>
   );

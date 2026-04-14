@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -24,7 +25,7 @@ export function AdminMobileNav({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="md:hidden flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10 shadow-[0_0_25px_rgba(117,192,67,0.15)] touch-manipulation"
+        className="md:hidden flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm ring-1 ring-slate-100 touch-manipulation"
         aria-label="Open menu"
       >
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -40,20 +41,20 @@ export function AdminMobileNav({
             onClick={() => setOpen(false)}
           />
           <aside
-            className="fixed left-0 top-0 z-50 h-screen w-72 border-r border-white/10 bg-slate-950 shadow-xl"
+            className="fixed left-0 top-0 z-50 h-screen w-72 border-r border-slate-200 bg-[#F4F7F9] shadow-xl"
             role="dialog"
             aria-label="Admin navigation"
           >
             <div className="flex h-full flex-col">
-              <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
-                <div className="text-lg font-semibold">
+              <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                <div className="text-lg font-semibold text-slate-900">
                   Crew<span className="text-[#75C043]">Rules</span>
                   <span className="align-super text-xs">™</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 hover:bg-white/5 hover:text-white touch-manipulation"
+                  className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 touch-manipulation"
                   aria-label="Close menu"
                 >
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -64,22 +65,26 @@ export function AdminMobileNav({
               <nav className="flex-1 overflow-y-auto px-4 py-4">
                 <div className="space-y-1">
                   {nav.map((item) => (
-                    <Link
-                      key={item.label}
-                      href={item.href ? `${base}/${item.href}` : base}
-                      onClick={() => setOpen(false)}
-                      className="flex items-center rounded-xl px-3 py-3 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition touch-manipulation min-h-[44px]"
-                    >
-                      {item.label}
-                    </Link>
+                    <Fragment key={item.label}>
+                      {item.href === "settings" && (
+                        <div className="mt-5 h-3 shrink-0" aria-hidden />
+                      )}
+                      <Link
+                        href={item.href ? `${base}/${item.href}` : base}
+                        onClick={() => setOpen(false)}
+                        className="flex items-center rounded-xl px-3 py-3 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition touch-manipulation min-h-[44px]"
+                      >
+                        {item.label}
+                      </Link>
+                    </Fragment>
                   ))}
                 </div>
                 {!hidePortalLink && (
-                  <div className="mt-6 border-t border-white/10 pt-4">
+                  <div className="mt-6 border-t border-slate-200 pt-4">
                     <Link
                       href={portalBase}
                       onClick={() => setOpen(false)}
-                      className="flex min-h-[44px] items-center rounded-xl px-3 py-3 text-sm text-slate-400 hover:bg-white/5 hover:text-white transition touch-manipulation"
+                      className="flex min-h-[44px] items-center rounded-xl px-3 py-3 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition touch-manipulation"
                     >
                       ← Back to Portal
                     </Link>

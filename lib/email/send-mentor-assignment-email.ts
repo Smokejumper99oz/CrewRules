@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -16,6 +17,7 @@ function escapeHtml(input: unknown): string {
  * Does not throw; returns { ok: false, error } on missing config or Resend failure.
  */
 export async function sendMentorAssignmentEmail(params: {
+  assignmentId: string;
   toEmail: string;
   mentorName: string;
   menteeName: string;
@@ -122,7 +124,9 @@ export async function sendMentorAssignmentEmail(params: {
   </body>
 </html>`;
 
-  const { error } = await resend.emails.send({
+  const admin = createAdminClient();
+
+  const { data: response, error } = await resend.emails.send({
     from: "Frontier Airlines Mentoring via CrewRules™ <F9mentorship@notification.crewrules.com>",
     to,
     subject,
@@ -133,6 +137,21 @@ export async function sendMentorAssignmentEmail(params: {
   if (error) {
     console.error("[mentor-assignment-email] resend error", { to, error });
     return { ok: false, error: error.message ?? "Resend error" };
+  }
+
+  try {
+    const { error: logError } = await admin.from("mentor_email_events").insert({
+      assignment_id: params.assignmentId,
+      email: params.toEmail,
+      event_type: "sent",
+      resend_email_id: response?.id ?? null,
+    });
+
+    if (logError) {
+      console.error("[mentor_email_events] insert error", logError);
+    }
+  } catch (e) {
+    console.error("[mentor_email_events] unexpected error", e);
   }
 
   return { ok: true };

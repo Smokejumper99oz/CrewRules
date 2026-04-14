@@ -56,7 +56,7 @@ export default function HomePage() {
             alt="CrewRules background"
             fill
             priority
-            quality={100}
+            quality={75}
             sizes="100vw"
             className="object-cover object-[52%_34%] opacity-100"
           />

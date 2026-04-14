@@ -63,19 +63,19 @@ function programFieldLabel(kind: "type" | "status", raw: string | null | undefin
 function mentorProgramPillSurfaceClass(status: MentorRosterRow["mentor_status"]): string {
   const s = (status ?? "").trim();
   if (!isMentorRegistryStatusValue(s)) {
-    return "border-white/10 bg-white/[0.04] text-slate-400";
+    return "border-slate-200 bg-slate-100 text-slate-700";
   }
   switch (s) {
     case "active":
-      return "border-emerald-500/45 bg-emerald-500/15 text-emerald-200";
+      return "border-emerald-200 bg-emerald-50 text-emerald-900";
     case "non_active":
-      return "border-amber-500/45 bg-amber-500/18 text-amber-200";
+      return "border-amber-200 bg-amber-50 text-amber-950";
     case "former":
-      return "border-slate-500/45 bg-slate-600/20 text-slate-300";
+      return "border-slate-300 bg-slate-200 text-slate-900";
     case "archived":
-      return "border-white/10 bg-white/[0.04] text-slate-500";
+      return "border-slate-200 bg-slate-100 text-slate-700";
     default:
-      return "border-white/10 bg-white/[0.04] text-slate-400";
+      return "border-slate-200 bg-slate-100 text-slate-700";
   }
 }
 
@@ -157,7 +157,7 @@ const PROGRAM_PILL_CELL_CLASS =
 
 /** Compact toolbar selects: low-contrast dark surface (not filled gray panels). */
 const ROSTER_FILTER_SELECT_CLASS =
-  "h-6 w-full min-w-0 cursor-pointer rounded border border-white/[0.07] bg-white/[0.03] px-1 py-0 pr-5 text-[10px] leading-none text-slate-300 transition-colors [color-scheme:dark] hover:border-white/11 hover:bg-white/[0.055] focus:border-[#75C043]/35 focus:outline-none focus:ring-1 focus:ring-[#75C043]/18 lg:bg-[length:0.5rem] lg:bg-[position:right_0.28rem_center] lg:bg-no-repeat lg:[background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2364748b'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.24 4.5a.75.75 0 01-1.08 0l-4.24-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E\")] lg:appearance-none";
+  "h-6 w-full min-w-0 cursor-pointer rounded border border-slate-200 bg-slate-50 px-1 py-0 pr-5 text-[10px] leading-none text-slate-800 transition-colors [color-scheme:light] hover:border-slate-300 hover:bg-slate-100 focus:border-[#75C043]/35 focus:outline-none focus:ring-1 focus:ring-[#75C043]/18 lg:bg-[length:0.5rem] lg:bg-[position:right_0.28rem_center] lg:bg-no-repeat lg:[background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2364748b'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.24 4.5a.75.75 0 01-1.08 0l-4.24-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E\")] lg:appearance-none";
 
 export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadStaging }: Props) {
   const router = useRouter();
@@ -316,7 +316,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
 
   return (
     <>
-      <div className="mb-3 rounded-lg border border-white/10 bg-slate-950/35 px-2.5 py-1.5 lg:mb-2 lg:px-3 lg:py-1">
+      <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 lg:mb-2 lg:px-3 lg:py-1">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-3">
           <div className="grid min-w-0 flex-1 grid-cols-2 content-end gap-x-1.5 gap-y-1 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 lg:gap-x-1.5 xl:grid-cols-7">
             <label className="min-w-0 sm:col-span-2 md:col-span-3 lg:col-span-2 xl:col-span-2 xl:max-w-[15rem]">
@@ -328,7 +328,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Name, emp #, email, crew base…"
-                className="h-6 w-full max-w-full rounded border border-white/[0.07] bg-white/[0.03] px-1.5 text-[10px] leading-none text-slate-300 placeholder:text-slate-600 transition-colors hover:border-white/11 hover:bg-white/[0.055] focus:border-[#75C043]/35 focus:outline-none focus:ring-1 focus:ring-[#75C043]/18"
+                className="h-6 w-full max-w-full rounded border border-slate-200 bg-slate-50 px-1.5 text-[10px] leading-none text-slate-800 placeholder:text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-100 focus:border-[#75C043]/35 focus:outline-none focus:ring-1 focus:ring-[#75C043]/18"
               />
             </label>
             <label className="min-w-0">
@@ -417,18 +417,18 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
               </select>
             </label>
           </div>
-          <div className="flex min-h-6 shrink-0 items-center border-t border-white/5 pt-2 text-[10px] tabular-nums leading-none text-slate-500 sm:justify-end lg:min-h-0 lg:min-w-[10.5rem] lg:self-stretch lg:border-t-0 lg:border-l lg:border-white/[0.07] lg:pt-0 lg:pl-3 lg:pr-0.5 lg:items-end lg:justify-end">
-            <span className="whitespace-nowrap lg:inline-block lg:rounded lg:border lg:border-white/[0.05] lg:bg-white/[0.02] lg:px-1.5 lg:py-px">
-              <span className="font-medium text-slate-400">{visibleRows.length}</span>
+          <div className="flex min-h-6 shrink-0 items-center border-t border-slate-200 pt-2 text-[10px] tabular-nums leading-none text-slate-500 sm:justify-end lg:min-h-0 lg:min-w-[10.5rem] lg:self-stretch lg:border-t-0 lg:border-l lg:border-slate-200 lg:pt-0 lg:pl-3 lg:pr-0.5 lg:items-end lg:justify-end">
+            <span className="whitespace-nowrap lg:inline-block lg:rounded lg:border lg:border-slate-100 lg:bg-slate-50 lg:px-1.5 lg:py-px">
+              <span className="font-medium text-slate-700">{visibleRows.length}</span>
               <span className="text-slate-600"> shown</span>
               <span className="text-slate-600"> · </span>
-              <span className="font-medium text-slate-400">{rows.length}</span>
+              <span className="font-medium text-slate-700">{rows.length}</span>
               <span className="text-slate-600"> in roster</span>
             </span>
           </div>
         </div>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-white/5 lg:-mt-px">
+      <div className="overflow-x-auto rounded-lg border border-slate-200 lg:-mt-px">
         <table className="table-fixed w-full min-w-[980px] text-xs leading-tight">
           <colgroup>
             <col className="w-10" />
@@ -442,14 +442,14 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
             <col className="w-[3.75rem]" />
             <col className="w-[3.25rem]" />
           </colgroup>
-          <thead className="border-b border-white/5 bg-white/[0.03] text-[11px] font-medium uppercase tracking-wide text-slate-500">
+          <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-medium uppercase tracking-wide text-slate-500">
             <tr>
               <th className="w-10 box-border px-0 py-1.5 text-center align-middle">CRA</th>
               <th className="box-border pl-3 pr-1.5 py-1.5 text-left align-middle normal-case tracking-normal">
                 <button
                   type="button"
                   onClick={() => onSortHeaderClick("name")}
-                  className="inline-flex max-w-full min-w-0 items-center gap-1 text-left font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
+                  className="inline-flex max-w-full min-w-0 items-center gap-1 text-left font-medium text-slate-600 hover:text-slate-900 touch-manipulation"
                 >
                   <span className="min-w-0 truncate">Name</span>
                   {sortIndicator("name") ? (
@@ -463,7 +463,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                 <button
                   type="button"
                   onClick={() => onSortHeaderClick("emp")}
-                  className="inline-flex w-full items-center justify-center gap-1 whitespace-nowrap font-medium text-slate-500 hover:text-slate-200 touch-manipulation"
+                  className="inline-flex w-full items-center justify-center gap-1 whitespace-nowrap font-medium text-slate-500 hover:text-slate-900 touch-manipulation"
                 >
                   <span>Emp.#</span>
                   {sortIndicator("emp") ? (
@@ -478,7 +478,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                 <button
                   type="button"
                   onClick={() => onSortHeaderClick("base")}
-                  className="inline-flex w-full items-center justify-center gap-1 whitespace-nowrap font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
+                  className="inline-flex w-full items-center justify-center gap-1 whitespace-nowrap font-medium text-slate-600 hover:text-slate-900 touch-manipulation"
                   title="Crew Base"
                 >
                   <span>Crew Base</span>
@@ -496,7 +496,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                 <button
                   type="button"
                   onClick={() => onSortHeaderClick("mentees")}
-                  className="inline-flex w-full items-center justify-center gap-1 whitespace-nowrap font-medium text-slate-400 hover:text-slate-200 touch-manipulation"
+                  className="inline-flex w-full items-center justify-center gap-1 whitespace-nowrap font-medium text-slate-600 hover:text-slate-900 touch-manipulation"
                 >
                   <span>Mentees</span>
                   {sortIndicator("mentees") ? (
@@ -509,7 +509,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
               <th className="px-1 py-1.5 text-center normal-case tracking-normal">Edit</th>
             </tr>
           </thead>
-          <tbody className="text-slate-300">
+          <tbody className="text-slate-800">
             {visibleRows.map((m) => {
               const rk = rowKey(m);
               const craOnCrewRules = m.rowKind === "profile";
@@ -538,39 +538,39 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                 <Fragment key={rk}>
                   <tr
                     className={[
-                      "border-t border-white/5",
-                      isInactivePreload ? "border-l-2 border-l-slate-600 bg-slate-950/35" : "",
+                      "border-t border-slate-200",
+                      isInactivePreload ? "border-l-2 border-l-slate-600 bg-slate-50" : "",
                     ].join(" ")}
                   >
                     <td className="px-0.5 py-1.5 align-middle text-center">
                       {craOnCrewRules ? (
-                        <span className="text-sm font-semibold leading-none text-emerald-400" title="On CrewRules">
+                        <span className="text-sm font-semibold leading-none text-emerald-600" title="On CrewRules">
                           ✓
                         </span>
                       ) : isInactivePreload ? (
                         <span
-                          className="text-sm font-semibold leading-none text-amber-500/45 ring-1 ring-slate-600/80 rounded px-0.5"
+                          className="rounded px-0.5 text-sm font-semibold leading-none text-slate-500 ring-1 ring-slate-400"
                           title="Preload — inactive staging (not on CrewRules; marked inactive in mentor preload)"
                         >
                           ✕
                         </span>
                       ) : (
                         <span
-                          className="text-sm font-semibold leading-none text-amber-400"
+                          className="text-sm font-semibold leading-none text-amber-700"
                           title="Preload — not on CrewRules yet"
                         >
                           ✕
                         </span>
                       )}
                     </td>
-                    <td className="max-w-0 px-1.5 py-1.5 align-middle text-slate-200">
+                    <td className="max-w-0 px-1.5 py-1.5 align-middle text-slate-900">
                       <div className="flex min-w-0 flex-col gap-0.5">
                         <button
                           type="button"
                           onClick={() =>
                             setOpenContactRowKey((k) => (k === rk ? null : rk))
                           }
-                          className="truncate text-left font-medium text-slate-200 hover:underline touch-manipulation"
+                          className="truncate text-left font-medium text-slate-900 hover:underline touch-manipulation"
                           title="Show mentor contact"
                         >
                           {name}
@@ -596,19 +596,19 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                     </td>
                     <td className="box-border pl-2 pr-1.5 py-1.5 align-middle text-center">
                       <div
-                        className="truncate font-mono text-[11px] text-slate-500 text-center"
+                        className="truncate font-mono text-[11px] text-slate-700 text-center"
                         title={emp}
                       >
                         {emp}
                       </div>
                     </td>
-                    <td className="px-1.5 py-1.5 align-middle text-center text-slate-400">{posLabel}</td>
-                    <td className="px-1.5 py-1.5 align-middle text-center font-mono text-[11px] text-slate-400">
+                    <td className="px-1.5 py-1.5 align-middle text-center text-slate-700">{posLabel}</td>
+                    <td className="px-1.5 py-1.5 align-middle text-center font-mono text-[11px] text-slate-700">
                       <div className="truncate text-center" title={baseLabel}>
                         {baseLabel}
                       </div>
                     </td>
-                    <td className="max-w-0 px-1.5 py-1.5 align-middle text-center text-slate-400">
+                    <td className="max-w-0 px-1.5 py-1.5 align-middle text-center text-slate-700">
                       <div
                         className="truncate font-mono text-[11px] text-center"
                         title={phoneFormatted || undefined}
@@ -636,7 +636,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                         <span className="text-slate-600">—</span>
                       )}
                     </td>
-                    <td className="px-1.5 py-1.5 text-center tabular-nums text-slate-400">{count}</td>
+                    <td className="px-1.5 py-1.5 text-center tabular-nums text-slate-700">{count}</td>
                     <td className="px-1 py-1.5 text-center align-middle">
                       <button
                         type="button"
@@ -652,27 +652,27 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                     </td>
                   </tr>
                   {editRowKey === rk ? (
-                    <tr className="border-t border-white/5 bg-slate-900/50">
+                    <tr className="border-t border-slate-200 bg-slate-100">
                       <td colSpan={COL_COUNT} className="px-3 py-5 sm:px-5">
                         <div className="max-w-3xl space-y-5 text-sm">
-                          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-white/10 pb-3">
+                          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-slate-200 pb-3">
                             <span
                               className={
                                 craOnCrewRules
-                                  ? "rounded border border-emerald-500/35 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-200"
-                                  : "rounded border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-200"
+                                  ? "rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-900"
+                                  : "rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-950"
                               }
                             >
                               {craOnCrewRules ? "Live" : "Staging"}
                             </span>
-                            <span className="font-semibold text-slate-100">{name}</span>
+                            <span className="font-semibold text-slate-900">{name}</span>
                             <span className="font-mono text-xs text-slate-500">{emp}</span>
                             <span className="text-xs text-slate-500">
                               {posLabel} · <span className="font-mono">{baseLabel}</span>
                             </span>
                           </div>
 
-                          <div className="rounded-lg border border-white/10 bg-slate-950/50 p-3 text-xs text-slate-400 shadow-sm shadow-black/20">
+                          <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600 shadow-sm">
                             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                               Contact
                             </p>
@@ -681,11 +681,11 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                 <>
                                   <div className="grid gap-0.5 sm:grid-cols-[8rem_1fr] sm:gap-x-3">
                                     <dt className="text-slate-500">Full Name</dt>
-                                    <dd className="text-slate-200">{name}</dd>
+                                    <dd className="text-slate-900">{name}</dd>
                                   </div>
                                   <div className="grid gap-0.5 sm:grid-cols-[8rem_1fr] sm:gap-x-3">
                                     <dt className="text-slate-500">Personal email</dt>
-                                    <dd className="break-all font-medium text-slate-200">
+                                    <dd className="break-all font-medium text-slate-900">
                                       {(m.personal_email ?? "").trim() ? (
                                         <a
                                           href={`mailto:${(m.personal_email ?? "").trim()}`}
@@ -700,7 +700,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                   </div>
                                   <div className="grid gap-0.5 sm:grid-cols-[8rem_1fr] sm:gap-x-3">
                                     <dt className="text-slate-500">Work / Company email</dt>
-                                    <dd className="break-all text-slate-300">
+                                    <dd className="break-all text-slate-800">
                                       {contactEmail ? (
                                         <a
                                           href={`mailto:${contactEmail}`}
@@ -715,14 +715,14 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                   </div>
                                   <div className="grid gap-0.5 sm:grid-cols-[8rem_1fr] sm:gap-x-3">
                                     <dt className="text-slate-500">Phone</dt>
-                                    <dd className="text-slate-200">{phoneFormatted || "—"}</dd>
+                                    <dd className="text-slate-800">{phoneFormatted || "—"}</dd>
                                   </div>
                                 </>
                               ) : (
                                 <>
                                   <div className="grid gap-0.5 sm:grid-cols-[8rem_1fr] sm:gap-x-3">
                                     <dt className="text-slate-500">Contact email</dt>
-                                    <dd className="break-all text-slate-200">
+                                    <dd className="break-all text-slate-800">
                                       {contactEmail ? (
                                         <a
                                           href={`mailto:${contactEmail}`}
@@ -741,7 +741,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                   </p>
                                   <div className="grid gap-0.5 sm:grid-cols-[8rem_1fr] sm:gap-x-3">
                                     <dt className="text-slate-500">Phone</dt>
-                                    <dd className="text-slate-200">{phoneFormatted || "—"}</dd>
+                                    <dd className="text-slate-800">{phoneFormatted || "—"}</dd>
                                   </div>
                                 </>
                               )}
@@ -749,7 +749,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                           </div>
 
                           {m.rowKind === "profile" ? (
-                            <p className="text-xs leading-relaxed text-slate-400">
+                            <p className="text-xs leading-relaxed text-slate-600">
                               Identity fields (name, employee #, phone, contact email as shown above, position, crew
                               base) come from this pilot&apos;s CrewRules profile. Update them in{" "}
                               <Link
@@ -762,9 +762,9 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                             </p>
                           ) : null}
 
-                          <div className="space-y-3 rounded-lg border border-white/10 bg-slate-950/30 p-4">
+                          <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
                             <div>
-                              <p className="text-sm font-semibold text-slate-200">Mentor Program</p>
+                              <p className="text-sm font-semibold text-slate-900">Mentor Program</p>
                               <p className="mt-1 text-[11px] text-slate-500">
                                 Saved to Mentor Registry — Does not change pilot profile fields.
                               </p>
@@ -795,14 +795,14 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                     {MENTOR_REGISTRY_TYPE_VALUES.map((v) => (
                                       <label
                                         key={v}
-                                        className="flex cursor-pointer items-center gap-2 rounded-md border border-white/5 bg-slate-950/50 px-2 py-1.5 text-sm text-slate-200"
+                                        className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-800"
                                       >
                                         <input
                                           type="checkbox"
                                           name="mentor_category"
                                           value={v}
                                           defaultChecked={categoryChecked.has(v)}
-                                          className="h-3.5 w-3.5 rounded border-white/20 bg-slate-900 text-[#75C043] focus:ring-[#75C043]/40"
+                                          className="h-3.5 w-3.5 rounded border-slate-300 bg-white text-[#75C043] focus:ring-[#75C043]/40"
                                         />
                                         {MENTOR_REGISTRY_TYPE_LABELS[v]}
                                       </label>
@@ -815,7 +815,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                     name="mentor_status"
                                     required
                                     defaultValue={statusDefault}
-                                    className="w-full rounded-md border border-white/10 bg-slate-950/80 px-2 py-2 text-sm text-slate-200"
+                                    className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800"
                                   >
                                     <option value="" disabled>
                                       Select status…
@@ -834,12 +834,12 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                   name="admin_notes"
                                   rows={3}
                                   defaultValue={m.admin_notes ?? ""}
-                                  className="w-full resize-y rounded-md border border-white/10 bg-slate-950/80 px-2 py-2 text-sm text-slate-200 placeholder:text-slate-600"
+                                  className="w-full resize-y rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800 placeholder:text-slate-600"
                                   placeholder="Internal notes for admins (mentor registry)"
                                 />
                               </label>
                               {editError ? (
-                                <p className="text-xs text-red-400" role="alert">
+                                <p className="text-xs font-medium text-red-700" role="alert">
                                   {editError}
                                 </p>
                               ) : null}
@@ -847,7 +847,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                 <button
                                   type="submit"
                                   disabled={pending}
-                                  className="inline-flex rounded-md border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50"
+                                  className="inline-flex rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
                                 >
                                   {pending ? "Saving…" : "Save Program Status"}
                                 </button>
@@ -856,9 +856,9 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                           </div>
 
                           {m.rowKind === "preload" ? (
-                            <div className="space-y-3 rounded-lg border border-white/10 bg-slate-950/30 p-4">
+                            <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
                               <div>
-                                <p className="text-sm font-semibold text-slate-200">Staging Identity</p>
+                                <p className="text-sm font-semibold text-slate-900">Staging Identity</p>
                                 <p className="mt-1 text-[11px] text-slate-500">
                                   Updates Mentor preload only. When this pilot links a CrewRules account, profile data
                                   becomes source of truth.
@@ -889,7 +889,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                       name="full_name"
                                       type="text"
                                       defaultValue={m.full_name ?? ""}
-                                      className="w-full rounded-md border border-white/10 bg-slate-950/80 px-2 py-2 text-sm text-slate-200"
+                                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800"
                                     />
                                   </label>
                                   <label className="block space-y-1">
@@ -899,7 +899,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                       type="text"
                                       required
                                       defaultValue={m.employee_number ?? ""}
-                                      className="w-full rounded-md border border-white/10 bg-slate-950/80 px-2 py-2 text-sm text-slate-200"
+                                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800"
                                     />
                                   </label>
                                   <label className="block space-y-1">
@@ -907,7 +907,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                     <select
                                       name="preload_active"
                                       defaultValue={m.preload_active !== false ? "true" : "false"}
-                                      className="w-full rounded-md border border-white/10 bg-slate-950/80 px-2 py-2 text-sm text-slate-200"
+                                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800"
                                     >
                                       <option value="true">Active (normal staging)</option>
                                       <option value="false">Inactive (stays on roster, muted)</option>
@@ -919,7 +919,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                       name="phone"
                                       type="text"
                                       defaultValue={m.phone ?? ""}
-                                      className="w-full rounded-md border border-white/10 bg-slate-950/80 px-2 py-2 text-sm text-slate-200"
+                                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800"
                                     />
                                   </label>
                                   <label className="block space-y-1">
@@ -928,7 +928,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                       name="work_email"
                                       type="email"
                                       defaultValue={m.email ?? ""}
-                                      className="w-full rounded-md border border-white/10 bg-slate-950/80 px-2 py-2 text-sm text-slate-200"
+                                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800"
                                     />
                                   </label>
                                   <label className="block space-y-1 sm:col-span-2">
@@ -937,7 +937,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                       name="personal_email"
                                       type="email"
                                       defaultValue={m.personal_email ?? ""}
-                                      className="w-full rounded-md border border-white/10 bg-slate-950/80 px-2 py-2 text-sm text-slate-200"
+                                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800"
                                     />
                                   </label>
                                   <label className="block space-y-1">
@@ -945,7 +945,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                     <select
                                       name="position"
                                       defaultValue={m.position ?? ""}
-                                      className="w-full rounded-md border border-white/10 bg-slate-950/80 px-2 py-2 text-sm text-slate-200"
+                                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800"
                                     >
                                       <option value="">—</option>
                                       <option value="captain">Captain</option>
@@ -960,7 +960,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                       type="text"
                                       maxLength={3}
                                       defaultValue={m.base_airport ?? ""}
-                                      className="w-full rounded-md border border-white/10 bg-slate-950/80 px-2 py-2 text-sm text-slate-200 uppercase font-mono"
+                                      className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800 uppercase font-mono"
                                     />
                                   </label>
                                   <label className="block space-y-1 sm:col-span-2">
@@ -969,13 +969,13 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                       name="preload_notes"
                                       rows={2}
                                       defaultValue={m.preload_notes ?? ""}
-                                      className="w-full resize-y rounded-md border border-white/10 bg-slate-950/80 px-2 py-2 text-sm text-slate-200 placeholder:text-slate-600"
+                                      className="w-full resize-y rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-800 placeholder:text-slate-600"
                                       placeholder="Import or ops notes stored on mentor preload"
                                     />
                                   </label>
                                 </div>
                                 {stagingError ? (
-                                  <p className="text-xs text-red-400" role="alert">
+                                  <p className="text-xs font-medium text-red-700" role="alert">
                                     {stagingError}
                                   </p>
                                 ) : null}
@@ -983,7 +983,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                   <button
                                     type="submit"
                                     disabled={pending}
-                                    className="inline-flex rounded-md border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50"
+                                    className="inline-flex rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
                                   >
                                     {pending ? "Saving…" : "Save Staging Identity"}
                                   </button>
@@ -993,11 +993,11 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                           ) : null}
 
                           {(m.admin_notes ?? "").trim() || (m.preload_notes ?? "").trim() ? (
-                            <div className="rounded-lg border border-white/10 bg-slate-950/40 p-3 text-xs text-slate-400">
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
                               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                                 Notes (full)
                               </p>
-                              <div className="mt-2 space-y-3 whitespace-pre-wrap break-words text-slate-300">
+                              <div className="mt-2 space-y-3 whitespace-pre-wrap break-words text-slate-700">
                                 {(m.admin_notes ?? "").trim() ? (
                                   <div>
                                     <p className="text-[10px] font-medium text-slate-500">Registry admin</p>
@@ -1023,7 +1023,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                                 setStagingError(null);
                                 setEditRowKey(null);
                               }}
-                              className="inline-flex rounded-md border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5"
+                              className="inline-flex rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
                             >
                               Close Panel
                             </button>

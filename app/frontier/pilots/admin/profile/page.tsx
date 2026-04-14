@@ -7,7 +7,7 @@ export default async function AdminProfilePage() {
   const profile = await getProfile();
 
   if (!profile) {
-    return <p className="text-sm text-slate-400">Sign in to manage your account.</p>;
+    return <p className="text-sm text-slate-600">Sign in to manage your account.</p>;
   }
 
   const fullNameDefault =
@@ -16,14 +16,14 @@ export default async function AdminProfilePage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200">
-        <h1 className="text-xl font-semibold tracking-tight border-b border-white/5 pb-2 text-white">
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200">
+        <h1 className="text-xl font-semibold tracking-tight border-b border-slate-200 pb-2 text-[#1a2b4b]">
           Your account
         </h1>
-        <p className="mt-3 text-sm text-slate-300">
-          Sign-in, security, and account-level controls for <strong className="font-medium text-slate-200">your</strong>{" "}
+        <p className="mt-3 text-sm text-slate-600">
+          Sign-in, security, and account-level controls for <strong className="font-medium text-slate-800">your</strong>{" "}
           CrewRules admin user. Tenant-wide options (FLICA onboarding, pay scale seeding, etc.) are under{" "}
-          <span className="text-slate-200">Settings</span>.
+          <span className="text-slate-800">Settings</span>.
         </p>
       </div>
 
@@ -40,6 +40,7 @@ export default async function AdminProfilePage() {
         }
         deletionScheduledFor={profile.deletion_scheduled_for ?? null}
         deletionReasonScheduled={profile.deletion_reason ?? null}
+        variant="light-admin"
       />
     </div>
   );

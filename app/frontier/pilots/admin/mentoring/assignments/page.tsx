@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 const TENANT = "frontier";
 const PORTAL = "pilots";
 
-const emptyStateCard = "rounded-xl border border-slate-700/50 bg-slate-800/50 p-5 sm:p-6";
+const emptyStateCard = "rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm";
 
 function statusLabel(row: {
   is_matched: boolean;
@@ -26,8 +26,8 @@ export default async function FrontierPilotAdminMentoringAssignmentsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight border-b border-white/5 pb-3">Assignments</h1>
-        <p className="mt-2 text-sm text-slate-400">
+        <h1 className="text-xl font-semibold tracking-tight border-b border-slate-200 pb-3 text-[#1a2b4b]">Assignments</h1>
+        <p className="mt-2 text-sm text-slate-600">
           Mentoring assignments for this tenant. Correct hire dates per assignment; saving updates milestone due dates from
           the standard schedule.
         </p>
@@ -35,51 +35,52 @@ export default async function FrontierPilotAdminMentoringAssignmentsPage() {
 
       {rows.length === 0 ? (
         <div className={emptyStateCard}>
-          <h2 className="text-sm font-semibold text-slate-200">No mentoring assignments in this tenant</h2>
-          <p className="mt-2 text-sm leading-relaxed text-slate-400">
+          <h2 className="text-sm font-semibold text-slate-800">No mentoring assignments in this tenant</h2>
+          <p className="mt-2 text-sm leading-relaxed text-slate-600">
             Assignments appear when mentors in this tenant have mentoring records.
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-white/5">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full text-sm min-w-[720px]">
             <thead>
-              <tr className="border-b border-white/5 bg-white/5">
-                <th className="px-4 py-3 text-left font-medium text-slate-300">Mentor</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-300">Mentee</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-300">Employee #</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-300">DOH</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-300">Status</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-300">Contact health</th>
+              <tr className="border-b border-slate-200 bg-slate-50">
+                <th className="px-4 py-3 text-left font-medium text-slate-600">Mentor</th>
+                <th className="px-4 py-3 text-left font-medium text-slate-600">Mentee</th>
+                <th className="px-4 py-3 text-left font-medium text-slate-600">Employee #</th>
+                <th className="px-4 py-3 text-left font-medium text-slate-600">DOH</th>
+                <th className="px-4 py-3 text-left font-medium text-slate-600">Status</th>
+                <th className="px-4 py-3 text-left font-medium text-slate-600">Contact health</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => {
                 const st = statusLabel(r);
                 return (
-                  <tr key={r.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
-                    <td className="px-4 py-3 text-slate-200 max-w-[180px] truncate" title={r.mentor_name ?? undefined}>
+                  <tr key={r.id} className="border-b border-slate-200 last:border-0 hover:bg-slate-50">
+                    <td className="px-4 py-3 text-slate-900 max-w-[180px] truncate" title={r.mentor_name ?? undefined}>
                       {r.mentor_name?.trim() || "—"}
                     </td>
-                    <td className="px-4 py-3 text-slate-300 max-w-[180px] truncate" title={r.mentee_name ?? undefined}>
+                    <td className="px-4 py-3 text-slate-700 max-w-[180px] truncate" title={r.mentee_name ?? undefined}>
                       {r.is_matched ? r.mentee_name?.trim() || "—" : "—"}
                     </td>
-                    <td className="px-4 py-3 text-slate-300 font-mono text-xs">{r.employee_number ?? "—"}</td>
-                    <td className="px-4 py-3 align-middle text-slate-300">
+                    <td className="px-4 py-3 text-slate-700 font-mono text-xs">{r.employee_number ?? "—"}</td>
+                    <td className="px-4 py-3 align-middle text-slate-700">
                       <SuperAdminMentorAssignmentHireDateEdit
                         assignmentId={r.id}
                         hireDateIso={r.hire_date}
                         formAction={updateFrontierPilotAdminMentorAssignmentHireDateFormState}
+                        tone="light"
                       />
                     </td>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-semibold ${
                           st.warn
-                            ? "border-amber-500/40 bg-amber-500/20 text-amber-200"
+                            ? "border-amber-300 bg-amber-50 text-amber-900"
                             : st.text === "Active"
-                              ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-200"
-                              : "border-slate-500/40 bg-slate-500/20 text-slate-400"
+                              ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                              : "border-slate-200 bg-slate-100 text-slate-700"
                         }`}
                       >
                         {st.text}
@@ -89,8 +90,8 @@ export default async function FrontierPilotAdminMentoringAssignmentsPage() {
                       <span
                         className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-semibold ${
                           r.mentor_contact_ok
-                            ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-200"
-                            : "border-amber-500/40 bg-amber-500/20 text-amber-200"
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                            : "border-amber-300 bg-amber-50 text-amber-900"
                         }`}
                       >
                         {r.mentor_contact_ok ? "OK" : "Missing"}

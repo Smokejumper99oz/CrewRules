@@ -20,9 +20,9 @@ import { AccessBadge } from "@/components/access-badge";
 function LoaderBar({ percent }: { percent?: number | null }) {
   const pct = percent == null ? 0 : Math.min(100, Math.max(0, percent));
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
       <div
-        className="h-full rounded-full bg-[#75C043]/70 transition-all duration-500"
+        className="h-full rounded-full bg-emerald-700 transition-all duration-500"
         style={{ width: `${pct}%` }}
       />
     </div>
@@ -202,11 +202,14 @@ export default function AdminLibraryPage() {
   };
 
   return (
-    <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-6">
-      <h1 className="text-xl font-semibold tracking-tight border-b border-white/5">Library</h1>
-      <p className="mt-2 text-slate-300">
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:shadow-md hover:border-slate-300">
+      <h1 className="text-xl font-semibold tracking-tight border-b border-slate-200 pb-2 text-[#1a2b4b]">Library</h1>
+      <p className="mt-2 text-slate-600">
         View and manage uploaded documents. Upload files in{" "}
-        <Link href="/frontier/pilots/admin/documents" className="text-[#75C043] hover:underline">
+        <Link
+          href="/frontier/pilots/admin/documents"
+          className="font-medium text-emerald-800 underline-offset-2 hover:text-emerald-950 hover:underline"
+        >
           Admin → Uploads
         </Link>
         .
@@ -214,16 +217,17 @@ export default function AdminLibraryPage() {
 
       {loading && (
         <div className="mt-6 space-y-3">
-          <div className="flex items-center gap-3 text-slate-400">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#75C043]/40 border-t-[#75C043]" />
+          <div className="flex items-center gap-3 text-slate-600">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-200 border-t-emerald-700" />
             <span>Loading documents…</span>
           </div>
           {slowLoad && (
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-2 text-sm text-amber-200/90">
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-950">
               <span>Taking longer than usual.</span>
               <button
+                type="button"
                 onClick={() => load()}
-                className="rounded border border-amber-500/40 px-2 py-1 text-amber-400 hover:bg-amber-500/10"
+                className="rounded border border-amber-300 bg-white px-2 py-1 text-amber-900 hover:bg-amber-100"
               >
                 Retry now
               </button>
@@ -234,11 +238,12 @@ export default function AdminLibraryPage() {
 
       {error && (
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <p className="text-sm text-red-400">{error}</p>
+          <p className="text-sm text-red-700">{error}</p>
           <button
+            type="button"
             onClick={() => load()}
             disabled={loading}
-            className="rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+            className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm text-red-800 hover:bg-red-50 disabled:opacity-50"
           >
             Retry
           </button>
@@ -249,20 +254,21 @@ export default function AdminLibraryPage() {
         <div className="mt-6 space-y-3">
           <div className="flex flex-wrap items-center gap-3">
             <button
+              type="button"
               onClick={handleIndex}
               disabled={indexing}
-              className="rounded-xl border border-[#75C043]/50 bg-[#75C043]/10 px-4 py-2.5 text-sm font-semibold text-[#75C043] hover:bg-[#75C043]/20 disabled:opacity-50"
+              className="rounded-xl border border-emerald-700/35 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-900 shadow-sm hover:bg-emerald-100 disabled:opacity-50"
             >
               {indexing ? "Enabling…" : "Enable AI Questions"}
             </button>
             {indexResult?.success && (
-              <span className="text-sm text-emerald-400">{indexResult.success}</span>
+              <span className="text-sm font-medium text-emerald-800">{indexResult.success}</span>
             )}
           </div>
           {indexing && (
-            <div className="rounded-xl border border-[#75C043]/20 bg-[#75C043]/5 p-4 space-y-2">
+            <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/80 p-4">
               <LoaderBar percent={indexPercent} />
-              <div className="flex items-center justify-between text-sm text-slate-300">
+              <div className="flex items-center justify-between text-sm text-slate-600">
                 <span>Making documents searchable…</span>
                 <span>
                   {indexPercent != null ? `${indexPercent}%` : ""}
@@ -278,7 +284,7 @@ export default function AdminLibraryPage() {
                 </span>
               </div>
               {indexSecondsRemaining != null && indexSecondsRemaining <= 0 && indexPercent !== 100 && (
-                <p className="text-xs text-amber-400/90">
+                <p className="text-xs font-medium text-amber-900">
                   Embedding documents — may take 1–2 min to finish
                 </p>
               )}
@@ -288,9 +294,12 @@ export default function AdminLibraryPage() {
       )}
 
       {!loading && docs.length === 0 && !error && (
-        <p className="mt-6 text-slate-400">
+        <p className="mt-6 text-slate-600">
           No documents yet. Upload files in{" "}
-          <Link href="/frontier/pilots/admin/documents" className="text-[#75C043] hover:underline">
+          <Link
+            href="/frontier/pilots/admin/documents"
+            className="font-medium text-emerald-800 underline-offset-2 hover:text-emerald-950 hover:underline"
+          >
             Admin → Uploads
           </Link>
           .
@@ -302,25 +311,29 @@ export default function AdminLibraryPage() {
           {docs.map((doc) => (
             <div
               key={doc.path}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 px-4 py-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all duration-200 hover:shadow-md hover:border-slate-300"
             >
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 <FileTypeIcon fileName={doc.name} />
-                <span className="font-medium text-white">{displayName(doc)}</span>
-                <AccessBadge aiEnabled={aiEnabledByPath[doc.path] ?? false} />
-                <AIStatusBadge status={aiStatusByPath[doc.path] ?? "not_enabled"} indexing={indexing} />
-                <label className="flex items-center gap-1.5 text-xs text-slate-400">
+                <span className="font-medium text-slate-900">{displayName(doc)}</span>
+                <AccessBadge aiEnabled={aiEnabledByPath[doc.path] ?? false} surface="light" />
+                <AIStatusBadge
+                  status={aiStatusByPath[doc.path] ?? "not_enabled"}
+                  indexing={indexing}
+                  surface="light"
+                />
+                <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
                   <input
                     type="checkbox"
                     checked={aiEnabledByPath[doc.path] ?? false}
                     onChange={(e) => handleToggleAI(doc, e.target.checked)}
                     disabled={busy}
-                    className="h-3.5 w-3.5 rounded border-white/20 text-[#75C043]"
+                    className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600/30"
                   />
                   AI
                 </label>
                 {aiEnabledByPath[doc.path] && aiStatusByPath[doc.path] === "not_enabled" && !indexing && (
-                  <span className="text-xs text-amber-400/90">
+                  <span className="text-xs font-medium text-amber-900">
                     Click &quot;Enable AI Questions&quot; above to make searchable
                   </span>
                 )}
@@ -333,21 +346,23 @@ export default function AdminLibraryPage() {
                       value={renameValue}
                       onChange={(e) => setRenameValue(e.target.value)}
                       placeholder="New name"
-                      className="rounded-lg border border-white/10 bg-slate-950/60 px-3 py-1.5 text-sm text-white"
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900"
                     />
                     <button
+                      type="button"
                       onClick={handleRename}
                       disabled={busy}
-                      className="rounded-lg bg-[#75C043] px-3 py-1.5 text-sm font-medium text-slate-950"
+                      className="rounded-lg bg-emerald-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-900"
                     >
                       Save
                     </button>
                     <button
+                      type="button"
                       onClick={() => {
                         setAction({ type: null, doc: null });
                         setRenameValue("");
                       }}
-                      className="text-sm text-slate-400 hover:text-white"
+                      className="text-sm text-slate-600 hover:text-slate-900"
                     >
                       Cancel
                     </button>
@@ -358,21 +373,23 @@ export default function AdminLibraryPage() {
                       type="file"
                       accept=".pdf,.doc,.docx,.txt,.csv"
                       onChange={(e) => setReplaceFile(e.target.files?.[0] ?? null)}
-                      className="max-w-[140px] text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-[#75C043]/20 file:px-2 file:py-1 file:text-xs file:text-[#75C043]"
+                      className="max-w-[140px] text-xs text-slate-700 file:mr-2 file:rounded file:border-0 file:bg-emerald-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-emerald-900"
                     />
                     <button
+                      type="button"
                       onClick={handleReplace}
                       disabled={busy || !replaceFile}
-                      className="rounded-lg bg-[#75C043] px-3 py-1.5 text-sm font-medium text-slate-950 disabled:opacity-50"
+                      className="rounded-lg bg-emerald-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-900 disabled:opacity-50"
                     >
                       Replace
                     </button>
                     <button
+                      type="button"
                       onClick={() => {
                         setAction({ type: null, doc: null });
                         setReplaceFile(null);
                       }}
-                      className="text-sm text-slate-400 hover:text-white"
+                      className="text-sm text-slate-600 hover:text-slate-900"
                     >
                       Cancel
                     </button>
@@ -380,30 +397,34 @@ export default function AdminLibraryPage() {
                 ) : (
                   <>
                     <button
+                      type="button"
                       onClick={() => handleDownload(doc)}
-                      className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-slate-200 hover:bg-white/5"
+                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
                     >
                       Download
                     </button>
                     <button
+                      type="button"
                       onClick={() => {
                         setAction({ type: "rename", doc });
                         setRenameValue(displayName(doc));
                       }}
-                      className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-slate-200 hover:bg-white/5"
+                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
                     >
                       Rename
                     </button>
                     <button
+                      type="button"
                       onClick={() => setAction({ type: "replace", doc })}
-                      className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-slate-200 hover:bg-white/5"
+                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
                     >
                       Replace
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleDelete(doc)}
                       disabled={busy}
-                      className="rounded-lg border border-red-500/30 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                      className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50 disabled:opacity-50"
                     >
                       Delete
                     </button>

@@ -8,16 +8,16 @@ export default async function FrontierPilotAdminUsersPage() {
   const users = await getFrontierPilotAdminUsers();
 
   return (
-    <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] p-6 transition-all duration-200">
-      <h1 className="text-xl font-semibold tracking-tight border-b border-white/5">Users</h1>
-      <p className="mt-2 text-slate-300">
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200">
+      <h1 className="text-xl font-semibold tracking-tight border-b border-slate-200 pb-2 text-[#1a2b4b]">Users</h1>
+      <p className="mt-2 text-sm text-slate-600">
         Frontier Airline pilots roster. Tenant admins manage crew in this tenant only.
       </p>
 
       <InviteUserForm className="mt-6" />
 
       <div className="mt-8">
-        <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-4">All users</h2>
+        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-slate-600">All users</h2>
         <SuperAdminUsersPageClient
           users={users}
           currentUserRole={profile?.role ?? ""}

@@ -36,20 +36,20 @@ function mentorPreloadHistoryShortLabel(row: MentorPreloadImportHistoryRowResult
 }
 
 function mentorPreloadHistoryLineClass(row: MentorPreloadImportHistoryRowResult): string {
-  if (!mentorPreloadHistoryRowSuccess(row)) return "text-red-300/95";
-  if (row.message === MENTORING_IMPORT_ROW_CREATED_MESSAGE) return "text-emerald-300/90";
+  if (!mentorPreloadHistoryRowSuccess(row)) return "text-red-800";
+  if (row.message === MENTORING_IMPORT_ROW_CREATED_MESSAGE) return "text-emerald-900";
   if (
     row.message === MENTORING_IMPORT_ROW_UPDATED_MESSAGE ||
     row.message === MENTORING_IMPORT_ROW_NO_CHANGES_MESSAGE
   ) {
-    return "text-amber-200/95";
+    return "text-amber-950";
   }
-  return "text-amber-200/95";
+  return "text-slate-800";
 }
 
 function rowLineClass(status: string): string {
-  if (status === "success") return "text-emerald-300/90";
-  return "text-red-300/95";
+  if (status === "success") return "text-emerald-900";
+  return "text-red-800";
 }
 
 function menteeRowStatusLabel(row: MentoringCsvImportRowResult): string {
@@ -72,62 +72,73 @@ export function MentoringImportHistorySection({
 }) {
   if (entries.length === 0) {
     return (
-      <section className="rounded-lg border border-slate-700/60 bg-slate-900/25 px-3.5 py-3" aria-label={title}>
-        <p className="text-xs font-semibold text-slate-200">{title}</p>
-        <p className="mt-2 text-xs text-slate-500">No imports recorded yet for this tenant.</p>
+      <section className="rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3" aria-label={title}>
+        <p className="text-xs font-semibold text-slate-900">{title}</p>
+        <p className="mt-2 text-xs text-slate-600">No imports recorded yet for this tenant.</p>
       </section>
     );
   }
 
   return (
-    <section className="rounded-lg border border-slate-700/60 bg-slate-900/25 px-3.5 py-3" aria-label={title}>
-      <p className="text-xs font-semibold text-slate-200">{title}</p>
-      <ul className="mt-3 space-y-2.5 text-xs text-slate-300">
+    <section className="rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3" aria-label={title}>
+      <p className="text-xs font-semibold text-slate-900">{title}</p>
+      <ul className="mt-3 space-y-2.5 text-xs text-slate-800">
         {entries.map((e) => (
           <li
             key={e.id}
-            className="border-b border-slate-700/40 pb-2 last:border-0 last:pb-0 leading-snug"
+            className="border-b border-slate-200 pb-2 last:border-0 last:pb-0 leading-snug"
           >
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              <span className="text-slate-400 shrink-0">{formatTs(e.created_at)}</span>
+              <span className="shrink-0 text-slate-600">{formatTs(e.created_at)}</span>
               {e.is_test_import ? (
-                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-400/95 ring-1 ring-amber-400/25">
+                <span className="shrink-0 rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950">
                   TEST
                 </span>
               ) : null}
-              <span className="font-medium text-slate-100 truncate max-w-[min(100%,280px)]" title={e.file_name}>
+              <span className="max-w-[min(100%,280px)] truncate font-medium text-slate-900" title={e.file_name}>
                 {e.file_name}
               </span>
               <span className="uppercase text-slate-500">{e.file_type}</span>
             </div>
-            <p className="mt-0.5 text-[11px] text-slate-500">
+            <p className="mt-0.5 text-[11px] text-slate-600">
               by {e.uploader_display ?? "Unknown user"}
             </p>
-            <div className="mt-1 font-mono text-[11px] text-slate-400">
+            <div className="mt-1 font-mono text-[11px] text-slate-700">
               {variant === "mentor" ? (
                 <>
-                  rows {e.total_rows} — succeeded {e.success_count} — failed {e.failed_count}
+                  rows <span className="font-semibold text-slate-900">{e.total_rows}</span>
+                  <span className="text-slate-400"> — </span>
+                  succeeded <span className="font-semibold text-emerald-800">{e.success_count}</span>
+                  <span className="text-slate-400"> — </span>
+                  failed <span className="font-semibold text-red-700">{e.failed_count}</span>
                 </>
               ) : (
                 <>
-                  rows {e.total_rows} — succeeded {e.success_count} — created {e.created_count} — updated{" "}
-                  {e.updated_count} — failed {e.failed_count}
+                  rows <span className="font-semibold text-slate-900">{e.total_rows}</span>
+                  <span className="text-slate-400"> — </span>
+                  succeeded <span className="font-semibold text-emerald-800">{e.success_count}</span>
+                  <span className="text-slate-400"> — </span>
+                  created <span className="font-semibold text-emerald-900">{e.created_count}</span>
+                  <span className="text-slate-400"> — </span>
+                  updated <span className="font-semibold text-sky-900">{e.updated_count}</span>
+                  <span className="text-slate-400"> — </span>
+                  failed <span className="font-semibold text-red-700">{e.failed_count}</span>
                 </>
               )}
               {e.fatal_error ? (
-                <span className="block text-red-300/90 mt-0.5">Fatal: {e.fatal_error}</span>
+                <span className="mt-0.5 block font-sans font-medium text-red-800">Fatal: {e.fatal_error}</span>
               ) : null}
             </div>
 
             {Array.isArray(e.row_results) && e.row_results.length > 0 ? (
-              <details className="mt-2 rounded-md border border-slate-700/55 bg-slate-950/30">
-                <summary className="cursor-pointer select-none px-2.5 py-1.5 text-[11px] font-medium text-slate-300 hover:bg-slate-800/35">
+              <details className="mt-2 rounded-md border border-slate-200 bg-white">
+                <summary className="cursor-pointer select-none px-2.5 py-1.5 text-[11px] font-medium text-slate-800 hover:bg-slate-50">
                   Row details ({e.row_results.length})
                 </summary>
-                <div className="border-t border-slate-700/40 px-2 pb-2 pt-2 max-h-[280px] overflow-x-auto overflow-y-auto">
+                <div className="max-h-[280px] overflow-x-auto overflow-y-auto border-t border-slate-200 px-2 pb-2 pt-2">
                   <div className="min-w-[520px]">
                     <div
-                      className={`${mentorHistoryRowGridClass} text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-b border-slate-700/45 pb-1 mb-1.5`}
+                      className={`${mentorHistoryRowGridClass} mb-1.5 border-b border-slate-200 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600`}
                     >
                       <span>Row</span>
                       <span>Status</span>
@@ -145,7 +156,7 @@ export function MentoringImportHistorySection({
                           return (
                             <li
                               key={`${mRow.rowNumber}-${idx}`}
-                              className={`${mentorHistoryRowGridClass} text-[10px] font-mono leading-snug py-1 border-b border-slate-800/70 last:border-0 min-w-0 ${lineCls}`}
+                              className={`${mentorHistoryRowGridClass} min-w-0 border-b border-slate-100 py-1 font-mono text-[10px] leading-snug last:border-0 ${lineCls}`}
                             >
                               <span className="tabular-nums">{mRow.rowNumber}</span>
                               <span className="font-sans text-[10px] font-medium">
@@ -182,7 +193,7 @@ export function MentoringImportHistorySection({
                         return (
                           <li
                             key={`${menteeRow.rowNumber}-${idx}`}
-                            className={`${mentorHistoryRowGridClass} text-[10px] font-mono leading-snug py-1 border-b border-slate-800/70 last:border-0 min-w-0 ${lineCls}`}
+                            className={`${mentorHistoryRowGridClass} min-w-0 border-b border-slate-100 py-1 font-mono text-[10px] leading-snug last:border-0 ${lineCls}`}
                           >
                             <span className="tabular-nums">{menteeRow.rowNumber}</span>
                             <span className="font-sans text-[10px] font-medium">

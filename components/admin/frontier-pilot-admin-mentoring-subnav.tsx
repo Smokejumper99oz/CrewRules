@@ -31,7 +31,7 @@ export function FrontierPilotAdminMentoringSubnav() {
     <nav aria-label="Mentoring admin sections" className="min-w-0 w-full">
       <div
         className={[
-          "sidebar-scrollbar-hide flex w-full max-w-full min-w-0 flex-nowrap items-end gap-0 overflow-x-auto overscroll-x-contain border-b border-white/10",
+          "sidebar-scrollbar-hide flex w-full max-w-full min-w-0 flex-nowrap items-end gap-0 overflow-x-auto overscroll-x-contain border-b border-slate-200",
           "scroll-smooth scroll-ps-3 scroll-pe-8 sm:scroll-ps-4 sm:scroll-pe-10 lg:scroll-ps-0 lg:scroll-pe-8",
           "max-lg:snap-x max-lg:snap-mandatory",
         ].join(" ")}
@@ -45,10 +45,10 @@ export function FrontierPilotAdminMentoringSubnav() {
               className={[
                 "group flex shrink-0 items-center gap-1.5 border-b-2 border-transparent text-sm transition touch-manipulation",
                 "-mb-px px-3 py-2.5 max-lg:min-h-[48px] max-lg:snap-start max-lg:snap-always max-lg:py-3 lg:min-h-0 lg:px-3.5 lg:py-2",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-emerald-400/50 dark:focus-visible:ring-offset-slate-950",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#F4F7F9]",
                 isActive
-                  ? "border-[#75C043] font-medium text-slate-900 dark:border-emerald-400 dark:text-white"
-                  : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100",
+                  ? "border-[#75C043] font-medium text-slate-900"
+                  : "text-slate-500 hover:text-slate-800",
               ].join(" ")}
             >
               <Icon className="h-4 w-4 shrink-0 opacity-80 group-hover:opacity-100" aria-hidden />

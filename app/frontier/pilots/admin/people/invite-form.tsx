@@ -29,20 +29,20 @@ export function InviteUserForm({ className }: { className?: string }) {
     <form onSubmit={handleSubmit} className={className}>
       <div className="flex flex-wrap items-end gap-4 md:flex-nowrap">
         <label className="flex w-full min-w-0 flex-col gap-1 md:w-2/5 md:max-w-md">
-          <span className="text-xs text-slate-400">Email</span>
+          <span className="text-xs font-medium text-slate-600">Email</span>
           <input
             type="email"
             name="email"
             required
             placeholder="firstname.lastname@flyfrontier.com"
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/50"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/50"
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-slate-400">Role</span>
+          <span className="text-xs font-medium text-slate-600">Role</span>
           <select
             name="role"
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/50"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/50"
           >
             <option value="pilot">Pilot</option>
             <option value="flight_attendant">Flight Attendant</option>
@@ -50,10 +50,10 @@ export function InviteUserForm({ className }: { className?: string }) {
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-slate-400">Portal</span>
+          <span className="text-xs font-medium text-slate-600">Portal</span>
           <select
             name="portal"
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/50"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-[#75C043]/50 focus:outline-none focus:ring-1 focus:ring-[#75C043]/50"
           >
             <option value="pilots">Pilots</option>
             <option value="fa">Flight Attendants</option>
@@ -67,8 +67,8 @@ export function InviteUserForm({ className }: { className?: string }) {
           {loading ? "Sending…" : "Invite"}
         </button>
       </div>
-      {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
-      {success && <p className="mt-2 text-sm text-emerald-400">Invitation sent.</p>}
+      {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+      {success && <p className="mt-2 text-sm font-medium text-emerald-800">Invitation sent.</p>}
     </form>
   );
 }

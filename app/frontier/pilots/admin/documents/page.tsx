@@ -18,7 +18,7 @@ const ALLOWED_TYPES = [
 function LoaderBar({ percent }: { percent?: number | null }) {
   const pct = percent == null ? 0 : Math.min(100, Math.max(0, percent));
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
       <div
         className="h-full rounded-full bg-[#75C043]/70 transition-all duration-500"
         style={{ width: `${pct}%` }}
@@ -164,66 +164,66 @@ export default function DocumentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-6">
-        <h1 className="text-xl font-semibold tracking-tight border-b border-white/5">Uploads</h1>
-        <p className="mt-2 text-slate-300">
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h1 className="text-xl font-semibold tracking-tight border-b border-slate-200 pb-2 text-[#1a2b4b]">Uploads</h1>
+        <p className="mt-2 text-slate-600">
           Upload documents for pilot access. AI usage is optional.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-6 space-y-4">
+      <form onSubmit={handleSubmit} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
         {uploading && (
           <div className="rounded-xl border border-[#75C043]/20 bg-[#75C043]/5 p-4 space-y-2">
             <LoaderBar percent={uploadPercent} />
-            <p className="text-sm text-slate-300">
+            <p className="text-sm text-slate-600">
               Uploading {uploadingFileName}… {uploadPercent != null ? `${uploadPercent}%` : ""}
             </p>
           </div>
         )}
         <div>
-          <label className="block text-sm font-medium text-slate-200">File</label>
+          <label className="block text-sm font-medium text-slate-700">File</label>
           <input
             name="file"
             type="file"
             required
             accept=".pdf,.doc,.docx,.txt,.csv"
             disabled={uploading}
-            className="mt-2 block w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white file:mr-4 file:rounded-lg file:border-0 file:bg-[#75C043] file:px-4 file:py-2 file:font-semibold file:text-slate-950 file:hover:opacity-90 disabled:opacity-50"
+            className="mt-2 block w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 file:mr-4 file:rounded-lg file:border-0 file:bg-[#75C043] file:px-4 file:py-2 file:font-semibold file:text-slate-950 file:hover:opacity-90 disabled:opacity-50"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-200">File name</label>
+          <label className="block text-sm font-medium text-slate-700">File name</label>
           <input
             name="file_name"
             type="text"
             required
             placeholder="e.g. Frontier Airlines CBA"
             disabled={uploading}
-            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40 disabled:opacity-50"
+            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-500 outline-none focus:border-[#75C043]/50 disabled:opacity-50"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-200">Document category (optional)</label>
+          <label className="block text-sm font-medium text-slate-700">Document category (optional)</label>
           <input
             name="category"
             type="text"
             placeholder="Used to organize documents in the Library (CBA, LOA, Training, Memo)"
             disabled={uploading}
-            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40 disabled:opacity-50"
+            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-500 outline-none focus:border-[#75C043]/50 disabled:opacity-50"
           />
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
-          <p className="mb-2 text-sm font-medium text-slate-200">AI Access</p>
-          <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-300">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="mb-2 text-sm font-medium text-slate-800">AI Access</p>
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700">
             <input
               name="ai_enabled"
               type="checkbox"
               defaultChecked={false}
               disabled={uploading}
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/20 bg-slate-950/40 text-[#75C043] focus:ring-[#75C043]/50"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 bg-white text-[#75C043] focus:ring-[#75C043]/50"
             />
             <span>
               Allow CrewRules AI to reference this document
@@ -246,12 +246,12 @@ export default function DocumentsPage() {
         </button>
       </form>
 
-      <div className="rounded-3xl bg-gradient-to-b from-slate-900/60 to-slate-950/80 border border-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:border-emerald-400/20 p-6">
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="space-y-3">
           {indexing && (
             <div className="space-y-2">
               <LoaderBar percent={indexPercent} />
-              <p className="text-sm text-slate-300">
+              <p className="text-sm text-slate-600">
                 Indexing documents for AI search… {indexPercent != null ? `${indexPercent}%` : ""}
               </p>
             </div>
@@ -260,13 +260,13 @@ export default function DocumentsPage() {
             type="button"
             onClick={handleIndex}
             disabled={indexing}
-            className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+            className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
           >
             {indexing ? "Enabling…" : "Enable AI Questions"}
           </button>
           {indexError && <p className="text-sm text-red-400">{indexError}</p>}
           {indexSuccess && <p className="text-sm text-emerald-400">{indexSuccess}</p>}
-          <p className="mt-2 text-sm text-slate-400">
+          <p className="mt-2 text-sm text-slate-600">
             View and manage documents in{" "}
             <Link href="/frontier/pilots/admin/library" className="text-[#75C043] hover:underline">
               Admin → Library

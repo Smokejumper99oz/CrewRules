@@ -83,7 +83,7 @@ export function MenteeRosterReassignMentor({
         onClick={() => setOpen((v) => !v)}
         disabled={isPending}
         title={currentHint ? `Current: ${currentHint}` : undefined}
-        className="touch-manipulation whitespace-nowrap text-[11px] font-semibold leading-none text-[#75C043] hover:underline disabled:opacity-50 disabled:hover:no-underline"
+        className="touch-manipulation whitespace-nowrap text-[11px] font-semibold leading-none text-emerald-800 hover:text-emerald-900 hover:underline disabled:opacity-50 disabled:hover:no-underline"
       >
         {open ? "Close" : "Reassign"}
       </button>
@@ -109,7 +109,7 @@ export function MenteeRosterReassignMentor({
             <button
               type="submit"
               disabled={isPending}
-              className="inline-flex shrink-0 items-center rounded-md border border-slate-500/40 bg-slate-800/80 px-2 py-1 text-[10px] font-semibold text-slate-200 hover:border-slate-400/50 hover:bg-slate-800 disabled:opacity-50"
+              className="inline-flex shrink-0 items-center rounded-md border border-slate-300 bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-800 hover:border-slate-400 hover:bg-slate-200 disabled:opacity-50"
             >
               {isPending ? "…" : "Save"}
             </button>
@@ -117,7 +117,7 @@ export function MenteeRosterReassignMentor({
               type="button"
               disabled={isPending}
               onClick={() => setOpen(false)}
-              className="inline-flex shrink-0 items-center rounded-md border border-white/10 bg-transparent px-2 py-1 text-[10px] font-semibold text-slate-400 hover:bg-white/[0.04] disabled:opacity-50"
+              className="inline-flex shrink-0 items-center rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
             >
               Cancel
             </button>

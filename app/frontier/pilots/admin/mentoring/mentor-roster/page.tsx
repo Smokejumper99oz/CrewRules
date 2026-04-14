@@ -109,8 +109,8 @@ export default async function FrontierPilotAdminMentoringMentorRosterPage() {
   if (pErr) {
     return (
       <div className="space-y-4">
-        <h1 className="text-xl font-semibold tracking-tight border-b border-white/5 pb-3">Mentor Roster</h1>
-        <p className="text-sm text-red-400">Could not load mentors.</p>
+        <h1 className="text-xl font-semibold tracking-tight border-b border-slate-200 pb-3 text-[#1a2b4b]">Mentor Roster</h1>
+        <p className="text-sm font-medium text-red-700">Could not load mentors.</p>
       </div>
     );
   }
@@ -253,18 +253,18 @@ export default async function FrontierPilotAdminMentoringMentorRosterPage() {
   return (
     <div className="space-y-4 lg:space-y-3">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight border-b border-white/5 pb-3 lg:pb-2">Mentor Roster</h1>
-        <p className="mt-2 text-sm text-slate-400 leading-snug lg:mt-1.5">
+        <h1 className="text-xl font-semibold tracking-tight border-b border-slate-200 pb-3 text-[#1a2b4b] lg:pb-2">Mentor Roster</h1>
+        <p className="mt-2 text-sm text-slate-600 leading-snug lg:mt-1.5">
           ALPA mentors with an active CrewRules account are shown with a{" "}
-          <span className="inline font-medium text-emerald-300/90">green CRA</span>. Preloaded ALPA mentors who have not
+          <span className="inline font-medium text-emerald-700">green CRA</span>. Preloaded ALPA mentors who have not
           yet activated a CrewRules account show an{" "}
-          <span className="inline font-medium text-amber-300/80">amber ✕</span> in the CRA column. Inactive staging rows
+          <span className="inline font-medium text-amber-800">amber ✕</span> in the CRA column. Inactive staging rows
           appear with a muted CRA and an{" "}
-          <span className="text-slate-400">&#8220;</span>
-          <span className="mx-px inline-flex items-center rounded-full border border-slate-600 bg-slate-800/80 px-1.5 py-0.5 align-middle text-[11px] font-medium text-slate-200">
+          <span className="text-slate-600">&#8220;</span>
+          <span className="mx-px inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-1.5 py-0.5 align-middle text-[11px] font-medium text-slate-800">
             Inactive
           </span>
-          <span className="text-slate-400">&#8221;</span> badge.
+          <span className="text-slate-600">&#8221;</span> badge.
         </p>
       </div>
 

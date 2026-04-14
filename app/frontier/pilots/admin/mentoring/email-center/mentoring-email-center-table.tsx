@@ -42,11 +42,11 @@ function formatClassOptionLabel(ymd: string): string {
 }
 
 const ROSTER_FILTER_SELECT_CLASS =
-  "h-6 w-full min-w-0 max-w-full cursor-pointer rounded border border-white/[0.07] bg-white/[0.03] px-1 py-0 pr-5 text-[10px] leading-none text-slate-300 transition-colors [color-scheme:dark] hover:border-white/11 hover:bg-white/[0.055] focus:border-[#75C043]/35 focus:outline-none focus:ring-1 focus:ring-[#75C043]/18 lg:bg-[length:0.5rem] lg:bg-[position:right_0.28rem_center] lg:bg-no-repeat lg:[background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2364748b'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.24 4.5a.75.75 0 01-1.08 0l-4.24-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E\")] lg:appearance-none";
+  "h-6 w-full min-w-0 max-w-full cursor-pointer rounded border border-slate-200 bg-slate-50 px-1 py-0 pr-5 text-[10px] leading-none text-slate-800 transition-colors [color-scheme:light] hover:border-slate-300 hover:bg-slate-100 focus:border-[#75C043]/35 focus:outline-none focus:ring-1 focus:ring-[#75C043]/18 lg:bg-[length:0.5rem] lg:bg-[position:right_0.28rem_center] lg:bg-no-repeat lg:[background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2364748b'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.24 4.5a.75.75 0 01-1.08 0l-4.24-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E\")] lg:appearance-none";
 
 /** Same compact search input as mentee-roster-table. */
 const ROSTER_FILTER_INPUT_CLASS =
-  "h-6 w-full max-w-full min-w-0 rounded border border-white/[0.07] bg-white/[0.03] px-1.5 text-[10px] leading-none text-slate-300 placeholder:text-slate-600 transition-colors hover:border-white/11 hover:bg-white/[0.055] focus:border-[#75C043]/35 focus:outline-none focus:ring-1 focus:ring-[#75C043]/18";
+  "h-6 w-full max-w-full min-w-0 rounded border border-slate-200 bg-slate-50 px-1.5 text-[10px] leading-none text-slate-800 placeholder:text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-100 focus:border-[#75C043]/35 focus:outline-none focus:ring-1 focus:ring-[#75C043]/18";
 
 type RosterStatus = "live" | "not_live" | "unassigned";
 
@@ -77,29 +77,29 @@ function statusLabel(s: RosterStatus): string {
 }
 
 function statusPillClass(s: RosterStatus): string {
-  if (s === "live") return "border-emerald-500/40 bg-emerald-500/20 text-emerald-200";
-  if (s === "unassigned") return "border-amber-500/40 bg-amber-500/20 text-amber-200";
-  return "border-slate-500/40 bg-slate-500/20 text-slate-400";
+  if (s === "live") return "border-emerald-200 bg-emerald-50 text-emerald-900";
+  if (s === "unassigned") return "border-amber-200 bg-amber-50 text-amber-950";
+  return "border-slate-200 bg-slate-100 text-slate-800";
 }
 
-const missingEmailPillClass = "border-amber-500/40 bg-amber-500/20 text-amber-200";
+const missingEmailPillClass = "border-amber-200 bg-amber-50 text-amber-950";
 
 /** Mentor Email column: same width for “No Mentor yet” and “Ready” pills. */
 const MENTOR_EMAIL_PRIMARY_PILL_W = "w-[7.5rem]";
 
 const readyPillClass =
-  `inline-flex ${MENTOR_EMAIL_PRIMARY_PILL_W} cursor-pointer items-center justify-center text-center rounded-md border border-emerald-500/40 bg-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950`;
+  `inline-flex ${MENTOR_EMAIL_PRIMARY_PILL_W} cursor-pointer items-center justify-center text-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-900 transition-colors hover:border-emerald-300 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white`;
 
 /** Same width as Ready pill; taller hit target; tighter type so “Send Mentor Email” stays on one line. */
 const mentorSendPillClass =
-  `inline-flex ${MENTOR_EMAIL_PRIMARY_PILL_W} cursor-pointer items-center justify-center text-center rounded-md border border-emerald-500/40 bg-emerald-500/20 px-1.5 py-2 text-[9px] font-semibold leading-none tracking-tight text-emerald-200 transition-colors hover:bg-emerald-500/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 whitespace-nowrap`;
+  `inline-flex ${MENTOR_EMAIL_PRIMARY_PILL_W} cursor-pointer items-center justify-center text-center rounded-md border border-emerald-300 bg-emerald-50 px-1.5 py-2 text-[9px] font-semibold leading-none tracking-tight text-emerald-900 transition-colors hover:border-emerald-400 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white whitespace-nowrap`;
 
 /** Secondary control after success window; same footprint as primary send. */
 const mentorSendResendPillClass =
-  `inline-flex ${MENTOR_EMAIL_PRIMARY_PILL_W} cursor-pointer items-center justify-center text-center rounded-md border border-slate-500/45 bg-slate-500/10 px-1.5 py-2 text-[9px] font-semibold leading-none tracking-tight text-slate-400 transition-colors hover:border-slate-500/55 hover:bg-slate-500/16 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 whitespace-nowrap`;
+  `inline-flex ${MENTOR_EMAIL_PRIMARY_PILL_W} cursor-pointer items-center justify-center text-center rounded-md border border-slate-300 bg-slate-100 px-1.5 py-2 text-[9px] font-semibold leading-none tracking-tight text-slate-800 transition-colors hover:border-slate-400 hover:bg-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white whitespace-nowrap`;
 
 const neutralPillClass =
-  `inline-flex ${MENTOR_EMAIL_PRIMARY_PILL_W} items-center justify-center text-center rounded-md border border-slate-500/40 bg-slate-500/15 px-2 py-0.5 text-xs font-semibold text-slate-400`;
+  `inline-flex ${MENTOR_EMAIL_PRIMARY_PILL_W} items-center justify-center text-center rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700`;
 
 const mentorSendInitial: SendFrontierPilotAdminMentorAssignmentEmailFormState = { error: null };
 
@@ -154,7 +154,7 @@ function MentorAssignmentEmailSendCell({ row }: { row: FrontierMentoringEmailCen
         <button
           type="submit"
           disabled
-          className={`${mentorSendPillClass} touch-manipulation disabled:pointer-events-none disabled:opacity-50 disabled:hover:bg-emerald-500/20`}
+          className={`${mentorSendPillClass} touch-manipulation disabled:pointer-events-none disabled:opacity-50 disabled:hover:bg-emerald-50`}
         >
           Send Mentor Email
         </button>
@@ -170,13 +170,13 @@ function MentorAssignmentEmailSendCell({ row }: { row: FrontierMentoringEmailCen
         <button
           type="submit"
           disabled={isPending}
-          className={`${mentorSendPillClass} touch-manipulation disabled:opacity-50 disabled:hover:bg-emerald-500/20`}
+          className={`${mentorSendPillClass} touch-manipulation disabled:opacity-50 disabled:hover:bg-emerald-50`}
         >
           {isPending ? "Sending…" : "Send Mentor Email"}
         </button>
       )}
-      {state.error ? <p className="text-[10px] text-red-400">{state.error}</p> : null}
-      {inSentWindow ? <p className="text-[10px] text-emerald-400">Sent</p> : null}
+      {state.error ? <p className="text-[10px] font-medium text-red-700">{state.error}</p> : null}
+      {inSentWindow ? <p className="text-[10px] font-medium text-emerald-800">Sent</p> : null}
     </form>
   );
 }
@@ -442,7 +442,7 @@ export function MentoringEmailCenterTable({ roster }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="mb-3 rounded-lg border border-white/5 bg-slate-950/35 px-2.5 py-1.5 lg:mb-2 lg:px-3 lg:py-1">
+      <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 lg:mb-2 lg:px-3 lg:py-1">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-3">
           <div className="grid min-w-0 flex-1 grid-cols-1 gap-x-1.5 gap-y-1.5 sm:grid-cols-2 sm:items-end">
             <div className="min-w-0 sm:max-w-[16rem] lg:max-w-[14rem]">
@@ -484,18 +484,18 @@ export function MentoringEmailCenterTable({ roster }: Props) {
               </select>
             </label>
           </div>
-          <div className="flex min-h-6 shrink-0 items-center border-t border-white/5 pt-2 text-[10px] tabular-nums leading-none text-slate-500 sm:justify-end lg:min-h-0 lg:min-w-[10.5rem] lg:self-stretch lg:border-t-0 lg:border-l lg:border-white/[0.07] lg:pt-0 lg:pl-3 lg:pr-0.5 lg:items-end lg:justify-end">
-            <span className="whitespace-nowrap lg:inline-block lg:rounded lg:border lg:border-white/[0.05] lg:bg-white/[0.02] lg:px-1.5 lg:py-px">
-              <span className="font-medium text-slate-400">{filteredRows.length}</span>
+          <div className="flex min-h-6 shrink-0 items-center border-t border-slate-200 pt-2 text-[10px] tabular-nums leading-none text-slate-500 sm:justify-end lg:min-h-0 lg:min-w-[10.5rem] lg:self-stretch lg:border-t-0 lg:border-l lg:border-slate-200 lg:pt-0 lg:pl-3 lg:pr-0.5 lg:items-end lg:justify-end">
+            <span className="whitespace-nowrap lg:inline-block lg:rounded lg:border lg:border-slate-100 lg:bg-slate-50 lg:px-1.5 lg:py-px">
+              <span className="font-medium text-slate-700">{filteredRows.length}</span>
               <span className="text-slate-600"> shown</span>
               <span className="text-slate-600"> · </span>
-              <span className="font-medium text-slate-400">{roster.length}</span>
+              <span className="font-medium text-slate-700">{roster.length}</span>
               <span className="text-slate-600"> in roster</span>
             </span>
           </div>
         </div>
 
-        <div className="mt-2 border-t border-white/5 pt-2">
+        <div className="mt-2 border-t border-slate-200 pt-2">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
             <div className="min-w-0 flex-1 space-y-1">
               <span className="mb-px block text-[8px] font-semibold uppercase leading-none tracking-wide text-slate-500">
@@ -503,7 +503,7 @@ export function MentoringEmailCenterTable({ roster }: Props) {
               </span>
               <p className="text-[10px] leading-snug text-slate-600">
                 Selected class:{" "}
-                <span className="font-medium text-slate-400">{classMentorEmailPreview.classLabel}</span>
+                <span className="font-medium text-slate-800">{classMentorEmailPreview.classLabel}</span>
                 <span className="text-slate-600"> · </span>
                 <span className="tabular-nums text-slate-500">
                   {classMentorEmailPreview.rowCount} row{classMentorEmailPreview.rowCount === 1 ? "" : "s"} in scope
@@ -513,7 +513,7 @@ export function MentoringEmailCenterTable({ roster }: Props) {
               </p>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] tabular-nums leading-snug text-slate-500">
                 <span>
-                  <span className="font-medium text-emerald-400">{classMentorEmailPreview.eligible}</span> eligible
+                  <span className="font-medium text-emerald-800">{classMentorEmailPreview.eligible}</span> eligible
                 </span>
                 <span>
                   <span className="font-medium text-slate-400">{classMentorEmailPreview.noAssignment}</span> no assignment
@@ -539,8 +539,8 @@ export function MentoringEmailCenterTable({ roster }: Props) {
                 onClick={onClassBulkPrimaryClick}
                 className={
                   classBulkPrimaryDisabled
-                    ? "w-full cursor-not-allowed rounded-md border border-white/10 bg-white/[0.02] px-2.5 py-1.5 text-center text-[10px] font-semibold leading-none text-slate-500 opacity-60 sm:w-auto"
-                    : "w-full cursor-pointer rounded-md border border-emerald-500/40 bg-emerald-500/20 px-2.5 py-1.5 text-center text-[10px] font-semibold leading-none text-emerald-200 transition-colors hover:bg-emerald-500/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:w-auto"
+                    ? "w-full cursor-not-allowed rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-center text-[10px] font-semibold leading-none text-slate-500 opacity-60 sm:w-auto"
+                    : "w-full cursor-pointer rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-center text-[10px] font-semibold leading-none text-emerald-900 transition-colors hover:border-emerald-400 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:w-auto"
                 }
                 aria-disabled={classBulkPrimaryDisabled}
               >
@@ -557,7 +557,7 @@ export function MentoringEmailCenterTable({ roster }: Props) {
                           : "Prepare Class Email Send"}
               </button>
               {!isAllClassesSelected && classBulkLastSuccessAppliesToCurrentContext ? (
-                <p className="max-w-[11rem] text-right text-[9px] leading-tight text-emerald-400/85">
+                <p className="max-w-[11rem] text-right text-[9px] leading-tight text-emerald-800">
                   Last send completed for this class context.
                 </p>
               ) : null}
@@ -565,18 +565,18 @@ export function MentoringEmailCenterTable({ roster }: Props) {
           </div>
           {isAllClassesSelected ? (
             <div
-              className="mt-2 w-full rounded-lg border-2 border-amber-500/55 bg-amber-950/50 px-3 py-2.5 shadow-[inset_0_1px_0_0_rgba(251,191,36,0.12)]"
+              className="mt-2 w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5"
               role="status"
             >
-              <p className="text-[9px] font-bold uppercase tracking-wide text-amber-200">Bulk Send Blocked</p>
-              <p className="mt-1.5 text-[10px] font-medium leading-snug text-amber-100/90">
+              <p className="text-[9px] font-bold uppercase tracking-wide text-amber-900">Bulk Send Blocked</p>
+              <p className="mt-1.5 text-[10px] font-medium leading-snug text-amber-950">
                 Bulk send is disabled while All classes is selected. Choose a specific class before continuing.
               </p>
             </div>
           ) : null}
           {!isAllClassesSelected && isClassBulkConfirmOpen ? (
-            <div className="mt-2 rounded-md border border-white/[0.07] bg-white/[0.02] px-2.5 py-2">
-              <p className="text-[10px] leading-snug text-slate-400">
+            <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+              <p className="text-[10px] leading-snug text-slate-700">
                 You are about to send an email to all mentors for new mentee assignments in this class. Are you
                 sure?
               </p>
@@ -585,7 +585,7 @@ export function MentoringEmailCenterTable({ roster }: Props) {
                   type="button"
                   disabled={isClassBulkSending}
                   onClick={onClassBulkCancelConfirm}
-                  className="rounded-md border border-white/15 bg-white/[0.03] px-2 py-1 text-[10px] font-medium text-slate-300 transition-colors hover:border-white/25 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-800 transition-colors hover:border-slate-400 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -593,7 +593,7 @@ export function MentoringEmailCenterTable({ roster }: Props) {
                   type="button"
                   disabled={isClassBulkSending}
                   onClick={onClassBulkConfirmSendClick}
-                  className="rounded-md border border-emerald-500/45 bg-emerald-500/20 px-2 py-1 text-[10px] font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/28 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-900 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Click to Confirm
                 </button>
@@ -601,47 +601,47 @@ export function MentoringEmailCenterTable({ roster }: Props) {
             </div>
           ) : null}
           {classBulkError ? (
-            <p className="mt-2 text-[10px] leading-snug text-red-400">{classBulkError}</p>
+            <p className="mt-2 text-[10px] font-medium leading-snug text-red-700">{classBulkError}</p>
           ) : null}
           {classBulkResult ? (
-            <div className="mt-2 space-y-0.5 rounded-md border border-white/[0.07] bg-white/[0.02] px-2 py-1.5 text-[10px] tabular-nums leading-snug text-slate-500">
-              <p className="font-medium text-slate-400">
+            <div className="mt-2 space-y-0.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] tabular-nums leading-snug text-slate-500">
+              <p className="font-medium text-slate-800">
                 Last bulk send — {classBulkResult.classLabel} · requested {classBulkResult.requestedCount}
               </p>
               <p>
-                Sent: <span className="font-medium text-slate-300">{classBulkResult.successCount}</span>
+                Sent: <span className="font-medium text-slate-800">{classBulkResult.successCount}</span>
               </p>
               <p>
                 Skipped no assignment:{" "}
-                <span className="font-medium text-slate-300">{classBulkResult.skippedNoAssignment}</span>
+                <span className="font-medium text-slate-800">{classBulkResult.skippedNoAssignment}</span>
               </p>
               <p>
                 Skipped no mentor:{" "}
-                <span className="font-medium text-slate-300">{classBulkResult.skippedNoMentor}</span>
+                <span className="font-medium text-slate-800">{classBulkResult.skippedNoMentor}</span>
               </p>
               <p>
                 Skipped no email:{" "}
-                <span className="font-medium text-slate-300">{classBulkResult.skippedNoEmail}</span>
+                <span className="font-medium text-slate-800">{classBulkResult.skippedNoEmail}</span>
               </p>
               <p>
-                Errors: <span className="font-medium text-slate-300">{classBulkResult.errorCount}</span>
+                Errors: <span className="font-medium text-slate-800">{classBulkResult.errorCount}</span>
               </p>
             </div>
           ) : null}
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-white/5">
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full text-sm min-w-[960px]">
           <thead>
-            <tr className="border-b border-white/5 bg-white/5">
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-300">Name</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-300">Employee #</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-300">Class</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-300">Mentor Name</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-300">Mentee Email</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-300">Mentor Email</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-300">Status</th>
+            <tr className="border-b border-slate-200 bg-slate-50">
+              <th className="px-4 py-3 text-left text-xs font-medium text-slate-600">Name</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-slate-600">Employee #</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-slate-600">Class</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-slate-600">Mentor Name</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-slate-600">Mentee Email</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-slate-600">Mentor Email</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-slate-600">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -662,14 +662,14 @@ export function MentoringEmailCenterTable({ roster }: Props) {
               const sourceLine = mentorEmailSourceLabel(r.resolved_mentor_email_source);
 
               return (
-                <tr key={r.key} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
-                  <td className="px-4 py-3 text-slate-200 max-w-[200px] truncate" title={r.name !== "—" ? r.name : undefined}>
+                <tr key={r.key} className="border-b border-slate-200 last:border-0 hover:bg-slate-50">
+                  <td className="px-4 py-3 text-slate-900 max-w-[200px] truncate" title={r.name !== "—" ? r.name : undefined}>
                     {r.name?.trim() || "—"}
                   </td>
-                  <td className="px-4 py-3 text-slate-300 font-mono text-xs">{r.employee_number?.trim() || "—"}</td>
-                  <td className="px-4 py-3 text-slate-300 tabular-nums">{formatDohCell(r.hire_date)}</td>
+                  <td className="px-4 py-3 text-slate-800 font-mono text-xs">{r.employee_number?.trim() || "—"}</td>
+                  <td className="px-4 py-3 text-slate-800 tabular-nums">{formatDohCell(r.hire_date)}</td>
                   <td
-                    className="px-4 py-3 text-slate-200 max-w-[180px] truncate"
+                    className="px-4 py-3 text-slate-900 max-w-[180px] truncate"
                     title={r.mentor_name?.trim() || undefined}
                   >
                     {r.mentor_name?.trim() || "—"}

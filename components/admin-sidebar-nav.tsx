@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -27,32 +28,37 @@ export function AdminSidebarNav({
   }
 
   return (
-    <nav className="px-4 pb-6 pt-2">
+    <nav className="px-4 pb-6 pt-6">
       <div className="space-y-0.5">
         {nav.map((item) => {
           const full = item.href ? `${base}/${item.href}` : base;
           const active = isActive(item);
+          const spacerBefore = item.href === "settings";
           return (
-            <Link
-              key={item.label}
-              href={full}
-              className={`touch-target touch-pad flex items-center rounded-xl px-3 py-2 text-sm transition ${
-                active
-                  ? "bg-white/8 font-medium text-white ring-1 ring-inset ring-white/10"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
-              }`}
-            >
-              {item.label}
-            </Link>
+            <Fragment key={item.label}>
+              {spacerBefore && (
+                <div className="mt-5 h-3 shrink-0" aria-hidden />
+              )}
+              <Link
+                href={full}
+                className={`touch-target touch-pad flex items-center rounded-xl px-3 py-2 text-sm transition ${
+                  active
+                    ? "bg-slate-100 font-medium text-slate-900 ring-1 ring-inset ring-slate-200"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                }`}
+              >
+                {item.label}
+              </Link>
+            </Fragment>
           );
         })}
       </div>
 
-      <div className="mt-6 border-t border-white/5 pt-4 space-y-0.5">
+      <div className="mt-6 border-t border-slate-200 pt-4 space-y-0.5">
         {isSuperAdmin && (
           <Link
             href="/super-admin"
-            className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-amber-400/80 hover:bg-white/5 hover:text-amber-400 transition"
+            className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-amber-800/90 hover:bg-amber-50 hover:text-amber-900 transition"
           >
             Platform Owner Dashboard →
           </Link>
@@ -60,7 +66,7 @@ export function AdminSidebarNav({
         {!hidePortalLink && (
           <Link
             href={portalBase}
-            className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-slate-500 hover:bg-white/5 hover:text-slate-300 transition"
+            className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition"
           >
             ← Back to Portal
           </Link>

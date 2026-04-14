@@ -152,10 +152,10 @@ export function ContactsEditor({ initialCards }: { initialCards: ContactCard[] }
   }
 
   return (
-    <section className="rounded-xl border border-slate-700/50 bg-slate-800/50 p-5 sm:p-6 space-y-4" aria-labelledby="contacts-edit-heading">
+    <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6 space-y-4 shadow-sm" aria-labelledby="contacts-edit-heading">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 id="contacts-edit-heading" className="text-base font-semibold text-slate-200 flex items-center gap-2">
+          <h2 id="contacts-edit-heading" className="text-base font-semibold text-[#1a2b4b] flex items-center gap-2">
             <BookUser className="h-4 w-4 text-slate-400" aria-hidden />
             Important Contacts — Admin Editor
           </h2>
@@ -183,7 +183,7 @@ export function ContactsEditor({ initialCards }: { initialCards: ContactCard[] }
 
       {/* Edit / Create form */}
       {editing && (
-        <div className="rounded-xl border border-slate-600/50 bg-slate-900/60 p-4 space-y-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             {editing.id ? "Edit Contact Card" : "New Contact Card"}
           </p>
@@ -196,7 +196,7 @@ export function ContactsEditor({ initialCards }: { initialCards: ContactCard[] }
                 value={editing.title}
                 onChange={(e) => setEditing({ ...editing, title: e.target.value })}
                 placeholder="e.g. ALPA Mentorship Program"
-                className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 placeholder:text-slate-600 focus:border-emerald-500/60 focus:outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-600 focus:border-emerald-500/60 focus:outline-none"
               />
             </label>
 
@@ -207,7 +207,7 @@ export function ContactsEditor({ initialCards }: { initialCards: ContactCard[] }
                 value={editing.subtitle}
                 onChange={(e) => setEditing({ ...editing, subtitle: e.target.value })}
                 placeholder="Short description shown under the title"
-                className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 placeholder:text-slate-600 focus:border-emerald-500/60 focus:outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-600 focus:border-emerald-500/60 focus:outline-none"
               />
             </label>
 
@@ -216,7 +216,7 @@ export function ContactsEditor({ initialCards }: { initialCards: ContactCard[] }
               <select
                 value={editing.icon_key}
                 onChange={(e) => setEditing({ ...editing, icon_key: e.target.value })}
-                className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:border-emerald-500/60 focus:outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-emerald-500/60 focus:outline-none"
               >
                 {ICON_OPTIONS.map((o) => (
                   <option key={o.key} value={o.key}>{o.label}</option>
@@ -231,7 +231,7 @@ export function ContactsEditor({ initialCards }: { initialCards: ContactCard[] }
                 value={editing.sort_order}
                 onChange={(e) => setEditing({ ...editing, sort_order: parseInt(e.target.value, 10) || 0 })}
                 min={0}
-                className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:border-emerald-500/60 focus:outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-emerald-500/60 focus:outline-none"
               />
             </label>
           </div>
@@ -261,21 +261,21 @@ export function ContactsEditor({ initialCards }: { initialCards: ContactCard[] }
                   value={entry.label}
                   onChange={(e) => setEntry(i, "label", e.target.value)}
                   placeholder="Label"
-                  className="rounded-lg border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:border-emerald-500/60 focus:outline-none"
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 placeholder:text-slate-600 focus:border-emerald-500/60 focus:outline-none"
                 />
                 <input
                   type="text"
                   value={entry.value}
                   onChange={(e) => setEntry(i, "value", e.target.value)}
                   placeholder="Display value"
-                  className="rounded-lg border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:border-emerald-500/60 focus:outline-none"
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 placeholder:text-slate-600 focus:border-emerald-500/60 focus:outline-none"
                 />
                 <input
                   type="url"
                   value={entry.href ?? ""}
                   onChange={(e) => setEntry(i, "href", e.target.value)}
                   placeholder="URL (optional)"
-                  className="rounded-lg border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:border-emerald-500/60 focus:outline-none"
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 placeholder:text-slate-600 focus:border-emerald-500/60 focus:outline-none"
                 />
                 <button
                   type="button"
@@ -324,10 +324,10 @@ export function ContactsEditor({ initialCards }: { initialCards: ContactCard[] }
             .map((card) => (
               <div
                 key={card.id}
-                className="flex items-start justify-between gap-3 rounded-lg border border-white/5 bg-slate-900/40 px-4 py-3"
+                className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
               >
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-slate-200 truncate">{card.title}</div>
+                  <div className="text-sm font-medium text-slate-900 truncate">{card.title}</div>
                   {card.subtitle && (
                     <div className="text-xs text-slate-500 mt-0.5 truncate">{card.subtitle}</div>
                   )}

@@ -794,6 +794,7 @@ export async function sendFrontierPilotAdminMentorAssignmentEmailFormState(
   const menteePrivatePhone = menteePhoneFmt ?? "—";
 
   const sent = await sendMentorAssignmentEmail({
+    assignmentId: assignmentId,
     toEmail,
     mentorName,
     menteeName,
@@ -892,6 +893,7 @@ export async function sendFrontierPilotAdminMentorAssignmentEmailsBulk(
     const menteePrivatePhone = menteePhoneFmt ?? "—";
 
     const sent = await sendMentorAssignmentEmail({
+      assignmentId: assignmentId,
       toEmail,
       mentorName,
       menteeName,

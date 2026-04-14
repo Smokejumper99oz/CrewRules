@@ -34,7 +34,7 @@ export function FailedMilestoneReviewRowActions({ attemptId }: { attemptId: stri
           type="button"
           disabled={pending}
           onClick={() => run(() => resolveFailedMilestoneReview({ attemptId }))}
-          className={`${btnClass} border-emerald-500/35 bg-emerald-500/10 text-emerald-200 hover:border-emerald-400/45 hover:bg-emerald-500/15`}
+          className={`${btnClass} border-emerald-600/40 bg-emerald-50 text-emerald-800 hover:border-emerald-500/60 hover:bg-emerald-100`}
         >
           Resolve
         </button>
@@ -42,7 +42,7 @@ export function FailedMilestoneReviewRowActions({ attemptId }: { attemptId: stri
           type="button"
           disabled={pending}
           onClick={() => run(() => archiveFailedMilestoneReview({ attemptId }))}
-          className={`${btnClass} border-slate-500/35 bg-slate-800/50 text-slate-300 hover:border-slate-400/45 hover:bg-slate-800/80`}
+          className={`${btnClass} border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50`}
         >
           Archive
         </button>

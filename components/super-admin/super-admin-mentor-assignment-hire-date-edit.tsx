@@ -18,12 +18,15 @@ type Props = {
   hireDateIso: string | null;
   /** Defaults to Super Admin action; tenant admin page passes Frontier pilots admin action. */
   formAction?: MentorAssignmentHireDateFormAction;
+  /** Pale inputs for Frontier tenant admin; default matches Super Admin dark surfaces. */
+  tone?: "dark" | "light";
 };
 
 export function SuperAdminMentorAssignmentHireDateEdit({
   assignmentId,
   hireDateIso,
   formAction: formActionProp,
+  tone = "dark",
 }: Props) {
   const [state, formAction, isPending] = useActionState(
     formActionProp ?? updateSuperAdminMentorAssignmentHireDateFormState,
@@ -32,6 +35,16 @@ export function SuperAdminMentorAssignmentHireDateEdit({
 
   const head = (hireDateIso ?? "").trim().slice(0, 10);
   const ymd = /^\d{4}-\d{2}-\d{2}$/.test(head) ? head : "";
+
+  const inputClass =
+    tone === "light"
+      ? "rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 focus:border-[#75C043]/50 focus:outline-none disabled:opacity-50"
+      : "rounded-md border border-white/10 bg-slate-950/50 px-2 py-1 text-xs text-slate-200 focus:border-emerald-500/40 focus:outline-none disabled:opacity-50";
+
+  const saveBtnClass =
+    tone === "light"
+      ? "inline-flex shrink-0 items-center rounded-md border border-slate-300 bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-800 hover:border-slate-400 hover:bg-slate-200 disabled:opacity-50"
+      : "inline-flex shrink-0 items-center rounded-md border border-slate-500/40 bg-slate-800/80 px-2 py-1 text-xs font-semibold text-slate-200 hover:border-slate-400/50 hover:bg-slate-800 disabled:opacity-50";
 
   return (
     <form action={formAction} className="inline-flex min-w-0 flex-col gap-1">
@@ -43,12 +56,12 @@ export function SuperAdminMentorAssignmentHireDateEdit({
           defaultValue={ymd}
           required
           disabled={isPending}
-          className="rounded-md border border-white/10 bg-slate-950/50 px-2 py-1 text-xs text-slate-200 focus:border-emerald-500/40 focus:outline-none disabled:opacity-50"
+          className={inputClass}
         />
         <button
           type="submit"
           disabled={isPending}
-          className="inline-flex shrink-0 items-center rounded-md border border-slate-500/40 bg-slate-800/80 px-2 py-1 text-xs font-semibold text-slate-200 hover:border-slate-400/50 hover:bg-slate-800 disabled:opacity-50"
+          className={saveBtnClass}
         >
           {isPending ? "…" : "Save"}
         </button>

@@ -170,13 +170,22 @@ function followUpQueryMeansOnly(raw: string | string[] | undefined): boolean {
   return t === "1" || t.toLowerCase() === "true";
 }
 
+/** Hire-date cohort for Class filter (`YYYY-MM-DD`), or null if missing/invalid. */
+function classQueryToYmd(raw: string | string[] | undefined): string | null {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  if (v == null) return null;
+  const t = String(v).trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null;
+}
+
 type MenteeRosterPageProps = {
-  searchParams: Promise<{ follow_up?: string | string[] }>;
+  searchParams: Promise<{ follow_up?: string | string[]; class?: string | string[] }>;
 };
 
 export default async function FrontierPilotAdminMentoringMenteeRosterPage({ searchParams }: MenteeRosterPageProps) {
   const sp = await searchParams;
   const initialFollowUpOnly = followUpQueryMeansOnly(sp.follow_up);
+  const initialClassYmd = classQueryToYmd(sp.class);
 
   const collectDohAudit = process.env.MENTEE_ROSTER_DOH_AUDIT === "1";
   const [{ roster, counts }, mentorOptions] = await Promise.all([
@@ -190,7 +199,7 @@ export default async function FrontierPilotAdminMentoringMenteeRosterPage({ sear
   return (
     <div className="space-y-4 lg:space-y-3">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight border-b border-white/5 pb-3 lg:pb-2">Mentee Roster</h1>
+        <h1 className="text-xl font-semibold tracking-tight border-b border-slate-200 pb-3 text-[#1a2b4b] lg:pb-2">Mentee Roster</h1>
         <p className="mt-2 text-sm text-slate-400 leading-snug lg:mt-1.5">
           Frontier Airlines first-year pilots and mentoring assignment rows. Left CRA shows mentee CrewRules activation.
           Right CRA shows mentor CrewRules activation. Staged mentors may appear without a live account.
@@ -210,6 +219,7 @@ export default async function FrontierPilotAdminMentoringMenteeRosterPage({ sear
           counts={counts}
           mentorOptions={mentorOptions}
           initialFollowUpOnly={initialFollowUpOnly}
+          initialClassYmd={initialClassYmd}
         />
       )}
     </div>
