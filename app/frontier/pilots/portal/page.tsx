@@ -24,10 +24,10 @@ export default async function PortalDashboard() {
   const tripChangeSummaries = profile?.id ? await getTripChangeSummariesForUser(profile.id) : [];
   console.log("[CurrentTrip wired]", { loaded: !!profile?.id, hasActiveTrip: !!activeTrip, pairing: activeTrip?.pairing ?? null });
 
-  // Current location: first upcoming leg's origin if on a trip, otherwise home base.
-  // This shows the weather where the pilot actually is right now (layover city, home base, etc.)
+  // Dashboard weather METAR airport: today's trip leg origin when on a trip, else profile home, else crew base.
   const currentLocationAirport =
     activeTrip?.todayLegs?.[0]?.origin?.trim() ||
+    profile?.home_airport?.trim() ||
     profile?.base_airport?.trim() ||
     null;
 
