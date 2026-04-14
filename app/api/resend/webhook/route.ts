@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Webhook } from "svix";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -13,9 +14,40 @@ type ResendWebhookBody = {
 };
 
 export async function POST(req: Request) {
+  const rawBody = await req.text();
+
+  const svixId = req.headers.get("svix-id");
+  const svixTimestamp = req.headers.get("svix-timestamp");
+  const svixSignature = req.headers.get("svix-signature");
+
+  if (!svixId || !svixTimestamp || !svixSignature) {
+    console.error(
+      "[resend/webhook] signature verification failed: missing Svix headers (svix-id, svix-timestamp, and/or svix-signature)"
+    );
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+  if (!webhookSecret?.trim()) {
+    console.error("[resend/webhook] signature verification failed: RESEND_WEBHOOK_SECRET is not configured");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const wh = new Webhook(webhookSecret);
+    wh.verify(rawBody, {
+      "svix-id": svixId,
+      "svix-timestamp": svixTimestamp,
+      "svix-signature": svixSignature,
+    });
+  } catch (e) {
+    console.error("[resend/webhook] signature verification failed: invalid signature or payload", e);
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   let body: ResendWebhookBody;
   try {
-    body = (await req.json()) as ResendWebhookBody;
+    body = JSON.parse(rawBody) as ResendWebhookBody;
   } catch (e) {
     console.error("[resend/webhook] invalid JSON", e);
     return NextResponse.json({ ok: true }, { status: 200 });

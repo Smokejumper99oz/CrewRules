@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
 import {
   AlertTriangle,
   Users,
@@ -72,24 +73,6 @@ function formatAttemptYmd(ymd: string): string {
 
 function featureEnabled(features: TenantFeature[], key: string) {
   return features.find((f) => f.feature_key === key)?.enabled === true;
-}
-
-function StatPill({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: number | string;
-  sub?: string;
-}) {
-  return (
-    <div className="flex flex-col gap-0.5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-      <span className="text-xl font-light text-slate-900 tabular-nums">{value}</span>
-      <span className="text-xs text-slate-600">{label}</span>
-      {sub && <span className="text-[11px] text-slate-500">{sub}</span>}
-    </div>
-  );
 }
 
 function pctRounded(part: number, whole: number): string | null {
@@ -441,16 +424,67 @@ function OverviewKpiCard({
   );
 }
 
+/** Lower rank = shown first (attention-first). */
+function mentorActivityTierRank(tier: MentorActivityRow["activity_tier"]): number {
+  switch (tier) {
+    case "never":
+      return 0;
+    case "stale":
+      return 1;
+    case "this_month":
+      return 2;
+    case "this_week":
+      return 3;
+    case "today":
+      return 4;
+    default:
+      return 99;
+  }
+}
+
+function sortMentorActivityRows(rows: MentorActivityRow[]): MentorActivityRow[] {
+  return [...rows].sort((a, b) => {
+    const ar = mentorActivityTierRank(a.activity_tier);
+    const br = mentorActivityTierRank(b.activity_tier);
+    if (ar !== br) return ar - br;
+    if (b.mentee_count !== a.mentee_count) return b.mentee_count - a.mentee_count;
+    return (a.full_name ?? "").localeCompare(b.full_name ?? "", undefined, { sensitivity: "base" });
+  });
+}
+
 const ACTIVITY_BADGE: Record<
   MentorActivityRow["activity_tier"],
   { label: string; className: string }
 > = {
-  today: { label: "Active today", className: "bg-[#75C043]/15 text-[#75C043]" },
-  this_week: { label: "This week", className: "bg-blue-500/15 text-blue-400" },
-  this_month: { label: "This month", className: "bg-slate-200 text-slate-600" },
-  stale: { label: "30+ days ago", className: "bg-slate-200 text-slate-600" },
-  never: { label: "No activity", className: "bg-red-500/10 text-red-400" },
+  today: {
+    label: "Active today",
+    className:
+      "border border-emerald-600/40 bg-emerald-50 text-emerald-900",
+  },
+  this_week: {
+    label: "This week",
+    className: "border border-blue-600/40 bg-blue-50 text-blue-900",
+  },
+  this_month: {
+    label: "This month",
+    className: "border border-amber-600/35 bg-amber-50/90 text-amber-900",
+  },
+  stale: {
+    label: "30+ days",
+    className: "border border-red-600/40 bg-red-50 text-red-900",
+  },
+  never: {
+    label: "None yet",
+    className: "border border-slate-300/90 bg-slate-100 text-slate-700",
+  },
 };
+
+function formatLastMilestoneActivityLine(lastAt: string | null): string {
+  if (lastAt == null || !String(lastAt).trim()) return "No milestone activity yet";
+  const d = new Date(String(lastAt).trim());
+  if (Number.isNaN(d.getTime())) return "No milestone activity yet";
+  return `Last milestone activity ${formatDistanceToNow(d, { addSuffix: true })}`;
+}
 
 function MentorActivityRow({ row }: { row: MentorActivityRow }) {
   const badge = ACTIVITY_BADGE[row.activity_tier];
@@ -462,14 +496,15 @@ function MentorActivityRow({ row }: { row: MentorActivityRow }) {
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-medium text-slate-700">
         {name.charAt(0).toUpperCase()}
       </div>
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-800 truncate">{name}</span>
-          {emp && <span className="text-xs text-slate-500 shrink-0">{emp}</span>}
+          <span className="truncate text-sm text-slate-800">{name}</span>
+          {emp && <span className="shrink-0 text-xs text-slate-500">{emp}</span>}
         </div>
         <div className="text-xs text-slate-600">
           {row.mentee_count === 1 ? "1 mentee" : `${row.mentee_count} mentees`}
         </div>
+        <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{formatLastMilestoneActivityLine(row.last_milestone_at)}</p>
       </div>
       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}>
         {badge.label}
@@ -546,9 +581,16 @@ export function AdminDashboard({
           : "text-amber-800";
 
   const mentorEnabled = featureEnabled(tenantFeatures, "mentoring");
-  const inactiveCount = mentorActivity.filter(
-    (r) => r.activity_tier === "stale" || r.activity_tier === "never"
-  ).length;
+  const mentorActivitySorted =
+    mentorActivity.length > 0 ? sortMentorActivityRows(mentorActivity) : [];
+  const mentorActivitySummary = {
+    activeToday: mentorActivitySorted.filter((r) => r.activity_tier === "today").length,
+    thisWeek: mentorActivitySorted.filter((r) => r.activity_tier === "this_week").length,
+    thisMonth: mentorActivitySorted.filter((r) => r.activity_tier === "this_month").length,
+    needsAttention: mentorActivitySorted.filter(
+      (r) => r.activity_tier === "stale" || r.activity_tier === "never"
+    ).length,
+  };
 
   return (
     <div className="space-y-8">
@@ -790,59 +832,68 @@ export function AdminDashboard({
         </div>
       </div>
 
-      <section className="space-y-3" aria-label="Program roster snapshot">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatPill
-            label="Active mentors"
-            value={overview.mentors}
-            sub={inactiveCount > 0 ? `${inactiveCount} inactive 30d+` : undefined}
-          />
-          <StatPill label="Active mentees" value={overview.activeMentees} />
-          <StatPill
-            label="Live in portal"
-            value={overview.liveMentees}
-            sub="Completed onboarding"
-          />
-          <StatPill
-            label="Unmatched"
-            value={overview.unmatchedMentees}
-            sub="Awaiting mentor"
-          />
-        </div>
-      </section>
-
       {/* ── MENTOR ACTIVITY ────────────────────────────────── */}
-      {mentorEnabled && mentorActivity.length > 0 && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <GraduationCap className="h-4 w-4 text-slate-500" />
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700">
-                Mentor Activity
-              </h2>
-            </div>
-            <Link
-              href={`${base}/mentoring`}
-              className="text-xs text-slate-600 hover:text-slate-900 transition"
-            >
-              View all →
-            </Link>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 divide-y divide-slate-200 shadow-sm">
-            {mentorActivity.slice(0, 10).map((row) => (
-              <MentorActivityRow key={row.mentor_user_id} row={row} />
-            ))}
-          </div>
-
-          {mentorActivity.length > 10 && (
-            <p className="text-xs text-slate-500 text-right">
-              +{mentorActivity.length - 10} more mentors —{" "}
-              <Link href={`${base}/mentoring`} className="text-slate-600 hover:text-slate-900 transition">
-                view all
+      {mentorEnabled && mentorActivitySorted.length > 0 && (
+        <section aria-label="Mentor Activity">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3 sm:px-5">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 sm:gap-x-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-slate-600 ring-1 ring-slate-200/80">
+                  <GraduationCap className="h-4 w-4" aria-hidden />
+                </div>
+                <h2 className="shrink-0 text-sm font-semibold tracking-wide text-[#1a2b4b]">Mentor Activity</h2>
+              </div>
+              <Link
+                href={`${base}/mentoring`}
+                className="shrink-0 text-xs text-slate-600 transition hover:text-slate-900"
+              >
+                View all →
               </Link>
-            </p>
-          )}
+            </div>
+
+            <div className="border-b border-slate-100 px-4 py-2.5 sm:px-5">
+              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[11px] text-slate-600">
+                <span>
+                  <span className="font-semibold tabular-nums text-slate-900">
+                    {mentorActivitySummary.activeToday}
+                  </span>{" "}
+                  Active today
+                </span>
+                <span>
+                  <span className="font-semibold tabular-nums text-slate-900">{mentorActivitySummary.thisWeek}</span>{" "}
+                  This week
+                </span>
+                <span>
+                  <span className="font-semibold tabular-nums text-slate-900">{mentorActivitySummary.thisMonth}</span>{" "}
+                  This month
+                </span>
+                <span>
+                  <span className="font-semibold tabular-nums text-red-800">{mentorActivitySummary.needsAttention}</span>{" "}
+                  Needs attention
+                </span>
+              </div>
+            </div>
+
+            <div className="px-4 sm:px-5">
+              <div className="divide-y divide-slate-200">
+                {mentorActivitySorted.slice(0, 10).map((row) => (
+                  <MentorActivityRow key={row.mentor_user_id} row={row} />
+                ))}
+              </div>
+            </div>
+
+            {mentorActivitySorted.length > 10 ? (
+              <>
+                <div className="border-t border-slate-200" />
+                <p className="px-4 py-2.5 text-right text-xs text-slate-500 sm:px-5">
+                  +{mentorActivitySorted.length - 10} more mentors —{" "}
+                  <Link href={`${base}/mentoring`} className="text-slate-600 transition hover:text-slate-900">
+                    view all
+                  </Link>
+                </p>
+              </>
+            ) : null}
+          </div>
         </section>
       )}
 

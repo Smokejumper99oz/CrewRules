@@ -33,6 +33,8 @@ export type FrontierMentoringEmailCenterResolvedSource =
 export type FrontierMentoringEmailCenterRow = MenteeRosterRow & {
   resolved_mentor_email: string | null;
   resolved_mentor_email_source: FrontierMentoringEmailCenterResolvedSource;
+  /** Latest `mentor_email_events.created_at` with `event_type = 'sent'` for this assignment, if any. */
+  mentor_assignment_notify_last_sent_at: string | null;
 };
 
 type ProfileEmailFields = {
@@ -101,6 +103,7 @@ export async function loadFrontierMentoringEmailCenterPageData(
         ...r,
         resolved_mentor_email: null,
         resolved_mentor_email_source: null,
+        mentor_assignment_notify_last_sent_at: null,
       })),
       counts,
       dohAudit,
@@ -206,6 +209,29 @@ export async function loadFrontierMentoringEmailCenterPageData(
     }
   }
 
+  const sentByAssignment = new Map<string, string>();
+  for (const part of chunk(assignmentIds, IN_CHUNK)) {
+    if (part.length === 0) continue;
+    const { data, error } = await admin
+      .from("mentor_email_events")
+      .select("assignment_id, created_at")
+      .eq("event_type", "sent")
+      .in("assignment_id", part);
+    if (error) {
+      console.error("[email-center-load] mentor_email_events sent:", error);
+      break;
+    }
+    for (const raw of data ?? []) {
+      const rowEv = raw as { assignment_id: string | null; created_at: string | null };
+      const aid = rowEv.assignment_id != null ? String(rowEv.assignment_id).trim() : "";
+      if (!aid) continue;
+      const at = rowEv.created_at != null ? String(rowEv.created_at).trim() : "";
+      if (!at) continue;
+      const prev = sentByAssignment.get(aid);
+      if (!prev || at > prev) sentByAssignment.set(aid, at);
+    }
+  }
+
   function resolveMentorForAssignment(keys: AssignmentMentorKeys | undefined): {
     email: string | null;
     source: FrontierMentoringEmailCenterResolvedSource;
@@ -233,14 +259,17 @@ export async function loadFrontierMentoringEmailCenterPageData(
         ...r,
         resolved_mentor_email: null,
         resolved_mentor_email_source: null,
+        mentor_assignment_notify_last_sent_at: null,
       };
     }
     const keys = assignmentById.get(r.assignment_id);
     const { email, source } = resolveMentorForAssignment(keys);
+    const lastSent = sentByAssignment.get(r.assignment_id) ?? null;
     return {
       ...r,
       resolved_mentor_email: email,
       resolved_mentor_email_source: source,
+      mentor_assignment_notify_last_sent_at: lastSent,
     };
   });
 

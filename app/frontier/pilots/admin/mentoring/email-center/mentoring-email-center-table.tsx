@@ -103,36 +103,37 @@ const neutralPillClass =
 
 const mentorSendInitial: SendFrontierPilotAdminMentorAssignmentEmailFormState = { error: null };
 
+function formatMentorNotifySentLine(iso: string | null | undefined): string {
+  if (iso == null || !String(iso).trim()) return "Sent";
+  const d = new Date(String(iso).trim());
+  if (Number.isNaN(d.getTime())) return "Sent";
+  return `Sent ${d.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`;
+}
+
 function MentorAssignmentEmailSendCell({ row }: { row: FrontierMentoringEmailCenterRow }) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(
     sendFrontierPilotAdminMentorAssignmentEmailFormState,
     mentorSendInitial
   );
-  const [sentAt, setSentAt] = useState<number | null>(null);
-  const [showResend, setShowResend] = useState(false);
+  /** Until `router.refresh()` returns roster with `mentor_assignment_notify_last_sent_at`. */
+  const [optimisticSent, setOptimisticSent] = useState(false);
   const wasPendingRef = useRef(false);
 
-  /** Start sent window when a submission finishes successfully (including resend), not on arbitrary re-renders. */
   useEffect(() => {
     if (!isPending && wasPendingRef.current && state.success) {
-      setSentAt(Date.now());
-      setShowResend(false);
+      setOptimisticSent(true);
+      router.refresh();
     }
     wasPendingRef.current = isPending;
-  }, [isPending, state.success]);
+  }, [isPending, state.success, router]);
 
+  const lastSentAt = row.mentor_assignment_notify_last_sent_at?.trim() ?? null;
   useEffect(() => {
-    if (sentAt == null) return;
-    const id = window.setTimeout(() => {
-      setSentAt(null);
-      setShowResend(true);
-      router.refresh();
-    }, 10_000);
-    return () => window.clearTimeout(id);
-  }, [sentAt, router]);
+    if (lastSentAt) setOptimisticSent(false);
+  }, [lastSentAt]);
 
-  const inSentWindow = sentAt != null;
+  const showSentWithResend = Boolean(lastSentAt) || optimisticSent;
   const st = statusFromRow(row);
   const hasResolved = Boolean(row.resolved_mentor_email?.trim());
   const assignmentId = row.assignment_id;
@@ -150,22 +151,19 @@ function MentorAssignmentEmailSendCell({ row }: { row: FrontierMentoringEmailCen
   return (
     <form action={formAction} className="mt-1 flex min-w-0 flex-col gap-0.5">
       <input type="hidden" name="assignmentId" value={assignmentId} />
-      {inSentWindow ? (
-        <button
-          type="submit"
-          disabled
-          className={`${mentorSendPillClass} touch-manipulation disabled:pointer-events-none disabled:opacity-50 disabled:hover:bg-emerald-50`}
-        >
-          Send Mentor Email
-        </button>
-      ) : showResend ? (
-        <button
-          type="submit"
-          disabled={isPending}
-          className={`${mentorSendResendPillClass} touch-manipulation disabled:opacity-50`}
-        >
-          {isPending ? "Sending…" : "Resend if needed"}
-        </button>
+      {showSentWithResend ? (
+        <>
+          <p className="text-[10px] font-medium text-emerald-800">
+            {formatMentorNotifySentLine(lastSentAt || null)}
+          </p>
+          <button
+            type="submit"
+            disabled={isPending}
+            className={`${mentorSendResendPillClass} touch-manipulation disabled:opacity-50`}
+          >
+            {isPending ? "Sending…" : "Resend if needed"}
+          </button>
+        </>
       ) : (
         <button
           type="submit"
@@ -176,7 +174,6 @@ function MentorAssignmentEmailSendCell({ row }: { row: FrontierMentoringEmailCen
         </button>
       )}
       {state.error ? <p className="text-[10px] font-medium text-red-700">{state.error}</p> : null}
-      {inSentWindow ? <p className="text-[10px] font-medium text-emerald-800">Sent</p> : null}
     </form>
   );
 }
