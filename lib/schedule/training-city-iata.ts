@@ -69,3 +69,18 @@ export function getTrainingCityIataFromTrainingRow(
   }
   return codes[codes.length - 1] ?? null;
 }
+
+/**
+ * True when recurrent training is in the pilot's crew domicile or home airport — no "commute from home" choice applies.
+ */
+export function trainingCityIsPilotBaseOrHome(
+  trainingCityIata: string | null | undefined,
+  baseAirport: string | null | undefined,
+  homeAirport: string | null | undefined
+): boolean {
+  const t = (trainingCityIata ?? "").trim().toUpperCase();
+  if (t.length !== 3) return false;
+  const b = (baseAirport ?? "").trim().toUpperCase();
+  const h = (homeAirport ?? "").trim().toUpperCase();
+  return (b.length === 3 && t === b) || (h.length === 3 && t === h);
+}

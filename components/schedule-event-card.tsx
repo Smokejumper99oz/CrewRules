@@ -75,6 +75,14 @@ type Props = {
    * Compact + training only: when set, shown instead of the start–end time span (e.g. training city from FLICA companion trip).
    */
   upcomingTrainingLocationLine?: string | null;
+  /** Training only: company DH to recurrent (e.g. SJU → DEN); from FLICA companion trip. */
+  trainingCompanyCommuteToLegs?: ScheduleEventLeg[] | null;
+  /** Training only: company DH return (e.g. DEN → MCO → SJU). */
+  trainingCompanyCommuteFromLegs?: ScheduleEventLeg[] | null;
+  /**
+   * When set (e.g. SIM release for deviated recurrent training), duty end display uses this instant instead of event.end_time.
+   */
+  displayEndTimeIso?: string | null;
 };
 
 export function ScheduleEventCard({
@@ -91,8 +99,16 @@ export function ScheduleEventCard({
   redEyeReportDateLong,
   creditMinutesDisplayOverride,
   upcomingTrainingLocationLine,
+  trainingCompanyCommuteToLegs,
+  trainingCompanyCommuteFromLegs,
+  displayEndTimeIso,
 }: Props) {
   if (isRdPlaceholderEvent(event)) return null;
+
+  const dutyEndInstant =
+    displayEndTimeIso?.trim() && !Number.isNaN(new Date(displayEndTimeIso).getTime())
+      ? displayEndTimeIso.trim()
+      : event.end_time;
 
   const timeOpts = {
     timezone: displaySettings.baseTimezone,
@@ -165,7 +181,7 @@ export function ScheduleEventCard({
       ? formatMinutesToHhMm(creditMinutes)
       : "—";
   const departureTime = formatScheduleTime(event.start_time, timeOpts);
-  const arrivalTime = formatScheduleTime(event.end_time, timeOpts);
+  const arrivalTime = formatScheduleTime(dutyEndInstant, timeOpts);
   const dutyRange = `${departureTime}–${arrivalTime}`;
   const timeLine =
     event.event_type === "reserve"
@@ -179,7 +195,7 @@ export function ScheduleEventCard({
     event.event_type === "off" ||
     (event.event_type === "training" && !displayDateStr);
   const dateLabel = showDateRange
-    ? formatDayRangeLabel(event.start_time, event.end_time, displaySettings.baseTimezone)
+    ? formatDayRangeLabel(event.start_time, dutyEndInstant, displaySettings.baseTimezone)
     : displayDateStr
       ? formatDayLabel(`${displayDateStr}T12:00:00.000Z`, displaySettings.baseTimezone)
       : formatDayLabel(event.start_time, displaySettings.baseTimezone);
@@ -203,7 +219,7 @@ export function ScheduleEventCard({
       return codes[codes.length - 1] ?? null;
     })();
     const arrivalAirport = destFromEventLegs || destFromSlice || routeFinalAirport || "—";
-    const dutyEndFormatted = formatScheduleTime(event.end_time, timeOpts);
+    const dutyEndFormatted = formatScheduleTime(dutyEndInstant, timeOpts);
     const releaseBorderStyle = EVENT_STYLES[event.event_type] ?? EVENT_STYLES.other;
     const summaryClass = compact ? "text-xs text-slate-400" : "text-sm text-slate-400";
     if (compact) {
@@ -254,6 +270,33 @@ export function ScheduleEventCard({
   const hideDutyRangeFallback =
     event.event_type === "trip" && isTripReportNightUi;
 
+  const trainingCommuteToRows =
+    event.event_type === "training" && trainingCompanyCommuteToLegs && trainingCompanyCommuteToLegs.length > 0
+      ? trainingCompanyCommuteToLegs
+      : null;
+  const trainingCommuteFromRows =
+    event.event_type === "training" && trainingCompanyCommuteFromLegs && trainingCompanyCommuteFromLegs.length > 0
+      ? trainingCompanyCommuteFromLegs
+      : null;
+  const hasTrainingCommuteLegRows = !!(trainingCommuteToRows || trainingCommuteFromRows);
+
+  const renderTrainingDhLeg = (l: ScheduleEventLeg, i: number, keyPrefix: string) => (
+    <div
+      key={`${keyPrefix}-${i}`}
+      className={`font-normal text-slate-300 whitespace-nowrap ${compact ? "text-xs" : "text-sm"}`}
+    >
+      {l.deadhead ? (
+        <span
+          className={`mr-1 rounded bg-amber-500/20 px-1 py-0.5 font-semibold text-amber-200 ${compact ? "text-[9px]" : "text-[10px]"}`}
+        >
+          DH
+        </span>
+      ) : null}
+      {l.flightNumber ? `${formatFlightDisplay(l.flightNumber, displaySettings.carrierCode)} ` : ""}
+      {l.origin} → {l.destination}   {l.depTime ?? "—"} – {l.arrTime ?? "—"}
+    </div>
+  );
+
   if (compact) {
     return (
       <div className={`flex flex-col gap-0.5 rounded-xl border px-3 py-2 ${borderStyle} bg-white dark:bg-slate-950/40`}>
@@ -296,11 +339,30 @@ export function ScheduleEventCard({
           </>
         )}
         {event.event_type === "training" && !hideDutyRangeFallback && (
-          <span className="text-xs text-slate-400">
-            {upcomingTrainingLocationLine?.trim()
-              ? upcomingTrainingLocationLine.trim()
-              : dutyRange}
-          </span>
+          <>
+            {hasTrainingCommuteLegRows ? (
+              <div className="text-xs space-y-1">
+                {trainingCommuteToRows ? (
+                  <div className="space-y-0.5">
+                    <span className="font-medium uppercase tracking-wider text-slate-500">To recurrent</span>
+                    {trainingCommuteToRows.map((l, i) => renderTrainingDhLeg(l, i, "to"))}
+                  </div>
+                ) : null}
+                {trainingCommuteFromRows ? (
+                  <div className="space-y-0.5">
+                    <span className="font-medium uppercase tracking-wider text-slate-500">Return</span>
+                    {trainingCommuteFromRows.map((l, i) => renderTrainingDhLeg(l, i, "from"))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <span className="text-xs text-slate-400">
+                {upcomingTrainingLocationLine?.trim()
+                  ? upcomingTrainingLocationLine.trim()
+                  : dutyRange}
+              </span>
+            )}
+          </>
         )}
         {event.event_type === "training" && (
           <span className="text-xs text-slate-400">Credit {creditDisplay}</span>
@@ -348,7 +410,28 @@ export function ScheduleEventCard({
         </>
       )}
       {event.event_type === "training" && !hideDutyRangeFallback && (
-        <span className="text-sm text-slate-400">{dutyRange}</span>
+        <>
+          {hasTrainingCommuteLegRows ? (
+            <div className="space-y-1 text-sm">
+              {trainingCommuteToRows ? (
+                <div className="space-y-0.5">
+                  <span className="text-xs font-medium uppercase tracking-wider text-slate-500">To recurrent</span>
+                  {trainingCommuteToRows.map((l, i) => renderTrainingDhLeg(l, i, "to"))}
+                </div>
+              ) : null}
+              {trainingCommuteFromRows ? (
+                <div className="space-y-0.5">
+                  <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Return</span>
+                  {trainingCommuteFromRows.map((l, i) => renderTrainingDhLeg(l, i, "from"))}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <span className="text-sm text-slate-400">
+              {upcomingTrainingLocationLine?.trim() ? upcomingTrainingLocationLine.trim() : dutyRange}
+            </span>
+          )}
+        </>
       )}
       {event.event_type === "training" && (
         <span className="text-sm text-slate-400">Credit {creditDisplay}</span>

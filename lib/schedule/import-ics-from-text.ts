@@ -310,6 +310,8 @@ export async function importIcsFromText(
       blockMinutes: ev.blockMinutes ?? null,
       legs: ev.legs ?? null,
       isTraining: ev.isTraining === true,
+      trainingReleaseTime: ev.trainingReleaseTime ?? null,
+      trainingScheduleDetail: ev.trainingScheduleDetail ?? null,
     }));
 
   if (process.env.NODE_ENV === "development") {
@@ -468,6 +470,11 @@ export async function importIcsFromText(
       is_reserve_assignment: isReserveAssignment,
       first_leg_departure_time: e.firstLegDepartureTime ?? null,
       legs: e.legs ?? null,
+      training_release_time:
+        e.trainingReleaseTime != null && !isNaN(e.trainingReleaseTime.getTime())
+          ? e.trainingReleaseTime.toISOString()
+          : null,
+      training_schedule_detail: e.trainingScheduleDetail ?? null,
       source: FLICA_SOURCE,
       external_uid: e.externalUid,
       import_batch_id: importBatchId,

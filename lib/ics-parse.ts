@@ -5,7 +5,12 @@
  * Recurring events (RRULE) are skipped for MVP.
  */
 
-import { fromZonedTime } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { computeLastSimReleaseUtc, type SimSessionHm } from "@/lib/leg-dates";
+import {
+  buildTrainingScheduleDetail,
+  trainingTimezoneForParsed,
+} from "@/lib/training-schedule-detail";
 
 export type ParsedLeg = {
   day?: string;
@@ -37,6 +42,10 @@ export type ParsedEvent = {
    * Title alone does not set this; DH alone does not.
    */
   isTraining?: boolean;
+  /** SIM block end from DESCRIPTION (UTC), when a SIM line with HHMM–HHMM range is parsed. */
+  trainingReleaseTime?: Date | null;
+  /** Per training-local calendar day labels for My Schedule popover (ground school / SIM). */
+  trainingScheduleDetail?: Record<string, string> | null;
 };
 
 export type ParseIcsOptions = {
@@ -161,6 +170,8 @@ function parseDescription(desc: string): {
   pairingDays?: number;
   blockMinutes?: number;
   legs?: ParsedLeg[];
+  simTimeRange?: { startHm: number; endHm: number };
+  simSessions?: SimSessionHm[];
 } {
   const result: {
     reportTime?: string;
@@ -170,6 +181,8 @@ function parseDescription(desc: string): {
     pairingDays?: number;
     blockMinutes?: number;
     legs?: ParsedLeg[];
+    simTimeRange?: { startHm: number; endHm: number };
+    simSessions?: SimSessionHm[];
   } = {};
   const raw = desc.replace(/\\n/g, "\n").replace(/\\,/g, ",");
   const normalized = raw.toLowerCase();
@@ -393,6 +406,13 @@ function parseDescription(desc: string): {
     }
   }
 
+  const simSessions = extractAllSimSessionsFromDescription(raw);
+  if (simSessions.length > 0) {
+    result.simSessions = simSessions;
+    const lastS = simSessions[simSessions.length - 1]!;
+    result.simTimeRange = { startHm: lastS.startHm, endHm: lastS.endHm };
+  }
+
   return result;
 }
 
@@ -450,6 +470,47 @@ function propertyTextOrFallback(block: string, name: "DESCRIPTION" | "COMMENT"):
 
 const hhmmDigitsToMinutes = (n: number) => Math.floor(n / 100) * 60 + (n % 100);
 
+function isPlausibleHhmmToken(n: number): boolean {
+  const h = Math.floor(n / 100);
+  const m = n % 100;
+  return h >= 0 && h < 24 && m >= 0 && m < 60;
+}
+
+/**
+ * All SIM lines in DESCRIPTION order (FLICA: "Sa sim Den-Den 2030 0230 0430Dh" — times may be spaced, not dashed).
+ */
+function extractAllSimSessionsFromDescription(desc: string): SimSessionHm[] {
+  const raw = desc.replace(/\\n/g, "\n").replace(/\\,/g, ",");
+  const out: SimSessionHm[] = [];
+  for (const line of raw.split(/\r?\n/)) {
+    if (!/\bSIM\b/i.test(line)) continue;
+    const dm = line.match(/^(Mo|Tu|We|Th|Fr|Sa|Su)\b/i);
+    if (!dm) continue;
+    const dayAbbrev = dm[1]!;
+    let startHm: number | null = null;
+    let endHm: number | null = null;
+    const rangeRe = /(\d{3,4})\s*[-–—\u2010\u2011]\s*(\d{3,4})/g;
+    const rangeMatches = [...line.matchAll(rangeRe)];
+    if (rangeMatches.length > 0) {
+      const lastRg = rangeMatches[rangeMatches.length - 1]!;
+      startHm = parseInt(lastRg[1], 10);
+      endHm = parseInt(lastRg[2], 10);
+    } else {
+      const routeStripped = line.replace(/^.*?\b[A-Za-z]{3}\s*[-→–—\/\u2010\u2011]\s*[A-Za-z]{3}\b/i, " ");
+      const nums = [...routeStripped.matchAll(/\b(\d{3,4})\b/g)].map((m) => parseInt(m[1], 10));
+      const plausible = nums.filter(isPlausibleHhmmToken);
+      if (plausible.length >= 2) {
+        startHm = plausible[0]!;
+        endHm = plausible[1]!;
+      }
+    }
+    if (startHm == null || endHm == null) continue;
+    if (!isPlausibleHhmmToken(startHm) || !isPlausibleHhmmToken(endHm)) continue;
+    out.push({ dayAbbrev, startHm, endHm });
+  }
+  return out;
+}
+
 /**
  * SUMMARY:PAY events often carry the protected-trip paid HHMM only in DESCRIPTION/COMMENT;
  * merge those fields so Pay:/TCRD/16:40 patterns match. Also handles Pay=1640-style exports.
@@ -496,8 +557,16 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
 
         if (!dtstartRaw?.value) continue;
 
-        const { reportTime, creditMinutes, firstLegRoute, firstLegDepartureTime, pairingDays, blockMinutes, legs } =
-          parseDescription(descriptionRaw);
+        const {
+          reportTime,
+          creditMinutes,
+          firstLegRoute,
+          firstLegDepartureTime,
+          pairingDays,
+          blockMinutes,
+          legs,
+          simSessions,
+        } = parseDescription(descriptionRaw);
         if (process.env.NODE_ENV === "development" && (summary ?? "").includes("S3090") && (!legs || legs.length === 0)) {
           console.log("[ICS parse] S3090 DESCRIPTION (legs=0)", {
             summary,
@@ -529,6 +598,7 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
         const routeFromSummary = !firstLegRoute ? parseRouteFromText(summary ?? "") : null;
         const routeFromLocation =
           !firstLegRoute && !routeFromSummary ? parseRouteFromText(location ?? "") : null;
+        const resolvedFirstLegRoute = firstLegRoute || routeFromSummary || routeFromLocation || null;
         const start = parseIcsDateToUtc(dtstartRaw.value, {
           tzid: dtstartRaw.tzid,
           sourceTimezone,
@@ -542,6 +612,34 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
         const endDate =
           end && !isNaN(end.getTime()) ? end : new Date(start.getTime() + 60 * 60 * 1000);
 
+        const trainingTz = trainingTimezoneForParsed({
+          legs: legs?.map((l) => ({
+            destination: l.destination,
+            blockMinutes: l.blockMinutes,
+          })),
+          firstLegRoute: resolvedFirstLegRoute,
+          sourceTimezone,
+        });
+        const trainingReleaseTime: Date | null =
+          simSessions && simSessions.length > 0
+            ? computeLastSimReleaseUtc(
+                simSessions,
+                start.toISOString(),
+                endDate.toISOString(),
+                trainingTz
+              )
+            : null;
+
+        let trainingScheduleDetail: Record<string, string> | null = null;
+        if (isRecurrentTrainingDescription(descriptionRaw)) {
+          trainingScheduleDetail = buildTrainingScheduleDetail(
+            descriptionRaw,
+            start.toISOString(),
+            endDate.toISOString(),
+            trainingTz
+          );
+        }
+
         events.push({
           start,
           end: endDate,
@@ -549,12 +647,14 @@ export function parseIcs(icsText: string, options: ParseIcsOptions = {}): Parsed
           uid: uid?.trim() || null,
           reportTime: reportTime || undefined,
           creditMinutes: resolvedCreditMinutes,
-          firstLegRoute: firstLegRoute || routeFromSummary || routeFromLocation || undefined,
+          firstLegRoute: resolvedFirstLegRoute ?? undefined,
           firstLegDepartureTime: firstLegDepartureTime ?? undefined,
           pairingDays: pairingDays ?? undefined,
           blockMinutes: blockMinutes ?? undefined,
           legs: legs ?? undefined,
           isTraining: isRecurrentTrainingDescription(descriptionRaw) || undefined,
+          trainingReleaseTime,
+          trainingScheduleDetail: trainingScheduleDetail ?? undefined,
         });
       }
     }

@@ -56,6 +56,50 @@ export function getTripDateStrings(startTime: string, endTime: string, timezone:
  * Derive departure and arrival dates for each leg.
  * Uses leg order to handle multiple legs on the same weekday.
  */
+/** FLICA DESCRIPTION SIM lines: day prefix + start/end HHMM (e.g. Su sim … 2030 0230). */
+export type SimSessionHm = { dayAbbrev: string; startHm: number; endHm: number };
+
+/**
+ * Local end instant of the **last** SIM session in trainingTimezone (for commute / training_release_time).
+ * Assigns each session to trip calendar days by weekday order (same as flight legs).
+ */
+export function computeLastSimReleaseUtc(
+  sessions: SimSessionHm[],
+  startTimeIso: string,
+  endTimeIso: string,
+  trainingTimezone: string
+): Date | null {
+  if (sessions.length === 0) return null;
+  const tripDateStrs = getTripDateStrings(startTimeIso, endTimeIso, trainingTimezone);
+  if (tripDateStrs.length === 0) return null;
+  const usedCountByWeekday = new Map<string, number>();
+  let last: Date | null = null;
+  for (const s of sessions) {
+    const legDayNorm = s.dayAbbrev.slice(0, 2).toLowerCase();
+    const datesForWeekday = tripDateStrs.filter(
+      (d) => getWeekdayAbbrev(d, trainingTimezone).toLowerCase() === legDayNorm
+    );
+    const usedCount = usedCountByWeekday.get(legDayNorm) ?? 0;
+    const idx = Math.min(usedCount, Math.max(0, datesForWeekday.length - 1));
+    const depYmd = datesForWeekday[idx] ?? null;
+    if (!depYmd) continue;
+    usedCountByWeekday.set(legDayNorm, usedCount + 1);
+    const sm = Math.floor(s.startHm / 100) * 60 + (s.startHm % 100);
+    const em = Math.floor(s.endHm / 100) * 60 + (s.endHm % 100);
+    const overnight = em <= sm;
+    const endYmd = overnight ? addDay(depYmd) : depYmd;
+    const eh = Math.floor(s.endHm / 100);
+    const emin = s.endHm % 100;
+    const endStr = `${endYmd}T${String(eh).padStart(2, "0")}:${String(emin).padStart(2, "0")}:00`;
+    try {
+      last = fromZonedTime(endStr, trainingTimezone);
+    } catch {
+      continue;
+    }
+  }
+  return last;
+}
+
 export function computeLegDates<T extends { day?: string; depTime?: string; arrTime?: string }>(
   legs: T[],
   tripDateStrs: string[],

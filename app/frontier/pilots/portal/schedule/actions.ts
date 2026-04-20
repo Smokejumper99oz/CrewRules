@@ -9,7 +9,16 @@ import {
   computeTripCredit,
   expandEventToDaySegmentsInRange,
   type DaySegment,
+  type TimeFormat,
 } from "@/lib/schedule-time";
+import {
+  buildTrainingCompanyCommuteLine,
+  getTrainingCompanyCommuteLegsFromTraining,
+  getTrainingCompanyCommuteLegsToTraining,
+  type TrainingCommutePopoverPayload,
+} from "@/lib/schedule/training-company-commute-line";
+
+export type { TrainingCommutePopoverPayload };
 import { formatInTimeZone } from "date-fns-tz";
 import { getBidPeriodBounds, getBidPeriodForTimestamp, getAllBidPeriodsForYear, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
@@ -208,6 +217,10 @@ export type ScheduleEvent = {
   imported_at?: string | null;
   legs?: ScheduleEventLeg[] | null;
   training_deviation_home_commute?: boolean | null;
+  /** ICS DESCRIPTION SIM block end (UTC), when parsed from HHMM–HHMM on a SIM line. */
+  training_release_time?: string | null;
+  /** Training-local YYYY-MM-DD → ground/SIM label from FLICA DESCRIPTION (My Schedule popover). */
+  training_schedule_detail?: Record<string, string> | null;
 };
 
 export type NextDutyLabel = "on_duty" | "later_today" | "next_duty" | "post_duty_release";
@@ -216,6 +229,19 @@ export type NextDutyLabel = "on_duty" | "later_today" | "next_duty" | "post_duty
 function isVacationCode(title: string | null | undefined): boolean {
   const t = (title ?? "").trim().toUpperCase();
   return /^V\d+$/.test(t);
+}
+
+/** Duty end instant for on-duty overlap: SIM release when deviated recurrent training; else calendar end_time. */
+function scheduleEventDutyEndMs(ev: ScheduleEvent): number {
+  if (
+    ev.event_type === "training" &&
+    ev.training_deviation_home_commute === true &&
+    ev.training_release_time?.trim()
+  ) {
+    const ms = new Date(ev.training_release_time.trim()).getTime();
+    if (!Number.isNaN(ms)) return ms;
+  }
+  return new Date(ev.end_time).getTime();
 }
 
 export async function getNextDuty(): Promise<{
@@ -271,7 +297,7 @@ export async function getNextDuty(): Promise<{
     const nowMs = Date.now();
     const { data: onDutyOverlap, error: onDutyError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_deviation_home_commute")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_release_time, training_schedule_detail, training_deviation_home_commute")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .or("is_muted.eq.false,is_muted.is.null")
@@ -285,7 +311,7 @@ export async function getNextDuty(): Promise<{
         const ev = row as ScheduleEvent;
         if (isVacationCode(ev.title)) return false;
         const dutyStartMs = getScheduleEventDutyStartMs(ev, baseTimezone);
-        const endMs = new Date(ev.end_time).getTime();
+        const endMs = scheduleEventDutyEndMs(ev);
         return nowMs >= dutyStartMs && nowMs < endMs;
       }) ?? null;
 
@@ -438,7 +464,7 @@ export async function getNextDuty(): Promise<{
     // 2. Upcoming events: start >= now
     const { data: upcomingData, error: upcomingError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_deviation_home_commute")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_release_time, training_schedule_detail, training_deviation_home_commute")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .or("is_muted.eq.false,is_muted.is.null")
@@ -452,7 +478,7 @@ export async function getNextDuty(): Promise<{
 
     const { data: lastEndedData, error: lastEndedError } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_deviation_home_commute")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_release_time, training_schedule_detail, training_deviation_home_commute")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .or("is_muted.eq.false,is_muted.is.null")
@@ -630,7 +656,7 @@ async function findNextEventForDate(
   const dayEnd = new Date(Date.UTC(y, m - 1, d, 23, 59, 59)).toISOString();
   const { data } = await supabase
     .from("schedule_events")
-    .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_deviation_home_commute")
+    .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_release_time, training_schedule_detail, training_deviation_home_commute")
     .eq("user_id", userId)
     .eq("source", FLICA_SOURCE)
     .or("is_muted.eq.false,is_muted.is.null")
@@ -653,7 +679,7 @@ export async function getScheduleEvents(fromIso: string, toIso: string): Promise
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, protected_credit_minutes, protected_full_trip_paid_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, is_muted, import_batch_id, imported_at, training_deviation_home_commute")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, protected_credit_minutes, protected_full_trip_paid_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, is_muted, import_batch_id, imported_at, training_release_time, training_schedule_detail, training_deviation_home_commute")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .lte("start_time", toIso)
@@ -719,7 +745,7 @@ export async function getUpcomingEvents(limit = 8): Promise<{ events: ScheduleEv
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("schedule_events")
-      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_deviation_home_commute")
+      .select("id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, training_release_time, training_schedule_detail, training_deviation_home_commute")
       .eq("user_id", profile.id)
       .eq("source", FLICA_SOURCE)
       .or("is_muted.eq.false,is_muted.is.null")
@@ -1396,6 +1422,110 @@ export async function getAvailableMonths(): Promise<MonthOption[]> {
 // ---------------------------------------------------------------------------
 
 /**
+ * Companion trip legs + resolved training city (one DB round-trip).
+ * Companion = overlapping trip whose title shares a prefix with the training title.
+ */
+export async function getTrainingCompanionDataForEvent(
+  eventTitle: string | null,
+  startTime: string,
+  endTime: string,
+  trainingRow?: Pick<ScheduleEvent, "event_type" | "legs" | "route"> | null
+): Promise<{ trainingCityIata: string | null; companionLegs: ScheduleEventLeg[] | null }> {
+  try {
+    const supabase = await createClient();
+    const profile = await getProfile();
+    if (!profile) {
+      return { trainingCityIata: null, companionLegs: null };
+    }
+
+    const fromTrainingRow = () =>
+      trainingRow ? getTrainingCityIataFromTrainingRow(trainingRow, profile.base_airport) : null;
+
+    const { data } = await supabase
+      .from("schedule_events")
+      .select("legs, title, start_time")
+      .eq("user_id", profile.id)
+      .eq("source", FLICA_SOURCE)
+      .eq("event_type", "trip")
+      .lt("start_time", endTime)
+      .gt("end_time", startTime)
+      .order("start_time", { ascending: true })
+      .limit(25);
+
+    if (!data || data.length === 0) {
+      return { trainingCityIata: fromTrainingRow(), companionLegs: null };
+    }
+
+    const trainingTitle = (eventTitle ?? "").trim().toUpperCase();
+    const titleMatch = (row: { title?: string | null }) => {
+      const t = ((row.title ?? "") as string).trim().toUpperCase();
+      return t && trainingTitle && (t.startsWith(trainingTitle) || trainingTitle.startsWith(t));
+    };
+    const matchingRows = data.filter(titleMatch);
+    const companionRows =
+      matchingRows.length > 0
+        ? [...matchingRows].sort((a, b) =>
+            String((a as { start_time?: string }).start_time ?? "").localeCompare(
+              String((b as { start_time?: string }).start_time ?? "")
+            )
+          )
+        : [data[0]!];
+
+    const mergedLegs: ScheduleEventLeg[] = [];
+    for (const row of companionRows) {
+      const rowLegs = ((row as { legs?: unknown }).legs as ScheduleEventLeg[] | null) ?? [];
+      for (const leg of rowLegs) mergedLegs.push(leg);
+    }
+
+    const fromCompanion =
+      mergedLegs.length > 0 ? extractTrainingCityFromLegs(mergedLegs, profile.base_airport) : null;
+    const trainingCityIata = fromCompanion ?? fromTrainingRow();
+    return {
+      trainingCityIata,
+      companionLegs: mergedLegs.length > 0 ? mergedLegs : null,
+    };
+  } catch {
+    return { trainingCityIata: null, companionLegs: null };
+  }
+}
+
+/**
+ * Calendar popover: company DH to recurrent + return from companion trip (FLICA), with leg rows.
+ */
+export async function getTrainingCompanyCommuteForCalendarPopover(
+  eventTitle: string | null,
+  startTime: string,
+  endTime: string,
+  timeFormat: TimeFormat,
+  trainingRow?: Pick<ScheduleEvent, "event_type" | "legs" | "route"> | null
+): Promise<TrainingCommutePopoverPayload | null> {
+  const { trainingCityIata, companionLegs } = await getTrainingCompanionDataForEvent(
+    eventTitle,
+    startTime,
+    endTime,
+    trainingRow ?? null
+  );
+  if (!companionLegs?.length) return null;
+  const toLegs = getTrainingCompanyCommuteLegsToTraining(companionLegs, trainingCityIata);
+  const fromLegs = getTrainingCompanyCommuteLegsFromTraining(companionLegs, trainingCityIata);
+  const toLine = buildTrainingCompanyCommuteLine(companionLegs, {
+    timeFormat,
+    trainingStationIata: trainingCityIata,
+    direction: "to_training",
+  });
+  const fromLine = buildTrainingCompanyCommuteLine(companionLegs, {
+    timeFormat,
+    trainingStationIata: trainingCityIata,
+    direction: "from_training",
+  });
+  if (!toLine && !fromLine && toLegs.length === 0 && fromLegs.length === 0) return null;
+  return {
+    toTraining: { line: toLine, legs: toLegs },
+    fromTraining: { line: fromLine, legs: fromLegs },
+  };
+}
+
+/**
  * Fetch the training city IATA for a training event by looking at its companion trip's legs.
  * Companion trip = overlapping trip event whose title shares a prefix with the training event title.
  */
@@ -1405,44 +1535,13 @@ export async function getTrainingCityForEvent(
   endTime: string,
   trainingRow?: Pick<ScheduleEvent, "event_type" | "legs" | "route"> | null
 ): Promise<string | null> {
-  try {
-    const supabase = await createClient();
-    const profile = await getProfile();
-    if (!profile) return null;
-
-    const fromTrainingRow = () =>
-      trainingRow ? getTrainingCityIataFromTrainingRow(trainingRow, profile.base_airport) : null;
-
-    const { data } = await supabase
-      .from("schedule_events")
-      .select("legs, title")
-      .eq("user_id", profile.id)
-      .eq("source", FLICA_SOURCE)
-      .eq("event_type", "trip")
-      .lt("start_time", endTime)
-      .gt("end_time", startTime)
-      .order("start_time", { ascending: true })
-      .limit(5);
-
-    if (!data || data.length === 0) {
-      return fromTrainingRow();
-    }
-
-    const trainingTitle = (eventTitle ?? "").trim().toUpperCase();
-    // Prefer the companion trip whose title shares a prefix with the training title
-    const companion =
-      data.find((row) => {
-        const t = ((row as { title?: string | null }).title ?? "").trim().toUpperCase();
-        return t && trainingTitle && (t.startsWith(trainingTitle) || trainingTitle.startsWith(t));
-      }) ?? data[0];
-
-    const legs = ((companion as { legs?: unknown }).legs as ScheduleEventLeg[] | null) ?? [];
-    const fromCompanion = extractTrainingCityFromLegs(legs, profile.base_airport);
-    if (fromCompanion) return fromCompanion;
-    return fromTrainingRow();
-  } catch {
-    return null;
-  }
+  const { trainingCityIata } = await getTrainingCompanionDataForEvent(
+    eventTitle,
+    startTime,
+    endTime,
+    trainingRow
+  );
+  return trainingCityIata;
 }
 
 /**

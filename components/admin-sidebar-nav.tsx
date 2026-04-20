@@ -12,12 +12,15 @@ export function AdminSidebarNav({
   portalBase,
   isSuperAdmin,
   hidePortalLink = false,
+  onLinkClick,
 }: {
   base: string;
   nav: NavItem[];
   portalBase: string;
   isSuperAdmin: boolean;
   hidePortalLink?: boolean;
+  /** e.g. close mobile drawer after navigation */
+  onLinkClick?: () => void;
 }) {
   const pathname = usePathname();
 
@@ -41,6 +44,7 @@ export function AdminSidebarNav({
               )}
               <Link
                 href={full}
+                onClick={() => onLinkClick?.()}
                 className={`touch-target touch-pad flex items-center rounded-xl px-3 py-2 text-sm transition ${
                   active
                     ? "bg-slate-100 font-medium text-slate-900 ring-1 ring-inset ring-slate-200"
@@ -58,6 +62,7 @@ export function AdminSidebarNav({
         {isSuperAdmin && (
           <Link
             href="/super-admin"
+            onClick={() => onLinkClick?.()}
             className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-amber-800/90 hover:bg-amber-50 hover:text-amber-900 transition"
           >
             Platform Owner Dashboard →
@@ -66,6 +71,7 @@ export function AdminSidebarNav({
         {!hidePortalLink && (
           <Link
             href={portalBase}
+            onClick={() => onLinkClick?.()}
             className="touch-target touch-pad block rounded-xl px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition"
           >
             ← Back to Portal

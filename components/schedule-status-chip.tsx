@@ -7,7 +7,13 @@ type ScheduleStatus = "no_schedule" | "up_to_date" | "outdated";
 export function formatLastImport(iso: string): string {
   try {
     const d = new Date(iso);
-    return `${d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })} · ${d.toLocaleTimeString(undefined, { timeStyle: "short" })}`;
+    const datePart = d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+    const timePart = d.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    return `${datePart} · ${timePart}`;
   } catch {
     return iso;
   }

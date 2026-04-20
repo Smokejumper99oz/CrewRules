@@ -2,9 +2,14 @@ import {
   getNextDuty,
   getUpcomingEvents,
   getScheduleDisplaySettings,
-  getTrainingCityForEvent,
+  getTrainingCompanionDataForEvent,
 } from "@/app/frontier/pilots/portal/schedule/actions";
 import { iataToCityName } from "@/lib/family-view/translate-schedule";
+import {
+  buildTrainingCompanyCommuteLine,
+  getTrainingCompanyCommuteLegsFromTraining,
+  getTrainingCompanyCommuteLegsToTraining,
+} from "@/lib/schedule/training-company-commute-line";
 import { scheduleCardLegDateHelpers, withLegsToShow } from "@/lib/schedule-card-legs";
 import type { ScheduleEvent, ScheduleEventLeg } from "@/app/frontier/pilots/portal/schedule/actions";
 import { getProfile } from "@/lib/profile";
@@ -297,13 +302,52 @@ export async function PortalScheduleUpcoming({ tenant, portal }: { tenant: strin
   if (upcomingEvents.length === 0) return null;
 
   const trainingLocationByEventId = new Map<string, string>();
+  const trainingCommuteLegsByEventId = new Map<
+    string,
+    { to: ScheduleEventLeg[]; from: ScheduleEventLeg[] }
+  >();
   await Promise.all(
     upcomingEvents
       .filter((row) => row.event.event_type === "training")
       .map(async (row) => {
         const e = row.event;
-        const iata = await getTrainingCityForEvent(e.title ?? null, e.start_time, e.end_time, e);
-        if (iata) trainingLocationByEventId.set(e.id, iataToCityName(iata));
+        const { trainingCityIata, companionLegs } = await getTrainingCompanionDataForEvent(
+          e.title ?? null,
+          e.start_time,
+          e.end_time,
+          e
+        );
+        const toLegs =
+          companionLegs?.length && companionLegs.length > 0
+            ? getTrainingCompanyCommuteLegsToTraining(companionLegs, trainingCityIata)
+            : [];
+        const fromLegs =
+          companionLegs?.length && companionLegs.length > 0
+            ? getTrainingCompanyCommuteLegsFromTraining(companionLegs, trainingCityIata)
+            : [];
+        if (toLegs.length > 0 || fromLegs.length > 0) {
+          trainingCommuteLegsByEventId.set(e.id, { to: toLegs, from: fromLegs });
+        }
+        const companyLine =
+          companionLegs?.length && companionLegs.length > 0
+            ? (() => {
+                const to = buildTrainingCompanyCommuteLine(companionLegs, {
+                  timeFormat: displaySettings.timeFormat,
+                  trainingStationIata: trainingCityIata,
+                  direction: "to_training",
+                });
+                const from = buildTrainingCompanyCommuteLine(companionLegs, {
+                  timeFormat: displaySettings.timeFormat,
+                  trainingStationIata: trainingCityIata,
+                  direction: "from_training",
+                });
+                return [to, from].filter(Boolean).join(" · ") || null;
+              })()
+            : null;
+        const fallbackCity =
+          trainingCityIata && trainingCityIata.length === 3 ? iataToCityName(trainingCityIata) : null;
+        const line = companyLine?.trim() || fallbackCity;
+        if (line) trainingLocationByEventId.set(e.id, line);
       })
   );
 
@@ -333,6 +377,16 @@ export async function PortalScheduleUpcoming({ tenant, portal }: { tenant: strin
                   : null
               }
               upcomingTrainingLocationLine={trainingLocationByEventId.get(row.event.id) ?? null}
+              trainingCompanyCommuteToLegs={trainingCommuteLegsByEventId.get(row.event.id)?.to}
+              trainingCompanyCommuteFromLegs={trainingCommuteLegsByEventId.get(row.event.id)?.from}
+              displayEndTimeIso={
+                row.event.event_type === "training" &&
+                row.event.training_deviation_home_commute === true &&
+                row.event.training_release_time?.trim() &&
+                !Number.isNaN(new Date(row.event.training_release_time).getTime())
+                  ? row.event.training_release_time.trim()
+                  : undefined
+              }
             />
           </li>
         ))}

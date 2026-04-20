@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
-import { getNextDuty, getScheduleImportStatus, getScheduleDisplaySettings, getTrainingCityForEvent } from "@/app/frontier/pilots/portal/schedule/actions";
+import {
+  getNextDuty,
+  getScheduleImportStatus,
+  getScheduleDisplaySettings,
+  getTrainingCompanionDataForEvent,
+} from "@/app/frontier/pilots/portal/schedule/actions";
 import { getProfile, isProActive } from "@/lib/profile";
 import type { ActiveTrip } from "@/lib/trips/get-active-trip";
 import { formatLegLine } from "@/lib/trips/detect-trip-changes";
@@ -25,6 +30,13 @@ import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getLaterTodayRedEyeCardInfo, getTripReportNightMeta } from "@/lib/schedule-report-night";
 import { TrainingDeviationPrompt } from "@/components/training-deviation-prompt";
 import { iataToCityName } from "@/lib/family-view/translate-schedule";
+import { trainingReleaseIsoFromScheduleDetail } from "@/lib/schedule/training-release-from-schedule-detail";
+import {
+  buildTrainingCompanyCommuteLine,
+  getTrainingCompanyCommuteLegsFromTraining,
+  getTrainingCompanyCommuteLegsToTraining,
+} from "@/lib/schedule/training-company-commute-line";
+import { trainingCityIsPilotBaseOrHome } from "@/lib/schedule/training-city-iata";
 
 function fmtHM(totalMinutes: number) {
   const h = Math.floor(totalMinutes / 60);
@@ -126,14 +138,54 @@ export async function PortalNextDuty({
     getProfile(),
   ]);
 
-  // Training event enrichment — fetch companion trip legs to determine training city
+  // Training event enrichment — companion trip legs + training city (single query)
   const isTrainingEvent = event?.event_type === "training";
-  const trainingCityIata = isTrainingEvent && event
-    ? await getTrainingCityForEvent(event.title ?? null, event.start_time, event.end_time, event)
-    : null;
+  const trainingCompanionData =
+    isTrainingEvent && event
+      ? await getTrainingCompanionDataForEvent(event.title ?? null, event.start_time, event.end_time, event)
+      : null;
+  const trainingCityIata = trainingCompanionData?.trainingCityIata ?? null;
+  const trainingCompanyCommuteLine =
+    isTrainingEvent && trainingCompanionData?.companionLegs?.length
+      ? (() => {
+          const legs = trainingCompanionData.companionLegs!;
+          const to = buildTrainingCompanyCommuteLine(legs, {
+            timeFormat: displaySettings.timeFormat,
+            trainingStationIata: trainingCityIata,
+            direction: "to_training",
+          });
+          const from = buildTrainingCompanyCommuteLine(legs, {
+            timeFormat: displaySettings.timeFormat,
+            trainingStationIata: trainingCityIata,
+            direction: "from_training",
+          });
+          return [to, from].filter(Boolean).join(" · ") || null;
+        })()
+      : null;
+  const trainingCompanyCommuteToLegs =
+    isTrainingEvent && trainingCompanionData?.companionLegs?.length
+      ? getTrainingCompanyCommuteLegsToTraining(trainingCompanionData.companionLegs, trainingCityIata)
+      : null;
+  const trainingCompanyCommuteFromLegs =
+    isTrainingEvent && trainingCompanionData?.companionLegs?.length
+      ? getTrainingCompanyCommuteLegsFromTraining(trainingCompanionData.companionLegs, trainingCityIata)
+      : null;
   const trainingDeviationHomeCommute = isTrainingEvent
     ? (event?.training_deviation_home_commute ?? null)
     : null;
+  /** SIM release instant for display + on-duty timer when pilot deviates (own commute); not company block end. */
+  const trainingDeviatedSimEndIso =
+    isTrainingEvent && trainingDeviationHomeCommute === true && event
+      ? (() => {
+          const tr = event.training_release_time?.trim();
+          if (tr && !Number.isNaN(new Date(tr).getTime())) return tr;
+          const tz =
+            trainingCityIata && trainingCityIata.length === 3
+              ? getTimezoneFromAirport(trainingCityIata)
+              : displaySettings.baseTimezone;
+          return trainingReleaseIsoFromScheduleDetail(event.training_schedule_detail ?? null, tz);
+        })()
+      : null;
   const trainingCityDisplay = trainingCityIata ? iataToCityName(trainingCityIata) : null;
   const homeAirport = profile?.home_airport?.trim().toUpperCase() ?? null;
   const homeCity = homeAirport ? iataToCityName(homeAirport) : null;
@@ -648,6 +700,18 @@ export async function PortalNextDuty({
                   reportTimeOverride={reportTimeOverride}
                   postDutyRelease={label === "post_duty_release"}
                   redEyeReportDateLong={redEyeReportDateLong}
+                  displayEndTimeIso={trainingDeviatedSimEndIso ?? undefined}
+                  upcomingTrainingLocationLine={trainingCompanyCommuteLine ?? undefined}
+                  trainingCompanyCommuteToLegs={
+                    trainingCompanyCommuteToLegs && trainingCompanyCommuteToLegs.length > 0
+                      ? trainingCompanyCommuteToLegs
+                      : undefined
+                  }
+                  trainingCompanyCommuteFromLegs={
+                    trainingCompanyCommuteFromLegs && trainingCompanyCommuteFromLegs.length > 0
+                      ? trainingCompanyCommuteFromLegs
+                      : undefined
+                  }
                 />
               </div>
             ) : (
@@ -660,6 +724,18 @@ export async function PortalNextDuty({
                 displayDateStr={displayDateStr}
                 reportTimeOverride={reportTimeOverride}
                 postDutyRelease={label === "post_duty_release"}
+                displayEndTimeIso={trainingDeviatedSimEndIso ?? undefined}
+                upcomingTrainingLocationLine={trainingCompanyCommuteLine ?? undefined}
+                trainingCompanyCommuteToLegs={
+                  trainingCompanyCommuteToLegs && trainingCompanyCommuteToLegs.length > 0
+                    ? trainingCompanyCommuteToLegs
+                    : undefined
+                }
+                trainingCompanyCommuteFromLegs={
+                  trainingCompanyCommuteFromLegs && trainingCompanyCommuteFromLegs.length > 0
+                    ? trainingCompanyCommuteFromLegs
+                    : undefined
+                }
               />
             ))}
           {far117Result && !activeTrip && (
@@ -669,11 +745,18 @@ export async function PortalNextDuty({
             />
           )}
           {isOnDuty && (
-            <OnDutyTimer startTime={event.start_time} endTime={event.end_time} timezone={displaySettings.baseTimezone} />
+            <OnDutyTimer
+              startTime={event.start_time}
+              endTime={trainingDeviatedSimEndIso ?? event.end_time}
+              timezone={displaySettings.baseTimezone}
+            />
           )}
 
-          {/* Training deviation prompt — shown when deviation preference not yet set */}
-          {isTrainingEvent && trainingDeviationHomeCommute === null && event && (
+          {/* Training deviation prompt — not applicable when recurrent is at crew base or home airport */}
+          {isTrainingEvent &&
+            trainingDeviationHomeCommute === null &&
+            event &&
+            !trainingCityIsPilotBaseOrHome(trainingCityIata, baseAirport || null, homeAirport) && (
             <TrainingDeviationPrompt
               eventId={event.id}
               trainingCityIata={trainingCityIata}

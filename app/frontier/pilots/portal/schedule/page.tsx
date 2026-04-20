@@ -9,8 +9,10 @@ import {
   getScheduleDisplaySettings,
   getIsAdmin,
   getScheduleImportEmail,
+  getTrainingCompanyCommuteForCalendarPopover,
   type ScheduleEvent,
   type ScheduleDisplaySettings,
+  type TrainingCommutePopoverPayload,
 } from "./actions";
 import { InboundEmailDisplay } from "@/components/inbound-email-display";
 import { FlicaIcsHelperModal } from "@/components/flica-ics-helper-modal";
@@ -59,15 +61,57 @@ function eventPillStyle(ev: ScheduleEvent): string {
   return ev.is_muted === true ? MUTED_EVENT_STYLE : eventStyle(ev.event_type);
 }
 
+/** Human-readable type label for popover pill (DB uses lowercase e.g. training). */
+function scheduleEventTypeLabel(eventType: string | null | undefined): string {
+  const t = (eventType ?? "").trim();
+  if (!t) return "Other";
+  if (t.toLowerCase() === "training") return "Training";
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+}
+
+function trainingScheduleDetailForDay(
+  event: ScheduleEvent,
+  clickedDate: string | null
+): string | null {
+  const raw = event.training_schedule_detail;
+  if (!raw || typeof raw !== "object") return null;
+  if (clickedDate) {
+    const v = raw[clickedDate];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
+}
+
 /** Display-only; DB title unchanged. */
 function scheduleEventDisplayTitle(ev: ScheduleEvent): string {
   const base = ev.title?.trim() || "Untitled";
   return ev.event_type === "training" ? `${base} - Recurrent` : base;
 }
 
-function getCalendarPillLabel(ev: ScheduleEvent, dayEvents: ScheduleEvent[]): string {
+/** True when `dayYmd` is the first or last local day of a training block (same TZ spine as calendar overlap). */
+function isTrainingCompanyCommuteCalendarDay(ev: ScheduleEvent, dayYmd: string, timezone: string): boolean {
+  if (ev.event_type !== "training") return false;
+  const days = getTripDateStrings(ev.start_time, ev.end_time, timezone);
+  if (days.length === 0) return false;
+  const first = days[0]!;
+  const last = days[days.length - 1]!;
+  return dayYmd === first || dayYmd === last;
+}
+
+function getCalendarPillLabel(
+  ev: ScheduleEvent,
+  dayEvents: ScheduleEvent[],
+  dayYmd: string,
+  baseTimezone: string
+): string {
   const isPay = ev.title?.trim().toUpperCase() === "PAY" || ev.event_type === "pay";
-  if (!isPay) return scheduleEventDisplayTitle(ev);
+  if (!isPay) {
+    if (isTrainingCompanyCommuteCalendarDay(ev, dayYmd, baseTimezone)) {
+      const code = ev.title?.trim() || "Untitled";
+      return `${code} - Company Commute - Recurrent`;
+    }
+    return scheduleEventDisplayTitle(ev);
+  }
   const tripOnDay = dayEvents.find((e) => {
     const t = (e.title ?? "").trim().toUpperCase();
     return e.event_type === "trip" && t !== "PAY";
@@ -212,6 +256,8 @@ function EventDetailPopover({
     left: anchorPosition.x,
     top: anchorPosition.y + 8,
   }));
+  const [commutePopover, setCommutePopover] = useState<TrainingCommutePopoverPayload | null>(null);
+  const [commuteFetched, setCommuteFetched] = useState(false);
 
   const reposition = useCallback(() => {
     const el = popoverRef.current;
@@ -235,7 +281,56 @@ function EventDetailPopover({
     event.block_minutes,
     event.legs?.length,
     event.route,
+    event.training_schedule_detail,
     clickedDayEvents.length,
+    commutePopover,
+    commuteFetched,
+  ]);
+
+  useEffect(() => {
+    if (event.event_type !== "training") {
+      setCommutePopover(null);
+      setCommuteFetched(false);
+      return;
+    }
+    if (
+      !clickedDate ||
+      !isTrainingCompanyCommuteCalendarDay(event, clickedDate, displaySettings.baseTimezone)
+    ) {
+      setCommutePopover(null);
+      setCommuteFetched(false);
+      return;
+    }
+    setCommuteFetched(false);
+    let cancelled = false;
+    void getTrainingCompanyCommuteForCalendarPopover(
+      event.title ?? null,
+      event.start_time,
+      event.end_time,
+      displaySettings.timeFormat,
+      event
+    )
+      .then((payload) => {
+        if (!cancelled) setCommutePopover(payload);
+      })
+      .catch(() => {
+        if (!cancelled) setCommutePopover(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCommuteFetched(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    clickedDate,
+    displaySettings.baseTimezone,
+    displaySettings.timeFormat,
+    event.id,
+    event.event_type,
+    event.start_time,
+    event.end_time,
+    event.title,
   ]);
 
   useEffect(() => {
@@ -278,10 +373,55 @@ function EventDetailPopover({
     baseAirport: displaySettings.baseAirport,
   });
 
-  const timeRange =
-    legsToShow && legsToShow.length > 0 && legsToShow[0].depTime != null && legsToShow[legsToShow.length - 1].arrTime != null
-      ? `${legsToShow[0].depTime} – ${legsToShow[legsToShow.length - 1].arrTime}`
-      : `${formatTimeForDisplay(event.start_time, displaySettings)} – ${formatTimeForDisplay(event.end_time, displaySettings)}`;
+  const trainingDayDetail =
+    event.event_type === "training" ? trainingScheduleDetailForDay(event, clickedDate) : null;
+  const isTrainingCommuteCalendarDay =
+    event.event_type === "training" &&
+    !!clickedDate &&
+    isTrainingCompanyCommuteCalendarDay(event, clickedDate, displaySettings.baseTimezone);
+  const trainingBlockDays =
+    event.event_type === "training"
+      ? getTripDateStrings(event.start_time, event.end_time, displaySettings.baseTimezone)
+      : [];
+  const trainFirstYmd = trainingBlockDays[0] ?? null;
+  const trainLastYmd =
+    trainingBlockDays.length > 0 ? trainingBlockDays[trainingBlockDays.length - 1]! : null;
+  const showCommuteTo = !!clickedDate && !!trainFirstYmd && clickedDate === trainFirstYmd;
+  const showCommuteFrom = !!clickedDate && !!trainLastYmd && clickedDate === trainLastYmd;
+
+  const commuteSummaryParts: string[] = [];
+  if (isTrainingCommuteCalendarDay && commutePopover) {
+    if (showCommuteTo && commutePopover.toTraining.line) commuteSummaryParts.push(commutePopover.toTraining.line);
+    if (showCommuteFrom && commutePopover.fromTraining.line) {
+      commuteSummaryParts.push(commutePopover.fromTraining.line);
+    }
+  }
+  const commuteSummaryJoined = commuteSummaryParts.length > 0 ? commuteSummaryParts.join(" · ") : null;
+
+  const hasCommuteLegsToShow =
+    isTrainingCommuteCalendarDay &&
+    commutePopover &&
+    ((showCommuteTo && commutePopover.toTraining.legs.length > 0) ||
+      (showCommuteFrom && commutePopover.fromTraining.legs.length > 0));
+
+  const timeRange = (() => {
+    if (isTrainingCommuteCalendarDay && !commuteFetched) return "Loading company commute…";
+    if (isTrainingCommuteCalendarDay && commuteSummaryJoined) return commuteSummaryJoined;
+    if (isTrainingCommuteCalendarDay && hasCommuteLegsToShow) return "Company-provided travel (FLICA)";
+    if (isTrainingCommuteCalendarDay && commuteFetched) {
+      return `${formatTimeForDisplay(event.start_time, displaySettings)} – ${formatTimeForDisplay(event.end_time, displaySettings)}`;
+    }
+    if (event.event_type === "training" && trainingDayDetail) return trainingDayDetail;
+    if (
+      legsToShow &&
+      legsToShow.length > 0 &&
+      legsToShow[0].depTime != null &&
+      legsToShow[legsToShow.length - 1]!.arrTime != null
+    ) {
+      return `${legsToShow[0].depTime} – ${legsToShow[legsToShow.length - 1]!.arrTime}`;
+    }
+    return `${formatTimeForDisplay(event.start_time, displaySettings)} – ${formatTimeForDisplay(event.end_time, displaySettings)}`;
+  })();
 
   if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
     console.log("[EventDetailPopover] render", {
@@ -305,6 +445,41 @@ function EventDetailPopover({
         {" • "}
         {timeRange}
       </p>
+      {isTrainingCommuteCalendarDay &&
+        commutePopover &&
+        showCommuteTo &&
+        commutePopover.toTraining.legs.length > 0 && (
+          <div className="mt-2 space-y-1">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">To recurrent (company DH)</p>
+            {commutePopover.toTraining.legs.map((l, i) => (
+              <p key={`to-dh-${i}`} className="text-sm text-slate-400 font-mono">
+                {l.deadhead ? <span className="text-amber-400/90">DH </span> : null}
+                {l.flightNumber ? `${(displaySettings.carrierCode?.trim() || "FLT")}${l.flightNumber.trim()} ` : ""}
+                {l.origin} → {l.destination}
+                {l.depTime && l.arrTime ? ` ${l.depTime}–${l.arrTime}` : ""}
+              </p>
+            ))}
+          </div>
+        )}
+      {isTrainingCommuteCalendarDay &&
+        commutePopover &&
+        showCommuteFrom &&
+        commutePopover.fromTraining.legs.length > 0 && (
+          <div className="mt-2 space-y-1">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Return (company DH)</p>
+            {commutePopover.fromTraining.legs.map((l, i) => (
+              <p key={`from-dh-${i}`} className="text-sm text-slate-400 font-mono">
+                {l.deadhead ? <span className="text-amber-400/90">DH </span> : null}
+                {l.flightNumber ? `${(displaySettings.carrierCode?.trim() || "FLT")}${l.flightNumber.trim()} ` : ""}
+                {l.origin} → {l.destination}
+                {l.depTime && l.arrTime ? ` ${l.depTime}–${l.arrTime}` : ""}
+              </p>
+            ))}
+          </div>
+        )}
+      {event.event_type === "training" && isTrainingCommuteCalendarDay && trainingDayDetail ? (
+        <p className="mt-2 border-t border-white/10 pt-2 text-xs text-slate-500">{trainingDayDetail}</p>
+      ) : null}
       {event.event_type === "trip" &&
         (legsToShow && legsToShow.length > 0 ? (
           <div className="mt-2 space-y-1">
@@ -359,7 +534,7 @@ function EventDetailPopover({
         </div>
       )}
       <span className={`mt-2 inline-block rounded px-2 py-0.5 text-xs ${eventPillStyle(event)}`}>
-        {event.event_type}
+        {scheduleEventTypeLabel(event.event_type)}
       </span>
     </div>
   );
@@ -680,7 +855,7 @@ export default function SchedulePage() {
               {calendarDays.map((day, i) => (
                 <div
                   key={i}
-                  className={`min-h-[56px] sm:min-h-[72px] rounded-lg border p-0.5 sm:p-1 ${
+                  className={`min-h-[64px] sm:min-h-[80px] rounded-lg border p-0.5 sm:p-1 ${
                     !day
                       ? "border-transparent"
                       : isSameDay(day, today)
@@ -717,7 +892,7 @@ export default function SchedulePage() {
                                   className={
                                     isReportNightTile
                                       ? `flex w-full flex-col items-stretch gap-0 rounded border px-1 py-px text-left text-[10px] sm:gap-0.5 sm:px-1.5 sm:py-0.5 sm:text-xs ${REPORT_NIGHT_TILE_CLASS}`
-                                      : `flex w-full items-center rounded border px-1 py-px text-left text-[10px] sm:px-1.5 sm:py-0.5 sm:text-xs ${getCalendarTileStyle(ev, visibleDayEvents)}`
+                                      : `flex w-full flex-col items-stretch gap-0.5 rounded border px-1 py-px text-left text-[10px] sm:px-1.5 sm:py-0.5 sm:text-xs ${getCalendarTileStyle(ev, visibleDayEvents)}`
                                   }
                                 >
                                   {isReportNightTile ? (
@@ -743,10 +918,12 @@ export default function SchedulePage() {
                                       )}
                                     </>
                                   ) : (
-                                    <span className="min-w-0 truncate">{getCalendarPillLabel(ev, visibleDayEvents)}</span>
+                                    <span className="min-w-0 whitespace-normal break-words text-left leading-snug line-clamp-2">
+                                      {getCalendarPillLabel(ev, visibleDayEvents, dayStr, displaySettings.baseTimezone)}
+                                    </span>
                                   )}
                                   {ev.is_muted === true && (
-                                    <span className="ml-1 shrink-0 text-[10px] px-1 rounded bg-slate-500/20 text-slate-300 self-end">
+                                    <span className="shrink-0 self-end text-[10px] px-1 rounded bg-slate-500/20 text-slate-300">
                                       Previous
                                     </span>
                                   )}

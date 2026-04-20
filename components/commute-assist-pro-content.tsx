@@ -21,6 +21,7 @@ import {
   COMMUTE_COVERAGE_UI_TITLE,
   type CommuteCoverageForClient,
 } from "@/lib/commute/commute-coverage-public";
+import { trainingReleaseIsoFromScheduleDetail } from "@/lib/schedule/training-release-from-schedule-detail";
 
 type CommuteFlightsOk = Extract<Awaited<ReturnType<typeof getCommuteFlights>>, { ok: true }>;
 
@@ -351,7 +352,15 @@ function convertRawFlightsToLegOptions(
 }
 
 type Props = {
-  event: { start_time: string; end_time?: string; report_time?: string | null; route?: string | null };
+  event: {
+    start_time: string;
+    end_time?: string;
+    report_time?: string | null;
+    route?: string | null;
+    event_type?: string;
+    training_release_time?: string | null;
+    training_schedule_detail?: Record<string, string> | null;
+  };
   label?: "on_duty" | "later_today" | "next_duty" | "post_duty_release";
   profile: NonNullable<Profile>;
   displaySettings: ScheduleDisplaySettings;
@@ -1108,6 +1117,33 @@ export function CommuteAssistProContent({
     direction === "to_base" &&
     trainingCityIataForCommute.length === 3;
 
+  /** Return-home release instant: SIM end when deviated training + parsed release; else calendar end_time. */
+  const returnHomeReleaseIso = useMemo(() => {
+    if (event.event_type === "training" && commuteAssistTrainingDeviationToBase === true) {
+      const tr = event.training_release_time?.trim();
+      if (tr && !Number.isNaN(new Date(tr).getTime())) return tr;
+      const trainingTz =
+        trainingCityIataForCommute.length === 3
+          ? getTimezoneFromAirport(trainingCityIataForCommute)
+          : baseTz;
+      const fromDetail = trainingReleaseIsoFromScheduleDetail(
+        event.training_schedule_detail ?? null,
+        trainingTz
+      );
+      if (fromDetail) return fromDetail;
+    }
+    const end = event.end_time?.trim();
+    return end && end.length > 0 ? end : null;
+  }, [
+    event.event_type,
+    event.end_time,
+    event.training_release_time,
+    event.training_schedule_detail,
+    commuteAssistTrainingDeviationToBase,
+    trainingCityIataForCommute,
+    baseTz,
+  ]);
+
   const dutyStart = new Date(event.start_time);
   const dutyOk = !Number.isNaN(dutyStart.getTime());
 
@@ -1166,10 +1202,28 @@ export function CommuteAssistProContent({
   const toBaseCommuteDestinationAirport = isTrainingDeviationToBaseCommute
     ? trainingCityIataForCommute
     : (dutyStartAirport ?? baseAirport)?.toUpperCase() ?? "";
-  const dutyEndTime = event.end_time ? new Date(event.end_time) : null;
-  const dutyEndDateBase = dutyEndTime && !Number.isNaN(dutyEndTime.getTime())
-    ? formatInTimeZone(dutyEndTime, baseTz, "yyyy-MM-dd")
-    : null;
+
+  /** Return-home: training-station TZ when deviating (SIM local day + hour); else crew base. */
+  const returnHomeEarliestDepRoundTz = useMemo(() => {
+    if (
+      direction === "to_home" &&
+      commuteAssistTrainingDeviationToBase === true &&
+      (dutyEndAirport?.trim().length ?? 0) === 3
+    ) {
+      return getTimezoneFromAirport(dutyEndAirport!.trim().toUpperCase());
+    }
+    return baseTz;
+  }, [direction, commuteAssistTrainingDeviationToBase, dutyEndAirport, baseTz]);
+
+  const dutyEndTime = returnHomeReleaseIso ? new Date(returnHomeReleaseIso) : null;
+  const dutyEndDateBase =
+    dutyEndTime && !Number.isNaN(dutyEndTime.getTime())
+      ? formatInTimeZone(
+          dutyEndTime,
+          direction === "to_home" ? returnHomeEarliestDepRoundTz : baseTz,
+          "yyyy-MM-dd"
+        )
+      : null;
 
   /** Routes to search: [{ origin, destination, label }]. label = "home" | "alternate" */
   /** When 2-leg enabled, skip direct routes—user knows there are none; loadTwoLegFlights handles first leg. */
@@ -1332,8 +1386,8 @@ export function CommuteAssistProContent({
         : `${dutyDateBaseLocal}T12:00:00Z`;
       const isReturn = direction === "to_home";
       const releaseEarliestDepIso =
-        isReturn && event.end_time
-          ? roundDownToHour(event.end_time, baseTz)
+        isReturn && returnHomeReleaseIso
+          ? roundDownToHour(returnHomeReleaseIso, returnHomeEarliestDepRoundTz)
           : null;
       const options: CommuteFlightOption[] = [];
       for (let i = 0; i < flights.length; i++) {
@@ -1378,7 +1432,17 @@ export function CommuteAssistProContent({
       setHomePage(1);
       setAlternatePage(1);
     },
-    [direction, dutyOk, event.start_time, event.end_time, baseTz, arrivalBuffer, dutyDateTime, trainingArrivalDeadlineIso]
+    [
+      direction,
+      dutyOk,
+      event.start_time,
+      returnHomeReleaseIso,
+      returnHomeEarliestDepRoundTz,
+      baseTz,
+      arrivalBuffer,
+      dutyDateTime,
+      trainingArrivalDeadlineIso,
+    ]
   );
 
   const loadFlights = useCallback(
@@ -1819,7 +1883,7 @@ export function CommuteAssistProContent({
       setTwoLegOptions(allOptions);
       setTwoLegPage(1);
     },
-    [twoLegRoutes, direction, arriveBy?.getTime(), dutyDateBase, event.start_time, event.end_time, baseTz]
+    [twoLegRoutes, direction, arriveBy?.getTime(), dutyDateBase, event.start_time, returnHomeReleaseIso, baseTz]
   );
 
   useEffect(() => {

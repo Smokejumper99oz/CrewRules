@@ -45,7 +45,7 @@ export function TrainingDeviationPrompt({
         <GraduationCap className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
         <div className="min-w-0 space-y-2">
           <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-            Recurrent Training in {cityLabel} — how are you getting there?
+            Recurrent Training in {cityLabel} — How are you getting there?
           </p>
           <p className="text-xs text-amber-700 dark:text-amber-400">
             Company provides travel from your crew base. If you&apos;re flying from {homeLabel} instead, Commute Assist will show you flights to {cityLabel}.

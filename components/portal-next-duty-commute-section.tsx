@@ -11,7 +11,15 @@ import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/sched
 import { getPlanBadgeLabel, getPlanBadgeVariant } from "@/lib/profile-badge";
 
 type Props = {
-  event: { start_time: string; end_time?: string; report_time?: string | null; route?: string | null };
+  event: {
+    start_time: string;
+    end_time?: string;
+    report_time?: string | null;
+    route?: string | null;
+    event_type?: string;
+    training_release_time?: string | null;
+    training_schedule_detail?: Record<string, string> | null;
+  };
   label?: "on_duty" | "later_today" | "next_duty" | "post_duty_release";
   profile: Profile | null;
   displaySettings: ScheduleDisplaySettings;
