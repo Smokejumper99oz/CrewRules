@@ -771,7 +771,7 @@ export function AdminDashboard({
                 href={`${base}/mentoring/assignments`}
                 className="inline-flex shrink-0 items-center justify-center self-start rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 sm:self-auto"
               >
-                Open assignments →
+                Open pairing review →
               </Link>
             </div>
 

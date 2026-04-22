@@ -16,7 +16,7 @@ const BASE = "/frontier/pilots/admin/mentoring";
 
 const TABS: readonly { href: string; label: string; Icon: LucideIcon }[] = [
   { href: BASE, label: "Overview", Icon: LayoutDashboard },
-  { href: `${BASE}/assignments`, label: "Assignments", Icon: ClipboardList },
+  { href: `${BASE}/assignments`, label: "Pairing Review", Icon: ClipboardList },
   { href: `${BASE}/mentee-roster`, label: "Mentee Roster", Icon: Users },
   { href: `${BASE}/mentor-roster`, label: "Mentor Roster", Icon: UserCheck },
   { href: `${BASE}/email-center`, label: "Email Center", Icon: Mail },

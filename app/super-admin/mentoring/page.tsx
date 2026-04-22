@@ -156,7 +156,7 @@ export default async function SuperAdminMentoringPage() {
                 <th className="px-4 py-3 text-left font-medium text-slate-300">Employee #</th>
                 <th className="px-4 py-3 text-left font-medium text-slate-300">DOH</th>
                 <th className="px-4 py-3 text-left font-medium text-slate-300">Status</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-300">Contact health</th>
+                <th className="px-4 py-3 text-left font-medium text-slate-300">Mentor Contact</th>
               </tr>
             </thead>
             <tbody>

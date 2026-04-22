@@ -4,12 +4,17 @@ export type SuperAdminMentoringTableRow = {
   id: string;
   mentor_name: string | null;
   mentee_name: string | null;
+  /** From mentor_assignments.mentee_display_name (e.g. CSV) when mentee_user_id is not linked yet. */
+  staged_mentee_name: string | null;
   employee_number: string | null;
   hire_date: string | null;
   /** Linked portal user present */
   is_matched: boolean;
   assignment_active: boolean;
   mentor_contact_ok: boolean;
+  mentor_contact_email: string | null;
+  mentor_phone: string | null;
+  mentor_profile_phone: string | null;
 };
 
 function hasMentorContact(p: {
@@ -25,6 +30,7 @@ function hasMentorContact(p: {
 const ASSIGNMENT_LIST_SELECT = `
       id,
       mentee_user_id,
+      mentee_display_name,
       employee_number,
       hire_date,
       active,
@@ -36,6 +42,7 @@ const ASSIGNMENT_LIST_SELECT = `
 type AssignmentQueryRow = {
   id: string;
   mentee_user_id: string | null;
+  mentee_display_name: string | null;
   employee_number: string | null;
   hire_date: string | null;
   active: boolean | null;
@@ -55,11 +62,15 @@ function toMentoringTableRow(row: AssignmentQueryRow): SuperAdminMentoringTableR
     id: row.id,
     mentor_name: row.mentor?.full_name ?? null,
     mentee_name: row.mentee?.full_name ?? null,
+    staged_mentee_name: row.mentee_display_name?.trim() || null,
     employee_number: row.employee_number?.trim() || null,
     hire_date: row.hire_date,
     is_matched: matched,
     assignment_active: row.active === true,
     mentor_contact_ok: hasMentorContact(row.mentor),
+    mentor_contact_email: row.mentor?.mentor_contact_email?.trim() || null,
+    mentor_phone: row.mentor?.mentor_phone?.trim() || null,
+    mentor_profile_phone: row.mentor?.phone?.trim() || null,
   };
 }
 
@@ -130,4 +141,21 @@ export async function getMentoringAssignmentTableForTenant(
     String(b.assigned_at ?? "").localeCompare(String(a.assigned_at ?? ""))
   );
   return combined.map(toMentoringTableRow);
+}
+
+/** Status badge labels for assignment tables (e.g. Frontier admin Pairing Review). */
+export function statusLabel(row: {
+  is_matched: boolean;
+  assignment_active: boolean;
+  staged_mentee_name: string | null;
+  employee_number: string | null;
+}): { text: string; warn: boolean } {
+  if (!row.is_matched) {
+    if (row.staged_mentee_name?.trim() || row.employee_number?.trim()) {
+      return { text: "Awaiting Sign-Up", warn: true };
+    }
+    return { text: "Unmatched", warn: true };
+  }
+  if (row.assignment_active) return { text: "Active", warn: false };
+  return { text: "Inactive", warn: false };
 }
