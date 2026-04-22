@@ -39,10 +39,14 @@ function MentorLookupStatusCell({ status }: { status: string }) {
   const baseLabel = hasDuplicateNote
     ? status.slice(0, -LOOKUP_STATUS_DUPLICATE_SUFFIX.length)
     : status;
+  /** Mirrors server `runMentorNameLookup` duplicate suffix; UI-only, no logic change. */
+  const showDuplicateBadge = status.includes("Duplicate input");
 
-  /** One width for both so “Matched” is not wider than “Possible match” (same box, centered label). */
-  const matchedOrPossibleW =
-    baseLabel === "Matched" || baseLabel === "Possible match"
+  /** Shared width for Matched / Possible match / Unknown so the status column aligns. */
+  const uniformStatusPillW =
+    baseLabel === "Matched" ||
+    baseLabel === "Possible match" ||
+    baseLabel === "Unknown"
       ? "w-[7.375rem] shrink-0 justify-center"
       : "";
 
@@ -51,7 +55,7 @@ function MentorLookupStatusCell({ status }: { status: string }) {
       <span
         className={[
           "inline-flex max-w-full items-center rounded-md px-2.5 py-1 text-xs font-semibold leading-tight",
-          matchedOrPossibleW,
+          uniformStatusPillW,
           lookupStatusBadgeClassName(baseLabel),
         ]
           .filter(Boolean)
@@ -59,8 +63,14 @@ function MentorLookupStatusCell({ status }: { status: string }) {
       >
         {baseLabel}
       </span>
-      {hasDuplicateNote ? (
-        <span className="text-xs font-medium text-slate-500"> · Duplicate input</span>
+      {showDuplicateBadge ? (
+        <span
+          title="This name appears more than once in your input"
+          className="inline-flex shrink-0 items-center gap-0.5 rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-normal text-amber-700"
+        >
+          <span aria-hidden>⚠</span>
+          Duplicate
+        </span>
       ) : null}
     </div>
   );
