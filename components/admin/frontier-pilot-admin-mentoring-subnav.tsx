@@ -5,6 +5,7 @@ import {
   ClipboardList,
   LayoutDashboard,
   Mail,
+  Search,
   Upload,
   UserCheck,
   Users,
@@ -22,6 +23,7 @@ const TABS: readonly { href: string; label: string; Icon: LucideIcon }[] = [
   { href: `${BASE}/email-center`, label: "Email Center", Icon: Mail },
   { href: `${BASE}/mentee-import`, label: "Mentee Imports", Icon: Upload },
   { href: `${BASE}/mentor-import`, label: "Mentor Imports", Icon: Upload },
+  { href: `${BASE}/name-lookup`, label: "Lookup", Icon: Search },
 ];
 
 export function FrontierPilotAdminMentoringSubnav() {

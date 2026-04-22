@@ -44,6 +44,13 @@ import {
   loadFrontierMentoringEmailCenterRowByAssignmentId,
   type FrontierMentoringEmailCenterRow,
 } from "@/lib/mentoring/frontier-mentoring-email-center-load";
+import { getMentorPreloadRowsForTenant } from "@/lib/mentoring/get-mentor-preload-rows-for-tenant";
+import {
+  mergeMentorPreloadAndProfilesForNameLookup,
+  runMentorNameLookup,
+  type MentorNameLookupOutputRow,
+  type MentorNameLookupProfileRow,
+} from "@/lib/mentoring/mentor-name-lookup";
 
 export type {
   MentoringCsvImportMeta,
@@ -81,6 +88,69 @@ async function ensureFrontierPilotsTenantAdmin(): Promise<{ error?: string }> {
 }
 
 const MAX_CSV_BYTES = 2 * 1024 * 1024;
+
+const MENTOR_NAME_LOOKUP_MAX_CHARS = 100_000;
+const MENTOR_NAME_LOOKUP_MAX_LINES = 5_000;
+
+export type MentorNameLookupFormState = {
+  error: string | null;
+  rows: MentorNameLookupOutputRow[];
+};
+
+export async function runFrontierPilotAdminMentorNameLookup(
+  _prev: MentorNameLookupFormState,
+  formData: FormData,
+): Promise<MentorNameLookupFormState> {
+  const gate = await ensureFrontierPilotsTenantAdmin();
+  if (gate.error) {
+    return { error: gate.error, rows: [] };
+  }
+
+  const raw = String(formData.get("names") ?? "");
+  if (raw.length > MENTOR_NAME_LOOKUP_MAX_CHARS) {
+    return {
+      error: `Paste is too large (max ${MENTOR_NAME_LOOKUP_MAX_CHARS.toLocaleString()} characters).`,
+      rows: [],
+    };
+  }
+
+  const lines = raw.split(/\r?\n/);
+  if (lines.length > MENTOR_NAME_LOOKUP_MAX_LINES) {
+    return {
+      error: `Too many lines (max ${MENTOR_NAME_LOOKUP_MAX_LINES.toLocaleString()}).`,
+      rows: [],
+    };
+  }
+
+  const admin = createAdminClient();
+  const [preloadRows, profResult] = await Promise.all([
+    getMentorPreloadRowsForTenant(admin, TENANT),
+    admin
+      .from("profiles")
+      .select("employee_number, full_name")
+      .eq("tenant", TENANT)
+      .eq("portal", PORTAL)
+      .is("deleted_at", null),
+  ]);
+
+  if (profResult.error) {
+    return { error: profResult.error.message, rows: [] };
+  }
+
+  const profileRows: MentorNameLookupProfileRow[] = [];
+  for (const p of profResult.data ?? []) {
+    const emp = String((p as { employee_number: string | null }).employee_number ?? "").trim();
+    const name = String((p as { full_name: string | null }).full_name ?? "").trim();
+    if (emp && name) {
+      profileRows.push({ employee_number: emp, full_name: name });
+    }
+  }
+
+  const merged = mergeMentorPreloadAndProfilesForNameLookup(preloadRows, profileRows);
+  const rows = runMentorNameLookup(lines, merged);
+
+  return { error: null, rows };
+}
 
 const PROFILE_LINK_IN_CHUNK = 100;
 
