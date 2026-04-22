@@ -30,9 +30,8 @@ export async function POST(req: Request) {
     const stripe = new Stripe(STRIPE_SECRET_KEY);
     event = stripe.webhooks.constructEvent(rawBody, signature, STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Signature verification failed";
     console.error("[stripe/webhook] Signature verification failed", err);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
   const supabase = createAdminClient();

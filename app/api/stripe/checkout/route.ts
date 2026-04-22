@@ -48,8 +48,7 @@ export async function POST(req: Request) {
     const { url } = await createCheckoutSession(profile, interval);
     return NextResponse.json({ url });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Checkout failed";
     console.error("[stripe/checkout]", err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Checkout failed" }, { status: 500 });
   }
 }

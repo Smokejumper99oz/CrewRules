@@ -211,7 +211,7 @@ export async function importFrontierPilotAdminMentoringCsv(
   }
 
   const admin = createAdminClient();
-  const result = await runFrontierMentoringCsvImport(admin, TENANT, text);
+  const result = await runFrontierMentoringCsvImport(admin, TENANT, text, PORTAL);
 
   const profile = await getProfile();
   const counts = summarizeMentoringCsvImportRows(result.rows);

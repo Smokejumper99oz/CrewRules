@@ -31,7 +31,8 @@ type MentorAssignmentExistingRow = {
 
 /**
  * Creates or updates mentor_assignments so the Mentoring portal (getMentorAssignments)
- * returns a row for this mentor. Uses mentee employee_number + tenant to resolve mentee profile.
+ * returns a row for this mentor. Resolves mentee profile by tenant, trimmed employee_number, non-deleted rows,
+ * and optional portal (see `params.portal`).
  * Called from Super Admin user save when Mentor is enabled and mentee employee # is provided.
  *
  * When `mentorUserId` is null and `mentorEmployeeNumber` is empty after trim, the assignment is **unassigned** (no mentor).
@@ -49,6 +50,8 @@ export async function upsertMentorAssignmentFromSuperAdmin(
     mentorEmployeeNumber?: string | null;
     menteeEmployeeNumber: string;
     tenant: string;
+    /** When set, mentee profile lookup also requires `profiles.portal` to match (CrewRules portal slug). */
+    portal?: string | null;
     hireDate?: string | null;
     notes?: string | null;
     /** When set and non-empty after trim, stored on the assignment; empty omits field so existing value is not cleared. */
@@ -68,12 +71,22 @@ export async function upsertMentorAssignmentFromSuperAdmin(
 
   const allowMenteeWithoutProfile = params.allowMenteeWithoutProfile === true;
 
-  const { data: mentee, error: menteeErr } = await admin
+  const portalTrim =
+    params.portal != null && String(params.portal).trim() !== ""
+      ? String(params.portal).trim()
+      : null;
+
+  let menteeProfileQuery = admin
     .from("profiles")
     .select("id")
     .eq("tenant", params.tenant)
     .eq("employee_number", menteeEmp)
-    .maybeSingle();
+    .is("deleted_at", null);
+  if (portalTrim) {
+    menteeProfileQuery = menteeProfileQuery.eq("portal", portalTrim);
+  }
+
+  const { data: mentee, error: menteeErr } = await menteeProfileQuery.maybeSingle();
 
   if (menteeErr) return { error: menteeErr.message };
   const menteeIdResolved = mentee?.id ?? null;

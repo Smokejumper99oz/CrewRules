@@ -1616,6 +1616,7 @@ export async function updateSuperAdminUserAccess(
       mentorUserId: userId,
       menteeEmployeeNumber: menteeEmpTrimmed,
       tenant: mentorTenant,
+      portal: targetPortal,
     });
     if ("error" in syncResult) return { error: syncResult.error };
   }

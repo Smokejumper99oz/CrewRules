@@ -27,6 +27,7 @@ export async function importFrontierMentoringCsv(
 ): Promise<MentoringCsvImportResult> {
   const { profile } = await gateSuperAdmin();
   const tenant = String(profile.tenant ?? "frontier").trim() || "frontier";
+  const mentoringPortal = String(profile.portal ?? "pilots").trim() || "pilots";
   const uploaderId = profile.id;
 
   const isTestImport = formData.has("is_test_import");
@@ -62,7 +63,7 @@ export async function importFrontierMentoringCsv(
   }
 
   const admin = createAdminClient();
-  const result = await runFrontierMentoringCsvImport(admin, tenant, text);
+  const result = await runFrontierMentoringCsvImport(admin, tenant, text, mentoringPortal);
 
   const counts = summarizeMentoringCsvImportRows(result.rows);
   const meta = {

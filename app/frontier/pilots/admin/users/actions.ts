@@ -188,6 +188,7 @@ export async function updateFrontierPilotAdminUserAccess(
       mentorUserId: userId,
       menteeEmployeeNumber: menteeEmpTrimmed,
       tenant: TENANT,
+      portal: PORTAL,
     });
     if ("error" in syncResult) {
       return { error: syncResult.error };

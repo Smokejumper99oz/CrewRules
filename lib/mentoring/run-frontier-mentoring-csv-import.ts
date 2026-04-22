@@ -91,8 +91,14 @@ export type MentoringCsvImportResult = {
 export async function runFrontierMentoringCsvImport(
   admin: SupabaseClient,
   tenant: string,
-  csvText: string
+  csvText: string,
+  /** When set, mentee profile resolution is scoped to this CrewRules portal (matches `profiles.portal`). */
+  mentoringPortal?: string | null
 ): Promise<MentoringCsvImportResult> {
+  const portalForMenteeLookup =
+    mentoringPortal != null && String(mentoringPortal).trim() !== ""
+      ? String(mentoringPortal).trim()
+      : null;
   const parsed = parseFrontierMentoringCsv(csvText);
   if (!parsed.ok) {
     return { rows: [], fatalError: parsed.error };
@@ -241,13 +247,16 @@ export async function runFrontierMentoringCsvImport(
       }
     }
 
-    const { data: existingMentee, error: menteeLookupErr } = await admin
+    let existingMenteeQuery = admin
       .from("profiles")
       .select("id")
       .eq("tenant", tenant)
       .eq("employee_number", menteeEmp)
-      .is("deleted_at", null)
-      .maybeSingle();
+      .is("deleted_at", null);
+    if (portalForMenteeLookup) {
+      existingMenteeQuery = existingMenteeQuery.eq("portal", portalForMenteeLookup);
+    }
+    const { data: existingMentee, error: menteeLookupErr } = await existingMenteeQuery.maybeSingle();
 
     if (menteeLookupErr) {
       results.push({
@@ -308,6 +317,7 @@ export async function runFrontierMentoringCsvImport(
       mentorEmployeeNumber: mentorEmp || null,
       menteeEmployeeNumber: menteeEmp,
       tenant,
+      ...(portalForMenteeLookup ? { portal: portalForMenteeLookup } : {}),
       hireDate: hireDateNorm,
       notes: notesRaw,
       menteeDisplayName: menteeName,

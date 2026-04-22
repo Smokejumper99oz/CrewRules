@@ -38,8 +38,7 @@ export async function POST() {
     const { url } = await createPortalSession(profile.stripe_customer_id);
     return NextResponse.json({ url });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Portal failed";
     console.error("[stripe/portal]", err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Portal failed" }, { status: 500 });
   }
 }
