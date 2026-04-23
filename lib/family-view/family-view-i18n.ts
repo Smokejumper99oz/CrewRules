@@ -50,6 +50,8 @@ export type FamilyViewStrings = {
 
   // Status labels
   dayOff: string;
+  /** Today card: duty already finished earlier this calendar day (trip / reserve / training). */
+  tripCompleteToday: string;
   dutyStarts: string;
   overnight: string;
   dayTrip: string;
@@ -57,6 +59,8 @@ export type FamilyViewStrings = {
   commutingHome: string;
   comingHome: string;
   tripEnds: string;
+  /** Pairing / duty release (not last block arrival). */
+  dutyEnds: string;
   onCall: string;
   timeOff: string;
 
@@ -67,6 +71,8 @@ export type FamilyViewStrings = {
   commuteHomeAfterLanding: (inThePeriod: string) => string;
   commuteHome: string;        // "Commute home" prefix on the home row
   ifFlightsAvailable: string; // "if flights are available" suffix on the home row
+  /** When duty ends late: avoid implying same-night commute flights exist. */
+  commuteHomeLateDuty: string;
   currently: string;          // prefix "Currently"
 
   // Trip overview
@@ -101,6 +107,8 @@ export type FamilyViewStrings = {
 
   // Flying today section
   flyingToday: string;
+  /** Next / current trip overview: leg list heading (not “today” — trip may be in the future). */
+  nextTripFlightsHeading: string;
   recurrentTraining: string;
   travelToTraining: string;
   travelFromTraining: string;
@@ -163,6 +171,7 @@ const en: FamilyViewStrings = {
   sectionNextTrip: "Next Trip Overview",
 
   dayOff: "Day Off",
+  tripCompleteToday: "Trip Complete",
   dutyStarts: "Duty Starts",
   overnight: "Overnight",
   dayTrip: "Day Trip",
@@ -170,6 +179,7 @@ const en: FamilyViewStrings = {
   commutingHome: "Commuting Home",
   comingHome: "Coming Home",
   tripEnds: "Trip Ends",
+  dutyEnds: "Duty ends",
   onCall: "On Call",
   timeOff: "Time Off",
 
@@ -179,6 +189,8 @@ const en: FamilyViewStrings = {
     `Commute home ${inThe}, depending on available flights and seat options.`,
   commuteHome: "Commute home",
   ifFlightsAvailable: "if flights are available",
+  commuteHomeLateDuty:
+    "With a late duty release, getting home the same night is often unrealistic—many pilots commute the next morning when flights are available.",
   currently: "Currently",
 
   daysAway: "Days Away",
@@ -207,6 +219,7 @@ const en: FamilyViewStrings = {
   daysBetweenTrips: "days between trips",
 
   flyingToday: "Flying Today",
+  nextTripFlightsHeading: "Flights on this trip",
   recurrentTraining: "Recurrent Training",
   travelToTraining: "Travel to Training",
   travelFromTraining: "Travel from Training",
@@ -265,6 +278,7 @@ const es: FamilyViewStrings = {
   sectionNextTrip: "Próximo Viaje",
 
   dayOff: "Día Libre",
+  tripCompleteToday: "Viaje completado",
   dutyStarts: "Inicio de Servicio",
   overnight: "Noche Fuera",
   dayTrip: "Viaje de Día",
@@ -272,6 +286,7 @@ const es: FamilyViewStrings = {
   commutingHome: "Regresando a Casa",
   comingHome: "Llegando a Casa",
   tripEnds: "Fin del Viaje",
+  dutyEnds: "Fin del servicio",
   onCall: "De Guardia",
   timeOff: "Tiempo Libre",
 
@@ -281,6 +296,8 @@ const es: FamilyViewStrings = {
     `Regreso a casa ${inThe}, según los vuelos y asientos disponibles.`,
   commuteHome: "Regreso a casa",
   ifFlightsAvailable: "si hay vuelos disponibles",
+  commuteHomeLateDuty:
+    "Con una salida de servicio tarde, volver a casa la misma noche suele ser poco realista; muchos pilotos regresan al día siguiente cuando hay vuelos.",
   currently: "Actualmente",
 
   daysAway: "Días Fuera",
@@ -309,6 +326,7 @@ const es: FamilyViewStrings = {
   daysBetweenTrips: "días entre viajes",
 
   flyingToday: "Volando Hoy",
+  nextTripFlightsHeading: "Vuelos de este viaje",
   recurrentTraining: "Entrenamiento",
   travelToTraining: "Viaje al entrenamiento",
   travelFromTraining: "Viaje desde el entrenamiento",
@@ -367,6 +385,7 @@ const de: FamilyViewStrings = {
   sectionNextTrip: "Nächster Dienst",
 
   dayOff: "Freier Tag",
+  tripCompleteToday: "Dienst beendet",
   dutyStarts: "Dienstbeginn",
   overnight: "Auswärts",
   dayTrip: "Tagesreise",
@@ -374,6 +393,7 @@ const de: FamilyViewStrings = {
   commutingHome: "Heimreise",
   comingHome: "Kommt nach Hause",
   tripEnds: "Trip endet",
+  dutyEnds: "Dienstende",
   onCall: "Bereitschaft",
   timeOff: "Freizeit",
 
@@ -383,6 +403,8 @@ const de: FamilyViewStrings = {
     `Pendeln nach Hause ${inThe}, abhängig von verfügbaren Flügen und Sitzplätzen.`,
   commuteHome: "Heimreise",
   ifFlightsAvailable: "wenn Flüge verfügbar sind",
+  commuteHomeLateDuty:
+    "Bei spätem Dienstende ist Heimreise noch am selben Abend oft unrealistisch—viele pendeln am nächsten Morgen, wenn Flüge verfügbar sind.",
   currently: "Aktuell",
 
   daysAway: "Tage unterwegs",
@@ -411,6 +433,7 @@ const de: FamilyViewStrings = {
   daysBetweenTrips: "Tage zwischen den Trips",
 
   flyingToday: "Fliegt heute",
+  nextTripFlightsHeading: "Flüge auf diesem Trip",
   recurrentTraining: "Recurrent Training",
   travelToTraining: "Anreise zum Training",
   travelFromTraining: "Abreise vom Training",

@@ -1360,13 +1360,18 @@ export function CommuteAssistProContent({
     commuteTwoLegStop2,
   ]);
 
+  const releaseAirportUpper = (dutyEndAirport ?? "").toString().trim().toUpperCase();
   const noCommuteNeeded =
-    direction === "to_base" &&
-    !!homeAirport &&
-    (isTrainingDeviationToBaseCommute
-      ? !!toBaseCommuteDestinationAirport &&
-        toBaseCommuteDestinationAirport === homeAirport.toUpperCase()
-      : !!dutyStartAirport && dutyStartAirport.toUpperCase() === homeAirport.toUpperCase());
+    (direction === "to_base" &&
+      !!homeAirport &&
+      (isTrainingDeviationToBaseCommute
+        ? !!toBaseCommuteDestinationAirport &&
+          toBaseCommuteDestinationAirport === homeAirport.toUpperCase()
+        : !!dutyStartAirport && dutyStartAirport.toUpperCase() === homeAirport.toUpperCase())) ||
+    (direction === "to_home" &&
+      !!homeAirport &&
+      releaseAirportUpper.length === 3 &&
+      releaseAirportUpper === homeAirport.toUpperCase());
 
   /** Apply flights + metadata to state. Reused for API response and sessionStorage restore. */
   const applyFlightsToState = useCallback(
@@ -2120,7 +2125,11 @@ export function CommuteAssistProContent({
   if (noCommuteNeeded) {
     return (
       <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200/90">
-        No flight commute needed — Next Duty Report starts at your home airport.
+        {direction === "to_home" ? (
+          <>No flight commute needed — Your duty ended at your home airport.</>
+        ) : (
+          <>No flight commute needed — Your duty starts at your home airport.</>
+        )}
       </div>
     );
   }

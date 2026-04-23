@@ -223,6 +223,7 @@ export type FamilyViewStatus =
   | "At Work"
   | "Overnight Away"
   | "Expected Home"
+  | "Trip Complete"
   | "Recurrent Training"
   | "Travel to Training"
   | "Travel from Training";
@@ -307,6 +308,7 @@ export function formatStatusForDisplay(status: FamilyViewStatus): string {
     "At Work": "Working",
     "Overnight Away": "Away Overnight",
     "Expected Home": "Coming Home",
+    "Trip Complete": "Trip Complete",
     "Recurrent Training": "Recurrent Training",
     "Travel to Training": "Travel to Training",
     "Travel from Training": "Travel from Training",
@@ -644,6 +646,93 @@ function extractTrainingCityIataFromLegs(
   return null;
 }
 
+/** Operating/deadhead leg rows for legs that depart on `dateStr` within a trip. */
+function todayLegDetailsForDeparturesOnDate(
+  legs: ScheduleEventLeg[],
+  tripDates: string[],
+  dateStr: string,
+  baseTimezone: string,
+  settings: FamilyViewSettings,
+  profile: Profile | null
+): TodayLegDetail[] | null {
+  if (legs.length === 0 || tripDates.length === 0) return null;
+  const homeCarrierCode =
+    TENANT_CONFIG[(profile?.tenant ?? "").toLowerCase()]?.carrier ?? null;
+  const legDates = computeLegDates(legs, tripDates, baseTimezone);
+  const departingToday = legDates.filter((ld) => ld.departureDate === dateStr);
+  if (departingToday.length === 0) return null;
+  const mapped = departingToday
+    .map((ld) => {
+      const leg = ld.leg as ScheduleEventLeg;
+      const fn = leg.flightNumber?.trim() || null;
+      const code = carrierFromFlightNumber(fn) ?? (leg.deadhead ? null : homeCarrierCode);
+      const rawOrigin = (leg.origin ?? "").trim().toUpperCase();
+      const rawDest = (leg.destination ?? "").trim().toUpperCase();
+      return {
+        origin: settings.showOvernightCities ? iataToCityName(rawOrigin) : FAMILY_VIEW_GENERIC_TRAVEL_ROUTE,
+        originIata: rawOrigin,
+        depTime: leg.depTime ?? "",
+        destination: settings.showOvernightCities ? iataToCityName(rawDest) : FAMILY_VIEW_GENERIC_TRAVEL_ROUTE,
+        destIata: rawDest,
+        arrTime: leg.arrTime ?? "",
+        departureDate: ld.departureDate ?? dateStr,
+        deadhead: leg.deadhead === true,
+        flightNumber: fn,
+        carrierCode: code,
+        carrierDisplayName: carrierName(code),
+        flightNumeric: flightNumberNumeric(fn),
+      };
+    })
+    .filter((l) => l.depTime && l.arrTime);
+  return mapped.length ? mapped : null;
+}
+
+/**
+ * All flight legs for the Family View hero trip, in pairing order, with cities/times/carrier/flight #.
+ * Uses the same mapping as per-day leg rows (computeLegDates + tenant carrier fallback).
+ */
+export function buildHeroTripLegDetailsForFamilyView(
+  legs: ScheduleEventLeg[],
+  tripStartIso: string,
+  tripEndIso: string,
+  baseTimezone: string,
+  settings: FamilyViewSettings,
+  profile: Profile | null
+): TodayLegDetail[] {
+  const tripDates = getTripDateStrings(tripStartIso, tripEndIso, baseTimezone);
+  if (legs.length === 0 || tripDates.length === 0) return [];
+  const homeCarrierCode =
+    TENANT_CONFIG[(profile?.tenant ?? "").toLowerCase()]?.carrier ?? null;
+  const legDates = computeLegDates(legs, tripDates, baseTimezone);
+  const out: TodayLegDetail[] = [];
+  for (const ld of legDates) {
+    const leg = ld.leg as ScheduleEventLeg;
+    const dep = leg.depTime ?? "";
+    const arr = leg.arrTime ?? "";
+    if (!dep || !arr) continue;
+    const fn = leg.flightNumber?.trim() || null;
+    const code = carrierFromFlightNumber(fn) ?? (leg.deadhead ? null : homeCarrierCode);
+    const rawOrigin = (leg.origin ?? "").trim().toUpperCase();
+    const rawDest = (leg.destination ?? "").trim().toUpperCase();
+    if (!rawOrigin || !rawDest) continue;
+    out.push({
+      origin: settings.showOvernightCities ? iataToCityName(rawOrigin) : FAMILY_VIEW_GENERIC_TRAVEL_ROUTE,
+      originIata: rawOrigin,
+      depTime: dep,
+      destination: settings.showOvernightCities ? iataToCityName(rawDest) : FAMILY_VIEW_GENERIC_TRAVEL_ROUTE,
+      destIata: rawDest,
+      arrTime: arr,
+      departureDate: ld.departureDate ?? tripDates[0] ?? "",
+      deadhead: leg.deadhead === true,
+      flightNumber: fn,
+      carrierCode: code,
+      carrierDisplayName: carrierName(code),
+      flightNumeric: flightNumberNumeric(fn),
+    });
+  }
+  return out;
+}
+
 /** Get primary status for a single day from overlapping events. */
 function getStatusForDay(
   dateStr: string,
@@ -654,6 +743,8 @@ function getStatusForDay(
   settings: FamilyViewSettings
 ): FamilyViewDayItem {
   const dayLabel = formatDayLabel(`${dateStr}T12:00:00.000Z`, baseTimezone);
+  const nowMs = Date.now();
+  const todayYmd = todayStr(baseTimezone);
 
   // Check for "Likely Commuting" (day before first duty, commuter, early report) — only if commute estimates enabled
   if (settings.showCommuteEstimates) {
@@ -670,7 +761,15 @@ function getStatusForDay(
   const overlapping = events.filter((e) =>
     eventOverlapsDay(e.start_time, e.end_time, dayDate, baseTimezone)
   );
-  const workEvents = overlapping.filter((e) => e.event_type === "trip" || e.event_type === "reserve" || e.event_type === "training");
+  const workOverlapping = overlapping.filter(
+    (e) => e.event_type === "trip" || e.event_type === "reserve" || e.event_type === "training"
+  );
+  /** Prefer still-active duty today so a same-day evening trip isn't masked by a morning trip that already ended. */
+  const workEvents =
+    dateStr === todayYmd &&
+    workOverlapping.some((e) => new Date(e.end_time).getTime() > nowMs)
+      ? workOverlapping.filter((e) => new Date(e.end_time).getTime() > nowMs)
+      : workOverlapping;
   const vacationOff = overlapping.filter((e) => e.event_type === "vacation" || e.event_type === "off");
 
   const tripOrReserve = workEvents.find((e) => e.event_type === "trip" || e.event_type === "reserve");
@@ -706,6 +805,29 @@ function getStatusForDay(
   }
   if (primary.event_type === "off") {
     return { dateStr, dayLabel, status: "Day Off" };
+  }
+  if (
+    (primary.event_type === "trip" ||
+      primary.event_type === "reserve" ||
+      primary.event_type === "training") &&
+    dateStr === todayYmd
+  ) {
+    const endMs = new Date(primary.end_time).getTime();
+    if (!Number.isNaN(endMs) && endMs <= nowMs) {
+      let tripDayLabel: string | null = null;
+      if (primary.event_type === "trip" || primary.event_type === "training") {
+        const ds = getTripDateStrings(primary.start_time, primary.end_time, baseTimezone);
+        const idx = ds.indexOf(dateStr);
+        if (idx >= 0) tripDayLabel = `Day ${idx + 1} of ${ds.length}`;
+      }
+      return {
+        dateStr,
+        dayLabel,
+        status: "Trip Complete",
+        tripDayLabel,
+        dutyEndIsoUtc: primary.end_time,
+      };
+    }
   }
   if (primary.event_type === "reserve") {
     return { dateStr, dayLabel, status: "On Call" };
@@ -909,6 +1031,15 @@ function getStatusForDay(
       else if (arrStr) homeBaseTripDetail = `Arrives ${arrStr}`;
     }
 
+    const lastDayTodayLegs = todayLegDetailsForDeparturesOnDate(
+      legs,
+      tripDates,
+      dateStr,
+      baseTimezone,
+      settings,
+      profile
+    );
+
     return {
       dateStr,
       dayLabel,
@@ -917,6 +1048,7 @@ function getStatusForDay(
       reportTime: null,
       tripDayLabel,
       todayFlightRoute: lastDayRoute,
+      todayLegs: lastDayTodayLegs,
       isHomeBaseTrip: isHomeBaseTrip || null,
       dutyEndIsoUtc: primary.end_time,
     };
@@ -927,6 +1059,14 @@ function getStatusForDay(
     const firstDayRoute = firstDayLegs.length > 0
       ? computeDayFlightRoute(firstDayLegs, tripDates, dateStr, baseTimezone, settings)
       : null;
+    const firstDayTodayLegs = todayLegDetailsForDeparturesOnDate(
+      firstDayLegs,
+      tripDates,
+      dateStr,
+      baseTimezone,
+      settings,
+      profile
+    );
     // Detect home-base departures: commuter whose first leg departs from home airport.
     const homeIataFirst = (profile?.home_airport ?? "").trim().toUpperCase();
     const baseIataFirst = (profile?.base_airport ?? "").trim().toUpperCase();
@@ -941,6 +1081,7 @@ function getStatusForDay(
       reportTime: primary.report_time ?? null,
       tripDayLabel,
       todayFlightRoute: firstDayRoute,
+      todayLegs: firstDayTodayLegs,
       isHomeBaseTrip: departsFromHome || null,
     };
   }
@@ -950,9 +1091,6 @@ function getStatusForDay(
   let overnightCity: string | null = null;
   let todayFlightRoute: string | null = null;
   let todayLegs: TodayLegDetail[] | null = null;
-
-  const homeCarrierCode =
-    TENANT_CONFIG[(profile?.tenant ?? "").toLowerCase()]?.carrier ?? null;
 
   if (middleLegs.length > 0 && tripDates.length > 0) {
     const legDates = computeLegDates(middleLegs, tripDates, baseTimezone);
@@ -965,34 +1103,16 @@ function getStatusForDay(
       }
     }
 
-    const departingToday = legDates.filter((ld) => ld.departureDate === dateStr);
-    if (departingToday.length > 0) {
+    todayLegs = todayLegDetailsForDeparturesOnDate(
+      middleLegs,
+      tripDates,
+      dateStr,
+      baseTimezone,
+      settings,
+      profile
+    );
+    if (todayLegs?.length) {
       todayFlightRoute = computeDayFlightRoute(middleLegs, tripDates, dateStr, baseTimezone, settings);
-
-      todayLegs = departingToday
-        .map((ld) => {
-          const leg = ld.leg as ScheduleEventLeg;
-          const fn = leg.flightNumber?.trim() || null;
-          // For operating legs (no carrier prefix), fall back to the pilot's home carrier
-          const code = carrierFromFlightNumber(fn) ?? (leg.deadhead ? null : homeCarrierCode);
-          const rawOrigin = (leg.origin ?? "").trim().toUpperCase();
-          const rawDest = (leg.destination ?? "").trim().toUpperCase();
-          return {
-            origin: settings.showOvernightCities ? iataToCityName(rawOrigin) : FAMILY_VIEW_GENERIC_TRAVEL_ROUTE,
-            originIata: rawOrigin,
-            depTime: leg.depTime ?? "",
-            destination: settings.showOvernightCities ? iataToCityName(rawDest) : FAMILY_VIEW_GENERIC_TRAVEL_ROUTE,
-            destIata: rawDest,
-            arrTime: leg.arrTime ?? "",
-            departureDate: ld.departureDate ?? dateStr,
-            deadhead: leg.deadhead === true,
-            flightNumber: fn,
-            carrierCode: code,
-            carrierDisplayName: carrierName(code),
-            flightNumeric: flightNumberNumeric(fn),
-          };
-        })
-        .filter((l) => l.depTime && l.arrTime);
     }
   }
 

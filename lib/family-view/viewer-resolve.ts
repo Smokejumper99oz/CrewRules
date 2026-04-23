@@ -1,17 +1,59 @@
 import "server-only";
 
 import { addDays } from "date-fns";
+import { fromZonedTime } from "date-fns-tz";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { familyViewInviteTokenHashFromRaw } from "@/lib/family-view/invite-token";
+import { mergeFamilyViewScheduleEvents } from "@/lib/family-view/merge-family-view-events";
 import type { Profile } from "@/lib/profile";
 import type { ScheduleEvent, ScheduleEventLeg } from "@/app/frontier/pilots/portal/schedule/actions";
 import { scheduleDisplaySettingsFromProfile } from "@/lib/family-view/schedule-display-from-profile";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
+import { todayStr } from "@/lib/leg-dates";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const FLICA_SOURCE = "flica_import";
 
 const SCHEDULE_SELECT =
-  "id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, protected_credit_minutes, protected_full_trip_paid_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, is_muted, import_batch_id, imported_at, training_deviation_home_commute";
+  "id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, protected_credit_minutes, protected_full_trip_paid_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, is_muted, import_batch_id, imported_at, training_release_time, training_schedule_detail, training_deviation_home_commute";
+
+function isVacationCodeFamilyView(title: string | null | undefined): boolean {
+  const t = (title ?? "").trim().toUpperCase();
+  return /^V\d+$/.test(t);
+}
+
+async function fetchLastEndedDutyTouchingTodayAdmin(
+  admin: SupabaseClient,
+  pilotId: string,
+  baseTimezone: string
+): Promise<ScheduleEvent | null> {
+  const nowIso = new Date().toISOString();
+  const todayYmd = todayStr(baseTimezone);
+  let startOfTodayUtc: string;
+  try {
+    startOfTodayUtc = fromZonedTime(`${todayYmd}T00:00:00.000`, baseTimezone).toISOString();
+  } catch {
+    return null;
+  }
+
+  const { data, error } = await admin
+    .from("schedule_events")
+    .select(SCHEDULE_SELECT)
+    .eq("user_id", pilotId)
+    .eq("source", FLICA_SOURCE)
+    .in("event_type", ["trip", "reserve", "training"])
+    .or("is_muted.eq.false,is_muted.is.null")
+    .gte("end_time", startOfTodayUtc)
+    .lt("end_time", nowIso)
+    .order("end_time", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  const ev = data as ScheduleEvent;
+  if (isVacationCodeFamilyView(ev.title)) return null;
+  return ev;
+}
 
 export type FamilyViewViewerResolveInvalid = { ok: false; reason: "invalid" };
 export type FamilyViewViewerResolveUnavailable = { ok: false; reason: "unavailable" };
@@ -122,8 +164,13 @@ export async function resolveFamilyViewViewerByRawToken(
     return { ok: false, reason: "unavailable" };
   }
 
-  const events = (eventRows ?? []) as ScheduleEvent[];
   const displaySettings = scheduleDisplaySettingsFromProfile(profile);
+  const baseTz = displaySettings.baseTimezone ?? "America/Denver";
+  const lastEndedToday = await fetchLastEndedDutyTouchingTodayAdmin(admin, pilotId, baseTz);
+  const events = mergeFamilyViewScheduleEvents(
+    (eventRows ?? []) as ScheduleEvent[],
+    lastEndedToday
+  );
 
   return { ok: true, profile, events, displaySettings };
 }

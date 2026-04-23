@@ -19,7 +19,7 @@ import {
 } from "@/lib/schedule/training-company-commute-line";
 
 export type { TrainingCommutePopoverPayload };
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { getBidPeriodBounds, getBidPeriodForTimestamp, getAllBidPeriodsForYear, getFrontierBidPeriodTimezone } from "@/lib/frontier-bid-periods";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getPayScale } from "@/lib/tenant-settings";
@@ -690,6 +690,52 @@ export async function getScheduleEvents(fromIso: string, toIso: string): Promise
     return { events: (data ?? []) as ScheduleEvent[] };
   } catch (e) {
     return { events: [], error: e instanceof Error ? e.message : "Unknown error" };
+  }
+}
+
+/**
+ * Most recent trip/reserve/training that already ended (end < now) but ended on today's calendar date
+ * in `baseTimezone`. Mirrors the post-duty window used by getNextDuty so Family View still sees
+ * same-day completed duty after getScheduleEvents(from=now) drops those rows.
+ */
+export async function getLastEndedDutyTouchingToday(
+  baseTimezone: string
+): Promise<ScheduleEvent | null> {
+  const profile = await getProfile();
+  if (!profile) return null;
+
+  const nowIso = new Date().toISOString();
+  const todayYmd = todayStr(baseTimezone);
+  let startOfTodayUtc: string;
+  try {
+    startOfTodayUtc = fromZonedTime(`${todayYmd}T00:00:00.000`, baseTimezone).toISOString();
+  } catch {
+    return null;
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("schedule_events")
+      .select(
+        "id, start_time, end_time, title, event_type, report_time, credit_hours, credit_minutes, baseline_credit_minutes, protected_credit_minutes, protected_full_trip_paid_minutes, route, pairing_days, block_minutes, first_leg_departure_time, legs, is_muted, import_batch_id, imported_at, training_release_time, training_schedule_detail, training_deviation_home_commute"
+      )
+      .eq("user_id", profile.id)
+      .eq("source", FLICA_SOURCE)
+      .in("event_type", ["trip", "reserve", "training"])
+      .or("is_muted.eq.false,is_muted.is.null")
+      .gte("end_time", startOfTodayUtc)
+      .lt("end_time", nowIso)
+      .order("end_time", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    const ev = data as ScheduleEvent;
+    if (isVacationCode(ev.title)) return null;
+    return ev;
+  } catch {
+    return null;
   }
 }
 

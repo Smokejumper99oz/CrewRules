@@ -45,7 +45,7 @@ const NAV_GROUPS = [
   {
     title: "Community",
     items: [
-      { label: "Forum", href: "forum", badge: "IN DEVELOPMENT" },
+      // Forum: hidden from nav until membership supports it (route /forum still exists).
       { label: "Notes", href: "notes" },
       { label: "Mentoring", href: "mentoring", badge: "BETA" },
     ],

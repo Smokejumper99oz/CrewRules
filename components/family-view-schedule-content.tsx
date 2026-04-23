@@ -16,7 +16,11 @@ import {
   User,
 } from "lucide-react";
 import { getDisplayName, type Profile } from "@/lib/profile";
-import type { ScheduleDisplaySettings, ScheduleEvent } from "@/app/frontier/pilots/portal/schedule/actions";
+import type {
+  ScheduleDisplaySettings,
+  ScheduleEvent,
+  ScheduleEventLeg,
+} from "@/app/frontier/pilots/portal/schedule/actions";
 import {
   getTodayStatus,
   getNextTripSummary,
@@ -34,19 +38,34 @@ import {
   iataToCityName,
   isSameRegionAirports,
   commuteHomeLineAfterLanding,
+  buildHeroTripLegDetailsForFamilyView,
 } from "@/lib/family-view/translate-schedule";
 import Image from "next/image";
 import { addDays, differenceInCalendarDays } from "date-fns";
 import { getTripDateStrings, todayStr } from "@/lib/leg-dates";
 import { getDaysAwayFromHome } from "@/lib/family-view/days-away-from-home";
 import { isCommuter, getCommuteInfoForTrip } from "@/lib/family-view/commute-inference";
-import { addDay } from "@/lib/schedule-time";
+import { addDay, formatDayLabel } from "@/lib/schedule-time";
 import {
   computeFamilyViewBidGap,
   getNextBidPeriodForFamilyView,
 } from "@/lib/family-view/family-view-bid-schedule";
 
 const iconClass = "size-4 shrink-0 text-[#7A7A7A]";
+
+/** Local duty end at or after 22:00 — same-night commute flights are often unrealistic. */
+function isDutyEndLateForSameNightCommute(isoUtc: string, timezone: string): boolean {
+  try {
+    const d = new Date(isoUtc);
+    if (Number.isNaN(d.getTime())) return false;
+    const h = parseInt(formatInTimeZone(d, timezone, "H"), 10);
+    const m = parseInt(formatInTimeZone(d, timezone, "m"), 10);
+    if (Number.isNaN(h) || Number.isNaN(m)) return false;
+    return h * 60 + m >= 22 * 60;
+  } catch {
+    return false;
+  }
+}
 
 export type FamilyViewCommuteFlightsFetch = (p: {
   origin: string;
@@ -138,8 +157,31 @@ export async function FamilyViewScheduleContent({
       ? commuteHomeLineAfterLanding(s, todayStatus.dutyEndIsoUtc, baseTimezone, settings) ?? (settings.showCommuteEstimates ? s.timingDepends : null)
       : null;
   const nextTrip = getNextTripSummary(events, profile, baseTimezone, settings);
-  const heroScheduleLegs = nextTrip ? getScheduleEventLegsForHero(nextTrip.event, events) : [];
-  /** Calendar days (base TZ) covered by the Current/Next Trip hero — exclude from Week Ahead & Upcoming. */
+  const heroScheduleLegs: ScheduleEventLeg[] = nextTrip
+    ? (() => {
+        const ev = nextTrip.event;
+        const raw = ev.legs;
+        if (Array.isArray(raw) && raw.length > 0) {
+          return raw as ScheduleEventLeg[];
+        }
+        return getScheduleEventLegsForHero(ev, events);
+      })()
+    : [];
+  const heroTripLegDetails = nextTrip
+    ? buildHeroTripLegDetailsForFamilyView(
+        heroScheduleLegs,
+        nextTrip.event.start_time,
+        nextTrip.event.end_time,
+        baseTimezone,
+        settings,
+        profile
+      )
+    : [];
+  const showHeroTripLegList = heroTripLegDetails.length > 0;
+  const heroDutyEndLateNight = nextTrip
+    ? isDutyEndLateForSameNightCommute(nextTrip.event.end_time, baseTimezone)
+    : false;
+  /** Calendar days (base TZ) covered by the Current/Next Trip hero — excluded from Upcoming only (Week Ahead lists all T+1…T+7). */
   const heroTripCalendarDays =
     nextTrip != null
       ? new Set(getTripDateStrings(nextTrip.event.start_time, nextTrip.event.end_time, baseTimezone))
@@ -163,11 +205,10 @@ export async function FamilyViewScheduleContent({
     lastForwardDayYmd,
   });
 
-  const weekAheadDays = (
+  const weekAheadDays =
     bidGap.active && bidGap.hideDayRowsFromYmd
       ? thisWeek.filter((d) => d.dateStr < bidGap.hideDayRowsFromYmd)
-      : thisWeek
-  ).filter((d) => !heroTripCalendarDays.has(d.dateStr));
+      : thisWeek;
 
   const isEnabled = profile?.family_view_enabled ?? false;
 
@@ -552,6 +593,8 @@ export async function FamilyViewScheduleContent({
                     : isCommuter(profile) && settings.showCommuteEstimates
                     ? s.commutingHome
                     : s.comingHome
+                  : todayStatus.status === "Trip Complete"
+                  ? s.tripCompleteToday
                   : todayStatus.status === "Day Off"
                   ? s.dayOff
                   : todayStatus.status === "On Call"
@@ -761,6 +804,93 @@ export async function FamilyViewScheduleContent({
           {/* Decorative bar */}
           <div className="h-2 w-full rounded-full bg-gradient-to-r from-[#E6F1EA] via-[#F1F6F3] to-[#DCE9E2]" />
 
+          {showHeroTripLegList && nextTrip ? (() => {
+            const tripDatesHero = getTripDateStrings(
+              nextTrip.event.start_time,
+              nextTrip.event.end_time,
+              baseTimezone
+            );
+            const showLegDepartureDate = tripDatesHero.length > 1;
+            return (
+              <div className="space-y-1.5">
+                <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#6F6F6F]">
+                  <PlaneTakeoff className="size-3.5 shrink-0 text-[#7A7A7A]" aria-hidden />
+                  {s.nextTripFlightsHeading}
+                </p>
+                {heroTripLegDetails.map((leg, legIdx) => (
+                  <div
+                    key={`${leg.departureDate}-hero-leg-${legIdx}-${leg.originIata}-${leg.destIata}`}
+                    className="rounded-lg border border-[#E8E3DA] bg-[#F9F8F5] px-3 py-2 space-y-1.5"
+                  >
+                    {showLegDepartureDate && leg.departureDate ? (
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-[#9A9A9A]">
+                        {localDayLabel(
+                          leg.departureDate,
+                          formatDayLabel(`${leg.departureDate}T12:00:00.000Z`, baseTimezone)
+                        )}
+                      </p>
+                    ) : null}
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <div className="min-w-0 flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                        <span className="font-medium text-[#2F2F2F]">{leg.origin}</span>
+                        <span className="rounded bg-[#EDE9E2] px-1.5 py-px text-[10px] font-medium text-[#7A7A7A] tracking-wide">
+                          {leg.originIata}
+                        </span>
+                        <span className="mx-0.5 text-[#9AAE92]">→</span>
+                        <span className="font-medium text-[#2F2F2F]">{leg.destination}</span>
+                        <span className="rounded bg-[#EDE9E2] px-1.5 py-px text-[10px] font-medium text-[#7A7A7A] tracking-wide">
+                          {leg.destIata}
+                        </span>
+                      </div>
+                      <div className="shrink-0 text-right text-xs tabular-nums text-[#6F6F6F]">
+                        {formatLegHhmmForFamilyView(leg.depTime, settings, lang === "de")} →{" "}
+                        {formatLegHhmmForFamilyView(leg.arrTime, settings, lang === "de")}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {leg.deadhead ? (
+                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+                          {s.deadheadBadge}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-[#E8F5E0] px-2 py-0.5 text-[10px] font-medium text-[#3A7A1A]">
+                          {s.pilotOperating}
+                        </span>
+                      )}
+                      {(leg.carrierCode || leg.flightNumeric) && (
+                        <div className="flex items-center gap-1.5">
+                          {leg.carrierCode && (
+                            <Image
+                              src={`https://www.gstatic.com/flights/airline_logos/70px/${leg.carrierCode}.png`}
+                              alt={leg.carrierDisplayName ?? leg.carrierCode}
+                              width={20}
+                              height={20}
+                              className="rounded-sm"
+                              unoptimized
+                            />
+                          )}
+                          <span className="text-[11px] text-[#6F6F6F]">
+                            {leg.carrierDisplayName ?? leg.carrierCode ?? ""}
+                            {leg.flightNumeric && (
+                              <a
+                                href={flightAwareUrl(leg.carrierCode ?? "", leg.flightNumeric ?? "")}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-1 font-medium text-[#3A7A1A] underline underline-offset-2 hover:text-[#2d6115]"
+                              >
+                                · Flight {leg.flightNumeric} ↗
+                              </a>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })() : null}
+
           {/* Duty start time */}
           {/* Day-by-day breakdown */}
           {tripDayItems.length > 0 && (
@@ -837,29 +967,46 @@ export async function FamilyViewScheduleContent({
                         !day.isHomeBaseTrip &&
                         isCommuter(profile) &&
                         !wonʼtComeHome
-                      ? commuteHomeLineAfterLanding(
-                          s,
-                          day.dutyEndIsoUtc ?? nextTrip.event.end_time,
-                          baseTimezone,
-                          settings
-                        ) ?? (settings.showCommuteEstimates ? s.timingDepends : null)
+                      ? heroDutyEndLateNight
+                        ? s.timingDepends
+                        : commuteHomeLineAfterLanding(
+                            s,
+                            day.dutyEndIsoUtc ?? nextTrip.event.end_time,
+                            baseTimezone,
+                            settings
+                          ) ?? (settings.showCommuteEstimates ? s.timingDepends : null)
                     : null;
+                  const showHeroDutyEndPrimaryLine =
+                    (isLastDay || isCommuteHomeCannotReturn) &&
+                    !!lastDayDetail &&
+                    (!isFirstDay || isSingleCalendarDutyDay);
                   return (
                   <div key={`${day.dateStr}-${dayIdx}`} className="space-y-0.5">
                     <div className="flex items-baseline gap-2">
                       <span className="shrink-0 whitespace-nowrap text-[#6F6F6F]">{localDayLabel(day.dateStr, day.dayLabel)}</span>
                       <span className="text-[#2F2F2F] font-medium">
-                        {statusLabel}
-                        {isFirstDay && !isSingleCalendarDutyDay && (
-                          <span className="ml-1 font-normal text-[#6F6F6F]">
-                            {tod}{dutyTimeExact ? ` ${s.at} ${dutyTimeExact}` : ""}
-                          </span>
+                        {showHeroDutyEndPrimaryLine ? (
+                          <>
+                            <span className="font-medium">{s.dutyEnds}</span>
+                            <span className="ml-1 font-normal text-[#6F6F6F]">
+                              {s.at} {lastDayDetail}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            {statusLabel}
+                            {isFirstDay && !isSingleCalendarDutyDay && (
+                              <span className="ml-1 font-normal text-[#6F6F6F]">
+                                {tod}{dutyTimeExact ? ` ${s.at} ${dutyTimeExact}` : ""}
+                              </span>
+                            )}
+                            {(isLastDay || isCommuteHomeCannotReturn) &&
+                            lastDayDetail &&
+                            (!isFirstDay || isSingleCalendarDutyDay) ? (
+                              <span className="ml-1 font-normal text-[#6F6F6F]">{s.at} {lastDayDetail}</span>
+                            ) : null}
+                          </>
                         )}
-                        {(isLastDay || isCommuteHomeCannotReturn) &&
-                        lastDayDetail &&
-                        (!isFirstDay || isSingleCalendarDutyDay) ? (
-                          <span className="ml-1 font-normal text-[#6F6F6F]">{s.at} {lastDayDetail}</span>
-                        ) : null}
                       </span>
                     </div>
                     {commuteDetail && (
@@ -867,10 +1014,82 @@ export async function FamilyViewScheduleContent({
                         {commuteDetail}
                       </div>
                     )}
-                    {day.todayFlightRoute && (
+                    {day.todayFlightRoute && !day.todayLegs?.length && (
                       <div className="flex items-center gap-1.5 pl-[7.5rem] text-xs text-[#6F6F6F]">
                         <PlaneTakeoff className="size-3 shrink-0" aria-hidden />
                         {day.todayFlightRoute}
+                      </div>
+                    )}
+                    {!showHeroTripLegList && day.todayLegs && day.todayLegs.length > 0 && (
+                      <div className="space-y-1.5 pl-[7.5rem] pt-0.5">
+                        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#6F6F6F]">
+                          <PlaneTakeoff className="size-3.5 shrink-0 text-[#7A7A7A]" aria-hidden />
+                          {s.flyingToday}
+                        </p>
+                        {day.todayLegs.map((leg, legIdx) => {
+                          return (
+                            <div
+                              key={`${day.dateStr}-leg-${legIdx}`}
+                              className="rounded-lg border border-[#E8E3DA] bg-[#F9F8F5] px-3 py-2 space-y-1.5"
+                            >
+                              <div className="flex items-center justify-between gap-2 text-sm">
+                                <div className="min-w-0 flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                                  <span className="font-medium text-[#2F2F2F]">{leg.origin}</span>
+                                  <span className="rounded bg-[#EDE9E2] px-1.5 py-px text-[10px] font-medium text-[#7A7A7A] tracking-wide">
+                                    {leg.originIata}
+                                  </span>
+                                  <span className="mx-0.5 text-[#9AAE92]">→</span>
+                                  <span className="font-medium text-[#2F2F2F]">{leg.destination}</span>
+                                  <span className="rounded bg-[#EDE9E2] px-1.5 py-px text-[10px] font-medium text-[#7A7A7A] tracking-wide">
+                                    {leg.destIata}
+                                  </span>
+                                </div>
+                                <div className="shrink-0 text-right text-xs tabular-nums text-[#6F6F6F]">
+                                  {formatLegHhmmForFamilyView(leg.depTime, settings, lang === "de")} →{" "}
+                                  {formatLegHhmmForFamilyView(leg.arrTime, settings, lang === "de")}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {leg.deadhead ? (
+                                  <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+                                    {s.deadheadBadge}
+                                  </span>
+                                ) : (
+                                  <span className="rounded-full bg-[#E8F5E0] px-2 py-0.5 text-[10px] font-medium text-[#3A7A1A]">
+                                    {s.pilotOperating}
+                                  </span>
+                                )}
+                                {(leg.carrierCode || leg.flightNumeric) && (
+                                  <div className="flex items-center gap-1.5">
+                                    {leg.carrierCode && (
+                                      <Image
+                                        src={`https://www.gstatic.com/flights/airline_logos/70px/${leg.carrierCode}.png`}
+                                        alt={leg.carrierDisplayName ?? leg.carrierCode}
+                                        width={20}
+                                        height={20}
+                                        className="rounded-sm"
+                                        unoptimized
+                                      />
+                                    )}
+                                    <span className="text-[11px] text-[#6F6F6F]">
+                                      {leg.carrierDisplayName ?? leg.carrierCode ?? ""}
+                                      {leg.flightNumeric && (
+                                        <a
+                                          href={flightAwareUrl(leg.carrierCode ?? "", leg.flightNumeric ?? "")}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="ml-1 font-medium text-[#3A7A1A] underline underline-offset-2 hover:text-[#2d6115]"
+                                        >
+                                          · Flight {leg.flightNumeric} ↗
+                                        </a>
+                                      )}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -887,7 +1106,11 @@ export async function FamilyViewScheduleContent({
               <span className="text-[#2F2F2F]">
                 {localDayLabel(currentTripLastDayStr ?? "", nextTrip.lastDayLabel)}{" "}
                 {isCommuter(profile) && settings.showCommuteEstimates ? (
-                  <>{s.commuteHome} {nextTrip.expectedHomeTime}, {s.ifFlightsAvailable}.</>
+                  heroDutyEndLateNight ? (
+                    <>{s.commuteHomeLateDuty}</>
+                  ) : (
+                    <>{s.commuteHome} {nextTrip.expectedHomeTime}, {s.ifFlightsAvailable}.</>
+                  )
                 ) : (
                   <>{s.homeOn} {nextTrip.expectedHomeTime}</>
                 )}
@@ -922,7 +1145,7 @@ export async function FamilyViewScheduleContent({
         </div>
       )}
 
-      {/* Section 3: Week Ahead — T+1…T+7 minus hero trip days (same calendar span as Current/Next Trip card) */}
+      {/* Section 3: Week Ahead — T+1…T+7 (chronological; hero trip days may appear here too) */}
       {(() => {
         const remainingWeek = weekAheadDays;
         if (remainingWeek.length === 0) return null;
