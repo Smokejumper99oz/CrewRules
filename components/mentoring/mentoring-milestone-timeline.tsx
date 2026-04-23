@@ -10,6 +10,7 @@ import {
   deleteLatestMenteeMilestoneUpdate,
   deleteMentorshipCheckIn,
   submitMenteeMilestoneUpdate,
+  undoCompletedMentorshipMilestone,
   updateCompletedMentorshipMilestone,
   updateMentorshipCheckIn,
   type MentorshipMilestoneAttemptRow,
@@ -112,6 +113,9 @@ const checkInFollowUpBadgeClass =
 /** Edit beside Completed: height matches Completed via parent `items-stretch`. */
 const editBesideCompletedClass =
   "inline-flex min-w-max shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-slate-500/40 bg-slate-500/20 px-3 text-xs font-semibold leading-none text-slate-400 antialiased transition-colors duration-200 hover:border-slate-400/50 hover:bg-slate-500/30 active:bg-slate-500/35 max-[380px]:px-2.5 disabled:opacity-50";
+
+const undoBesideCompletedClass =
+  "inline-flex min-w-max shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-amber-600/40 bg-amber-950/25 px-3 text-xs font-semibold leading-none text-amber-200/90 antialiased transition-colors duration-200 hover:border-amber-500/50 hover:bg-amber-950/40 active:bg-amber-950/45 max-[380px]:px-2.5 disabled:opacity-50";
 
 function defaultCompletedDateYmd(): string {
   const d = new Date();
@@ -295,7 +299,12 @@ export function MentoringMilestoneTimeline({
   const [isPending, startTransition] = useTransition();
   const [isMenteeUpdatePending, startMenteeUpdateTransition] = useTransition();
   const [isMenteeRemoveLastPending, startMenteeRemoveLastTransition] = useTransition();
+  const [isUndoPending, startUndoTransition] = useTransition();
   const [menteeRemoveLastError, setMenteeRemoveLastError] = useState<{
+    milestoneType: string;
+    message: string;
+  } | null>(null);
+  const [undoMilestoneError, setUndoMilestoneError] = useState<{
     milestoneType: string;
     message: string;
   } | null>(null);
@@ -348,12 +357,25 @@ export function MentoringMilestoneTimeline({
   };
 
   const openEdit = (m: MentoringMilestoneTimelineItem) => {
+    setUndoMilestoneError(null);
     setModal({ milestoneType: m.milestone_type, mode: "edit" });
     setMilestoneModalOutcome("passed");
     setNote(m.completion_note ?? "");
     setCompletedDateInput(ymdToDohDisplay(milestoneCompletedYmd(m)));
     setMilestoneModalDateFirstFocusClearDone(false);
     setFormError(null);
+  };
+
+  const runUndoCompletion = (m: MentoringMilestoneTimelineItem) => {
+    setUndoMilestoneError(null);
+    startUndoTransition(async () => {
+      const result = await undoCompletedMentorshipMilestone(assignmentId, m.milestone_type);
+      if (result.error) {
+        setUndoMilestoneError({ milestoneType: m.milestone_type, message: result.error });
+        return;
+      }
+      router.refresh();
+    });
   };
 
   const openCheckIn = () => {
@@ -771,22 +793,38 @@ export function MentoringMilestoneTimeline({
                 {m.dueDisplay}
               </span>
               {canEditMilestones ? (
-                <div className="flex items-stretch gap-2">
-                  <span className={completedOn ? completedPillWithDateClass : completedPillClass}>
-                    <span>Completed</span>
-                    {completedOn ? (
-                      <span className="text-[11px] font-medium tabular-nums leading-none text-emerald-200/85">
-                        {completedOn}
-                      </span>
-                    ) : null}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => openEdit(m)}
-                    className={editBesideCompletedClass}
-                  >
-                    Edit Milestone
-                  </button>
+                <div className="flex flex-col items-stretch gap-1">
+                  <div className="flex items-stretch gap-2">
+                    <span className={completedOn ? completedPillWithDateClass : completedPillClass}>
+                      <span>Completed</span>
+                      {completedOn ? (
+                        <span className="text-[11px] font-medium tabular-nums leading-none text-emerald-200/85">
+                          {completedOn}
+                        </span>
+                      ) : null}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openEdit(m)}
+                      disabled={isUndoPending}
+                      className={editBesideCompletedClass}
+                    >
+                      Edit Milestone
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => runUndoCompletion(m)}
+                      disabled={isUndoPending || isPending}
+                      className={undoBesideCompletedClass}
+                    >
+                      {isUndoPending ? "Undoing…" : "Undo"}
+                    </button>
+                  </div>
+                  {undoMilestoneError?.milestoneType === m.milestone_type ? (
+                    <p className="max-w-full text-xs leading-snug text-red-400">
+                      {undoMilestoneError.message}
+                    </p>
+                  ) : null}
                 </div>
               ) : (
                 <span className={completedOn ? completedPillWithDateClass : completedPillClass}>

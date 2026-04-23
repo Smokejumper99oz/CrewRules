@@ -1442,6 +1442,10 @@ function milestoneCompletionErrorMessage(raw: string): string {
 
   const msg = raw.toLowerCase();
 
+  if (msg.includes("milestone is not completed yet")) {
+    return "Milestone is not completed yet.";
+  }
+
   if (
     msg.includes("cannot set completed_date") ||
     msg.includes("is not completed") ||
@@ -1793,6 +1797,41 @@ export async function updateCompletedMentorshipMilestone(
   });
 
   if (cascadeErr) return { error: milestoneCompletionErrorMessage(cascadeErr.message) };
+
+  revalidatePath("/frontier/pilots/portal/mentoring");
+  revalidatePath(`/frontier/pilots/portal/mentoring/${aid}`);
+  return { ok: true };
+}
+
+/**
+ * Mentor only: atomic undo via DB RPC (tail-only, clear completion, hire-baseline due sync).
+ */
+export async function undoCompletedMentorshipMilestone(
+  assignmentId: string,
+  milestoneType: string
+): Promise<{ ok?: true; error?: string }> {
+  const aid = assignmentId.trim();
+  const mtype = milestoneType.trim();
+  if (!aid) return { error: "Assignment not found." };
+  if (!mtype) return { error: "Milestone not found." };
+
+  const profile = await getProfile();
+  if (!profile) return { error: "Not signed in" };
+
+  await linkMenteeToAssignments(profile.id, profile.employee_number);
+  await linkMentorToAssignments(profile.id, profile.employee_number);
+  if (profile.employee_number?.trim() && profile.tenant?.trim()) {
+    await linkMentorToPreload(profile.id, profile.employee_number, profile.tenant);
+  }
+
+  const supabase = await createClient();
+
+  const { error: rpcErr } = await supabase.rpc("undo_mentorship_milestone_completion_with_hire_due_sync", {
+    p_assignment_id: aid,
+    p_milestone_type: mtype,
+  });
+
+  if (rpcErr) return { error: milestoneCompletionErrorMessage(rpcErr.message) };
 
   revalidatePath("/frontier/pilots/portal/mentoring");
   revalidatePath(`/frontier/pilots/portal/mentoring/${aid}`);
