@@ -1625,6 +1625,11 @@ export async function createFailedMilestoneAttempt(input: {
   if (!mid) return { error: "Milestone not found." };
   if (!mtype) return { error: "Milestone not found." };
 
+  const failedAttemptMilestoneTypes = ["type_rating", "oe_complete", "probation_checkride"] as const;
+  if (!(failedAttemptMilestoneTypes as readonly string[]).includes(mtype)) {
+    return { error: "This milestone type does not support recording a failed attempt." };
+  }
+
   const rawOccurred = (input.occurredOn ?? "").trim();
   if (!rawOccurred) return { error: "Occurred date is required." };
   const occurredResolved = resolveMilestoneCompletedDate(rawOccurred);

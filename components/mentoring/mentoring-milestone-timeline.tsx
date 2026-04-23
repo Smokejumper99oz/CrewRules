@@ -46,6 +46,17 @@ export type MentoringMilestoneTimelineItem = {
   completedDisplay: string | null;
 };
 
+/** Evaluative milestone types: Passed/Failed outcome and failed-attempt flow apply only to these. */
+const MILESTONE_TYPES_WITH_OUTCOME = [
+  "type_rating",
+  "oe_complete",
+  "probation_checkride",
+] as const;
+
+function milestoneTypeSupportsOutcome(milestoneType: string): boolean {
+  return (MILESTONE_TYPES_WITH_OUTCOME as readonly string[]).includes(milestoneType);
+}
+
 type Props = {
   assignmentId: string;
   items: MentoringMilestoneTimelineItem[];
@@ -264,11 +275,15 @@ export function MentoringMilestoneTimeline({
   const [milestoneModalOutcome, setMilestoneModalOutcome] = useState<"passed" | "failed">("passed");
   const [note, setNote] = useState("");
   const [completedDateInput, setCompletedDateInput] = useState("");
+  const [milestoneModalDateFirstFocusClearDone, setMilestoneModalDateFirstFocusClearDone] =
+    useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [checkInEditId, setCheckInEditId] = useState<string | null>(null);
   const [checkInNote, setCheckInNote] = useState("");
   const [checkInDateInput, setCheckInDateInput] = useState("");
+  const [checkInModalDateFirstFocusClearDone, setCheckInModalDateFirstFocusClearDone] =
+    useState(false);
   const [checkInError, setCheckInError] = useState<string | null>(null);
   const [checkInNeedsFollowUp, setCheckInNeedsFollowUp] = useState(false);
   const [checkInFollowUpDateYmd, setCheckInFollowUpDateYmd] = useState("");
@@ -328,6 +343,7 @@ export function MentoringMilestoneTimeline({
     setMilestoneModalOutcome("passed");
     setNote("");
     setCompletedDateInput(ymdToDohDisplay(defaultCompletedDateYmd()));
+    setMilestoneModalDateFirstFocusClearDone(false);
     setFormError(null);
   };
 
@@ -336,6 +352,7 @@ export function MentoringMilestoneTimeline({
     setMilestoneModalOutcome("passed");
     setNote(m.completion_note ?? "");
     setCompletedDateInput(ymdToDohDisplay(milestoneCompletedYmd(m)));
+    setMilestoneModalDateFirstFocusClearDone(false);
     setFormError(null);
   };
 
@@ -344,6 +361,7 @@ export function MentoringMilestoneTimeline({
     setCheckInOpen(true);
     setCheckInNote("");
     setCheckInDateInput(ymdToDohDisplay(defaultCompletedDateYmd()));
+    setCheckInModalDateFirstFocusClearDone(false);
     setCheckInError(null);
     setCheckInNeedsFollowUp(false);
     setCheckInFollowUpDateYmd("");
@@ -354,6 +372,7 @@ export function MentoringMilestoneTimeline({
     setCheckInOpen(true);
     setCheckInNote(ci.note);
     setCheckInDateInput(ymdToDohDisplay(occurredYmd(ci)));
+    setCheckInModalDateFirstFocusClearDone(false);
     setCheckInError(null);
     const needs = ci.follow_up_category === "needs_admin_follow_up";
     setCheckInNeedsFollowUp(needs);
@@ -366,9 +385,21 @@ export function MentoringMilestoneTimeline({
     if (ymd) setCompletedDateInput(ymdToDohDisplay(ymd));
   };
 
+  const onMilestoneDialogDateFocus = () => {
+    if (milestoneModalDateFirstFocusClearDone) return;
+    setCompletedDateInput("");
+    setMilestoneModalDateFirstFocusClearDone(true);
+  };
+
   const normalizeCheckInDateOnBlur = () => {
     const ymd = parseFlexibleDateInput(checkInDateInput);
     if (ymd) setCheckInDateInput(ymdToDohDisplay(ymd));
+  };
+
+  const onCheckInDialogDateFocus = () => {
+    if (checkInModalDateFirstFocusClearDone) return;
+    setCheckInDateInput("");
+    setCheckInModalDateFirstFocusClearDone(true);
   };
 
   const saveModal = () => {
@@ -383,7 +414,11 @@ export function MentoringMilestoneTimeline({
     const itemForModal = items.find((x) => x.milestone_type === milestoneType);
     const milestoneIdForAction = modal.milestoneId ?? itemForModal?.milestone_id;
 
-    if (mode === "complete" && milestoneModalOutcome === "failed") {
+    if (
+      mode === "complete" &&
+      milestoneModalOutcome === "failed" &&
+      milestoneTypeSupportsOutcome(milestoneType)
+    ) {
       if (!milestoneIdForAction?.trim()) {
         setFormError("Milestone could not be saved. Refresh and try again.");
         return;
@@ -914,7 +949,7 @@ export function MentoringMilestoneTimeline({
               {modal.mode === "edit" ? `Edit completion · ${modalItem.title}` : modalItem.title}
             </h3>
 
-            {modal.mode === "complete" ? (
+            {modal.mode === "complete" && milestoneTypeSupportsOutcome(modal.milestoneType) ? (
               <div className="mt-3" role="group" aria-label="Milestone outcome">
                 <span className="text-xs font-medium text-slate-400">Outcome</span>
                 <div className="mt-1.5 flex gap-2">
@@ -948,7 +983,9 @@ export function MentoringMilestoneTimeline({
 
             <div className="mt-3 flex flex-col gap-1.5 text-left">
               <label htmlFor="milestone-dialog-note" className="text-xs font-medium text-slate-400">
-                {modal.mode === "complete" && milestoneModalOutcome === "failed"
+                {modal.mode === "complete" &&
+                milestoneModalOutcome === "failed" &&
+                milestoneTypeSupportsOutcome(modal.milestoneType)
                   ? "Failure note (optional)"
                   : "Note (optional)"}
               </label>
@@ -965,7 +1002,9 @@ export function MentoringMilestoneTimeline({
 
             <div className="mt-3 flex flex-col gap-1.5 text-left">
               <label htmlFor="milestone-dialog-date" className="text-xs font-medium text-slate-400">
-                {modal.mode === "complete" && milestoneModalOutcome === "failed"
+                {modal.mode === "complete" &&
+                milestoneModalOutcome === "failed" &&
+                milestoneTypeSupportsOutcome(modal.milestoneType)
                   ? "Occurred on"
                   : "Completed date"}
               </label>
@@ -977,6 +1016,7 @@ export function MentoringMilestoneTimeline({
                 placeholder="e.g. February 17, 2026 or 021726"
                 value={completedDateInput}
                 onChange={(e) => setCompletedDateInput(e.target.value)}
+                onFocus={onMilestoneDialogDateFocus}
                 onBlur={normalizeDateFieldOnBlur}
                 disabled={isPending}
                 className="min-h-[44px] w-full rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/40 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 disabled:opacity-50"
@@ -1097,6 +1137,7 @@ export function MentoringMilestoneTimeline({
                 placeholder="e.g. February 17, 2026 or 021726"
                 value={checkInDateInput}
                 onChange={(e) => setCheckInDateInput(e.target.value)}
+                onFocus={onCheckInDialogDateFocus}
                 onBlur={normalizeCheckInDateOnBlur}
                 disabled={isPending}
                 className="min-h-[44px] w-full rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/40 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 disabled:opacity-50"
