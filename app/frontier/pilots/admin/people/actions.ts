@@ -1,5 +1,6 @@
 "use server";
 
+import { getAppOriginForAuthInvites } from "@/lib/app-url-for-auth-invite";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/profile";
@@ -59,9 +60,7 @@ export async function inviteUser(formData: FormData): Promise<{ error?: string }
   }
 
   const portalValue = portal === "fa" ? "fa" : "pilots";
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  const appUrl = getAppOriginForAuthInvites();
   // redirectTo for Supabase's action_link — used after the user clicks "Accept" on our intermediate page.
   const redirectTo = `${appUrl}/frontier/pilots/reset-password`;
 

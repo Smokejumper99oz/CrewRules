@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getAppOriginForAuthInvites } from "@/lib/app-url-for-auth-invite";
 import { gateSuperAdmin } from "@/lib/super-admin/gate";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -36,11 +37,8 @@ export async function createInvitedUser(
     return { error: "Invalid role." };
   }
 
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-
-  const redirectTo = `${appUrl}/auth/callback`;
+  const appUrl = getAppOriginForAuthInvites();
+  const redirectTo = `${appUrl}/frontier/pilots/reset-password`;
 
   try {
     const admin = createAdminClient();
