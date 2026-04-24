@@ -31,6 +31,7 @@ const COMMUTE_SETTINGS_FIELD_FEEDBACK_KEYS = {
   commute_two_leg_stop_2: "commute_two_leg_stop_2",
   commute_two_leg_enabled: "commute_two_leg_enabled",
   commute_nonstop_only: "commute_nonstop_only",
+  personal_email: "personal_email",
 } as const;
 
 type FieldFeedback = {
@@ -167,6 +168,7 @@ export function CommuteAssistSettingsForm({ profile, proActive }: Props) {
   const commuteTwoLegStop2 = profile.commute_two_leg_stop_2 ?? "";
   /** Trial / read-only snapshot: unchanged from prior behavior (DB default true, explicit false off). */
   const commuteNonstopOnly = profile.commute_nonstop_only !== false;
+  const commuteAlertEmail = profile.personal_email ?? "";
 
   const saveFn = useCallback(async (form: HTMLFormElement) => {
     const formData = new FormData(form);
@@ -222,6 +224,53 @@ export function CommuteAssistSettingsForm({ profile, proActive }: Props) {
         </div>
       </div>
       <form ref={formRef} onSubmit={(e) => e.preventDefault()} className="space-y-8">
+        <section
+          className="rounded-xl border border-slate-200/90 bg-slate-50/60 p-4 sm:p-5 dark:border-white/10 dark:bg-white/[0.04]"
+          aria-labelledby="commute-settings-alert-email-heading"
+        >
+          <div className="border-b border-slate-200/80 pb-3 dark:border-white/10">
+            <h3
+              id="commute-settings-alert-email-heading"
+              className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white"
+            >
+              Commute{" "}
+              <span className="text-[#75C043]">Assist</span>
+              <span className="align-super text-[10px]">™</span>{" "}
+              Alert email
+            </h3>
+          </div>
+          <div className="mt-4 space-y-3">
+            <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+              Use a personal email where you receive phone notifications.
+            </p>
+            <input
+              id="commute_alert_personal_email"
+              name="personal_email"
+              type="email"
+              autoComplete="email"
+              aria-labelledby="commute-settings-alert-email-heading"
+              key={commuteAlertEmail}
+              defaultValue={commuteAlertEmail}
+              placeholder="you@example.com"
+              disabled={!proActive}
+              readOnly={!proActive}
+              className={`${FIELD_CONTROL} w-full max-w-md disabled:cursor-not-allowed disabled:opacity-70 ${!proActive ? "cursor-not-allowed opacity-60" : ""}`}
+              onInput={() => {
+                setFeedbackTargetKey(COMMUTE_SETTINGS_FIELD_FEEDBACK_KEYS.personal_email);
+                scheduleDebouncedSave();
+              }}
+            />
+            <FieldSaveFeedback
+              fieldKey={COMMUTE_SETTINGS_FIELD_FEEDBACK_KEYS.personal_email}
+              feedback={settingsFieldFeedback}
+            />
+            <p className="mt-1.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              CrewRules<span className="align-super text-[9px]">™</span> will send commute alerts to this email first.
+              If blank, alerts go to your account email.
+            </p>
+          </div>
+        </section>
+
         <section
           className="rounded-xl border border-slate-200/90 bg-slate-50/60 p-4 sm:p-5 dark:border-white/10 dark:bg-white/[0.04]"
           aria-labelledby="commute-settings-origins-heading"
@@ -484,6 +533,7 @@ export function CommuteAssistSettingsForm({ profile, proActive }: Props) {
             <input type="hidden" name="commute_two_leg_enabled" value={commuteTwoLegEnabled ? "1" : "0"} />
             <input type="hidden" name="commute_two_leg_stop_1" value={commuteTwoLegStop1} />
             <input type="hidden" name="commute_two_leg_stop_2" value={commuteTwoLegStop2} />
+            <input type="hidden" name="personal_email" value={commuteAlertEmail} />
           </div>
         )}
 

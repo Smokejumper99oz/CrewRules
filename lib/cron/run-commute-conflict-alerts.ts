@@ -26,6 +26,8 @@ export type CommuteConflictAlertsResult = {
   dryRunBypassedDeduped?: number;
   /** Alert would have fired but no delivery path (real off/dry-run and no test recipient). */
   skippedNoEmailRoute?: number;
+  /** Profiles excluded because COMMUTE_CONFLICT_EMAIL_TEST_USER_ID was set to another id (no schedule/ADB work for those rows). */
+  skippedByTestUserFilter?: number;
   errors: number;
 };
 
@@ -88,6 +90,8 @@ export async function runCommuteConflictAlerts(): Promise<CommuteConflictAlertsR
   const admin = createAdminClient();
   const nowIso = new Date().toISOString();
   const emailEnv = commuteConflictEmailEnv();
+  const testUserIdRaw = process.env.COMMUTE_CONFLICT_EMAIL_TEST_USER_ID?.trim() ?? "";
+  const testUserIdFilter = testUserIdRaw.length > 0 ? testUserIdRaw : null;
 
   let emailsSent = 0;
   let dryRunEmailsSent = 0;
@@ -97,12 +101,14 @@ export async function runCommuteConflictAlerts(): Promise<CommuteConflictAlertsR
   let skippedDeduped = 0;
   let dryRunBypassedDeduped = 0;
   let skippedNoEmailRoute = 0;
+  let skippedByTestUserFilter = 0;
   let errors = 0;
 
   console.log("[commute-conflict-alerts] email env", {
     COMMUTE_CONFLICT_EMAILS_ENABLED: emailEnv.emailsEnabled,
     COMMUTE_CONFLICT_EMAIL_DRY_RUN: emailEnv.dryRun,
     has_COMMUTE_CONFLICT_EMAIL_TEST_RECIPIENT: Boolean(emailEnv.testRecipient),
+    has_COMMUTE_CONFLICT_EMAIL_TEST_USER_ID: Boolean(testUserIdFilter),
     sendToRealUsers: emailEnv.sendToRealUsers,
     dryRunDedupeBypassForPreviews: emailEnv.dryRun,
   });
@@ -136,15 +142,23 @@ export async function runCommuteConflictAlerts(): Promise<CommuteConflictAlertsR
       message: `Aborted: ${profErr.message}`,
       scannedUsers: 0,
       emailsSent: 0,
+      skippedByTestUserFilter: 0,
       errors: 1,
     };
   }
 
   const users = profiles ?? [];
+  if (testUserIdFilter) {
+    console.log("[commute-conflict-alerts] single-user test mode active (COMMUTE_CONFLICT_EMAIL_TEST_USER_ID)");
+  }
   console.log("[commute-conflict-alerts] start", { scannedUsers: users.length, limit: USER_BATCH_LIMIT });
 
   for (const row of users) {
     const userId = row.id as string;
+    if (testUserIdFilter && userId !== testUserIdFilter) {
+      skippedByTestUserFilter++;
+      continue;
+    }
     const intended = intendedCommuteAlertRecipient(row.personal_email, row.email);
     const home = String(row.home_airport ?? "")
       .trim()
@@ -305,7 +319,7 @@ export async function runCommuteConflictAlerts(): Promise<CommuteConflictAlertsR
     }
   }
 
-  const message = `Processed ${users.length} users; emailsSent(real)=${emailsSent}; dryRunEmailsSent=${dryRunEmailsSent}; dryRunBypassedDeduped=${dryRunBypassedDeduped}`;
+  const message = `Processed ${users.length} users; emailsSent(real)=${emailsSent}; dryRunEmailsSent=${dryRunEmailsSent}; dryRunBypassedDeduped=${dryRunBypassedDeduped}; skippedByTestUserFilter=${skippedByTestUserFilter}`;
   console.log("[commute-conflict-alerts] end", {
     scannedUsers: users.length,
     emailsSent,
@@ -316,6 +330,7 @@ export async function runCommuteConflictAlerts(): Promise<CommuteConflictAlertsR
     skippedNotUnsafe,
     skippedDeduped,
     skippedNoEmailRoute,
+    skippedByTestUserFilter,
     errors,
   });
 
@@ -332,6 +347,7 @@ export async function runCommuteConflictAlerts(): Promise<CommuteConflictAlertsR
     skippedNotUnsafe,
     skippedDeduped,
     skippedNoEmailRoute,
+    skippedByTestUserFilter,
     errors,
   };
 }

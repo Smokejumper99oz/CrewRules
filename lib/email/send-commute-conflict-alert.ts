@@ -114,7 +114,7 @@ function buildCommuteFlightsPreviewHtml(flights: CommuteFlight[]): string {
   );
   const top = sorted.slice(0, MAX_COMMUTE_PREVIEW_FLIGHTS);
 
-  const heading = `<p style="margin:0 0 8px 0;"><strong>Same-Day Flights checked:</strong></p>`;
+  const heading = `<p style="margin:0 0 8px 0;"><strong>Same-day flights reviewed:</strong></p>`;
 
   if (top.length === 0) {
     return `${heading}
