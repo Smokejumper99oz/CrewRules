@@ -4,7 +4,7 @@
  * Reuses getCommuteFlights (DB-backed cache) to avoid duplicate AviationStack requests with Commute Assist.
  */
 
-import { parseAviationstackTs } from "@/lib/aviationstack";
+import { parseAviationstackTs, type CommuteFlight } from "@/lib/aviationstack";
 import { getCommuteFlights } from "@/app/frontier/pilots/portal/commute/actions";
 import { AIRLINE_NAMES } from "@/lib/airlines";
 
@@ -51,18 +51,94 @@ function flightNumberMatches(legNum: string, apiFlightNumber: string): boolean {
   return legNumeric === apiNumeric || apiFull.endsWith(legNumeric);
 }
 
+function hhmmStringToMinutes(hhmm: string): number | null {
+  const d = (hhmm ?? "").replace(/\D/g, "").padStart(4, "0").slice(0, 4);
+  if (d.length < 4) return null;
+  const h = parseInt(d.slice(0, 2), 10);
+  const m = parseInt(d.slice(2, 4), 10);
+  if (Number.isNaN(h) || Number.isNaN(m) || h > 23 || m > 59) return null;
+  return h * 60 + m;
+}
+
+function extractApiDepHhMm(f: { dep_scheduled_raw?: string; departureTime?: string | Date }): string | null {
+  const depRaw = f.dep_scheduled_raw ?? (f.departureTime != null ? String(f.departureTime) : "");
+  const digits = depRaw.replace(/[^0-9]/g, "");
+  const depHhMm = digits.length >= 12 ? digits.slice(8, 12) : digits.slice(0, 4);
+  if (depHhMm.length < 3) return null;
+  return depHhMm.padStart(4, "0");
+}
+
+const DEADHEAD_DEP_TOLERANCE_MIN = 15;
+
+/**
+ * Deadhead: require a single best match within ±15 minutes dep time; ambiguous → no carrier.
+ * Non-deadhead: unchanged (first match, legacy ~30 “clock” tolerance).
+ */
+function pickMatchForLeg(
+  flights: CommuteFlight[],
+  legNum: string,
+  legDep: string,
+  deadhead: boolean
+): CommuteFlight | null {
+  if (!deadhead) {
+    return (
+      flights.find((f) => {
+        if (!flightNumberMatches(legNum, f.flightNumber)) return false;
+        if (legDep) {
+          const depRaw = f.dep_scheduled_raw ?? f.departureTime ?? "";
+          const digits = depRaw.replace(/[^0-9]/g, "");
+          const depHhMm = digits.length >= 12 ? digits.slice(8, 12) : digits.slice(0, 4);
+          if (depHhMm && legDep) {
+            const diff = Math.abs(parseInt(depHhMm, 10) - parseInt(legDep, 10));
+            if (diff > 30) return false;
+          }
+        }
+        return true;
+      }) ?? null
+    );
+  }
+
+  const legDepMin = hhmmStringToMinutes(legDep);
+  if (!legDep || legDepMin == null) return null;
+
+  const scored = flights
+    .filter((f) => flightNumberMatches(legNum, f.flightNumber))
+    .map((f) => {
+      const apiHhMm = extractApiDepHhMm(f);
+      const apiMin = apiHhMm ? hhmmStringToMinutes(apiHhMm) : null;
+      if (apiMin == null) return { f, delta: Number.POSITIVE_INFINITY };
+      const delta = Math.abs(legDepMin - apiMin);
+      return { f, delta };
+    })
+    .filter((x) => x.delta <= DEADHEAD_DEP_TOLERANCE_MIN)
+    .sort((a, b) => a.delta - b.delta);
+
+  if (scored.length === 0) return null;
+  if (scored.length === 1) return scored[0]!.f;
+  if (scored[0]!.delta < scored[1]!.delta) return scored[0]!.f;
+  return null;
+}
+
+export type ResolveLegIdentityOptions = {
+  /** Strict single-match dep window (±15 min); no ambiguous carrier. */
+  deadhead?: boolean;
+};
+
 /**
  * Resolve the first leg of an active trip to carrier/airline/status.
  * Uses getCommuteFlights (DB-backed cache) so Dashboard load shares cache with Commute Assist.
  * Returns null if no match or API unavailable.
  */
-export async function resolveLegIdentity(input: {
-  flightNumber: string;
-  origin: string;
-  destination: string;
-  depTime?: string;
-  date: string; // YYYY-MM-DD in user's timezone
-}): Promise<ResolvedLegIdentity | null> {
+export async function resolveLegIdentity(
+  input: {
+    flightNumber: string;
+    origin: string;
+    destination: string;
+    depTime?: string;
+    date: string; // YYYY-MM-DD in user's timezone
+  },
+  options?: ResolveLegIdentityOptions
+): Promise<ResolvedLegIdentity | null> {
   const origin = (input.origin ?? "").trim().toUpperCase();
   const destination = (input.destination ?? "").trim().toUpperCase();
   if (origin.length !== 3 || destination.length !== 3) return null;
@@ -79,20 +155,9 @@ export async function resolveLegIdentity(input: {
 
     const legNum = (input.flightNumber ?? "").trim();
     const legDep = (input.depTime ?? "").replace(/:/g, "").slice(0, 4); // HHMM
+    const deadhead = options?.deadhead === true;
 
-    const match = flights.find((f) => {
-      if (!flightNumberMatches(legNum, f.flightNumber)) return false;
-      if (legDep) {
-        const depRaw = f.dep_scheduled_raw ?? f.departureTime ?? "";
-        const digits = depRaw.replace(/[^0-9]/g, "");
-        const depHhMm = digits.length >= 12 ? digits.slice(8, 12) : digits.slice(0, 4);
-        if (depHhMm && legDep) {
-          const diff = Math.abs(parseInt(depHhMm, 10) - parseInt(legDep, 10));
-          if (diff > 30) return false; // allow ~30 min tolerance
-        }
-      }
-      return true;
-    });
+    const match = pickMatchForLeg(flights, legNum, legDep, deadhead);
 
     if (!match) return null;
 

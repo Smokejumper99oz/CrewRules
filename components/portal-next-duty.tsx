@@ -377,14 +377,17 @@ export async function PortalNextDuty({
   const firstLeg = (legsToShow && legsToShow.length > 0 ? legsToShow[0] : activeTrip?.todayLegs?.[0]) ?? null;
   const displayDateForResolve = (legsToShow && legsToShow.length > 0 ? displayDateStr : activeTrip?.displayDateStr) ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
   const [resolvedFirstLeg, filedResult] = await Promise.all([
-    firstLeg && firstLeg.flightNumber && firstLeg.origin && firstLeg.destination && proActive && !firstLeg.deadhead
-      ? resolveLegIdentity({
-          flightNumber: firstLeg.flightNumber,
-          origin: firstLeg.origin,
-          destination: firstLeg.destination,
-          depTime: firstLeg.depTime,
-          date: displayDateForResolve,
-        })
+    firstLeg && firstLeg.flightNumber && firstLeg.origin && firstLeg.destination && proActive
+      ? resolveLegIdentity(
+          {
+            flightNumber: firstLeg.flightNumber,
+            origin: firstLeg.origin,
+            destination: firstLeg.destination,
+            depTime: firstLeg.depTime,
+            date: displayDateForResolve,
+          },
+          { deadhead: firstLeg.deadhead === true }
+        )
       : null,
     (async () => {
       if (!firstLeg?.flightNumber || !firstLeg.origin || !firstLeg.destination) return { filedResult: null, departureIso: null, arrivalIso: null };
@@ -640,11 +643,21 @@ export async function PortalNextDuty({
               const numPart = f && (f.flightNumber ?? "").toUpperCase().startsWith((f.carrier ?? "").toUpperCase())
                 ? (f.flightNumber ?? "").slice((f.carrier ?? "").length).trim()
                 : null;
-              const fallbackCarrierForLeg = tenant ? TENANT_CARRIER[tenant] ?? null : null;
+              const isDh = leg.deadhead === true;
+              const fallbackCarrierForLeg = !isDh && tenant ? TENANT_CARRIER[tenant] ?? null : null;
               const legFlightNum = leg.flightNumber ?? "";
               const legEncodedCarrier = /^([A-Z]{2})\d/i.exec(legFlightNum)?.[1]?.toUpperCase() ?? null;
-              const flightLabel = f ? `${f.carrier}${numPart || f.flightNumber}` : (fallbackCarrierForLeg && !legEncodedCarrier ? `${fallbackCarrierForLeg}${legFlightNum}` : legFlightNum);
-              const effectiveCarrier = (f?.carrier ?? legEncodedCarrier ?? fallbackCarrierForLeg ?? "").toUpperCase();
+              const flightLabel = f
+                ? `${f.carrier}${numPart || f.flightNumber}`
+                : isDh
+                  ? legEncodedCarrier
+                    ? legFlightNum
+                    : "Deadhead Flight"
+                  : fallbackCarrierForLeg && !legEncodedCarrier
+                    ? `${fallbackCarrierForLeg}${legFlightNum}`
+                    : legFlightNum;
+              const logoCarrier = f?.carrier ?? legEncodedCarrier ?? (isDh ? "" : fallbackCarrierForLeg ?? "");
+              const effectiveCarrier = (logoCarrier ?? "").toUpperCase();
               const effectiveAircraftType = f
                 ? (f.aircraft_type ?? (effectiveCarrier === "WN" ? "B737" : "—"))
                 : (effectiveCarrier === "WN" ? "B737" : "—");
@@ -704,7 +717,7 @@ export async function PortalNextDuty({
                       {leg.deadhead && (
                         <span className="inline-flex rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-200">DH</span>
                       )}
-                      <AirlineLogo carrier={f?.carrier ?? legEncodedCarrier ?? fallbackCarrierForLeg ?? ""} size={24} />
+                      <AirlineLogo carrier={logoCarrier} size={24} />
                       <span className="text-slate-300 font-medium font-mono tabular-nums">{flightLabel}</span>
                       <span className="text-slate-600">•</span>
                       {/* Prefer live duration when live delayed times are shown so duration matches displayed dep/arr */}
@@ -740,10 +753,17 @@ export async function PortalNextDuty({
 
               // Fallback when API has no data (e.g. tomorrow's flights): show schedule-derived info to match Commute Assist style
               const legDisplayDate = ("departureDate" in leg && leg.departureDate) ? leg.departureDate : displayDateStr ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
-              const fallbackCarrier = tenant ? TENANT_CARRIER[tenant] ?? null : null;
+              const isDhFallback = leg.deadhead === true;
+              const fallbackCarrier = !isDhFallback && tenant ? TENANT_CARRIER[tenant] ?? null : null;
               const fallbackLegNum = leg.flightNumber ?? "";
               const fallbackLegEncodedCarrier = /^([A-Z]{2})\d/i.exec(fallbackLegNum)?.[1]?.toUpperCase() ?? null;
-              const fallbackFlightLabel = fallbackCarrier && !fallbackLegEncodedCarrier ? `${fallbackCarrier}${fallbackLegNum}` : fallbackLegNum;
+              const fallbackFlightLabel = isDhFallback
+                ? fallbackLegEncodedCarrier
+                  ? fallbackLegNum
+                  : "Deadhead Flight"
+                : fallbackCarrier && !fallbackLegEncodedCarrier
+                  ? `${fallbackCarrier}${fallbackLegNum}`
+                  : fallbackLegNum;
               const durMin = leg.depTime && leg.arrTime ? legDurationMinutes(leg.depTime, leg.arrTime) : 0;
 
               return (
@@ -767,7 +787,9 @@ export async function PortalNextDuty({
                     {leg.deadhead && (
                       <span className="inline-flex rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-200">DH</span>
                     )}
-                    {(fallbackLegEncodedCarrier || fallbackCarrier) && <AirlineLogo carrier={fallbackLegEncodedCarrier ?? fallbackCarrier ?? ""} size={24} />}
+                    {(fallbackLegEncodedCarrier || (!isDhFallback && fallbackCarrier)) && (
+                      <AirlineLogo carrier={fallbackLegEncodedCarrier ?? fallbackCarrier ?? ""} size={24} />
+                    )}
                     <span className="text-slate-300 font-medium font-mono tabular-nums">{fallbackFlightLabel}</span>
                     {durMin > 0 && (
                       <>
