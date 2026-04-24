@@ -44,10 +44,11 @@ type SendParams = {
   originalRecipientEmail?: string;
 };
 
-const SUBJECT_REAL = "⚠️ CrewRules Commute Alert: No Safe Same-Day Commute Found";
+const SUBJECT_REAL =
+  "⚠️ CrewRules™ Commute Assist™ Alert: No Safe Same-Day Commute Found";
 
 function buildSubjectDryRun(originalRecipientEmail: string): string {
-  return `[DRY RUN - original recipient: ${originalRecipientEmail.trim()}] ⚠️ CrewRules Commute Alert`;
+  return `[DRY RUN - original recipient: ${originalRecipientEmail.trim()}] ⚠️ CrewRules™ Commute Assist™ Alert`;
 }
 
 function buildReportDateTimeSectionHtml(dutyStartMs: number, baseTz: string): string {
