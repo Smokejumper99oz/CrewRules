@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { DatePickerInput } from "@/components/date-picker-input";
 import { CustomFormSelect } from "@/components/custom-form-select";
 import {
@@ -9,6 +10,8 @@ import {
   getFrontierCrewBaseLabel,
 } from "@/lib/frontier-crew-bases";
 import { getTimezoneFromAirport, DEFAULT_TIMEZONE } from "@/lib/airport-timezone";
+import type { Profile } from "@/lib/profile";
+import { isEligibleForProTrialStartCta } from "@/lib/profile-helpers";
 
 const COMMON_TIMEZONES = [
   "America/New_York",
@@ -116,6 +119,7 @@ function FieldSaveFeedback({
 
 export type PilotProfilePersonalFieldsModel = {
   tenant?: string;
+  portal?: string;
   full_name?: string | null;
   employee_number?: string | null;
   date_of_hire?: string | null;
@@ -422,11 +426,17 @@ export function PilotProfilePersonalFields({
                 }}
               />
               <p className="mt-1 text-xs text-slate-500">3-letter IATA code. This is where your commute normally begins.</p>
-              {!proActive && (
-                <button type="button" className="mt-1 inline-block text-xs text-[#75C043] hover:underline">
-                  Start your free 14-day trial
-                </button>
-              )}
+              {!proActive &&
+                isEligibleForProTrialStartCta(profile as Profile) &&
+                profile.tenant &&
+                profile.portal && (
+                  <Link
+                    href={`/${profile.tenant}/${profile.portal}/portal/settings/subscription`}
+                    className="mt-1 inline-block text-xs text-[#75C043] hover:underline"
+                  >
+                    Start your free 14-day trial
+                  </Link>
+                )}
             </div>
             <div>
               <label htmlFor="alternate_home_airport" className="block text-sm font-medium text-slate-700 dark:text-slate-300">

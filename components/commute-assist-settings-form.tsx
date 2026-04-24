@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { updateProfilePreferences } from "@/app/frontier/pilots/portal/profile/actions";
 import { SettingsProfilePreserveFields } from "@/components/settings-profile-preserve-fields";
@@ -281,9 +282,12 @@ export function CommuteAssistSettingsForm({ profile, proActive }: Props) {
             />
             <p className="mt-1 text-xs text-slate-500">3-letter IATA code. This is where your commute normally begins.</p>
             {!proActive && isEligibleForProTrialStartCta(profile) && (
-              <button type="button" className="mt-1 inline-block text-xs text-[#75C043] hover:underline">
+              <Link
+                href={`/${profile.tenant}/${profile.portal}/portal/settings/subscription`}
+                className="mt-1 inline-block text-xs text-[#75C043] hover:underline"
+              >
                 Start your free 14-day trial
-              </button>
+              </Link>
             )}
           </div>
           <div>
