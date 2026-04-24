@@ -3,6 +3,7 @@
  */
 
 export type CommuteCoverageReasonCode =
+  | "aviationstack_empty_fallback"
   | "single_provider"
   | "low_flight_count"
   | "no_live_fields_same_day";

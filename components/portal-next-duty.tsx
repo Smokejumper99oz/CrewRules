@@ -10,7 +10,12 @@ import { getProfile, isProActive } from "@/lib/profile";
 import type { ActiveTrip } from "@/lib/trips/get-active-trip";
 import { formatLegLine } from "@/lib/trips/detect-trip-changes";
 import type { TripChangeSummary } from "@/lib/trips/detect-trip-changes";
-import { resolveLegIdentity } from "@/lib/trips/resolve-leg-identity";
+import { resolveLegIdentity, type ResolvedLegFlight } from "@/lib/trips/resolve-leg-identity";
+import {
+  fetchFlightsFromAviationStack,
+  parseAviationstackTs,
+  type CommuteFlight,
+} from "@/lib/aviationstack";
 import { formatDayLabel, addDay, subtractMinutesFromTime } from "@/lib/schedule-time";
 import { getLegsForDate, computeLegDates, getTripDateStrings } from "@/lib/leg-dates";
 import { computeDelayInfo, getDelayStatusLabel, parseIsoTs } from "@/lib/flight-delay";
@@ -102,6 +107,140 @@ function buildReportTimeIso(
   } catch {
     return null;
   }
+}
+
+/** Per-leg leg date in Current Trip: FLICA per-leg `departureDate` when set, else trip display date. */
+function currentTripLegDepartureDateYmd(
+  leg: { departureDate?: string | null },
+  displayDateForResolve: string
+): string {
+  return "departureDate" in leg && leg.departureDate ? leg.departureDate : displayDateForResolve;
+}
+
+function flightNumberNumeric(flightNumber: string): string {
+  const s = (flightNumber ?? "").trim();
+  const m = s.match(/\d+/);
+  return m ? m[0] : s.replace(/\D/g, "");
+}
+
+/** True if schedule leg number matches a provider flight (same rules as `resolveLegIdentity`). */
+function flightNumberMatches(legNum: string, apiFlightNumber: string): boolean {
+  const legNumeric = flightNumberNumeric(legNum);
+  if (!legNumeric) return false;
+  const apiFull = (apiFlightNumber ?? "").trim().toUpperCase();
+  const apiNumeric = flightNumberNumeric(apiFull);
+  return legNumeric === apiNumeric || apiFull.endsWith(legNumeric);
+}
+
+function matchCommuteFlightToScheduleLeg(
+  flights: CommuteFlight[],
+  leg: {
+    origin: string;
+    destination: string;
+    flightNumber?: string;
+    depTime?: string;
+  }
+): CommuteFlight | null {
+  const o = (leg.origin ?? "").trim().toUpperCase();
+  const d = (leg.destination ?? "").trim().toUpperCase();
+  const legNum = (leg.flightNumber ?? "").trim();
+  const legDep = (leg.depTime ?? "").replace(/:/g, "").slice(0, 4);
+  const candidates = flights.filter(
+    (f) => (f.origin ?? "").toUpperCase() === o && (f.destination ?? "").toUpperCase() === d
+  );
+  const match = candidates.find((f) => {
+    if (!flightNumberMatches(legNum, f.flightNumber)) return false;
+    if (legDep) {
+      const depRaw = f.dep_scheduled_raw ?? f.departureTime ?? "";
+      const digits = depRaw.replace(/[^0-9]/g, "");
+      const depHhMm = digits.length >= 12 ? digits.slice(8, 12) : digits.slice(0, 4);
+      if (depHhMm && legDep) {
+        const diff = Math.abs(parseInt(depHhMm, 10) - parseInt(legDep, 10));
+        if (diff > 30) return false;
+      }
+    }
+    return true;
+  });
+  return match ?? null;
+}
+
+function commuteFlightToResolvedLegFlight(match: CommuteFlight): ResolvedLegFlight {
+  const depTz = match.origin_tz ?? "UTC";
+  const arrTz = match.dest_tz ?? "UTC";
+  const depUtc = match.dep_scheduled_raw
+    ? parseAviationstackTs(match.dep_scheduled_raw, depTz).toISOString()
+    : new Date(match.departureTime).toISOString();
+  const arrUtc = match.arr_scheduled_raw
+    ? parseAviationstackTs(match.arr_scheduled_raw, arrTz).toISOString()
+    : new Date(match.arrivalTime).toISOString();
+  return {
+    carrier: match.carrier,
+    flightNumber: match.flightNumber,
+    depUtc,
+    arrUtc,
+    originTz: depTz,
+    destTz: arrTz,
+    dep_scheduled_raw: match.dep_scheduled_raw,
+    dep_estimated_raw: match.dep_estimated_raw,
+    dep_actual_raw: match.dep_actual_raw,
+    arr_scheduled_raw: match.arr_scheduled_raw,
+    arr_estimated_raw: match.arr_estimated_raw,
+    arr_actual_raw: match.arr_actual_raw,
+    status: match.status,
+    durationMinutes: match.durationMinutes,
+    aircraft_type: match.aircraft_type,
+    dep_gate: match.dep_gate,
+  };
+}
+
+/**
+ * One AviationStack fetch per unique (origin, dest, local departure day); then match each schedule leg.
+ * Does not create or remove legs.
+ */
+async function fetchAsMatchesForCurrentTripLegs(
+  legs: Array<{
+    origin: string;
+    destination: string;
+    flightNumber?: string;
+    depTime?: string;
+    deadhead?: boolean;
+    departureDate?: string | null;
+  }>,
+  displayDateForResolve: string
+): Promise<(CommuteFlight | null)[]> {
+  const unique = new Map<string, { o: string; d: string; date: string }>();
+  for (const leg of legs) {
+    if (leg.deadhead) continue;
+    const o = (leg.origin ?? "").trim();
+    const d = (leg.destination ?? "").trim();
+    if (o.length !== 3 || d.length !== 3) continue;
+    const date = currentTripLegDepartureDateYmd(leg, displayDateForResolve);
+    const k = `${o.toUpperCase()}-${d.toUpperCase()}|${date}`;
+    if (!unique.has(k)) unique.set(k, { o, d, date });
+  }
+
+  const byKey = new Map<string, CommuteFlight[]>();
+  await Promise.all(
+    [...unique.values()].map(async ({ o, d, date }) => {
+      const k = `${o.toUpperCase()}-${d.toUpperCase()}|${date}`;
+      try {
+        const { flights } = await fetchFlightsFromAviationStack(o, d, date);
+        byKey.set(k, flights);
+      } catch {
+        byKey.set(k, []);
+      }
+    })
+  );
+
+  return legs.map((leg) => {
+    if (leg.deadhead) return null;
+    const o = (leg.origin ?? "").trim();
+    const d = (leg.destination ?? "").trim();
+    if (o.length !== 3 || d.length !== 3 || !leg.flightNumber?.trim()) return null;
+    const date = currentTripLegDepartureDateYmd(leg, displayDateForResolve);
+    const k = `${o.toUpperCase()}-${d.toUpperCase()}|${date}`;
+    return matchCommuteFlightToScheduleLeg(byKey.get(k) ?? [], leg);
+  });
 }
 
 export async function PortalNextDuty({
@@ -276,6 +415,15 @@ export async function PortalNextDuty({
   const firstLegLiveStatus = filedResult?.filedResult?.status ?? null;
   const firstLegDepIso = filedResult?.departureIso ?? null;
   const firstLegArrIso = filedResult?.arrivalIso ?? null;
+
+  let asMatchByIndex: (CommuteFlight | null)[] = [];
+  if (activeTrip && legsToShow && legsToShow.length > 0) {
+    asMatchByIndex = proActive
+      ? await fetchAsMatchesForCurrentTripLegs(legsToShow, displayDateForResolve).catch(() =>
+          legsToShow.map(() => null)
+        )
+      : legsToShow.map(() => null);
+  }
 
   console.log("[CurrentTrip primary mode]", { currentTripMode: isCurrentTripMode, nextDutyMode: !isCurrentTripMode });
   console.log("[CurrentTrip change summary]", {
@@ -454,8 +602,12 @@ export async function PortalNextDuty({
           <div className="border-l-4 border-l-emerald-500">
           {legsToShow && legsToShow.length > 0 ? (
             legsToShow.map((leg, i) => {
-              const resolved = i === 0 ? resolvedFirstLeg : null;
-              const f = resolved?.flight;
+              const asLeg = asMatchByIndex[i] ?? null;
+              const f: ResolvedLegFlight | null = asLeg
+                ? commuteFlightToResolvedLegFlight(asLeg)
+                : i === 0
+                  ? resolvedFirstLeg?.flight ?? null
+                  : null;
               const depTz = f?.originTz ?? getTimezoneFromAirport(leg.origin);
               const arrTz = f?.destTz ?? getTimezoneFromAirport(leg.destination);
               const delayInfo =
@@ -556,7 +708,19 @@ export async function PortalNextDuty({
                       <span className="text-slate-300 font-medium font-mono tabular-nums">{flightLabel}</span>
                       <span className="text-slate-600">•</span>
                       {/* Prefer live duration when live delayed times are shown so duration matches displayed dep/arr */}
-                      <span>Flight time {fmtHM(computeLiveDurationMinutes(firstLegLiveStatus?.dep_actual_raw ?? firstLegLiveStatus?.dep_estimated_raw ?? null, firstLegLiveStatus?.arr_actual_raw ?? firstLegLiveStatus?.arr_estimated_raw ?? null) ?? f?.durationMinutes ?? legDurationMinutes(leg.depTime ?? "00:00", leg.arrTime ?? "00:00"))}</span>
+                      <span>
+                        Flight time{" "}
+                        {fmtHM(
+                          computeLiveDurationMinutes(
+                            i === 0 && firstLegLiveStatus
+                              ? (firstLegLiveStatus.dep_actual_raw ?? firstLegLiveStatus.dep_estimated_raw ?? null)
+                              : (asLeg?.dep_actual_raw ?? asLeg?.dep_estimated_raw ?? null),
+                            i === 0 && firstLegLiveStatus
+                              ? (firstLegLiveStatus.arr_actual_raw ?? firstLegLiveStatus.arr_estimated_raw ?? null)
+                              : (asLeg?.arr_actual_raw ?? asLeg?.arr_estimated_raw ?? null)
+                          ) ?? f?.durationMinutes ?? legDurationMinutes(leg.depTime ?? "00:00", leg.arrTime ?? "00:00")
+                        )}
+                      </span>
                       {effectiveAircraftType && (
                         <>
                           <span className="text-slate-600">•</span>

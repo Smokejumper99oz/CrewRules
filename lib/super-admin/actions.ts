@@ -296,6 +296,7 @@ export type MentoringMilestoneIntegritySignals = {
 
 /** Platform snapshot for System Status: milestone rows vs hire-date schedule (same rules as backfill diagnostics). */
 export async function getMentoringMilestoneIntegritySignals(): Promise<MentoringMilestoneIntegritySignals> {
+  noStore();
   await ensureSuperAdmin();
   const admin = createAdminClient();
   const scan = await fetchMentoringMilestoneIntegrityScan(admin);
@@ -1627,9 +1628,9 @@ export async function updateSuperAdminUserAccess(
 export type UpdateMentorAssignmentHireDateFormState = { error: string | null };
 
 /**
- * Super Admin only: set `mentor_assignments.hire_date` by row id, then recalculate milestone `due_date`
- * values for that assignment via `recalculateSuperAdminMentorshipMilestoneDueDates` (no inserts/deletes,
- * does not change `completed_date`).
+ * Super Admin only: set `mentor_assignments.hire_date` by row id, then insert any missing standard
+ * milestone rows and sync `due_date` from hire (same helpers as CSV / backfill; does not change
+ * `completed_date` except as affected by due-date sync rules).
  */
 export async function updateSuperAdminMentorAssignmentHireDate(
   assignmentId: string,
@@ -1652,12 +1653,16 @@ export async function updateSuperAdminMentorAssignmentHireDate(
     return { error: error.message };
   }
 
-  revalidatePath("/super-admin/mentoring");
-
-  const recalc = await recalculateSuperAdminMentorshipMilestoneDueDates(id);
-  if (recalc.error) {
-    return { error: recalc.error };
+  const created = await createMilestonesForAssignment(id, raw);
+  if (created.error) {
+    return { error: created.error };
   }
+  const synced = await syncMentorshipMilestoneDueDatesFromHireForAssignment(admin, id);
+  if (synced.error) {
+    return { error: synced.error };
+  }
+
+  revalidatePath("/super-admin/mentoring");
 
   return {};
 }
@@ -1918,6 +1923,7 @@ export async function backfillMissingMentorshipMilestones(): Promise<BackfillMis
 
   if (msErr) {
     seedErrors.push(`milestone scan: ${msErr.message}`);
+    revalidatePath("/super-admin");
     revalidatePath("/super-admin/mentoring");
     revalidatePath("/frontier/pilots/portal/mentoring");
     return { processedWithHireDate, seedErrors, stillMissingOeComplete: [], missingHireDateBlockingRepair: [] };
@@ -1943,6 +1949,7 @@ export async function backfillMissingMentorshipMilestones(): Promise<BackfillMis
     }
   }
 
+  revalidatePath("/super-admin");
   revalidatePath("/super-admin/mentoring");
   revalidatePath("/frontier/pilots/portal/mentoring");
   return { processedWithHireDate, seedErrors, stillMissingOeComplete, missingHireDateBlockingRepair };

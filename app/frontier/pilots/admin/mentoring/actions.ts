@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { syncMentorshipMilestoneDueDatesFromHireForAssignment } from "@/lib/mentoring/create-milestones-for-assignment";
+import {
+  createMilestonesForAssignment,
+  syncMentorshipMilestoneDueDatesFromHireForAssignment,
+} from "@/lib/mentoring/create-milestones-for-assignment";
 import { isValidHireDateYyyyMmDd } from "@/lib/mentoring/mentoring-csv-import";
 import {
   frontierMentoringAssignXlsxToCsvText,
@@ -993,8 +996,8 @@ export async function sendFrontierPilotAdminMentorAssignmentEmailsBulk(
 
 /**
  * Frontier pilots tenant admin: set `mentor_assignments.hire_date` when assignment mentor is in this tenant,
- * then recalculate milestone `due_date` values for that assignment (same rules as seed; no inserts/deletes,
- * does not change `completed_date`).
+ * then insert any missing standard milestone rows and recalculate milestone `due_date` from hire
+ * (same helpers as super-admin hire edit; `completed_date` unchanged except as affected by due-date sync rules).
  */
 export async function updateFrontierPilotAdminMentorAssignmentHireDate(
   assignmentId: string,
@@ -1026,8 +1029,10 @@ export async function updateFrontierPilotAdminMentorAssignmentHireDate(
     return { error: error.message };
   }
 
-  revalidatePath("/frontier/pilots/admin/mentoring");
-  revalidatePath("/super-admin/mentoring");
+  const created = await createMilestonesForAssignment(id, raw);
+  if (created.error) {
+    return { error: created.error };
+  }
 
   const recalc = await recalculateFrontierPilotAdminMentorshipMilestoneDueDates(id);
   if (recalc.error) {

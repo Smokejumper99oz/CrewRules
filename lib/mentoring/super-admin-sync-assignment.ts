@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  createMilestonesForAssignment,
+  syncMentorshipMilestoneDueDatesFromHireForAssignment,
+} from "@/lib/mentoring/create-milestones-for-assignment";
 
 function eqAssignmentField(
   existing: string | null | undefined,
@@ -11,7 +15,25 @@ function eqAssignmentField(
 
 export type UpsertMentorAssignmentFromSuperAdminResult =
   | { error: string }
-  | { created: boolean; updated: boolean };
+  | { created: boolean; updated: boolean; assignmentId: string };
+
+/**
+ * When `hireDateParam` is omitted, does nothing. When present but empty after trim, does nothing
+ * (hire cleared in the same request). When non-empty, idempotent create then sync.
+ */
+async function ensureStandardMentorshipMilestonesForAssignment(
+  admin: SupabaseClient,
+  assignmentId: string,
+  hireDateParam: string | null | undefined
+): Promise<{ error?: string }> {
+  if (hireDateParam === undefined) return {};
+  const h = (hireDateParam ?? "").trim();
+  if (!h) return {};
+  const hireYmd = h.slice(0, 10);
+  const created = await createMilestonesForAssignment(assignmentId, hireYmd);
+  if (created.error) return { error: created.error };
+  return syncMentorshipMilestoneDueDatesFromHireForAssignment(admin, assignmentId);
+}
 
 const EXISTING_SELECT =
   "id, hire_date, notes, mentee_display_name, mentee_user_id, active, mentee_personal_email, mentee_phone, mentor_user_id, mentor_employee_number" as const;
@@ -287,11 +309,31 @@ export async function upsertMentorAssignmentFromSuperAdmin(
       .update(updatePayload)
       .eq("id", existing.id);
     if (updErr) return { error: updErr.message };
-    return { created: false, updated: dataChanged };
+    const milestoneResult = await ensureStandardMentorshipMilestonesForAssignment(
+      admin,
+      existing.id,
+      params.hireDate,
+    );
+    if (milestoneResult.error) return { error: milestoneResult.error };
+    return { created: false, updated: dataChanged, assignmentId: existing.id };
   }
 
-  const { error: insErr } = await admin.from("mentor_assignments").insert(insertPayload);
+  const { data: inserted, error: insErr } = await admin
+    .from("mentor_assignments")
+    .insert(insertPayload)
+    .select("id")
+    .single();
 
   if (insErr) return { error: insErr.message };
-  return { created: true, updated: false };
+  const newId = (inserted as { id: string } | null)?.id;
+  if (!newId) {
+    return { error: "Assignment was created but id could not be read." };
+  }
+  const insMilestoneResult = await ensureStandardMentorshipMilestonesForAssignment(
+    admin,
+    newId,
+    params.hireDate,
+  );
+  if (insMilestoneResult.error) return { error: insMilestoneResult.error };
+  return { created: true, updated: false, assignmentId: newId };
 }

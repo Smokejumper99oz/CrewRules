@@ -2,10 +2,12 @@ import Link from "next/link";
 import type { MentoringOverviewStats } from "@/lib/mentoring/admin-overview-stats";
 import { GraduationCap } from "lucide-react";
 
+/** Matches super-admin KPI tiles (`super-admin-kpi-cards`). */
 const cardInteractive =
-  "group block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[#75C043]/40 hover:shadow-md";
+  "group block rounded-xl border border-slate-700/50 bg-slate-800/50 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-600/60 hover:bg-slate-800/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/35";
 
-const cardFlat = "block rounded-xl border border-slate-200 bg-white p-4 shadow-sm";
+const cardFlat =
+  "block rounded-xl border border-slate-700/50 bg-slate-800/50 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#75C043]/35";
 
 type Props = {
   stats: MentoringOverviewStats;
@@ -32,19 +34,19 @@ export function MentoringOverviewCard({
 
   const requestsPillClass = hasOpenProgramRequests
     ? disableHover
-      ? "inline-flex w-fit items-center rounded-md border border-amber-500/40 bg-amber-500/20 px-3 py-1.5 text-[11px] font-semibold text-amber-300/95 shadow-[0_0_0_1px_rgba(245,158,11,0.08)]"
-      : "inline-flex w-fit items-center rounded-md border border-amber-500/40 bg-amber-500/20 px-3 py-1.5 text-[11px] font-semibold text-amber-300/95 shadow-[0_0_0_1px_rgba(245,158,11,0.08)] transition-colors group-hover:border-amber-400/45 group-hover:bg-amber-500/25 group-hover:text-amber-200"
+      ? "inline-flex w-fit items-center rounded-md border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-[11px] font-semibold text-amber-300"
+      : "inline-flex w-fit items-center rounded-md border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-[11px] font-semibold text-amber-300 transition-colors group-hover:border-amber-400/50 group-hover:bg-amber-500/20 group-hover:text-amber-200"
     : disableHover
-      ? "inline-flex w-fit items-center rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm"
-      : "inline-flex w-fit items-center rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm transition-colors group-hover:border-[#75C043]/40 group-hover:bg-white group-hover:text-[#75C043]";
+      ? "inline-flex w-fit items-center rounded-md border border-slate-600/50 bg-slate-900/40 px-3 py-1.5 text-[11px] font-semibold text-slate-300"
+      : "inline-flex w-fit items-center rounded-md border border-slate-600/50 bg-slate-900/40 px-3 py-1.5 text-[11px] font-semibold text-slate-300 transition-colors group-hover:border-[#75C043]/40 group-hover:bg-slate-800/60 group-hover:text-[#75C043]";
 
   return (
     <Link href={manageHref} className={disableHover ? cardFlat : cardInteractive}>
-      <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-2 mb-3">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-700/50 pb-2 mb-3">
         <div className="flex items-center gap-2 min-w-0">
-          <GraduationCap className="size-4 text-cyan-600 shrink-0" aria-hidden />
+          <GraduationCap className="size-4 text-slate-400 shrink-0" aria-hidden />
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-[#1a2b4b]">Mentoring Overview</h2>
+            <h2 className="text-sm font-semibold text-slate-200">Mentoring Overview</h2>
             {subtitle ? <p className="text-[11px] text-slate-500 mt-0.5 truncate">{subtitle}</p> : null}
           </div>
         </div>
@@ -81,9 +83,9 @@ export function MentoringOverviewCard({
 function Stat({ label, value, warn }: { label: string; value: number; warn?: boolean }) {
   return (
     <div className="min-w-0">
-      <div className="text-[11px] text-slate-500 leading-tight">{label}</div>
+      <div className="text-[11px] text-slate-400 leading-tight">{label}</div>
       <div
-        className={`text-xl font-semibold tabular-nums ${warn ? "text-amber-700" : "text-slate-900"}`}
+        className={`text-xl font-semibold tabular-nums ${warn ? "text-amber-400" : "text-slate-200"}`}
       >
         {value}
       </div>

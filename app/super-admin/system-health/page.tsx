@@ -7,6 +7,8 @@ import {
 
 const sectionCard = "rounded-xl border border-slate-700/50 bg-slate-800/50 p-4";
 
+export const dynamic = "force-dynamic";
+
 export default async function SuperAdminSystemHealthPage() {
   await gateSuperAdmin();
 

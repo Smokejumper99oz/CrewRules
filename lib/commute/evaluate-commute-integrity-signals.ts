@@ -86,17 +86,17 @@ function bothProvidersSucceeded(p: CommuteIntegrityProviders): boolean {
 
 /**
  * Shared V1 coverage rules (Super Admin events + user-facing warning).
- * Order: single_provider, no_live_fields_same_day.
+ * Order: aviationstack_empty_fallback / single_provider, no_live_fields_same_day.
  */
 export function collectCoverageReasonCodes(input: CommuteCoverageSignalInput): CommuteCoverageReasonCode[] {
   const codes: CommuteCoverageReasonCode[] = [];
 
-  if (
-    bothProvidersSucceeded(input.providers) &&
-    ((input.aviationstackCount === 0 && input.aerodataboxCount > 0) ||
-      (input.aerodataboxCount === 0 && input.aviationstackCount > 0))
-  ) {
-    codes.push("single_provider");
+  if (bothProvidersSucceeded(input.providers)) {
+    if (input.aviationstackCount === 0 && input.aerodataboxCount > 0) {
+      codes.push("aviationstack_empty_fallback");
+    } else if (input.aerodataboxCount === 0 && input.aviationstackCount > 0) {
+      codes.push("single_provider");
+    }
   }
 
   const withLive = countWithLiveEvidence(input.mergedFlightsForLiveScan);
@@ -123,7 +123,7 @@ export function getCommuteCoverageForClient(input: CommuteCoverageSignalInput): 
 
 /**
  * When reading legacy cache without stored coverage metadata: flight-derived signals only
- * (same-day no live). Omits single_provider (needs provider counts).
+ * (same-day no live). Omits aviationstack_empty_fallback / single_provider (needs provider counts).
  */
 export function getCommuteCoverageForCacheFallback(
   flights: CommuteFlight[],
@@ -143,11 +143,18 @@ function adminSpecForCode(code: CommuteCoverageReasonCode, input: CommuteIntegri
   const d = input.destination;
   const date = input.commuteDate;
   switch (code) {
+    case "aviationstack_empty_fallback":
+      return {
+        reasonCode: code,
+        severity: "info",
+        title: "Coverage Notice",
+        message: "AviationStack returned no flights; fallback provider used",
+      };
     case "single_provider":
       return {
         reasonCode: code,
         severity: "warning",
-        title: "Commute Assist: single provider returned flights",
+        title: "Commute Assist: Single provider returned flights",
         message: `Only one flight provider returned results for ${o}→${d} on ${date} (AviationStack: ${input.aviationstackCount}, AeroDataBox: ${input.aerodataboxCount}).`,
       };
     case "low_flight_count":

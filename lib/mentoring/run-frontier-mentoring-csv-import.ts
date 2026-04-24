@@ -6,7 +6,6 @@ import {
   parseFrontierMentoringCsv,
 } from "@/lib/mentoring/mentoring-csv-import";
 import { upsertMentorAssignmentFromSuperAdmin } from "@/lib/mentoring/super-admin-sync-assignment";
-import { createMilestonesForAssignment } from "@/lib/mentoring/create-milestones-for-assignment";
 
 export type MentoringCsvImportRowDisplay = {
   menteeName: string;
@@ -342,49 +341,11 @@ export async function runFrontierMentoringCsvImport(
         ? "Updated (filled missing data)"
         : "No changes (already up to date)";
 
-    const assignmentLookup = mentorUserId
-      ? await admin
-          .from("mentor_assignments")
-          .select("id")
-          .eq("mentor_user_id", mentorUserId)
-          .eq("employee_number", menteeEmp)
-          .maybeSingle()
-      : mentorEmp
-        ? await admin
-            .from("mentor_assignments")
-            .select("id")
-            .is("mentor_user_id", null)
-            .eq("mentor_employee_number", mentorEmp)
-            .eq("employee_number", menteeEmp)
-            .maybeSingle()
-        : await admin
-            .from("mentor_assignments")
-            .select("id")
-            .is("mentor_user_id", null)
-            .is("mentor_employee_number", null)
-            .eq("employee_number", menteeEmp)
-            .maybeSingle();
-
-    const { data: assignmentRow, error: assignmentLookupErr } = assignmentLookup;
-
-    if (assignmentLookupErr || !assignmentRow?.id) {
+    if (!("assignmentId" in sync) || !sync.assignmentId) {
       results.push({
         rowNumber,
         success: false,
-        message:
-          assignmentLookupErr?.message ??
-          "Assignment saved but could not resolve assignment id for milestones.",
-        display: rowDisplay(mentorEmp, menteeEmp, menteeName, mentorFullNameForDisplay),
-      });
-      continue;
-    }
-
-    const milestoneResult = await createMilestonesForAssignment(assignmentRow.id, hireDateNorm);
-    if (milestoneResult.error) {
-      results.push({
-        rowNumber,
-        success: false,
-        message: milestoneResult.error,
+        message: "Assignment saved but result did not include assignment id.",
         display: rowDisplay(mentorEmp, menteeEmp, menteeName, mentorFullNameForDisplay),
       });
       continue;
