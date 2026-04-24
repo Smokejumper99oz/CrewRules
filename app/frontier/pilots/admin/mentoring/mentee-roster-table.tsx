@@ -55,6 +55,8 @@ export type MenteeRosterRow = {
   key: string;
   /** `mentor_assignments.id` when this row is assignment-backed; null for synthetic first-year rows without an assignment. */
   assignment_id: string | null;
+  /** Mentee `profiles.id` in tenant/portal; set for synthetic unassigned rows and for assignment rows when linked. */
+  mentee_user_id: string | null;
   name: string;
   employee_number: string;
   hire_date: string | null;
@@ -438,6 +440,13 @@ export function MenteeRosterTable({
                       key={`reassign-${r.assignment_id}-${r.mentor_name ?? ""}`}
                       assignmentId={r.assignment_id}
                       currentMentorName={r.mentor_name}
+                      mentorOptions={mentorOptions}
+                    />
+                  ) : r.mentee_user_id ? (
+                    <MenteeRosterReassignMentor
+                      key={`assign-${r.mentee_user_id}`}
+                      variant="assign"
+                      menteeUserId={r.mentee_user_id}
                       mentorOptions={mentorOptions}
                     />
                   ) : (

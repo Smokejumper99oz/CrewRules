@@ -54,6 +54,7 @@ import {
   type MentorNameLookupOutputRow,
   type MentorNameLookupProfileRow,
 } from "@/lib/mentoring/mentor-name-lookup";
+import { upsertMentorAssignmentFromSuperAdmin } from "@/lib/mentoring/super-admin-sync-assignment";
 
 export type {
   MentoringCsvImportMeta,
@@ -697,6 +698,71 @@ export async function reassignFrontierPilotAdminMentorAssignment(
   return {};
 }
 
+type ResolvePilotAdminMentorSelectionResult =
+  | { unassign: true }
+  | { newMentorUserId: string | null; newMentorEmployeeNumber: string | null };
+
+/**
+ * `mentorSelection`: `__UNASSIGN__`, `profile:<profiles.id>`, or `preload:<mentor_preload.id>`
+ * (same as `MenteeRosterMentorOption.optionKey`).
+ */
+async function resolvePilotAdminMentorSelection(
+  mentorSelection: string
+): Promise<{ error: string } | ResolvePilotAdminMentorSelectionResult> {
+  const sel = mentorSelection.trim();
+  if (sel === "__UNASSIGN__") {
+    return { unassign: true };
+  }
+  if (!sel) {
+    return { error: "Select a mentor or unassign." };
+  }
+  if (sel.startsWith("profile:")) {
+    const uid = sel.slice("profile:".length).trim();
+    if (!uid) {
+      return { error: "Invalid selection." };
+    }
+    const adminProfile = createAdminClient();
+    const { data: prof, error: profErr } = await adminProfile
+      .from("profiles")
+      .select("employee_number")
+      .eq("id", uid)
+      .eq("tenant", TENANT)
+      .eq("portal", PORTAL)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (profErr) {
+      return { error: profErr.message };
+    }
+    const empNorm = prof?.employee_number != null ? String(prof.employee_number).trim() : "";
+    return {
+      newMentorUserId: uid,
+      newMentorEmployeeNumber: empNorm.length > 0 ? empNorm : null,
+    };
+  }
+  if (sel.startsWith("preload:")) {
+    const preloadId = sel.slice("preload:".length).trim();
+    if (!preloadId) {
+      return { error: "Invalid selection." };
+    }
+    const admin = createAdminClient();
+    const { data: pre, error: preErr } = await admin
+      .from("mentor_preload")
+      .select("employee_number")
+      .eq("id", preloadId)
+      .eq("tenant", TENANT)
+      .maybeSingle();
+    if (preErr) {
+      return { error: preErr.message };
+    }
+    const emp = pre?.employee_number != null ? String(pre.employee_number).trim() : "";
+    if (!emp) {
+      return { error: "Invalid staged mentor." };
+    }
+    return { newMentorUserId: null, newMentorEmployeeNumber: emp };
+  }
+  return { error: "Invalid selection." };
+}
+
 export type ReassignFrontierPilotAdminMentorAssignmentFormState = {
   error: string | null;
   success?: boolean;
@@ -721,58 +787,23 @@ export async function reassignFrontierPilotAdminMentorAssignmentFormState(
     return { error: "Select a mentor or unassign." };
   }
 
+  const resolved = await resolvePilotAdminMentorSelection(mentorSelection);
+  if ("error" in resolved) {
+    return { error: resolved.error };
+  }
   let params: ReassignFrontierPilotAdminMentorAssignmentInput;
-
-  if (mentorSelection === "__UNASSIGN__") {
+  if ("unassign" in resolved && resolved.unassign) {
     params = {
       assignmentId,
       newMentorUserId: null,
       newMentorEmployeeNumber: null,
     };
-  } else if (mentorSelection.startsWith("profile:")) {
-    const uid = mentorSelection.slice("profile:".length).trim();
-    if (!uid) {
-      return { error: "Invalid selection." };
-    }
-    const adminProfile = createAdminClient();
-    const { data: prof, error: profErr } = await adminProfile
-      .from("profiles")
-      .select("employee_number")
-      .eq("id", uid)
-      .eq("tenant", TENANT)
-      .eq("portal", PORTAL)
-      .is("deleted_at", null)
-      .maybeSingle();
-    if (profErr) {
-      return { error: profErr.message };
-    }
-    const empNorm =
-      prof?.employee_number != null ? String(prof.employee_number).trim() : "";
+  } else if ("newMentorUserId" in resolved) {
     params = {
       assignmentId,
-      newMentorUserId: uid,
-      newMentorEmployeeNumber: empNorm.length > 0 ? empNorm : null,
+      newMentorUserId: resolved.newMentorUserId,
+      newMentorEmployeeNumber: resolved.newMentorEmployeeNumber,
     };
-  } else if (mentorSelection.startsWith("preload:")) {
-    const preloadId = mentorSelection.slice("preload:".length).trim();
-    if (!preloadId) {
-      return { error: "Invalid selection." };
-    }
-    const admin = createAdminClient();
-    const { data: pre, error: preErr } = await admin
-      .from("mentor_preload")
-      .select("employee_number")
-      .eq("id", preloadId)
-      .eq("tenant", TENANT)
-      .maybeSingle();
-    if (preErr) {
-      return { error: preErr.message };
-    }
-    const emp = pre?.employee_number != null ? String(pre.employee_number).trim() : "";
-    if (!emp) {
-      return { error: "Invalid staged mentor." };
-    }
-    params = { assignmentId, newMentorUserId: null, newMentorEmployeeNumber: emp };
   } else {
     return { error: "Invalid selection." };
   }
@@ -780,6 +811,96 @@ export async function reassignFrontierPilotAdminMentorAssignmentFormState(
   const result = await reassignFrontierPilotAdminMentorAssignment(params);
   if (result.error) {
     return { error: result.error };
+  }
+
+  revalidatePath("/frontier/pilots/admin/mentoring/mentee-roster");
+  return { error: null, success: true };
+}
+
+export type AssignFrontierPilotAdminSyntheticMenteeFormState = {
+  error: string | null;
+  success?: boolean;
+};
+
+/**
+ * Create `mentor_assignments` (and standard milestones) for a first-year profile row on the
+ * mentee roster with no existing assignment, then assign a mentor. Same tenant/portal as
+ * `reassignFrontierPilotAdminMentorAssignment`.
+ */
+export async function assignFrontierPilotAdminSyntheticMenteeFormState(
+  _prev: AssignFrontierPilotAdminSyntheticMenteeFormState,
+  formData: FormData
+): Promise<AssignFrontierPilotAdminSyntheticMenteeFormState> {
+  const gate = await ensureFrontierPilotsTenantAdmin();
+  if (gate.error) {
+    return { error: gate.error };
+  }
+
+  const menteeUserId = String(formData.get("menteeUserId") ?? "").trim();
+  const mentorSelection = String(formData.get("mentorSelection") ?? "").trim();
+
+  if (!menteeUserId) {
+    return { error: "Invalid mentee." };
+  }
+  if (!mentorSelection || mentorSelection === "__UNASSIGN__") {
+    return { error: "Select a mentor." };
+  }
+
+  const resolved = await resolvePilotAdminMentorSelection(mentorSelection);
+  if ("error" in resolved) {
+    return { error: resolved.error };
+  }
+  if ("unassign" in resolved && resolved.unassign) {
+    return { error: "Select a mentor." };
+  }
+  if (!("newMentorUserId" in resolved)) {
+    return { error: "Invalid selection." };
+  }
+
+  const admin = createAdminClient();
+  const { data: menteeProf, error: menteeErr } = await admin
+    .from("profiles")
+    .select("id, full_name, employee_number, date_of_hire, personal_email, phone")
+    .eq("id", menteeUserId)
+    .eq("tenant", TENANT)
+    .eq("portal", PORTAL)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (menteeErr) {
+    return { error: menteeErr.message };
+  }
+  if (!menteeProf?.id) {
+    return { error: "Mentee profile not found in this tenant." };
+  }
+  const menteeEmp = menteeProf.employee_number != null ? String(menteeProf.employee_number).trim() : "";
+  if (!menteeEmp) {
+    return { error: "Mentee has no employee number; cannot create assignment." };
+  }
+
+  const hireDate =
+    menteeProf.date_of_hire != null && String(menteeProf.date_of_hire).trim() !== ""
+      ? String(menteeProf.date_of_hire)
+      : null;
+  const displayName = (menteeProf.full_name ?? "").trim();
+  const personalEmail =
+    menteeProf.personal_email != null ? String(menteeProf.personal_email).trim() : "";
+  const phone = menteeProf.phone != null ? String(menteeProf.phone).trim() : "";
+
+  const up = await upsertMentorAssignmentFromSuperAdmin(admin, {
+    mentorUserId: resolved.newMentorUserId,
+    mentorEmployeeNumber: resolved.newMentorEmployeeNumber,
+    menteeEmployeeNumber: menteeEmp,
+    tenant: TENANT,
+    portal: PORTAL,
+    hireDate: hireDate ?? undefined,
+    menteeDisplayName: displayName || undefined,
+    menteePersonalEmail: personalEmail || undefined,
+    menteePhone: phone || undefined,
+  });
+
+  if ("error" in up) {
+    return { error: up.error };
   }
 
   revalidatePath("/frontier/pilots/admin/mentoring/mentee-roster");

@@ -4,7 +4,9 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MenteeRosterMentorOption } from "@/app/frontier/pilots/admin/mentoring/mentee-roster/mentee-roster-mentor-options";
 import {
+  assignFrontierPilotAdminSyntheticMenteeFormState,
   reassignFrontierPilotAdminMentorAssignmentFormState,
+  type AssignFrontierPilotAdminSyntheticMenteeFormState,
   type ReassignFrontierPilotAdminMentorAssignmentFormState,
 } from "@/app/frontier/pilots/admin/mentoring/actions";
 import {
@@ -14,31 +16,39 @@ import {
 
 const UNASSIGN_VALUE = "__UNASSIGN__";
 
-const initial: ReassignFrontierPilotAdminMentorAssignmentFormState = { error: null };
+const initialReassign: ReassignFrontierPilotAdminMentorAssignmentFormState = { error: null };
+const initialAssign: AssignFrontierPilotAdminSyntheticMenteeFormState = { error: null };
 
-type Props = {
-  assignmentId: string;
-  currentMentorName?: string | null;
-  currentMentorEmployeeNumber?: string | null;
-  mentorOptions: MenteeRosterMentorOption[];
-};
+type Props =
+  | {
+      variant?: "reassign";
+      assignmentId: string;
+      currentMentorName?: string | null;
+      currentMentorEmployeeNumber?: string | null;
+      mentorOptions: MenteeRosterMentorOption[];
+    }
+  | {
+      variant: "assign";
+      menteeUserId: string;
+      mentorOptions: MenteeRosterMentorOption[];
+    };
 
-export function MenteeRosterReassignMentor({
-  assignmentId,
-  currentMentorName,
-  currentMentorEmployeeNumber,
-  mentorOptions,
-}: Props) {
+export function MenteeRosterReassignMentor(props: Props) {
   const router = useRouter();
+  const variant = props.variant ?? "reassign";
   const [open, setOpen] = useState(false);
-  const [mentorSelection, setMentorSelection] = useState(UNASSIGN_VALUE);
+  const [mentorSelection, setMentorSelection] = useState(() =>
+    variant === "assign" ? "" : UNASSIGN_VALUE
+  );
   const [state, formAction, isPending] = useActionState(
-    reassignFrontierPilotAdminMentorAssignmentFormState,
-    initial
+    variant === "assign"
+      ? assignFrontierPilotAdminSyntheticMenteeFormState
+      : reassignFrontierPilotAdminMentorAssignmentFormState,
+    variant === "assign" ? initialAssign : initialReassign
   );
 
   const searchableMentorOptions: SearchableFormSelectOption[] = useMemo(() => {
-    const fromMentors: SearchableFormSelectOption[] = mentorOptions.map((o) => {
+    const fromMentors: SearchableFormSelectOption[] = props.mentorOptions.map((o) => {
       const emp = (o.mentorEmployeeNumber ?? "").trim();
       const keywords = [emp, o.rowKind].filter(Boolean).join(" ");
       return {
@@ -47,6 +57,9 @@ export function MenteeRosterReassignMentor({
         keywords: keywords || undefined,
       };
     });
+    if (variant === "assign") {
+      return fromMentors;
+    }
     return [
       {
         value: UNASSIGN_VALUE,
@@ -55,26 +68,33 @@ export function MenteeRosterReassignMentor({
       },
       ...fromMentors,
     ];
-  }, [mentorOptions]);
+  }, [props.mentorOptions, variant]);
 
   useEffect(() => {
     if (state.success) {
       setOpen(false);
-      setMentorSelection(UNASSIGN_VALUE);
+      setMentorSelection(variant === "assign" ? "" : UNASSIGN_VALUE);
       router.refresh();
     }
-  }, [state.success, router]);
+  }, [state.success, router, variant]);
 
   useEffect(() => {
-    if (open) setMentorSelection(UNASSIGN_VALUE);
-  }, [open]);
+    if (open) {
+      setMentorSelection(variant === "assign" ? "" : UNASSIGN_VALUE);
+    }
+  }, [open, variant]);
 
-  const currentHint = [
-    (currentMentorName ?? "").trim(),
-    (currentMentorEmployeeNumber ?? "").trim(),
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const currentHint =
+    "assignmentId" in props
+      ? [
+          (props.currentMentorName ?? "").trim(),
+          (props.currentMentorEmployeeNumber ?? "").trim(),
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : "";
+
+  const actionLabel = variant === "assign" ? "Assign" : "Reassign";
 
   return (
     <div className="min-w-0">
@@ -85,12 +105,16 @@ export function MenteeRosterReassignMentor({
         title={currentHint ? `Current: ${currentHint}` : undefined}
         className="touch-manipulation whitespace-nowrap text-[11px] font-semibold leading-none text-emerald-800 hover:text-emerald-900 hover:underline disabled:opacity-50 disabled:hover:no-underline"
       >
-        {open ? "Close" : "Reassign"}
+        {open ? "Close" : actionLabel}
       </button>
 
       {open ? (
         <form action={formAction} className="mt-1.5 flex w-full min-w-0 flex-col gap-1.5">
-          <input type="hidden" name="assignmentId" value={assignmentId} />
+          {"menteeUserId" in props ? (
+            <input type="hidden" name="menteeUserId" value={props.menteeUserId} />
+          ) : (
+            <input type="hidden" name="assignmentId" value={props.assignmentId} />
+          )}
           <label className="block min-w-0">
             <span className="sr-only">Mentor</span>
             <SearchableFormSelect

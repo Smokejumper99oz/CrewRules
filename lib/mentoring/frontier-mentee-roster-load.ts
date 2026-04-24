@@ -477,6 +477,7 @@ export async function loadFrontierPilotMenteeRosterPageData(options: LoadFrontie
     roster.push({
       key: a.id,
       assignment_id: a.id,
+      mentee_user_id: a.mentee_user_id != null && String(a.mentee_user_id).trim() !== "" ? String(a.mentee_user_id).trim() : null,
       name,
       employee_number: emp || "—",
       hire_date: hireDate,
@@ -524,6 +525,7 @@ export async function loadFrontierPilotMenteeRosterPageData(options: LoadFrontie
     roster.push({
       key: `unassigned-${pr.id}`,
       assignment_id: null,
+      mentee_user_id: p.id,
       name: pr.full_name?.trim() || "—",
       employee_number: emp,
       hire_date: synHire,

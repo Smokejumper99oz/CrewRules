@@ -230,12 +230,15 @@ function buildTimelineSegments(
     if (a.kind === "milestone" && b.kind === "milestone") {
       return milestoneProgramRank(a.m.milestone_type) - milestoneProgramRank(b.m.milestone_type);
     }
-    const ac = a.ci;
-    const bc = b.ci;
-    const ta = new Date(ac.created_at).getTime();
-    const tb = new Date(bc.created_at).getTime();
-    if (ta !== tb) return ta - tb;
-    return ac.id < bc.id ? -1 : ac.id > bc.id ? 1 : 0;
+    if (a.kind === "standalone" && b.kind === "standalone") {
+      const ac = a.ci;
+      const bc = b.ci;
+      const ta = new Date(ac.created_at).getTime();
+      const tb = new Date(bc.created_at).getTime();
+      if (ta !== tb) return ta - tb;
+      return ac.id < bc.id ? -1 : ac.id > bc.id ? 1 : 0;
+    }
+    return 0;
   });
   return out;
 }
