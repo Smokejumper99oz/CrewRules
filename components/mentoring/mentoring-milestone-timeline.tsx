@@ -15,6 +15,7 @@ import {
   updateMentorshipCheckIn,
   type MentorshipMilestoneAttemptRow,
 } from "@/app/frontier/pilots/portal/mentoring/actions";
+import { milestoneProgramRank } from "@/lib/mentoring/milestone-program-order";
 
 export type MentoringCheckInItem = {
   id: string;
@@ -161,6 +162,23 @@ function dueYmd(m: MentoringMilestoneTimelineItem): string {
   return String(m.due_date ?? "").trim().slice(0, 10);
 }
 
+/**
+ * Date used to order a milestone in the combined timeline. Completed: `completed_at` (YMD) if
+ * present, else `completed_date`; pending: `due_date`.
+ */
+function milestoneEventSortKeyYmd(m: MentoringMilestoneTimelineItem): string {
+  const hasCompletion = Boolean(m.completed_date?.trim()) || Boolean(m.completed_at?.trim());
+  if (hasCompletion) {
+    const at = m.completed_at?.trim() ?? "";
+    const ymdAt = at.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(ymdAt)) return ymdAt;
+    const cd = m.completed_date?.trim() ?? "";
+    const ymdCd = cd.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(ymdCd)) return ymdCd;
+  }
+  return dueYmd(m);
+}
+
 function formatMenteeMilestoneUpdateTimestamp(iso: string): string {
   const t = iso?.trim() ?? "";
   if (!t) return "";
@@ -195,31 +213,30 @@ function buildTimelineSegments(
   checkIns: MentoringCheckInItem[]
 ): TimelineSegment[] {
   const standalone = standaloneCheckInsForTimeline(checkIns, items);
-  if (items.length === 0) {
-    return standalone.map((ci) => ({ kind: "standalone" as const, ci }));
-  }
   const out: TimelineSegment[] = [];
-  const firstDue = dueYmd(items[0]);
-  const lastDue = dueYmd(items[items.length - 1]);
-  for (const ci of standalone) {
-    if (occurredYmd(ci) < firstDue) out.push({ kind: "standalone", ci });
-  }
-  for (let i = 0; i < items.length; i++) {
-    const m = items[i];
+  for (const m of items) {
     const attached = checkIns.filter((c) => occurredYmd(c) === dueYmd(m));
     out.push({ kind: "milestone", m, attached });
-    if (i < items.length - 1) {
-      const lo = dueYmd(m);
-      const hi = dueYmd(items[i + 1]);
-      for (const ci of standalone) {
-        const o = occurredYmd(ci);
-        if (o > lo && o < hi) out.push({ kind: "standalone", ci });
-      }
-    }
   }
   for (const ci of standalone) {
-    if (occurredYmd(ci) > lastDue) out.push({ kind: "standalone", ci });
+    out.push({ kind: "standalone", ci });
   }
+  out.sort((a, b) => {
+    const ka = a.kind === "milestone" ? milestoneEventSortKeyYmd(a.m) : occurredYmd(a.ci);
+    const kb = b.kind === "milestone" ? milestoneEventSortKeyYmd(b.m) : occurredYmd(b.ci);
+    if (ka !== kb) return ka < kb ? -1 : 1;
+    if (a.kind === "milestone" && b.kind === "standalone") return -1;
+    if (a.kind === "standalone" && b.kind === "milestone") return 1;
+    if (a.kind === "milestone" && b.kind === "milestone") {
+      return milestoneProgramRank(a.m.milestone_type) - milestoneProgramRank(b.m.milestone_type);
+    }
+    const ac = a.ci;
+    const bc = b.ci;
+    const ta = new Date(ac.created_at).getTime();
+    const tb = new Date(bc.created_at).getTime();
+    if (ta !== tb) return ta - tb;
+    return ac.id < bc.id ? -1 : ac.id > bc.id ? 1 : 0;
+  });
   return out;
 }
 
