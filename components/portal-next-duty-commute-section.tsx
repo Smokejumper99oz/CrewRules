@@ -131,7 +131,7 @@ export function PortalNextDutyCommuteSection({
             href={`/${tenant}/${portal}/portal/settings/subscription`}
             className="inline-block text-sm font-medium text-[#75C043] hover:underline"
           >
-            {isEligibleForProTrialStartCta(profile) ? "Start free trial →" : "Subscribe now →"}
+            {isEligibleForProTrialStartCta(profile) ? "View Pro trial →" : "Subscribe now →"}
           </Link>
         </div>
       ) : (

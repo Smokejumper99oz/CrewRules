@@ -434,7 +434,7 @@ export function PilotProfilePersonalFields({
                     href={`/${profile.tenant}/${profile.portal}/portal/settings/subscription`}
                     className="mt-1 inline-block text-xs text-[#75C043] hover:underline"
                   >
-                    Start your free 14-day trial
+                    View Pro trial →
                   </Link>
                 )}
             </div>
