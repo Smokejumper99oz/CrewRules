@@ -68,6 +68,8 @@ export type Profile = {
   mentor_phone?: string | null;
   /** Preferred email on mentee Mentor Contact card; not the login email. */
   mentor_contact_email?: string | null;
+  /** Dedupe key for commute conflict alert emails (user_id + "_" + event start_time). */
+  last_commute_alert_trip_id?: string | null;
   /** Set when account deletion is scheduled or finalized (soft-delete). */
   deleted_at?: string | null;
   /** When scheduled account deletion should take effect. */
