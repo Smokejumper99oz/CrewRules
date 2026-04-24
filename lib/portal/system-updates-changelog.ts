@@ -17,6 +17,57 @@ export type SystemUpdateEntry = {
  */
 export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   {
+    date: "2026-04-24",
+    title: "Commute Assist — clearer “previous day” when same-day looks bad",
+    type: "improvement",
+    bullets: [
+      "When you’re commuting to base and every same-day option misses your arrival buffer, the warning now says you have no safe same-day options, with “Consider previous day” on the right. One tap still searches the day before, same as before.",
+      "If every same-day option is still within your buffer but all marked tight (risky), you get a different message: same-day commute looks tight, with the same “Consider previous day” action.",
+    ],
+  },
+  {
+    date: "2026-04-24",
+    title: "Commute Assist — completed flights are easier to read",
+    type: "improvement",
+    bullets: [
+      "Legs that have already landed or arrived can show as “Completed” with the same emerald styling as on-time, so your commute list is easier to scan at a glance.",
+    ],
+  },
+  {
+    date: "2026-04-24",
+    title: "Commute Assist — recurrent training deviation to base, fixed",
+    type: "fix",
+    bullets: [
+      "When you use commute deviation for recurrent training (home to the training city), to-base search now uses the training city, time zone, and arrive-by context instead of defaulting to crew base or the wrong day window.",
+      "Search day, scoring, and labels line up with the training block, so you are less likely to see a false “day prior” or a commute window that does not match your actual trip.",
+    ],
+  },
+  {
+    date: "2026-04-24",
+    title: "Current Trip — more accurate first-leg deadhead carrier",
+    type: "fix",
+    bullets: [
+      "Deadhead legs resolve against schedule and API data with tighter matching, without assuming Frontier when the data says a different market carrier.",
+      "When the carrier is still unknown, the UI can show a clear deadhead state instead of a misleading guess.",
+    ],
+  },
+  {
+    date: "2026-04-24",
+    title: "Family View™ — training gets the hero when it should",
+    type: "fix",
+    bullets: [
+      "On the shared page, the main trip strip can prefer your recurrent training block over later line trips when both are in play, and training companion or overnight cases are combined more sensibly so the family does not see the wrong “next” focus.",
+    ],
+  },
+  {
+    date: "2026-04-24",
+    title: "Pro trial — “View Pro trial” on menu links to subscription",
+    type: "improvement",
+    bullets: [
+      "Header and navigation call-to-action copy now says “View Pro trial” where it used to say “Start free trial,” and it leads into the same subscription and trial experience. The main subscription page button is unchanged.",
+    ],
+  },
+  {
     date: "2026-04-12",
     title: "FLICA import now removes stale traded trips later in the month",
     type: "fix",
@@ -32,6 +83,7 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
     bullets: [
       "The dashboard weather chip now uses your actual device location first when permitted, showing METAR-based conditions from the nearest suitable reporting station (U.S. NWS coverage).",
       "If location is denied, unavailable, or times out, the widget automatically falls back to the existing logic: active trip first-leg origin, then crew base from profile.",
+      "When you are not on an active trip, the chip can use your home airport from profile before your crew base, so the snapshot is more like where you actually are on days off.",
     ],
   },
   {

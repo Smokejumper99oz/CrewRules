@@ -71,7 +71,7 @@ export function PortalNextDutyCommuteSection({
       : null;
 
   const shouldAutoShow =
-    (daysUntilDuty !== null && daysUntilDuty <= 1 && daysUntilDuty >= -1) ||
+    (daysUntilDuty !== null && daysUntilDuty <= 3 && daysUntilDuty >= -1) ||
     label === "post_duty_release";
 
   const [showFlights, setShowFlights] = useState(shouldAutoShow);
@@ -112,7 +112,7 @@ export function PortalNextDutyCommuteSection({
       </div>
       {proActive && !showFlights && (
         <p className="mt-2 mb-3 text-xs text-slate-500 dark:text-slate-400">
-          Flights will appear automatically within 24 hours of your trip start or end. Click "Show Flights" above to view options now.
+          Flights will appear automatically within 3 days of duty. Click "Show Flights" above to view options now.
         </p>
       )}
       {!proActive ? (

@@ -254,6 +254,39 @@ function sortFlights(
   });
 }
 
+/**
+ * Direct to_base + "Earliest arrival" (arrAsc): sort the rest by arrival, then place the
+ * single latest-departure option last. Prevents an earlier departure with a later arrival
+ * (e.g. F9 20:32) from rendering below the "Last Flight" card (e.g. WN 20:35).
+ * All other mode/direction combinations delegate to `sortFlights` unchanged.
+ */
+function getOrderedDirectCommuteList(
+  list: CommuteFlightOption[],
+  sortBy: "arrAsc" | "arrDesc" | "durAsc" | "durDesc",
+  direction: "to_home" | "to_base",
+  commuteTwoLegEnabled: boolean
+): CommuteFlightOption[] {
+  if (direction !== "to_base" || commuteTwoLegEnabled || sortBy !== "arrAsc" || list.length <= 1) {
+    return sortFlights(list, sortBy);
+  }
+  const ensured = list.map(ensureOptionSortFields);
+  const L = ensured.reduce((best, f) => {
+    const d = sortDepMs(f);
+    const b = sortDepMs(best);
+    if (d > b) return f;
+    if (d < b) return best;
+    return f.id < best.id ? f : best;
+  });
+  const rest = ensured.filter((f) => f.id !== L.id);
+  rest.sort((a, b) => {
+    const arrA = new Date(a.sortArrUtc).getTime();
+    const arrB = new Date(b.sortArrUtc).getTime();
+    if (arrA !== arrB) return arrA - arrB;
+    return sortDepMs(a) - sortDepMs(b);
+  });
+  return [...rest, L];
+}
+
 /** Shared conversion: CommuteFlight → CommuteFlightOption. Used by direct and 2-leg paths. */
 function commuteFlightToOption(
   f: CommuteFlight,
@@ -1091,6 +1124,8 @@ export function CommuteAssistProContent({
   /** 2-leg first-leg full: leg1 + leg2 to crew base. Used when only stop1 is set. */
   const [twoLegFirstLegOptions, setTwoLegFirstLegOptions] = useState<TwoLegOption[]>([]);
   const [twoLegFirstLegPage, setTwoLegFirstLegPage] = useState(1);
+  /** When set, to_base flight search uses this YYYY-MM-DD instead of derived `toBaseCommuteSearchDate`. */
+  const [toBaseCommuteDateOverride, setToBaseCommuteDateOverride] = useState<string | null>(null);
 
   const baseTz = displaySettings.baseTimezone;
   const arrivalBuffer = profile?.commute_arrival_buffer_minutes ?? 60;
@@ -1170,6 +1205,12 @@ export function CommuteAssistProContent({
     return formatInTimeZone(searchDay, baseTz, "yyyy-MM-dd");
   })();
 
+  const toBaseCommuteDateForSearch = toBaseCommuteDateOverride ?? toBaseCommuteSearchDate;
+
+  useEffect(() => {
+    setToBaseCommuteDateOverride(null);
+  }, [toBaseCommuteSearchDate, direction]);
+
   /** End of commute calendar day at training station (23:59:59 local); to_base + deviation scoring anchor only. */
   const trainingArrivalDeadlineIso = useMemo(() => {
     if (!isTrainingDeviationToBaseCommute || !dutyOk) return null;
@@ -1231,7 +1272,7 @@ export function CommuteAssistProContent({
     if (commuteTwoLegEnabled) return [];
     const commuteDate =
       direction === "to_base"
-        ? toBaseCommuteSearchDate
+        ? toBaseCommuteDateForSearch
         : dutyEndDateBase ?? new Date().toISOString().slice(0, 10);
 
     if (direction === "to_base") {
@@ -1260,7 +1301,7 @@ export function CommuteAssistProContent({
     baseAirport,
     toBaseCommuteDestinationAirport,
     dutyEndAirport,
-    toBaseCommuteSearchDate,
+    toBaseCommuteDateForSearch,
     dutyEndDateBase,
   ]);
 
@@ -1275,7 +1316,7 @@ export function CommuteAssistProContent({
 
     const commuteDate =
       direction === "to_base"
-        ? toBaseCommuteSearchDate
+        ? toBaseCommuteDateForSearch
         : dutyEndDateBase ?? new Date().toISOString().slice(0, 10);
 
     const result: { origin: string; destination: string; routeKey: string; commuteDate: string }[] = [];
@@ -1297,7 +1338,7 @@ export function CommuteAssistProContent({
     homeAirport,
     alternateHomeAirport,
     direction,
-    toBaseCommuteSearchDate,
+    toBaseCommuteDateForSearch,
     dutyEndDateBase,
   ]);
 
@@ -1313,7 +1354,7 @@ export function CommuteAssistProContent({
 
     const commuteDate =
       direction === "to_base"
-        ? toBaseCommuteSearchDate
+        ? toBaseCommuteDateForSearch
         : dutyEndDateBase ?? new Date().toISOString().slice(0, 10);
 
     if (direction === "to_base") {
@@ -1348,7 +1389,7 @@ export function CommuteAssistProContent({
     return result;
   }, [
     direction,
-    toBaseCommuteSearchDate,
+    toBaseCommuteDateForSearch,
     dutyEndDateBase,
     homeAirport,
     alternateHomeAirport,
@@ -1969,8 +2010,21 @@ export function CommuteAssistProContent({
     setAlternatePage(1);
   }, [sortBy]);
 
-  const homeList = sortFlights(commuteGroups.home ?? [], sortBy);
-  const alternateList = sortFlights(commuteGroups.alternate ?? [], sortBy);
+  const homeList = getOrderedDirectCommuteList(
+    commuteGroups.home ?? [],
+    sortBy,
+    direction,
+    commuteTwoLegEnabled
+  );
+  const noSafeSameDay =
+    homeList.length > 0 && homeList.every((o) => o.risk === "not_recommended");
+  const allRisky = homeList.length > 0 && homeList.every((o) => o.risk === "risky");
+  const alternateList = getOrderedDirectCommuteList(
+    commuteGroups.alternate ?? [],
+    sortBy,
+    direction,
+    commuteTwoLegEnabled
+  );
   const homeLastFlightId =
     homeList.length > 0
       ? homeList.reduce((best, f) => (sortDepMs(f) > sortDepMs(best) ? f : best)).id
@@ -2062,11 +2116,21 @@ export function CommuteAssistProContent({
       }).catch(() => {});
     };
 
-    const homeSorted = sortFlights(commuteGroups.home ?? [], sortBy);
+    const homeSorted = getOrderedDirectCommuteList(
+      commuteGroups.home ?? [],
+      sortBy,
+      direction,
+      commuteTwoLegEnabled
+    );
     const homeMismatch = collectFlightsIfArrAscMismatchDirect(homeSorted);
     if (homeMismatch) reportMismatch(homeMismatch);
 
-    const altSorted = sortFlights(commuteGroups.alternate ?? [], sortBy);
+    const altSorted = getOrderedDirectCommuteList(
+      commuteGroups.alternate ?? [],
+      sortBy,
+      direction,
+      commuteTwoLegEnabled
+    );
     const altMismatch = collectFlightsIfArrAscMismatchDirect(altSorted);
     if (altMismatch) reportMismatch(altMismatch);
 
@@ -2087,6 +2151,7 @@ export function CommuteAssistProContent({
     commuteTwoLegEnabled,
     twoLegFirstLegRoutes,
     routes,
+    direction,
   ]);
 
   const didPaginateRef = useRef(false);
@@ -2219,11 +2284,16 @@ export function CommuteAssistProContent({
     ? (dutyOk
         ? isTrainingDeviationToBaseCommute
           ? "Same Day"
-          : toBaseCommuteSearchDate === dutyDateBase
+          : toBaseCommuteDateForSearch === dutyDateBase
             ? "Same Day"
             : "Day Prior"
         : "Same-day flights")
     : (dutyEndDateBase ? "Day of Release" : "Same-day flights");
+  const showPreviousDayCommuteCta =
+    direction === "to_base" &&
+    !commuteTwoLegEnabled &&
+    toBaseCommuteDateOverride === null &&
+    (noSafeSameDay || allRisky);
 
   return (
     <div className="mt-3 space-y-2">
@@ -2326,6 +2396,41 @@ export function CommuteAssistProContent({
           <p className="text-xs text-slate-400">
             Search Window •  {commuteWindowValue}
           </p>
+          {direction === "to_base" && toBaseCommuteDateOverride != null && (
+            <div className="mt-1.5 w-full">
+              <button
+                type="button"
+                onClick={() => setToBaseCommuteDateOverride(null)}
+                className="touch-target touch-pad flex w-full cursor-pointer items-center justify-between gap-3 rounded-md border border-sky-400/25 bg-sky-500/10 px-4 py-2 text-left text-sm font-medium text-sky-100 transition-colors hover:border-sky-300/40 hover:bg-sky-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              >
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="shrink-0 select-none" aria-hidden>
+                    ℹ️
+                  </span>
+                  <span>Using previous-day search</span>
+                </span>
+                <span className="shrink-0 text-sky-100">Use default search day</span>
+              </button>
+            </div>
+          )}
+          {showPreviousDayCommuteCta && (
+            <div className="mt-1.5 w-full">
+              <button
+                type="button"
+                onClick={() => setToBaseCommuteDateOverride(subtractDay(toBaseCommuteSearchDate))}
+                className="touch-target touch-pad flex w-full cursor-pointer items-center justify-between gap-3 rounded-md border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200 transition-colors duration-150 hover:border-amber-400/50 hover:bg-amber-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              >
+                <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                  <span>
+                    {noSafeSameDay
+                      ? "⚠️ No Safe same-day commute options"
+                      : "⚠️ Same-day commute looks tight"}
+                  </span>
+                </span>
+                <span className="shrink-0 text-amber-100">Consider previous day</span>
+              </button>
+            </div>
+          )}
           {direction === "to_base" && (
             <p className="text-xs text-slate-400">
               {arriveByFormatted === TRAINING_COMMUTE_ARRIVE_BY_LABEL ? (
