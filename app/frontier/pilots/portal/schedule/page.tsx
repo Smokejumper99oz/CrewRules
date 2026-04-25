@@ -792,7 +792,7 @@ export default function SchedulePage() {
           {isAdmin && importTechnicalError && (
             <details
               open={detailsOpen}
-              onToggle={(e) => setDetailsOpen((e.target as HTMLDetailsElement).open)}
+              onToggle={(e) => setDetailsOpen(e.currentTarget.open)}
               className="group"
             >
               <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-400 list-none flex items-center gap-1 [&::-webkit-details-marker]:hidden">

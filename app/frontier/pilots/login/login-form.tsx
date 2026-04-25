@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { signOut } from "../portal/actions";
 import { SignOutButton } from "@/components/sign-out-button";
 
@@ -30,6 +30,7 @@ export function LoginForm() {
   const [isPending, setIsPending] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     try {
@@ -143,14 +144,26 @@ export function LoginForm() {
 
             <div>
               <label className="text-sm text-slate-200">Password</label>
-              <input
-                name="password"
-                type="password"
-                placeholder="••••••••"
-                required
-                disabled={isPending}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
-              />
+              <div className="relative mt-2">
+                <input
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  required
+                  disabled={isPending}
+                  autoComplete="current-password"
+                  className="w-full rounded-xl border border-white/10 bg-slate-950/40 py-3 pl-4 pr-12 text-white placeholder:text-slate-500 outline-none focus:border-emerald-400/40"
+                />
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 disabled:opacity-40"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" aria-hidden /> : <Eye className="h-5 w-5" aria-hidden />}
+                </button>
+              </div>
             </div>
 
             <label className={`flex items-center gap-2 mt-3 ${isPending ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>

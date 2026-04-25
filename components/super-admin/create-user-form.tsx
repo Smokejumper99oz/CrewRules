@@ -1,22 +1,26 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { CheckCircle2, UserPlus, Info } from "lucide-react";
 import { createInvitedUser, type CreateUserState } from "@/app/super-admin/create-user/actions";
 import { TENANT_CONFIG } from "@/lib/tenant-config";
 
-const TENANT_OPTIONS = Object.entries(TENANT_CONFIG).map(([key, cfg]) => ({
-  value: key,
-  label: cfg.displayName,
-}));
+const TENANT_OPTIONS = [
+  ...Object.entries(TENANT_CONFIG).map(([key, cfg]) => ({
+    value: key,
+    label: cfg.displayName,
+  })),
+  { value: "demo135", label: "Demo 135 Ops" },
+];
 
 const PORTAL_OPTIONS = [
   { value: "pilots", label: "Pilot Portal" },
   { value: "flight-attendants", label: "Flight Attendant Portal" },
+  { value: "ops", label: "Ops (Management)" },
 ];
 
 const ROLE_OPTIONS = [
-  { value: "tenant_admin", label: "Admin (tenant_admin) — admin portal only, any email" },
+  { value: "tenant_admin", label: "Admin (tenant_admin) — Admin Portal Only / Any email" },
   { value: "pilot", label: "Pilot — standard pilot portal access" },
   { value: "flight_attendant", label: "Flight Attendant — FA portal access" },
 ];
@@ -25,6 +29,9 @@ const initial: CreateUserState = null;
 
 export function CreateUserForm() {
   const [state, action, isPending] = useActionState(createInvitedUser, initial);
+  const [tenant, setTenant] = useState("frontier");
+  const [portal, setPortal] = useState("pilots");
+  const isDemoOpsAdminCombo = tenant === "demo135" && portal === "ops";
 
   return (
     <div className="max-w-xl space-y-6">
@@ -48,6 +55,12 @@ export function CreateUserForm() {
       )}
 
       <form action={action} className="space-y-5">
+        {isDemoOpsAdminCombo && (
+          <p className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-200/95">
+            Demo Ops Admin Account
+          </p>
+        )}
+
         {/* Email */}
         <div>
           <label className="block text-sm font-medium text-slate-200 mb-1.5">
@@ -62,20 +75,20 @@ export function CreateUserForm() {
             className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-[#75C043]/50 disabled:opacity-50"
           />
           <p className="mt-1 text-xs text-slate-500">
-            Any email — not restricted to the airline domain. An invite link will be sent here.
+            Any email — Not restricted to the airline domain. An invite link will be sent here.
           </p>
         </div>
 
         {/* Full name */}
         <div>
           <label className="block text-sm font-medium text-slate-200 mb-1.5">
-            Full name <span className="text-slate-500">(optional)</span>
+            Full Name <span className="text-slate-500">(Optional)</span>
           </label>
           <input
             name="full_name"
             type="text"
             disabled={isPending}
-            placeholder="e.g. Justin Miller"
+            placeholder="e.g. Sven Folmer"
             className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-[#75C043]/50 disabled:opacity-50"
           />
         </div>
@@ -89,7 +102,8 @@ export function CreateUserForm() {
             name="tenant"
             required
             disabled={isPending}
-            defaultValue="frontier"
+            value={tenant}
+            onChange={(e) => setTenant(e.target.value)}
             className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2.5 text-sm text-white outline-none focus:border-[#75C043]/50 disabled:opacity-50"
           >
             {TENANT_OPTIONS.map((o) => (
@@ -109,7 +123,8 @@ export function CreateUserForm() {
             name="portal"
             required
             disabled={isPending}
-            defaultValue="pilots"
+            value={portal}
+            onChange={(e) => setPortal(e.target.value)}
             className="w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2.5 text-sm text-white outline-none focus:border-[#75C043]/50 disabled:opacity-50"
           >
             {PORTAL_OPTIONS.map((o) => (

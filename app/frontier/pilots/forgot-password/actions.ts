@@ -28,7 +28,7 @@ export async function sendResetEmail(
 
     const supabase = await createClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${origin}/frontier/pilots/reset-password`,
+      redirectTo: `${origin}/auth/reset-password`,
     });
 
     if (error) {

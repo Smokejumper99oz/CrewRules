@@ -12,12 +12,15 @@ export function SignOutButton({
   buttonClassName,
   children,
   role,
+  afterSignOutHref = LOGIN_PATH,
 }: {
   signOut: () => Promise<void>;
   className?: string;
   buttonClassName?: string;
   children: React.ReactNode;
   role?: string;
+  /** When set, browser navigates here after sign-out (default: Frontier pilots login). */
+  afterSignOutHref?: string;
 }) {
   const [pending, setPending] = useState(false);
   const router = useRouter();
@@ -32,7 +35,7 @@ export function SignOutButton({
     } catch {
       // Best-effort: clear browser storage; ignore errors
     }
-    window.location.replace(LOGIN_PATH);
+    window.location.replace(afterSignOutHref);
     setPending(false);
   }
 

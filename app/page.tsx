@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { RootRecoveryRedirect } from "@/components/auth/root-recovery-redirect";
 import { LandingHeader } from "@/components/landing-header";
 import { Button } from "@/components/ui/button";
 
@@ -41,6 +42,7 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white pb-[env(safe-area-inset-bottom,0px)]">
+      <RootRecoveryRedirect />
       {/* Background glows */}
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-40 left-1/2 h-[520px] w-[820px] -translate-x-1/2 rounded-full bg-emerald-500/12 blur-3xl" />

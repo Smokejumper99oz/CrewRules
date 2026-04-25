@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { gateSuperAdmin } from "@/lib/super-admin/gate";
+import { requireSuperAdminForServerAction } from "@/lib/super-admin/gate";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { insertMentoringImportHistory } from "@/lib/mentoring/mentoring-import-history";
 import { frontierMentoringAssignXlsxToCsvText } from "@/lib/mentoring/mentoring-workbook-first-sheet-to-csv-text";
@@ -25,7 +25,11 @@ export async function importFrontierMentoringCsv(
   _prev: MentoringCsvImportResult | null,
   formData: FormData
 ): Promise<MentoringCsvImportResult> {
-  const { profile } = await gateSuperAdmin();
+  const gate = await requireSuperAdminForServerAction();
+  if (!gate.ok) {
+    return { rows: [], fatalError: gate.error };
+  }
+  const { profile } = gate;
   const tenant = String(profile.tenant ?? "frontier").trim() || "frontier";
   const mentoringPortal = String(profile.portal ?? "pilots").trim() || "pilots";
   const uploaderId = profile.id;

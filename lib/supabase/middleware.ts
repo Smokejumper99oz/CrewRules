@@ -6,6 +6,8 @@ import { isSuperAdminAllowlistedEmail } from "@/lib/super-admin/allowlist";
 /** Same escape hatch as `gateUserForPortal` (restore / Danger Zone). */
 const FRONTIER_PILOTS_PORTAL_ACCOUNT_SETTINGS_PATH = "/frontier/pilots/portal/settings/account";
 
+const DEMO135_OPS_LOGIN_PATH = "/demo135/ops/login";
+
 function normalizeMiddlewarePathname(pathname: string): string {
   const pathOnly = pathname.split("?")[0]?.split("#")[0] ?? pathname;
   return pathOnly.replace(/\/+$/, "") || "/";
@@ -28,6 +30,8 @@ export async function updateSession(request: NextRequest) {
   const isPortalRoute = pathname.startsWith("/frontier/pilots/portal");
   const isPortalRoot = pathname === "/frontier/pilots/portal";
   const isAdminRoute = request.nextUrl.pathname.startsWith("/frontier/pilots/admin");
+  const isDemo135OpsAdminRoute =
+    pathname === "/demo135/ops/admin" || pathname.startsWith("/demo135/ops/admin/");
   const isSuperAdminRoute = request.nextUrl.pathname.startsWith("/super-admin");
   const isAuthRoute =
     request.nextUrl.pathname === "/frontier/pilots/login" ||
@@ -43,7 +47,9 @@ export async function updateSession(request: NextRequest) {
   const redirectLoggedInToPortal =
     request.nextUrl.pathname === "/login" ||
     request.nextUrl.pathname === "/frontier/pilots/login" ||
-    request.nextUrl.pathname === "/frontier/pilots/sign-up";
+    request.nextUrl.pathname === "/cr135/login" ||
+    request.nextUrl.pathname === "/frontier/pilots/sign-up" ||
+    request.nextUrl.pathname === DEMO135_OPS_LOGIN_PATH;
 
   let user: { id: string } | null = null;
   let isAdmin = false;
@@ -91,7 +97,14 @@ export async function updateSession(request: NextRequest) {
       user = null;
     }
 
-    if (user && (isAdminRoute || isSuperAdminRoute || redirectLoggedInToPortal || isFrontierPilotsPortalPath)) {
+    if (
+      user &&
+      (isAdminRoute ||
+        isSuperAdminRoute ||
+        redirectLoggedInToPortal ||
+        isFrontierPilotsPortalPath ||
+        isDemo135OpsAdminRoute)
+    ) {
       const { data: profile } = await supabase
         .from("profiles")
         .select("role, tenant, portal, is_admin")
@@ -115,6 +128,13 @@ export async function updateSession(request: NextRequest) {
   } catch {
     // Supabase unreachable (fetch failed, paused project, etc.)
     // Treat as no user so login/sign-up pages still load
+  }
+
+  if (isDemo135OpsAdminRoute && !user) {
+    const url = request.nextUrl.clone();
+    url.pathname = DEMO135_OPS_LOGIN_PATH;
+    url.searchParams.set("error", "not_signed_in");
+    return NextResponse.redirect(url);
   }
 
   if ((isPortalRoute || isAdminRoute || isSuperAdminRoute) && !user) {
@@ -141,6 +161,27 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/frontier/pilots/portal";
     return NextResponse.redirect(url);
+  }
+
+  if (user && isDemo135OpsAdminRoute) {
+    if (!isSuperAdmin) {
+      if (!loginGateProfile) {
+        const url = request.nextUrl.clone();
+        url.pathname = DEMO135_OPS_LOGIN_PATH;
+        url.searchParams.set("error", "profile_missing");
+        return NextResponse.redirect(url);
+      }
+      const ok =
+        loginGateProfile.role === "tenant_admin" &&
+        loginGateProfile.tenant === "demo135" &&
+        loginGateProfile.portal === "ops";
+      if (!ok) {
+        const url = request.nextUrl.clone();
+        url.pathname = DEMO135_OPS_LOGIN_PATH;
+        url.searchParams.set("error", "role_not_allowed");
+        return NextResponse.redirect(url);
+      }
+    }
   }
 
   if (isPortalRoot && user && isSuperAdmin) {

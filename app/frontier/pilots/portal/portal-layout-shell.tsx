@@ -40,6 +40,7 @@ const NAV_GROUPS = [
       { label: "Family View", href: "family-view", badge: "BETA" },
       { label: "Ask", href: "ask" },
       { label: "Library", href: "library" },
+      { label: "Guides", href: "guides" },
     ],
   },
   {
@@ -53,10 +54,10 @@ const NAV_GROUPS = [
   {
     title: "System",
     items: [
-      { label: "System updates", href: "updates" },
-      { label: "Archive", href: "archive" },
       { label: "Settings", href: "settings/pilot" },
+      { label: "System Updates", href: "updates" },
       { label: "About", href: "profile/about" },
+      { label: "Archive", href: "archive" },
     ],
   },
 ] as const;

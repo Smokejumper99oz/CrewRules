@@ -6,13 +6,14 @@ const PORTAL_TITLES: Record<string, string> = {
   "": "Dashboard",
   ask: "Ask AI",
   library: "Library",
+  guides: "Guides",
   schedule: "My Schedule",
   "family-view": "Family View",
   "weather-brief": "Weather Brief",
   forum: "Forum",
   notes: "Notes",
   mentoring: "Mentoring",
-  updates: "System updates",
+  updates: "System Updates",
   settings: "Settings",
   profile: "Profile",
   reserve: "Reserve",
@@ -61,6 +62,16 @@ export function PageTitle({ portalDisplayName = "", isAdmin = false, adminSurfac
 
   /** Admin index: single branded heading (replaces "Dashboard | … Admin"). */
   const isAdminHome = inAdmin && currentSegment === "";
+
+  if (!inAdmin && currentSegment === "guides" && nextSegment === "commute-assist-alerts") {
+    return (
+      <h1 className="min-w-0 truncate text-xl font-semibold tracking-normal border-b border-slate-200 pb-1 dark:border-white/5">
+        Commute Assist<span className="text-[#75C043]">™</span> Alerts
+        {context && <span className="text-slate-500 font-normal mx-1.5 dark:text-slate-400">|</span>}
+        {context && <span className="text-slate-500 font-normal dark:text-slate-400">{context}</span>}
+      </h1>
+    );
+  }
 
   // Weather Brief uses branded title with role context
   if (!inAdmin && currentSegment === "weather-brief") {

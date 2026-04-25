@@ -65,3 +65,50 @@ export async function gateSuperAdmin(): Promise<{ user: { id: string; email?: st
 
   redirect("/frontier/pilots/login?error=profile_missing");
 }
+
+/** For Server Actions called from forms (e.g. useActionState): never call redirect() — Next.js 15 treats that as a failed action response. */
+export type SuperAdminActionGateResult =
+  | { ok: true; user: { id: string; email?: string }; profile: Profile }
+  | { ok: false; error: string };
+
+export async function requireSuperAdminForServerAction(): Promise<SuperAdminActionGateResult> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "Your session expired. Refresh the page and sign in again." };
+  }
+
+  const email = (user.email ?? "").toLowerCase().trim();
+  const isAllowlisted = isSuperAdminAllowlistedEmail(email);
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, role, tenant, portal, email, full_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profile) {
+    const isSuperAdmin = profile.role === "super_admin" || isAllowlisted;
+    if (!isSuperAdmin) {
+      return { ok: false, error: "You do not have permission to perform this action." };
+    }
+    return {
+      ok: true,
+      user: { id: user.id, email: user.email ?? undefined },
+      profile: profile as Profile,
+    };
+  }
+
+  if (isAllowlisted) {
+    return {
+      ok: true,
+      user: { id: user.id, email: user.email ?? undefined },
+      profile: syntheticAllowlistProfile(user),
+    };
+  }
+
+  return { ok: false, error: "Profile missing. Sign in again or contact support." };
+}

@@ -3,6 +3,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 
+/**
+ * Exchanges a stored one-time token id for a Supabase invite action_link redirect.
+ * Used by Super Admin invite emails (/auth/accept-invite) so scanners cannot pre-consume
+ * the Supabase link embedded in the message.
+ */
 export async function acceptInvite(id: string): Promise<{ error: string } | never> {
   if (!id || typeof id !== "string") {
     return { error: "Invalid invite link." };
@@ -27,16 +32,11 @@ export async function acceptInvite(id: string): Promise<{ error: string } | neve
     return { error: "This invite has expired. Please ask your admin to send a new invite." };
   }
 
-  // Mark as used before redirecting to prevent double-use.
   await admin
     .from("tenant_admin_invite_tokens")
     .update({ used_at: new Date().toISOString() })
     .eq("id", id);
 
-  // Redirect the browser to the Supabase action_link. Supabase will verify the
-  // one-time invite token and redirect to /frontier/pilots/reset-password with
-  // session tokens in the URL hash. This is safe because it is triggered by a
-  // user button click (not an email link), so email scanners cannot pre-consume it.
   redirect(row.action_link);
 }
 
