@@ -9,25 +9,23 @@ export const metadata: Metadata = {
     "The all-in-one flight operations platform for Part 135, Part 91, and corporate flight departments.",
   openGraph: {
     title: "CrewRules 135 | Flight Ops. Simplified.",
-    description:
-      "The all-in-one flight operations platform for Part 135, Part 91, and corporate flight departments.",
+    description: "Flight operations tools for Part 135 operators.",
     url: "https://www.crewrules.com/cr135",
     siteName: "CrewRules",
-    type: "website",
     images: [
       {
-        url: "/images/cr135-og.png",
+        url: "https://www.crewrules.com/og/cr135-og.png",
         width: 1200,
         height: 630,
       },
     ],
+    type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: "CrewRules 135 | Flight Ops. Simplified.",
-    description:
-      "The all-in-one flight operations platform for Part 135, Part 91, and corporate flight departments.",
-    images: ["/images/cr135-og.png"],
+    description: "Flight operations tools for Part 135 operators.",
+    images: ["https://www.crewrules.com/og/cr135-og.png"],
   },
 };
 
