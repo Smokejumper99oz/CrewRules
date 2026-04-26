@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { DemoOpsAdminPageClient } from "./demo-ops-admin-page-client";
 import { DemoOpsShell } from "./demo-ops-shell";
 
+/** Hero URL depends on Storage; must not be statically cached as a long-lived custom image URL. */
+export const dynamic = "force-dynamic";
+
 export default async function Demo135OpsAdminPage() {
   const supabase = await createClient();
   const heroAircraftImageSrc = await resolveAircraftHeroImageUrl(supabase, {

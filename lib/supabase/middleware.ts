@@ -32,6 +32,7 @@ export async function updateSession(request: NextRequest) {
   const isAdminRoute = request.nextUrl.pathname.startsWith("/frontier/pilots/admin");
   const isDemo135OpsAdminRoute =
     pathname === "/demo135/ops/admin" || pathname.startsWith("/demo135/ops/admin/");
+  const isDemo135OpsLoginPath = pathname === DEMO135_OPS_LOGIN_PATH;
   const isSuperAdminRoute = request.nextUrl.pathname.startsWith("/super-admin");
   const isAuthRoute =
     request.nextUrl.pathname === "/frontier/pilots/login" ||
@@ -43,13 +44,13 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname === "/frontier/pilots/accept-invite" ||
     request.nextUrl.pathname.startsWith("/auth/");
 
-  // Redirect logged-in users away from login/sign-up (but not reset-password - they need to set new password)
+  // Redirect logged-in users away from login/sign-up (but not reset-password - they need to set new password).
+  // `/demo135/ops/login` is excluded: handled below so other org sessions are not bounced to /{tenant}/.../admin (wrong theme).
   const redirectLoggedInToPortal =
     request.nextUrl.pathname === "/login" ||
     request.nextUrl.pathname === "/frontier/pilots/login" ||
     request.nextUrl.pathname === "/cr135/login" ||
-    request.nextUrl.pathname === "/frontier/pilots/sign-up" ||
-    request.nextUrl.pathname === DEMO135_OPS_LOGIN_PATH;
+    request.nextUrl.pathname === "/frontier/pilots/sign-up";
 
   let user: { id: string } | null = null;
   let isAdmin = false;
@@ -103,7 +104,8 @@ export async function updateSession(request: NextRequest) {
         isSuperAdminRoute ||
         redirectLoggedInToPortal ||
         isFrontierPilotsPortalPath ||
-        isDemo135OpsAdminRoute)
+        isDemo135OpsAdminRoute ||
+        isDemo135OpsLoginPath)
     ) {
       const { data: profile } = await supabase
         .from("profiles")
@@ -189,6 +191,22 @@ export async function updateSession(request: NextRequest) {
     url.pathname = "/super-admin";
     url.search = "";
     return NextResponse.redirect(url);
+  }
+
+  // Ops login must stay ops-themed. Do not send super_admin here to /super-admin — after sign-out,
+  // cookies can still be present for one request; that redirect looked like leaving the "OPS world".
+  if (user && isDemo135OpsLoginPath) {
+    if (
+      loginGateProfile?.role === "tenant_admin" &&
+      loginGateProfile.tenant === "demo135" &&
+      loginGateProfile.portal === "ops"
+    ) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/demo135/ops/admin";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return supabaseResponse;
   }
 
   if (redirectLoggedInToPortal && user) {
