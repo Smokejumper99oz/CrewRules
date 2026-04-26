@@ -43,13 +43,15 @@ type FieldFeedback = {
 function FieldSaveFeedback({
   fieldKey,
   feedback,
+  inline = false,
 }: {
   fieldKey: string;
   feedback: FieldFeedback | undefined;
+  inline?: boolean;
 }) {
   if (!feedback || feedback.activeKey !== fieldKey || feedback.status === "idle") return null;
-  return (
-    <p className="mt-1.5 text-xs font-medium tracking-wide transition-opacity duration-300" aria-live="polite">
+  const body = (
+    <>
       {feedback.status === "saving" && (
         <span className="text-slate-500 tabular-nums dark:text-slate-400">Saving…</span>
       )}
@@ -64,6 +66,21 @@ function FieldSaveFeedback({
           Couldn&apos;t save
         </span>
       )}
+    </>
+  );
+  if (inline) {
+    return (
+      <span
+        className="shrink-0 whitespace-nowrap text-xs font-medium tracking-wide transition-opacity duration-300"
+        aria-live="polite"
+      >
+        {body}
+      </span>
+    );
+  }
+  return (
+    <p className="mt-1.5 text-xs font-medium tracking-wide transition-opacity duration-300" aria-live="polite">
+      {body}
     </p>
   );
 }
@@ -98,12 +115,15 @@ function CommuteSettingsToggleRow({
     <div className="py-0.5">
       <div className="flex flex-col gap-1.5">
         <div className="flex min-h-11 items-center justify-between gap-3">
-          <label
-            htmlFor={id}
-            className="min-w-0 flex-1 cursor-pointer text-sm font-medium leading-snug text-slate-700 dark:text-slate-300"
-          >
-            {label}
-          </label>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <label
+              htmlFor={id}
+              className="min-w-0 cursor-pointer text-sm font-medium leading-snug text-slate-700 dark:text-slate-300"
+            >
+              {label}
+            </label>
+            <FieldSaveFeedback fieldKey={feedbackFieldKey} feedback={feedback} inline />
+          </div>
           <div className="relative h-6 w-10 shrink-0">
             <input
               id={id}
@@ -129,7 +149,6 @@ function CommuteSettingsToggleRow({
           </div>
           {proActive && <input type="hidden" name={name} value="0" />}
         </div>
-        <FieldSaveFeedback fieldKey={feedbackFieldKey} feedback={feedback} />
         {children}
       </div>
     </div>

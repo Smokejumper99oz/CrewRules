@@ -1,7 +1,10 @@
+"use client";
+
 import {
   LayoutGrid,
   Calendar,
   User,
+  UserCircle,
   Plane,
   Wrench,
   Clock,
@@ -11,6 +14,8 @@ import {
   Settings,
   ClipboardList,
 } from "lucide-react";
+import { DEMO_OPS_CREW_DUTY_NAV } from "./demo-ops-crew-duty-nav";
+import { useDemoOpsView } from "./demo-ops-view-context";
 import { DemoOpsSignOutButton } from "./demo-ops-sign-out-button";
 
 const NAV_MAIN = [
@@ -19,7 +24,7 @@ const NAV_MAIN = [
   { label: "Pilot Directory", icon: User, active: false },
   { label: "Fleet Overview", icon: Plane, active: false },
   { label: "Maintenance Control", icon: Wrench, active: false },
-  { label: "Fatigue Risk (FAR 117)", icon: Clock, active: false },
+  { ...DEMO_OPS_CREW_DUTY_NAV, icon: Clock, active: false },
   { label: "Alerts & Notifications", icon: Bell, active: false },
 ] as const;
 
@@ -31,6 +36,8 @@ const NAV_TOOLS = [
 ] as const;
 
 export function DemoOpsSidebar() {
+  const { showPilotProfilePreview } = useDemoOpsView();
+
   return (
     <aside className="relative z-30 flex h-full max-h-[100dvh] w-64 shrink-0 flex-col overflow-hidden border-r border-[#0a1f33] bg-[#102b46] text-white">
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-5">
@@ -50,21 +57,33 @@ export function DemoOpsSidebar() {
 
       <nav className="flex-1 overflow-y-auto px-2 py-4" aria-label="Ops demo navigation">
         <ul className="space-y-0.5">
-          {NAV_MAIN.map(({ label, icon: Icon, active }) => (
-            <li key={label}>
-              <button
-                type="button"
-                className={
-                  active
-                    ? "flex w-full items-center gap-3 rounded-sm bg-amber-400/15 px-3 py-2.5 text-left text-sm font-semibold text-amber-200 ring-1 ring-amber-400/35"
-                    : "flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-left text-sm font-medium text-white/70 transition hover:bg-white/5 hover:text-white"
-                }
-              >
-                <Icon className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-                {label}
-              </button>
-            </li>
-          ))}
+          {NAV_MAIN.map((item) => {
+            const { label, icon: Icon, active } = item;
+            const description = "description" in item ? item.description : undefined;
+
+            const inactiveCls =
+              "flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-left text-sm font-medium text-white/70 transition hover:bg-white/5 hover:text-white";
+            const activeCls =
+              "flex w-full items-center gap-3 rounded-sm bg-amber-400/15 px-3 py-2.5 text-left text-sm font-semibold text-amber-200 ring-1 ring-amber-400/35";
+
+            const labelBlock = description ? (
+              <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left">
+                <span>{label}</span>
+                <span className="text-[11px] font-normal leading-snug text-white/55">{description}</span>
+              </span>
+            ) : (
+              label
+            );
+
+            return (
+              <li key={label}>
+                <button type="button" className={active ? activeCls : inactiveCls}>
+                  <Icon className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                  {labelBlock}
+                </button>
+              </li>
+            );
+          })}
         </ul>
 
         <p className="mt-6 px-3 text-[10px] font-semibold uppercase tracking-widest text-white/45">
@@ -82,6 +101,27 @@ export function DemoOpsSidebar() {
               </button>
             </li>
           ))}
+        </ul>
+
+        <p className="mt-6 px-3 text-[10px] font-semibold uppercase tracking-widest text-amber-200/70">
+          DEMO PREVIEW
+        </p>
+        <ul className="mt-2 space-y-0.5">
+          <li>
+            <button
+              type="button"
+              onClick={showPilotProfilePreview}
+              className="flex w-full items-center gap-3 rounded-sm border border-amber-400/45 bg-amber-400/10 px-3 py-2.5 text-left text-sm font-semibold text-amber-200 transition hover:border-amber-400/65 hover:bg-amber-400/18 hover:text-amber-100"
+            >
+              <UserCircle className="h-4 w-4 shrink-0 text-amber-200 opacity-90" aria-hidden />
+              <span className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left">
+                <span>Pilot Profile Preview</span>
+                <span className="shrink-0 text-amber-200/85" aria-hidden>
+                  →
+                </span>
+              </span>
+            </button>
+          </li>
         </ul>
       </nav>
 
