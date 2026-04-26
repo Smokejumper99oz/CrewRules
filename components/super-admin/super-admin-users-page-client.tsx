@@ -32,6 +32,7 @@ function baseRoleLabel(row: { role: string }): string {
 }
 
 function tenantLabel(tenant: string): string {
+  if (tenant === "demo135") return "Demo135";
   return TENANT_CONFIG[tenant]?.displayName ?? tenant;
 }
 
@@ -274,14 +275,23 @@ export function SuperAdminUsersPageClient({
 
     const form = e.currentTarget;
     const formData = new FormData(form);
-    const baseRole = (formData.get("role") as "pilot" | "flight_attendant") ?? "pilot";
-    const is_admin = formData.get("is_admin") === "on";
+    const roleRaw = formData.get("role")?.toString() ?? "pilot";
+    const resolvedRole: "pilot" | "flight_attendant" | "tenant_admin" =
+      roleRaw === "tenant_admin"
+        ? "tenant_admin"
+        : roleRaw === "flight_attendant"
+          ? "flight_attendant"
+          : "pilot";
+    let is_admin = formData.get("is_admin") === "on";
+    if (resolvedRole === "tenant_admin") {
+      is_admin = true;
+    }
     const is_mentor = formData.get("is_mentor") === "on";
     const super_admin =
       isCurrentSuperAdmin && !isFrontier ? formData.get("super_admin") === "on" : undefined;
 
-    const data: UpdateSuperAdminUserAccessInput = {
-      role: baseRole,
+    const data = {
+      role: resolvedRole,
       is_admin,
       is_mentor,
       super_admin,
@@ -292,7 +302,7 @@ export function SuperAdminUsersPageClient({
       employee_number: formData.get("employee_number")?.toString().trim() || null,
       mentee_employee_number:
         formData.get("mentee_employee_number")?.toString()?.trim() || null,
-    };
+    } as UpdateSuperAdminUserAccessInput;
 
     const result = await persistUserAccess(editing.id, data);
     setPending(false);
@@ -306,9 +316,11 @@ export function SuperAdminUsersPageClient({
   }
 
   const baseRole =
-    editing?.role === "super_admin" || editing?.role === "tenant_admin"
+    editing?.role === "super_admin"
       ? "pilot"
-      : (editing?.role as "pilot" | "flight_attendant") ?? "pilot";
+      : editing?.role === "tenant_admin"
+        ? "tenant_admin"
+        : (editing?.role as "pilot" | "flight_attendant") ?? "pilot";
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -532,29 +544,18 @@ export function SuperAdminUsersPageClient({
                 </p>
               )}
 
-              {editing.role === "tenant_admin" ? (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-400">Role</label>
-                  <p className="rounded border border-slate-600/40 bg-slate-800/30 px-3 py-2 text-sm text-slate-300">
-                    Tenant admin (unchanged)
-                  </p>
-                  <input type="hidden" name="role" value="pilot" />
-                </div>
-              ) : (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-400">
-                    Role (Pilot / Flight Attendant)
-                  </label>
-                  <select
-                    name="role"
-                    defaultValue={baseRole}
-                    className="w-full rounded border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 focus:border-[#75C043]/50 focus:outline-none"
-                  >
-                    <option value="pilot">Pilot</option>
-                    <option value="flight_attendant">Flight Attendant</option>
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">Role</label>
+                <select
+                  name="role"
+                  defaultValue={baseRole}
+                  className="w-full rounded border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 focus:border-[#75C043]/50 focus:outline-none"
+                >
+                  <option value="pilot">Pilot</option>
+                  <option value="flight_attendant">Flight Attendant</option>
+                  <option value="tenant_admin">Tenant Admin</option>
+                </select>
+              </div>
 
               <div className="flex items-center gap-2">
                 <input
