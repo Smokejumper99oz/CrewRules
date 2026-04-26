@@ -94,7 +94,7 @@ export default function HomePage() {
 
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link
-                  href="/frontier/pilots/login"
+                  href="/auth/login"
                   className="inline-flex items-center justify-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-100"
                 >
                   Login
@@ -531,7 +531,7 @@ export default function HomePage() {
 
             <div className="flex flex-wrap gap-4 text-sm text-slate-400">
               <Link className="hover:text-white" href="/contact">Contact Us</Link>
-              <Link className="hover:text-white" href="/frontier/pilots/login">Login</Link>
+              <Link className="hover:text-white" href="/auth/login">Login</Link>
             </div>
           </div>
 

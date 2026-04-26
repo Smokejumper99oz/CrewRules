@@ -66,7 +66,7 @@ export function LandingHeader() {
             Create Account
           </Link>
           <Link
-            href="/frontier/pilots/login"
+            href="/auth/login"
             className="inline-flex items-center rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium leading-tight text-white hover:bg-white/10"
           >
             Login
@@ -118,7 +118,7 @@ export function LandingHeader() {
               Create Account
             </Link>
             <Link
-              href="/frontier/pilots/login"
+              href="/auth/login"
               className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm font-medium text-white hover:bg-white/10"
               onClick={closeMobile}
             >
