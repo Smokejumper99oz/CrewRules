@@ -7,7 +7,7 @@ export default function PilotPortalMentoringGuidePage() {
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-white">Mentoring Guide</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Everything you need to understand and use CrewRules mentoring tools effectively.
+          Everything you need to understand and use CrewRules™ mentoring tools effectively.
         </p>
       </div>
       <div className="mt-6 space-y-5">

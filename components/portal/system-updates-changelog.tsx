@@ -104,7 +104,7 @@ export function SystemUpdatesChangelog(props: Props) {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Update history</h2>
         <div className={`mt-3 p-6 sm:p-8 ${CARD}`}>
           <p className="text-center text-slate-400 text-sm sm:text-base">
-            No release notes yet. Check back after the next CrewRules rollout.
+            No release notes yet. Check back after the next CrewRules™ rollout.
           </p>
         </div>
       </section>

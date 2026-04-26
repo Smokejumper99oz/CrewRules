@@ -108,7 +108,7 @@ export default async function FrontierPilotAdminMentoringMentorImportPage() {
           <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
             <li>Program sets the mentoring role (New Hire, Captain, or both)</li>
             <li>Status controls mentor activity (active, non-active, former)</li>
-            <li>Seat defines CrewRules position (Captain, First Officer, Flight Attendant)</li>
+            <li>Seat defines CrewRules™ position (Captain, First Officer, Flight Attendant)</li>
             <li>Missing fields will NOT overwrite existing data</li>
             <li>Existing mentors update automatically by employee number</li>
             <li>Profiles link automatically when the mentor signs in</li>

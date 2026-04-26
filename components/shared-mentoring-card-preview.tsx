@@ -214,7 +214,7 @@ export function SharedMentoringCardPreview({ profile, variant = "settings" }: Pr
         </h3>
       </div>
       <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
-        This is the information your mentee can see inside CrewRules.
+        This is the information your mentee can see inside CrewRules™.
       </p>
       {inner}
     </section>

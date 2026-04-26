@@ -73,7 +73,7 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
     type: "fix",
     bullets: [
       "Fixed a FLICA import issue where an old trip could remain on the schedule after it was traded earlier and removed from a newer monthly export.",
-      "CrewRules now uses the imported schedule's covered month window more accurately when clearing stale flica_import trips, so removed later-month trips no longer linger after upload.",
+      "CrewRules™ now uses the imported schedule's covered month window more accurately when clearing stale flica_import trips, so removed later-month trips no longer linger after upload.",
     ],
   },
   {
@@ -135,8 +135,8 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
     title: "Mentoring auto-match now works reliably",
     type: "fix",
     bullets: [
-      "When an admin uploads a mentor–mentee roster, mentors who already have a CrewRules account now immediately see their new mentees — no waiting, no manual step.",
-      "When a new mentor or mentee creates a CrewRules account, they are automatically linked to any pre-uploaded assignments the moment they sign in.",
+      "When an admin uploads a mentor–mentee roster, mentors who already have a CrewRules™ account now immediately see their new mentees — no waiting, no manual step.",
+      "When a new mentor or mentee creates a CrewRules™ account, they are automatically linked to any pre-uploaded assignments the moment they sign in.",
       "Fixed a matching failure caused by whitespace and leading zeros in employee numbers (e.g. 01234 now correctly matches 1234).",
     ],
   },
@@ -145,7 +145,7 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
     title: "Automatic schedule updates from ELP notifications",
     type: "new_feature",
     bullets: [
-      "When crew scheduling modifies a trip via FLICA's ELP system, the notification email now automatically updates your schedule in CrewRules — no manual re-import needed.",
+      "When crew scheduling modifies a trip via FLICA's ELP system, the notification email now automatically updates your schedule in CrewRules™ — no manual re-import needed.",
       "Added legs, removed legs, and report time changes are all applied in real time as soon as the ELP email is received.",
       "Deadhead legs (including carrier-coded flights like Southwest) are correctly identified and flagged during the update.",
       "Works through your existing email alias — forward your ELP notifications once and all future schedule changes arrive automatically.",
@@ -229,7 +229,7 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
     bullets: [
       "At-a-glance counts for active mentees and upcoming milestones.",
       "Quick links into mentee detail from the dashboard.",
-      "Cards use the same dark portal styling as the rest of CrewRules.",
+      "Cards use the same dark portal styling as the rest of CrewRules™.",
     ],
   },
   {
@@ -276,7 +276,7 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
     title: "Schedule email parsing, Month Overview, Weather Brief, and Family View™",
     type: "improvement",
     bullets: [
-      "Inbound email to your CrewRules import address can parse FLICA-style HTML calendar content as well as ICS attachments.",
+      "Inbound email to your CrewRules™ import address can parse FLICA-style HTML calendar content as well as ICS attachments.",
       "Duplicate-import prevention when the same schedule update email arrives more than once.",
       "Month Overview: filtering, award-change display, and muting for selected schedule imports.",
       "Weather Brief: TAF handling fixes, better iPad support, and header layout cleanup.",
@@ -308,7 +308,7 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
     type: "birthday",
     titleWordmark: true,
     bullets: [
-      "CrewRules™ goes live with a public landing page, Request Access backed by Supabase, CrewRules branding, access levels (the former pricing section), logos, and Open Graph previews for social apps and iMessage.",
+      "CrewRules™ goes live with a public landing page, Request Access backed by Supabase, CrewRules™ branding, access levels (the former pricing section), logos, and Open Graph previews for social apps and iMessage.",
     ],
   },
   {

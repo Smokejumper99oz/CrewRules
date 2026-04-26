@@ -279,7 +279,7 @@ export async function getNextFlight(): Promise<NextFlightResult> {
 
   const rows = openTrips as ScheduleEventRow[];
   /**
-   * CrewRules Weather Brief: try ALL open trips in priority order before empty state.
+   * CrewRules™ Weather Brief: try ALL open trips in priority order before empty state.
    * In-progress first (each row report_time ?? start_time <= now), then future rows, both orderings preserve
    * the query’s ascending start_time. Never stop after the first row when tryFlightFromEvent is null.
    */

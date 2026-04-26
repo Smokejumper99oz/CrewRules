@@ -77,15 +77,15 @@ export async function POST(req: Request) {
     const ts = escapeHtml(formatTimestamp());
 
     const mailtoReply = `mailto:${encodeURIComponent(String(email))}?subject=${encodeURIComponent(
-      "Re: CrewRules Contact Message"
+      "Re: CrewRules™ Contact Message"
     )}`;
 
     const { error } = await resend.emails.send({
-      from: "CrewRules <support@contact.crewrules.com>",
+      from: "CrewRules™ <support@contact.crewrules.com>",
       to: "contact@crewrules.com",
       cc: "svenfolmer92@gmail.com",
       replyTo: String(email),
-      subject: `CrewRules Contact — ${subject || "General"} — ${name}`,
+      subject: `CrewRules™ Contact — ${subject || "General"} — ${name}`,
       html: `<!DOCTYPE html>
 <html lang="en">
   <body style="margin:0;padding:0;background:#ffffff;">
@@ -104,7 +104,7 @@ export async function POST(req: Request) {
                     <td align="center" style="padding:0;">
                       <img
                         src="https://crewrules.com/logo/crewrules-logo.png"
-                        alt="CrewRules"
+                        alt="CrewRules™"
                         width="300"
                         style="max-width:300px;height:auto;display:block;border:0;outline:none;text-decoration:none;margin:0 auto;"
                       />

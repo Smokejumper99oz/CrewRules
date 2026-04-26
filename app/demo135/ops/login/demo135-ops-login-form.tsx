@@ -10,7 +10,7 @@ const REMEMBERED_EMAIL_KEY = "crewrules-demo135-ops-login-email";
 
 const GATE_ERROR_MESSAGES: Record<string, string> = {
   not_signed_in: "Your session expired. Please sign in again.",
-  profile_missing: "Your account exists but your CrewRules profile is missing. Contact an admin.",
+  profile_missing: "Your account exists but your CrewRules™ profile is missing. Contact an admin.",
   tenant_mismatch: "This account is not authorized for the Ops demo.",
   portal_mismatch: "This account is not authorized for this portal.",
   role_not_allowed: "Your role does not allow access to the Ops demo admin. Contact an admin.",
@@ -118,7 +118,7 @@ export function Demo135OpsLoginForm() {
           </h1>
           <p className="mt-3 text-slate-300">Management portal preview — demo sign-in.</p>
           <p className="mt-1 text-sm text-slate-500">
-            Authorized demo administrators only. Same CrewRules account as production sign-in.
+            Authorized demo administrators only. Same CrewRules™ account as production sign-in.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
@@ -190,7 +190,7 @@ export function Demo135OpsLoginForm() {
               </p>
               <p>
                 <Link href="/cr135" className="text-slate-500 hover:text-slate-300">
-                  CrewRules 135 overview
+                  CrewRules™ 135 overview
                 </Link>
               </p>
               <p>

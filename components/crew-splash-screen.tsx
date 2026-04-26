@@ -18,7 +18,7 @@ export function CrewSplashScreen({ staticMode, fadeOut }: { staticMode?: boolean
         <div className="w-[260px] sm:w-[320px] md:w-[440px] lg:w-[560px] xl:w-[640px] 2xl:w-[720px] max-w-[85vw]">
           <Image
             src="/logo/crewrules-logo.png"
-            alt="CrewRules"
+            alt="CrewRules™"
             width={720}
             height={288}
             className="h-auto w-full"

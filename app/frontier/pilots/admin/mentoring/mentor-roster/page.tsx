@@ -255,9 +255,9 @@ export default async function FrontierPilotAdminMentoringMentorRosterPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight border-b border-slate-200 pb-3 text-[#1a2b4b] lg:pb-2">Mentor Roster</h1>
         <p className="mt-2 text-sm text-slate-600 leading-snug lg:mt-1.5">
-          ALPA mentors with an active CrewRules account are shown with a{" "}
+          ALPA mentors with an active CrewRules™ account are shown with a{" "}
           <span className="inline font-medium text-emerald-700">green CRA</span>. Preloaded ALPA mentors who have not
-          yet activated a CrewRules account show an{" "}
+          yet activated a CrewRules™ account show an{" "}
           <span className="inline font-medium text-amber-800">amber ✕</span> in the CRA column. Inactive staging rows
           appear with a muted CRA and an{" "}
           <span className="text-slate-600">&#8220;</span>

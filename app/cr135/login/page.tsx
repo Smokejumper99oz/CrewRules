@@ -6,8 +6,8 @@ import { SharedLoginForm } from "@/components/auth/shared-login-form";
 const contactUrl = "https://www.crewrules.com/contact";
 
 export const metadata: Metadata = {
-  title: "Sign in | CrewRules 135",
-  description: "Sign in to your CrewRules 135 flight operations account.",
+  title: "Sign in | CrewRules™ 135",
+  description: "Sign in to your CrewRules™ 135 flight operations account.",
 };
 
 const cr135SecondaryCta = (
@@ -31,7 +31,7 @@ const cr135Footer = (
     </p>
     <p>
       <Link href="/cr135" className="text-slate-500 transition hover:text-slate-800">
-        ← Back to CrewRules 135/91 OPS
+        ← Back to CrewRules™ 135/91 OPS
       </Link>
     </p>
   </div>

@@ -69,7 +69,7 @@ export default async function ConnectFlicaPage() {
               Connect your schedule
             </h1>
             <p className="mt-3 text-sm sm:text-base text-slate-400">
-              Set this up once and CrewRules will automatically keep your schedule up to date.
+              Set this up once and CrewRules™ will automatically keep your schedule up to date.
             </p>
           </div>
 

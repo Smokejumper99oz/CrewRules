@@ -27,9 +27,9 @@ type SendParams = {
 function buildSubject(params: SendParams): string {
   const { daysRemaining, type } = params;
   if (daysRemaining === 1) {
-    return "Your Pro trial ends tomorrow — CrewRules";
+    return "Your Pro trial ends tomorrow — CrewRules™";
   }
-  return `Your Pro trial ends in ${daysRemaining} days — CrewRules`;
+  return `Your Pro trial ends in ${daysRemaining} days — CrewRules™`;
 }
 
 function buildGreeting(fullName: string | null): string {
@@ -84,7 +84,7 @@ export async function sendProTrialReminder(params: SendParams): Promise<
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                   <tr>
                     <td align="center" style="padding:0;">
-                      <img src="https://crewrules.com/logo/crewrules-logo.png" alt="CrewRules" width="300" style="max-width:300px;height:auto;display:block;border:0;outline:none;text-decoration:none;margin:0 auto;" />
+                      <img src="https://crewrules.com/logo/crewrules-logo.png" alt="CrewRules™" width="300" style="max-width:300px;height:auto;display:block;border:0;outline:none;text-decoration:none;margin:0 auto;" />
                     </td>
                   </tr>
                 </table>
@@ -117,7 +117,7 @@ export async function sendProTrialReminder(params: SendParams): Promise<
 </html>`;
 
   const { error } = await resend.emails.send({
-    from: "CrewRules <support@contact.crewrules.com>",
+    from: "CrewRules™ <support@contact.crewrules.com>",
     to,
     subject: buildSubject(params),
     html,

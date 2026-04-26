@@ -3,15 +3,17 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
+const cr135ShareTitle = "CrewRules™ / Flight OPS Simplified.";
+
 export const metadata: Metadata = {
-  title: "CrewRules 135 | Flight Ops. Simplified.",
+  title: cr135ShareTitle,
   description:
     "The all-in-one flight operations platform for Part 135, Part 91, and corporate flight departments.",
   openGraph: {
-    title: "CrewRules 135 | Flight Ops. Simplified.",
+    title: cr135ShareTitle,
     description: "Flight operations tools for Part 135 operators.",
     url: "https://www.crewrules.com/cr135",
-    siteName: "CrewRules",
+    siteName: "CrewRules™",
     images: [
       {
         url: "https://www.crewrules.com/og/cr135-og.png",
@@ -23,7 +25,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "CrewRules 135 | Flight Ops. Simplified.",
+    title: cr135ShareTitle,
     description: "Flight operations tools for Part 135 operators.",
     images: ["https://www.crewrules.com/og/cr135-og.png"],
   },
@@ -217,16 +219,16 @@ export default function Cr135LandingPage() {
             <p className="mt-5 max-w-xl text-base leading-7 text-white/90 sm:mt-6 md:text-lg">
               The All-in-One Platform for Part 135, Part 91, and Corporate Operators.
             </p>
-            <div className="mt-7 flex w-full max-w-md flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap">
+            <div className="mt-7 flex flex-wrap items-start justify-start gap-x-2 gap-y-2 sm:gap-x-3 sm:gap-y-3">
               <Link
                 href={crewrulesContactUrl}
-                className="inline-flex min-h-11 w-full items-center justify-center rounded-sm bg-gradient-to-b from-amber-300 to-amber-500 px-6 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-black/25 transition hover:brightness-110 sm:w-auto sm:min-w-36"
+                className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-sm bg-gradient-to-b from-amber-300 to-amber-500 px-3.5 py-2 text-xs font-bold text-slate-950 shadow-lg shadow-black/25 transition hover:brightness-110 sm:min-h-11 sm:px-6 sm:py-3 sm:text-sm"
               >
                 Get a Demo
               </Link>
               <Link
                 href="#features"
-                className="inline-flex min-h-11 w-full items-center justify-center rounded-sm bg-[#102c49] px-6 py-3 text-sm font-bold text-white shadow-lg shadow-black/25 transition hover:bg-[#163a5e] sm:w-auto sm:min-w-36"
+                className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-sm bg-[#102c49] px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-black/25 transition hover:bg-[#163a5e] sm:min-h-11 sm:px-6 sm:py-3 sm:text-sm"
               >
                 Learn More
               </Link>
@@ -297,7 +299,7 @@ export default function Cr135LandingPage() {
                   <div className="absolute -bottom-8 left-3 top-4 z-10 w-[9.5rem] sm:-bottom-10 sm:left-7 sm:top-5 sm:w-44">
                     <Image
                       src="/icons/135iphoneicon.png"
-                      alt="CrewRules trip briefing mobile preview"
+                      alt="CrewRules™ trip briefing mobile preview"
                       fill
                       sizes="(max-width: 639px) 152px, 185px"
                       className="object-contain object-bottom"
@@ -457,7 +459,7 @@ export default function Cr135LandingPage() {
 
       <footer className="bg-[#071b2e] text-white">
         <div className="mx-auto flex max-w-6xl min-w-0 flex-col gap-4 cr-px-safe py-6 text-xs text-white/70 sm:py-7 md:flex-row md:items-center md:justify-between md:gap-5">
-          <p className="min-w-0 leading-relaxed">© 2026 CrewRules. All rights reserved.</p>
+          <p className="min-w-0 leading-relaxed">© 2026 CrewRules™. All rights reserved.</p>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 sm:gap-x-8">
             <Link
               href="/privacy"

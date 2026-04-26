@@ -247,7 +247,7 @@ export function MentorContactSettingsForm({ profile }: Props) {
               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                 Shown on your{" "}
                 <span className="font-medium text-slate-600 dark:text-slate-400">Mentoring</span> card for contact
-                outside CrewRules. Company email is included automatically.
+                outside CrewRules™. Company email is included automatically.
               </p>
               <div className="mt-4 space-y-4">
                 <div>

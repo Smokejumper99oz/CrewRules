@@ -41,7 +41,7 @@ export function AdminProfileBasicsForm({
         Account basics
       </h2>
       <p className="mt-3 text-sm text-slate-600">
-        Your name and phone are stored on your CrewRules profile and may appear in admin or crew-facing
+        Your name and phone are stored on your CrewRules™ profile and may appear in admin or crew-facing
         features where applicable.
       </p>
 

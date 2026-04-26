@@ -48,7 +48,7 @@ export async function sendTenantAdminInviteEmail(params: {
 
   const supportLineText = trimmedSupport
     ? `If you have any questions, please contact ${trimmedSupport}.`
-    : "If you have any questions, please contact the person who invited you or your organization's CrewRules administrator.";
+    : "If you have any questions, please contact the person who invited you or your organization's CrewRules™ administrator.";
 
   const text = [
     `Hello ${greetingName},`,
@@ -66,7 +66,7 @@ export async function sendTenantAdminInviteEmail(params: {
 
   const supportLineHtml = trimmedSupport
     ? `If you have any questions, please contact <a href="mailto:${escapeHtml(trimmedSupport)}" style="color:#75C043;text-decoration:underline;">${escapeHtml(trimmedSupport)}</a>.`
-    : "If you have any questions, please contact the person who invited you or your organization&apos;s CrewRules administrator.";
+    : "If you have any questions, please contact the person who invited you or your organization&apos;s CrewRules™ administrator.";
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -121,7 +121,7 @@ export async function sendTenantAdminInviteEmail(params: {
 </html>`;
 
   const { error } = await resend.emails.send({
-    from: "CrewRules Admin Invites <admin-invites@notification.crewrules.com>",
+    from: "CrewRules™ Admin Invites <admin-invites@notification.crewrules.com>",
     to: trimmedTo,
     subject,
     text,

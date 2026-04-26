@@ -6,7 +6,7 @@
  * (most international locations), this returns null — callers should fall back.
  */
 
-const NWS_USER_AGENT = "CrewRules-DashboardWeather/1.0 (https://crewrules.com)";
+const NWS_USER_AGENT = "CrewRules™-DashboardWeather/1.0 (https://crewrules.com)";
 const FETCH_TIMEOUT_MS = 8000;
 
 type NwsPointProperties = {

@@ -121,8 +121,8 @@ export default function TermsOfServicePage() {
             <section className="space-y-3">
               <h2 className="text-lg font-bold text-[#17324d] md:text-xl">10. Contact</h2>
               <p>
-                For legal or contractual inquiries, contact CrewRules through the official contact options provided on
-                the CrewRules website.
+                For legal or contractual inquiries, contact CrewRules™ through the official contact options provided on
+                the CrewRules™ website.
               </p>
             </section>
           </div>
@@ -133,7 +133,7 @@ export default function TermsOfServicePage() {
             href="/cr135"
             className="inline-flex min-h-11 items-center justify-center px-2 font-semibold text-[#17324d] underline decoration-[#17324d]/30 underline-offset-4 transition hover:text-amber-700 hover:decoration-amber-600/50"
           >
-            Back to CrewRules
+            Back to CrewRules™
           </Link>
         </p>
       </div>

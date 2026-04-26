@@ -182,7 +182,7 @@ ${flightsSection}
       : SUBJECT_REAL;
 
   const { error } = await resend.emails.send({
-    from: "CrewRules <support@contact.crewrules.com>",
+    from: "CrewRules™ <support@contact.crewrules.com>",
     to,
     subject,
     html,

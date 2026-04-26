@@ -27,7 +27,7 @@ const STEPS = [
   },
   {
     step: 5,
-    title: "Upload to CrewRules",
+    title: "Upload to CrewRules™",
     text: "Upload the downloaded .VCS file on My Schedule",
     image: "/help/flica/step-5-upload.png",
   },
@@ -68,7 +68,7 @@ export function FlicaIcsHelper() {
       </div>
       <footer className="mt-6 space-y-1 border-t border-slate-200 pt-4 text-sm text-slate-500">
         <p>File downloads to your Downloads folder</p>
-        <p>No need to rename — CrewRules detects the month automatically</p>
+        <p>No need to rename — CrewRules™ detects the month automatically</p>
         <p className="text-slate-600">
           If you previously uploaded a schedule using the .ICS format, tap Clear schedule once and upload your latest .VCS schedule file again.
         </p>

@@ -3,13 +3,19 @@
 import type { ProTrialUsers, ProTrialUserRow } from "@/lib/super-admin/actions";
 import { formatDisplayName } from "@/lib/format-display-name";
 import { ChevronDown, ChevronRight, AlertTriangle, Clock, XCircle, CheckCircle } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type SuperAdminTrialUsersProps = {
   trialUsers: ProTrialUsers;
 };
 
 const cardBase = "rounded-xl border border-slate-700/50 bg-slate-800/50";
+
+const TRIAL_USERS_PAGE_SIZE = 5;
+/** One list row slot (name + meta + padding); list always shows this many slots so the card height does not jump between pages. */
+const TRIAL_USER_ROW_SLOT_CLASS = "min-h-[3.25rem]";
+/** Reserved strip under the list so columns align when only some groups paginate. */
+const TRIAL_USERS_PAGER_STRIP_MIN = "min-h-[2.75rem]";
 
 function formatRow(row: ProTrialUserRow): { primary: string; secondary: string; status: string } {
   const primary = row.full_name?.trim() || row.email || row.id.slice(0, 8);
@@ -45,31 +51,86 @@ function UserRow({ row }: { row: ProTrialUserRow }) {
   );
 }
 
-function GroupSection({
+function PaginatedGroupSection({
   title,
   icon,
   rows,
-  emptyLabel = "None",
 }: {
   title: string;
   icon: React.ReactNode;
   rows: ProTrialUserRow[];
-  emptyLabel?: string;
 }) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(rows.length / TRIAL_USERS_PAGE_SIZE));
+
+  useEffect(() => {
+    const tp = Math.max(1, Math.ceil(rows.length / TRIAL_USERS_PAGE_SIZE));
+    setPage((p) => Math.min(Math.max(1, p), tp));
+  }, [rows.length]);
+
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const slice = rows.slice(
+    (safePage - 1) * TRIAL_USERS_PAGE_SIZE,
+    safePage * TRIAL_USERS_PAGE_SIZE
+  );
+
   if (rows.length === 0) return null;
+
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-2 text-slate-400 text-xs font-medium">
+    <div className="flex h-full min-h-0 flex-col gap-1.5">
+      <div className="flex shrink-0 items-center gap-2 text-xs font-medium text-slate-400">
         {icon}
         {title}
+        <span className="font-normal text-slate-500">({rows.length})</span>
       </div>
-      <ul className="space-y-0">
-        {rows.map((row) => (
-          <li key={row.id}>
-            <UserRow row={row} />
-          </li>
-        ))}
+      <ul className="flex min-h-0 flex-1 flex-col gap-0">
+        {Array.from({ length: TRIAL_USERS_PAGE_SIZE }, (_, i) => {
+          const row = slice[i];
+          if (row) {
+            return (
+              <li key={row.id} className={`${TRIAL_USER_ROW_SLOT_CLASS} shrink-0`}>
+                <UserRow row={row} />
+              </li>
+            );
+          }
+          return (
+            <li
+              key={`trial-slot-${title}-${i}`}
+              aria-hidden
+              className={`${TRIAL_USER_ROW_SLOT_CLASS} shrink-0`}
+            />
+          );
+        })}
       </ul>
+      <div
+        className={`${TRIAL_USERS_PAGER_STRIP_MIN} mt-auto flex shrink-0 flex-col justify-center border-t pt-2 text-[11px] text-slate-500 ${
+          totalPages > 1 ? "border-slate-700/50" : "border-transparent"
+        }`}
+      >
+        {totalPages > 1 ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              className="rounded px-2 py-0.5 font-medium text-slate-400 transition hover:bg-slate-700/50 hover:text-slate-200 disabled:pointer-events-none disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="tabular-nums">
+              Page {safePage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}
+              className="rounded px-2 py-0.5 font-medium text-slate-400 transition hover:bg-slate-700/50 hover:text-slate-200 disabled:pointer-events-none disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -120,23 +181,23 @@ export function SuperAdminTrialUsers({ trialUsers }: SuperAdminTrialUsersProps) 
       </button>
       {isOpen && (
         <div className={`${cardBase} p-4 mt-2 space-y-4`}>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <GroupSection
+        <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <PaginatedGroupSection
             title="Expiring in 3 days"
             icon={<AlertTriangle className="size-3.5 text-amber-400" />}
             rows={trialUsers.expiringUrgent}
           />
-          <GroupSection
+          <PaginatedGroupSection
             title="Expiring in 7 days"
             icon={<Clock className="size-3.5" />}
             rows={trialUsers.expiringSoon}
           />
-          <GroupSection
+          <PaginatedGroupSection
             title="Trial expired"
             icon={<XCircle className="size-3.5" />}
             rows={trialUsers.expired}
           />
-          <GroupSection
+          <PaginatedGroupSection
             title="Recently converted"
             icon={<CheckCircle className="size-3.5 text-[#75C043]" />}
             rows={trialUsers.converted}

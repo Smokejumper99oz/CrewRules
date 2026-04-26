@@ -595,7 +595,7 @@ export async function getNextDuty(): Promise<{
     const { isEventStartToday } = await import("@/lib/schedule-time");
 
     /**
-     * Later today — CrewRules rule (trips):
+     * Later today — CrewRules™ rule (trips):
      * If trip report_time falls on today's calendar date in base timezone, that trip MUST appear under
      * "Later today" (including red-eye: report 23:59 today, first dep 00:59 tomorrow). Selection anchors
      * on report_time, not only start_time / first departure date. Reserve lines use separate on-duty logic.

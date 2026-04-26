@@ -101,7 +101,7 @@ export async function sendFamilyViewInviteEmail(params: {
 </html>`;
 
   const { error } = await resend.emails.send({
-    from: "CrewRules Family View <familyview@notification.crewrules.com>",
+    from: "CrewRules™ Family View <familyview@notification.crewrules.com>",
     to,
     subject,
     text,

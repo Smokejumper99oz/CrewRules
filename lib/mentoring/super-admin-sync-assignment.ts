@@ -72,7 +72,7 @@ export async function upsertMentorAssignmentFromSuperAdmin(
     mentorEmployeeNumber?: string | null;
     menteeEmployeeNumber: string;
     tenant: string;
-    /** When set, mentee profile lookup also requires `profiles.portal` to match (CrewRules portal slug). */
+    /** When set, mentee profile lookup also requires `profiles.portal` to match (CrewRules™ portal slug). */
     portal?: string | null;
     hireDate?: string | null;
     notes?: string | null;

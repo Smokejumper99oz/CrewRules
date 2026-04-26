@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { redirect } from "next/navigation";
 import { gateSuperAdmin } from "@/lib/super-admin/gate";
 import {
   getSuperAdminKpis,
@@ -37,8 +38,20 @@ import { MentoringOverviewCard } from "@/components/admin/mentoring-overview-car
 
 export const dynamic = "force-dynamic";
 
-export default async function SuperAdminPage() {
+const EVENTS_PAGE_SIZE = 5;
+
+type SuperAdminPageProps = {
+  searchParams: Promise<{ eventsPage?: string | string[] }>;
+};
+
+export default async function SuperAdminPage({ searchParams }: SuperAdminPageProps) {
   await gateSuperAdmin();
+
+  const sp = await searchParams;
+  const raw = sp.eventsPage;
+  const first = Array.isArray(raw) ? raw[0] : raw;
+  const parsed = first != null && first !== "" ? parseInt(String(first), 10) : NaN;
+  const requestedEventsPage = Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
 
   const [
     kpis,
@@ -60,7 +73,7 @@ export default async function SuperAdminPage() {
   ] = await Promise.all([
     getSuperAdminKpis(),
     getOnlineUserCount(),
-    getSystemEvents(),
+    getSystemEvents({ page: requestedEventsPage, pageSize: EVENTS_PAGE_SIZE }),
     getMentoringMilestoneIntegritySignals(),
     getTenantOverview(),
     getProductUsage(),
@@ -75,6 +88,10 @@ export default async function SuperAdminPage() {
     getSuperAdminWaitlistKpis(),
     getSuperAdminNewFeedbackCount(),
   ]);
+
+  if (systemEventsResult.page !== requestedEventsPage) {
+    redirect(`/super-admin?eventsPage=${systemEventsResult.page}`);
+  }
 
   const [peakToday, peakAllTime] = await Promise.all([
     getOnlinePeakToday(onlineNow),
@@ -110,7 +127,9 @@ export default async function SuperAdminPage() {
       <section>
         <SuperAdminNeedsAttention
           events={systemEventsResult.events}
-          dismissedCount={systemEventsResult.dismissedCount}
+          activeTotal={systemEventsResult.activeTotal}
+          eventsPage={systemEventsResult.page}
+          pageSize={EVENTS_PAGE_SIZE}
           mentoringIntegrity={mentoringIntegrity}
         />
       </section>
@@ -120,6 +139,7 @@ export default async function SuperAdminPage() {
           stats={mentoringOverview}
           manageHref="/super-admin/users"
           subtitle="Platform-wide"
+          disableHover
         />
       </section>
 

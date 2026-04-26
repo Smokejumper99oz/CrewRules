@@ -18,7 +18,7 @@ export function CrewrulesGuideShell({ documentTitle, children }: Props) {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo/crewrules-logo.png"
-              alt="CrewRules"
+              alt="CrewRules™"
               width={300}
               className="h-auto max-w-[min(100%,300px)]"
             />

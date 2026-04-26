@@ -14,7 +14,7 @@ export async function getOrCreateInboundAlias(userId: string) {
 
   if (profileError) throw profileError;
   if (!isProActive(profile as Profile | null)) {
-    throw new Error("Inbound email import is a CrewRules Pro feature.");
+    throw new Error("Inbound email import is a CrewRules™ Pro feature.");
   }
 
   const { data: existing, error: existingError } = await supabase

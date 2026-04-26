@@ -19,7 +19,7 @@ export default function PrivacyPage() {
             <section className="space-y-3">
               <h2 className="text-lg font-bold text-[#17324d] md:text-xl">1. Introduction</h2>
               <p>
-                CrewRules™ (&ldquo;CrewRules,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) respects
+                CrewRules™ (&ldquo;CrewRules™,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) respects
                 your privacy. This Privacy &amp; Cookie Statement (&ldquo;Statement&rdquo;) describes how we collect,
                 use, store, and protect information when you visit our websites, use the CrewRules™ platform
                 (&ldquo;Platform&rdquo;), or otherwise interact with our services.
@@ -86,7 +86,7 @@ export default function PrivacyPage() {
               </p>
               <p>
                 We may disclose information if required by law, regulation, legal process, or to protect the rights,
-                safety, and security of CrewRules, our users, or the public.
+                safety, and security of CrewRules™, our users, or the public.
               </p>
             </section>
 
@@ -114,7 +114,7 @@ export default function PrivacyPage() {
               <p>
                 Depending on your location, you may have rights to access, correct, delete, or restrict processing of
                 certain personal information, or to object to or port data. To exercise applicable rights, contact us
-                through the official contact options on the CrewRules website. We may verify requests as permitted by
+                through the official contact options on the CrewRules™ website. We may verify requests as permitted by
                 law.
               </p>
             </section>
@@ -148,8 +148,8 @@ export default function PrivacyPage() {
             <section className="space-y-3">
               <h2 className="text-lg font-bold text-[#17324d] md:text-xl">12. Contact</h2>
               <p>
-                For privacy-related questions or requests, contact CrewRules through the official contact options
-                provided on the CrewRules website.
+                For privacy-related questions or requests, contact CrewRules™ through the official contact options
+                provided on the CrewRules™ website.
               </p>
             </section>
           </div>
@@ -160,7 +160,7 @@ export default function PrivacyPage() {
             href="/cr135"
             className="inline-flex min-h-11 items-center justify-center px-2 font-semibold text-[#17324d] underline decoration-[#17324d]/30 underline-offset-4 transition hover:text-amber-700 hover:decoration-amber-600/50"
           >
-            Back to CrewRules
+            Back to CrewRules™
           </Link>
         </p>
       </div>

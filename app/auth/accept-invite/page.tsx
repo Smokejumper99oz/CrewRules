@@ -69,7 +69,7 @@ export default async function AuthAcceptInvitePage({ searchParams }: Props) {
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="mx-auto max-w-lg px-6 py-16">
         <div className="rounded-3xl border border-white/5 bg-gradient-to-b from-slate-900/60 to-slate-950/80 p-8 shadow-lg shadow-black/30">
-          <div className="text-xs uppercase tracking-widest text-slate-400">CrewRules</div>
+          <div className="text-xs uppercase tracking-widest text-slate-400">CrewRules™</div>
           <h1 className="mt-3 text-3xl font-bold tracking-tight">
             Crew<span className="text-[#75C043]">Rules</span>
             <span className="align-super text-sm">™</span>

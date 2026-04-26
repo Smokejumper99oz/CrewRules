@@ -12,7 +12,7 @@ export function DashboardCrewRulesAnniversary() {
   return (
     <aside
       className="rounded-2xl border border-fuchsia-200/90 bg-gradient-to-r from-fuchsia-50 via-violet-50 to-fuchsia-50 px-4 py-3.5 shadow-sm dark:border-fuchsia-500/35 dark:from-fuchsia-950/40 dark:via-violet-950/35 dark:to-fuchsia-950/40"
-      aria-label="CrewRules anniversary"
+      aria-label="CrewRules™ anniversary"
     >
       <p className="text-base font-semibold text-fuchsia-950 dark:text-fuchsia-100">
         CrewRules™ — {yearLabel} anniversary

@@ -97,7 +97,7 @@ export type MentorAssignmentRow = {
   /** Active mentee rows only: mentor `Profile` fields for `SharedMentoringCardPreview` (same shape as settings preview). */
   mentor_shared_card_profile: Profile | null;
   /**
-   * Staged mentor (assignment by `mentor_employee_number` before mentor has a CrewRules account).
+   * Staged mentor (assignment by `mentor_employee_number` before mentor has a CrewRules™ account).
    * Populated only for active mentee-view rows with null `mentor_user_id` and non-empty `mentor_employee_number`.
    */
   staged_mentor_full_name: string | null;

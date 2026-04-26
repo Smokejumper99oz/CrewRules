@@ -55,7 +55,7 @@ export default function HomePage() {
         <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
           <Image
             src="/hero/crewrules-bg3.png"
-            alt="CrewRules background"
+            alt="CrewRules™ background"
             fill
             priority
             quality={75}
@@ -164,7 +164,7 @@ export default function HomePage() {
                 <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 shadow-[0_0_60px_-20px_rgba(16,185,129,0.25)]">
                   <img
                     src="/hero/crewrules-current-trip-feature.png"
-                    alt="CrewRules Current Trip and Commute Assist preview"
+                    alt="CrewRules™ Current Trip and Commute Assist preview"
                     className="block w-full h-auto"
                   />
                   <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/10" />
@@ -218,7 +218,7 @@ export default function HomePage() {
                 <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 shadow-[0_0_60px_-20px_rgba(16,185,129,0.25)]">
                   <img
                     src="/hero/commute-assist-feature.png"
-                    alt="CrewRules Commute Assist preview"
+                    alt="CrewRules™ Commute Assist preview"
                     className="block w-full h-auto"
                   />
                   <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/10" />
@@ -272,7 +272,7 @@ export default function HomePage() {
                 <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 shadow-[0_0_60px_-20px_rgba(16,185,129,0.25)]">
                   <img
                     src="/hero/pay-month-overview-feature.png"
-                    alt="CrewRules Month Overview and pay estimate preview"
+                    alt="CrewRules™ Month Overview and pay estimate preview"
                     className="block w-full h-auto"
                   />
                   <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/10" />

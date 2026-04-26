@@ -42,7 +42,7 @@ export function ElpEmailHelperModal({ open, onClose }: Props) {
           </p>
           <img
             src="/help/elp/elpemailhelp.png"
-            alt="How to add your CrewRules import email in the ELP app"
+            alt="How to add your CrewRules™ import email in the ELP app"
             className="w-full rounded-xl border border-white/10"
           />
         </div>

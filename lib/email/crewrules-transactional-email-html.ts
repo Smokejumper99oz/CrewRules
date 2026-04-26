@@ -1,5 +1,5 @@
 /**
- * Shared HTML shell for CrewRules transactional emails (aligned with `send-trial-reminder` layout).
+ * Shared HTML shell for CrewRules™ transactional emails (aligned with `send-trial-reminder` layout).
  * Pass only pre-escaped inner fragments for the main content area.
  */
 export function buildCrewrulesTransactionalEmailHtml(bodyInnerHtml: string): string {
@@ -15,7 +15,7 @@ export function buildCrewrulesTransactionalEmailHtml(bodyInnerHtml: string): str
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                   <tr>
                     <td align="center" style="padding:0;">
-                      <img src="https://crewrules.com/logo/crewrules-logo.png" alt="CrewRules" width="300" style="max-width:300px;height:auto;display:block;border:0;outline:none;text-decoration:none;margin:0 auto;" />
+                      <img src="https://crewrules.com/logo/crewrules-logo.png" alt="CrewRules™" width="300" style="max-width:300px;height:auto;display:block;border:0;outline:none;text-decoration:none;margin:0 auto;" />
                     </td>
                   </tr>
                 </table>

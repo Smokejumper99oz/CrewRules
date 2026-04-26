@@ -13,7 +13,7 @@ function escapeHtml(input: unknown): string {
 }
 
 /**
- * Server-only. Notify a mentor of an assignment via CrewRules / Frontier Airlines mentoring.
+ * Server-only. Notify a mentor of an assignment via CrewRules™ / Frontier Airlines mentoring.
  * Does not throw; returns { ok: false, error } on missing config or Resend failure.
  */
 export async function sendMentorAssignmentEmail(params: {

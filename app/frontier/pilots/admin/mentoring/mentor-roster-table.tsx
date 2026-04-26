@@ -544,20 +544,20 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                   >
                     <td className="px-0.5 py-1.5 align-middle text-center">
                       {craOnCrewRules ? (
-                        <span className="text-sm font-semibold leading-none text-emerald-600" title="On CrewRules">
+                        <span className="text-sm font-semibold leading-none text-emerald-600" title="On CrewRules™">
                           ✓
                         </span>
                       ) : isInactivePreload ? (
                         <span
                           className="rounded px-0.5 text-sm font-semibold leading-none text-slate-500 ring-1 ring-slate-400"
-                          title="Preload — inactive staging (not on CrewRules; marked inactive in mentor preload)"
+                          title="Preload — inactive staging (not on CrewRules™; marked inactive in mentor preload)"
                         >
                           ✕
                         </span>
                       ) : (
                         <span
                           className="text-sm font-semibold leading-none text-amber-700"
-                          title="Preload — not on CrewRules yet"
+                          title="Preload — not on CrewRules™ yet"
                         >
                           ✕
                         </span>
@@ -751,7 +751,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                           {m.rowKind === "profile" ? (
                             <p className="text-xs leading-relaxed text-slate-600">
                               Identity fields (name, employee #, phone, contact email as shown above, position, crew
-                              base) come from this pilot&apos;s CrewRules profile. Update them in{" "}
+                              base) come from this pilot&apos;s CrewRules™ profile. Update them in{" "}
                               <Link
                                 href="/frontier/pilots/admin/users"
                                 className="font-medium text-[#75C043] hover:underline"
@@ -860,7 +860,7 @@ export function MentorRosterTable({ rows, saveMentorRegistry, saveMentorPreloadS
                               <div>
                                 <p className="text-sm font-semibold text-slate-900">Staging Identity</p>
                                 <p className="mt-1 text-[11px] text-slate-500">
-                                  Updates Mentor preload only. When this pilot links a CrewRules account, profile data
+                                  Updates Mentor preload only. When this pilot links a CrewRules™ account, profile data
                                   becomes source of truth.
                                 </p>
                               </div>

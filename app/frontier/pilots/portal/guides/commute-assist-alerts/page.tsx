@@ -45,7 +45,7 @@ export default function CommuteAssistAlertsGuidePage() {
           </p>
           <GuideImage
             src="/help/guides/commute-assist-alert-email-example.png"
-            alt="Example CrewRules Commute Assist alert email: same-day flights reviewed, arrival vs buffer, and recommended action"
+            alt="Example CrewRules™ Commute Assist alert email: same-day flights reviewed, arrival vs buffer, and recommended action"
           />
         </GuideStep>
         <GuideStep step={4} title="REVIEW YOUR DASHBOARD">

@@ -1,5 +1,5 @@
 /**
- * Canonical airport dataset for CrewRules.
+ * Canonical airport dataset for CrewRules™.
  * Single source of truth for IATA → timezone. Used by migrations and validation.
  * When adding airports: 1) update this file, 2) run `npm run generate:airports-migration`,
  * 3) create new migration with the output (e.g. 079_airports_canonical_upsert.sql).
@@ -13,7 +13,7 @@ export type AirportRecord = {
   tz: string;
 };
 
-/** All airports used by CrewRules (bases, commute cities, Family View, etc.). */
+/** All airports used by CrewRules™ (bases, commute cities, Family View, etc.). */
 export const AIRPORTS_CANONICAL: readonly AirportRecord[] = [
   { iata: "ATL", icao: "KATL", name: "Hartsfield-Jackson Atlanta", city: "Atlanta", tz: "America/New_York" },
   { iata: "BOS", icao: "KBOS", name: "Boston Logan", city: "Boston", tz: "America/New_York" },

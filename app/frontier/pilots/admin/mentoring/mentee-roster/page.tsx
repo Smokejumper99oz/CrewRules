@@ -201,12 +201,12 @@ export default async function FrontierPilotAdminMentoringMenteeRosterPage({ sear
       <div>
         <h1 className="text-xl font-semibold tracking-tight border-b border-slate-200 pb-3 text-[#1a2b4b] lg:pb-2">Mentee Roster</h1>
         <p className="mt-2 text-sm text-slate-400 leading-snug lg:mt-1.5">
-          Frontier Airlines first-year pilots and mentoring assignment rows. Left CRA shows mentee CrewRules activation.
-          Right CRA shows mentor CrewRules activation. Staged mentors may appear without a live account.
+          Frontier Airlines first-year pilots and mentoring assignment rows. Left CRA shows mentee CrewRules™ activation.
+          Right CRA shows mentor CrewRules™ activation. Staged mentors may appear without a live account.
         </p>
         <p className="mt-1.5 text-xs text-slate-500">
-          Live = mentor and mentee are both active in CrewRules · Not Live = mentor assigned but one or both have not
-          activated CrewRules yet · Unassigned = no mentor assigned · Left CRA shows mentee activation · Right CRA shows
+          Live = mentor and mentee are both active in CrewRules™ · Not Live = mentor assigned but one or both have not
+          activated CrewRules™ yet · Unassigned = no mentor assigned · Left CRA shows mentee activation · Right CRA shows
           mentor activation
         </p>
       </div>

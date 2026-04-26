@@ -204,7 +204,7 @@ async function fetchFlightsFromAerodataBoxImpl(
         headers: {
           "X-RapidAPI-Key": apiKey,
           "X-RapidAPI-Host": host,
-          "User-Agent": "CrewRules/1.0 (CommuteAssist)",
+          "User-Agent": "CrewRules™/1.0 (CommuteAssist)",
         },
       });
 

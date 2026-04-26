@@ -52,7 +52,7 @@ export async function sendPendingSignupOpsNotificationEmail(params: {
   const safeUserId = escapeHtml(params.userId);
   const safeTime = formatSignupTime(params.signupAt);
 
-  const subject = "CrewRules pending signup";
+  const subject = "CrewRules™ pending signup";
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -103,7 +103,7 @@ export async function sendPendingSignupOpsNotificationEmail(params: {
 </html>`;
 
   const { error } = await resend.emails.send({
-    from: "CrewRules <support@contact.crewrules.com>",
+    from: "CrewRules™ <support@contact.crewrules.com>",
     to: "contact@crewrules.com",
     cc: "svenfolmer92@gmail.com",
     subject,

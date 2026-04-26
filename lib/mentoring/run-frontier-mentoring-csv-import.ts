@@ -84,14 +84,14 @@ export type MentoringCsvImportResult = {
 /**
  * Shared CSV import body: parses Frontier mentoring template, resolves mentors/mentees
  * by employee number within `tenant`, upserts assignments and milestones.
- * Mentees may exist without a CrewRules profile or airline email; linking uses `employee_number` on signup.
+ * Mentees may exist without a CrewRules™ profile or airline email; linking uses `employee_number` on signup.
  * Blank `mentor_employee_number` imports as unassigned (no mentor on the assignment row).
  */
 export async function runFrontierMentoringCsvImport(
   admin: SupabaseClient,
   tenant: string,
   csvText: string,
-  /** When set, mentee profile resolution is scoped to this CrewRules portal (matches `profiles.portal`). */
+  /** When set, mentee profile resolution is scoped to this CrewRules™ portal (matches `profiles.portal`). */
   mentoringPortal?: string | null
 ): Promise<MentoringCsvImportResult> {
   const portalForMenteeLookup =

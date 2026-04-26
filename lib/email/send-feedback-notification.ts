@@ -98,7 +98,7 @@ export async function sendFeedbackNotificationEmail(params: {
   const typeTag = feedbackTypeSubjectTag(params.feedback_type);
   const nameForSubject = subjectDisplayName(params.submitter_full_name, params.submitter_email);
   const routeForSubject = subjectRouteSnippet(params.route_path);
-  const subject = `[CrewRules ${typeTag}] ${nameForSubject} — ${routeForSubject}`;
+  const subject = `[CrewRules™ ${typeTag}] ${nameForSubject} — ${routeForSubject}`;
 
   const typeLabel = feedbackTypeBodyLabel(params.feedback_type);
   const safeMessage = escapeHtml(params.message).replaceAll("\n", "<br />");
@@ -192,7 +192,7 @@ export async function sendFeedbackNotificationEmail(params: {
 </html>`;
 
   const { error } = await resend.emails.send({
-    from: "CrewRules <support@contact.crewrules.com>",
+    from: "CrewRules™ <support@contact.crewrules.com>",
     to: "contact@crewrules.com",
     cc: "svenfolmer92@gmail.com",
     ...(replyTo ? { replyTo } : {}),

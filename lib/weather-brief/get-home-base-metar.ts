@@ -8,7 +8,7 @@ import { resolveStationCode } from "./resolve-station-code";
 
 const AWC_BASE = "https://aviationweather.gov/api/data";
 const FETCH_OPTS: RequestInit = {
-  headers: { "User-Agent": "CrewRules-WeatherBrief/1.0 (https://crewrules.com)" },
+  headers: { "User-Agent": "CrewRules™-WeatherBrief/1.0 (https://crewrules.com)" },
   next: { revalidate: 300 },
 };
 

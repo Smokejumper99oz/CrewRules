@@ -256,34 +256,61 @@ export type SystemEventRow = {
   created_at: string;
 };
 
-export type SystemEventsResult = {
-  events: SystemEventRow[];
-  dismissedCount: number;
+export type GetSystemEventsOptions = {
+  page?: number;
+  pageSize?: number;
 };
 
-export async function getSystemEvents(): Promise<SystemEventsResult> {
+export type SystemEventsResult = {
+  events: SystemEventRow[];
+  activeTotal: number;
+  /** Page used after clamping to `1..totalPages` (match URL via redirect on the page). */
+  page: number;
+};
+
+export async function getSystemEvents(opts?: GetSystemEventsOptions): Promise<SystemEventsResult> {
   await ensureSuperAdmin();
   const admin = createAdminClient();
 
-  const [eventsRes, dismissedRes] = await Promise.all([
-    admin
-      .from("system_events")
-      .select("id, type, severity, title, message, metadata, created_at")
-      .eq("dismissed", false)
-      .order("created_at", { ascending: false })
-      .limit(20),
-    admin.from("system_events").select("id", { count: "exact", head: true }).eq("dismissed", true),
-  ]);
+  const pageSize = opts?.pageSize ?? 5;
+  const requestedPage = opts?.page ?? 1;
+
+  const activeCountRes = await admin
+    .from("system_events")
+    .select("id", { count: "exact", head: true })
+    .eq("dismissed", false);
+
+  if (activeCountRes.error) {
+    console.error("[SuperAdmin] getSystemEvents active count failed:", activeCountRes.error.message);
+    return { events: [], activeTotal: 0, page: 1 };
+  }
+
+  const activeTotal = activeCountRes.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(activeTotal / pageSize));
+  const page = Math.min(Math.max(1, requestedPage), totalPages);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const eventsRes = await admin
+    .from("system_events")
+    .select("id, type, severity, title, message, metadata, created_at")
+    .eq("dismissed", false)
+    .order("created_at", { ascending: false })
+    .range(from, to);
 
   if (eventsRes.error) {
     console.error("[SuperAdmin] getSystemEvents failed:", eventsRes.error.message);
-    return { events: [], dismissedCount: 0 };
+    return {
+      events: [],
+      activeTotal,
+      page,
+    };
   }
 
-  const dismissedCount = dismissedRes.count ?? 0;
   return {
     events: (eventsRes.data ?? []) as SystemEventRow[],
-    dismissedCount,
+    activeTotal,
+    page,
   };
 }
 
@@ -334,6 +361,40 @@ export async function dismissSystemEvent(eventId: string): Promise<{ error?: str
     return { error: error.message };
   }
   return {};
+}
+
+const SYSTEM_EVENT_ID_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function filterDeletableSystemEventIds(raw: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const id of raw) {
+    const t = String(id ?? "").trim();
+    if (!t || t.startsWith("mentoring-signal-")) continue;
+    if (!SYSTEM_EVENT_ID_UUID.test(t)) continue;
+    if (seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out;
+}
+
+export async function deleteSystemEventsByIds(
+  eventIds: string[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await ensureSuperAdmin();
+  const validIds = filterDeletableSystemEventIds(eventIds);
+  if (validIds.length === 0) {
+    return { ok: true };
+  }
+  const admin = createAdminClient();
+  const { error } = await admin.from("system_events").delete().in("id", validIds);
+  if (error) {
+    console.error("[SuperAdmin] deleteSystemEventsByIds failed:", error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
 }
 
 export type ProTrialMetrics = {

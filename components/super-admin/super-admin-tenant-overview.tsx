@@ -1,4 +1,5 @@
 import type { TenantOverviewRow } from "@/lib/super-admin/actions";
+import { formatDisplayName } from "@/lib/format-display-name";
 
 type SuperAdminTenantOverviewProps = {
   tenants: TenantOverviewRow[];
@@ -44,7 +45,9 @@ export function SuperAdminTenantOverview({ tenants }: SuperAdminTenantOverviewPr
                 } hover:bg-slate-800/50`}
               >
                 <td className="px-4 py-3">
-                  <span className="font-medium text-slate-200">{t.displayName}</span>
+                  <span className="font-medium text-slate-200">
+                    {formatDisplayName(t.displayName || t.tenant)}
+                  </span>
                   <span className="ml-1 text-xs text-slate-500">({t.tenant})</span>
                 </td>
                 <td className="px-4 py-3 text-right text-slate-200">{t.userCount}</td>

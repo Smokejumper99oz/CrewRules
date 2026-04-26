@@ -28,7 +28,7 @@ export default async function PilotPortalMentoringProfilePage() {
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-white">Mentor Profile</h1>
         <p className="mt-2 text-sm leading-relaxed text-slate-400">
-          This is the mentor profile card your mentees see inside CrewRules.
+          This is the mentor profile card your mentees see inside CrewRules™.
         </p>
       </div>
       <div className="mt-6">

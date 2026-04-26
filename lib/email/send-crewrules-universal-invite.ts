@@ -17,7 +17,7 @@ function getInviteContext(portal: string, role: string) {
     return {
       title: "Operations Portal",
       roleLabel: "Operations Admin",
-      description: "management-level access to CrewRules operations tools",
+      description: "management-level access to CrewRules™ operations tools",
     };
   }
 
@@ -38,13 +38,13 @@ function getInviteContext(portal: string, role: string) {
   }
 
   return {
-    title: "CrewRules",
+    title: "CrewRules™",
     roleLabel: "User",
-    description: "CrewRules platform access",
+    description: "CrewRules™ platform access",
   };
 }
 
-const SUBJECT = "You've been invited to CrewRules";
+const SUBJECT = "You've been invited to CrewRules™";
 
 /**
  * Super Admin (and any flow that should not name a tenant in email).
@@ -81,13 +81,13 @@ export async function sendCrewRulesUniversalInviteEmail(params: {
   const safeRoleLabel = escapeHtml(roleLabel);
   const safeDescription = escapeHtml(description);
 
-  /** Avoid "CrewRules™ CrewRules" when the fallback mapping title is the product name. */
+  /** Avoid "CrewRules™ CrewRules™" when the fallback mapping title is the product name. */
   const introLinePlain =
-    title === "CrewRules"
+    title === "CrewRules™"
       ? "You've been invited to access your CrewRules™ account."
       : `You've been invited to access the CrewRules™ ${title}.`;
   const introLineHtml =
-    title === "CrewRules"
+    title === "CrewRules™"
       ? `You&apos;ve been invited to access your CrewRules™ account.`
       : `You&apos;ve been invited to access the CrewRules™ ${safeTitle}.`;
 
@@ -106,7 +106,7 @@ export async function sendCrewRulesUniversalInviteEmail(params: {
     "",
     "If you didn't expect this message, you can ignore it.",
     "",
-    "— CrewRules",
+    "— CrewRules™",
   ].join("\n");
 
   const bodyInner = `
@@ -122,7 +122,7 @@ export async function sendCrewRulesUniversalInviteEmail(params: {
   const html = buildCrewrulesTransactionalEmailHtml(bodyInner);
 
   const { error } = await resend.emails.send({
-    from: "CrewRules <support@contact.crewrules.com>",
+    from: "CrewRules™ <support@contact.crewrules.com>",
     to: trimmedTo,
     subject: SUBJECT,
     text,

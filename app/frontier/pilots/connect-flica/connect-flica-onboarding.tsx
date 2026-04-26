@@ -12,9 +12,9 @@ type Props = {
 };
 
 const STEPS = [
-  "Copy your CrewRules email",
+  "Copy your CrewRules™ email",
   "Add it in FLICA or ELP schedule email settings",
-  "You're done — CrewRules will sync automatically",
+  "You're done — CrewRules™ will sync automatically",
 ];
 
 export function ConnectFlicaOnboarding({ inboundEmail, scheduleStatus, portalPath }: Props) {
@@ -51,7 +51,7 @@ export function ConnectFlicaOnboarding({ inboundEmail, scheduleStatus, portalPat
           {/* Email display */}
           <div className="rounded-xl border border-[#75C043]/40 bg-slate-950/60 px-4 py-3">
             <p className="text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">
-              Your CrewRules import email
+              Your CrewRules™ import email
             </p>
             <p className="text-base font-mono text-white break-all">{inboundEmail}</p>
           </div>

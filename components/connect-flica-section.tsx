@@ -26,7 +26,7 @@ export function ConnectFlicaSection({
 
   const hasSchedule = scheduleStatus.count > 0;
   const steps = [
-    "Copy your CrewRules import email",
+    "Copy your CrewRules™ import email",
     "Open FLICA or ELP settings",
     "Add this email to your schedule distribution list",
     "Your schedule will sync automatically when updates are sent",
@@ -46,7 +46,7 @@ export function ConnectFlicaSection({
             Connect your schedule automatically
           </p>
           <p className="mt-1 text-pretty text-sm leading-relaxed text-slate-600 [overflow-wrap:anywhere] dark:text-slate-400">
-            CrewRules syncs your schedule automatically by receiving updates from FLICA or ELP. Set this up once and your
+            CrewRules™ syncs your schedule automatically by receiving updates from FLICA or ELP. Set this up once and your
             schedule will always stay up to date.
           </p>
         </div>
@@ -103,7 +103,7 @@ export function ConnectFlicaSection({
               </div>
               <div className="mt-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
-                  Your CrewRules import email
+                  Your CrewRules™ import email
                 </p>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
                   <div className="min-w-0 flex-1 rounded-lg border border-[#75C043]/50 bg-white px-4 py-3 shadow-sm dark:border-[#75C043]/40 dark:bg-slate-950/60">

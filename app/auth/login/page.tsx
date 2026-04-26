@@ -7,7 +7,7 @@ const authSecondaryCta = (
     href="/request-access"
     className="block w-full rounded-lg border border-[#75C043]/60 bg-[#75C043]/10 px-4 py-2 text-center text-sm font-medium text-[#75C043] transition hover:border-[#75C043] hover:bg-[#75C043]/20"
   >
-    New to CrewRules? Request access
+    New to CrewRules™? Request access
   </Link>
 );
 
@@ -57,7 +57,7 @@ export default function AuthLoginPage() {
             <span className="align-super text-xs text-white">™</span> Login
           </>
         }
-        subtitle="Secure access to your CrewRules account"
+        subtitle="Secure access to your CrewRules™ account"
         secondaryCta={authSecondaryCta}
         footerContent={authFooter}
         disclaimer={authDisclaimer}

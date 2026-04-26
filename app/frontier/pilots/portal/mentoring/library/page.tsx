@@ -139,7 +139,7 @@ export default function PilotPortalMentoringLibraryPage() {
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-white">Mentor Library</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Resources and tools to support your mentoring experience in CrewRules.
+          Resources and tools to support your mentoring experience in CrewRules™.
         </p>
       </div>
       <div className="mt-6 space-y-5">
@@ -149,11 +149,11 @@ export default function PilotPortalMentoringLibraryPage() {
             <h2 className="text-lg font-semibold text-white">Program Resources</h2>
           </div>
           <p className="mt-2 text-sm leading-relaxed text-slate-400">
-            Core tools and guidance to help you navigate mentoring in CrewRules.
+            Core tools and guidance to help you navigate mentoring in CrewRules™.
           </p>
           <ul className="mt-3 list-disc space-y-1.5 pl-4 text-sm leading-relaxed text-slate-400">
             <li>Mentor Profile (how mentees see you)</li>
-            <li>CrewRules mentoring features overview</li>
+            <li>CrewRules™ mentoring features overview</li>
           </ul>
           <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5">
             <Link href="/frontier/pilots/portal/mentoring/profile" className={guideLinkClass}>
@@ -164,11 +164,11 @@ export default function PilotPortalMentoringLibraryPage() {
 
         <section className="rounded-2xl border border-white/5 bg-slate-950/40 p-5">
           <div>
-            <p className={sectionEyebrowClass}>CrewRules tools</p>
-            <h2 className="text-lg font-semibold text-white">CrewRules Tools</h2>
+            <p className={sectionEyebrowClass}>CrewRules™ tools</p>
+            <h2 className="text-lg font-semibold text-white">CrewRules™ Tools</h2>
           </div>
           <p className="mt-2 text-sm leading-relaxed text-slate-400">
-            Access the main tools available to pilots within CrewRules.
+            Access the main tools available to pilots within CrewRules™.
           </p>
           <ul className="mt-3 list-disc space-y-1.5 pl-4 text-sm leading-relaxed text-slate-400">
             <li>Pilot Library with documents and resources</li>

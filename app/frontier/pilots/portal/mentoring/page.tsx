@@ -211,7 +211,7 @@ function AssignmentStatusPill({ a }: { a: MentorAssignmentRow }) {
   );
 }
 
-/** Staged mentor: assignment by employee number before mentor has a CrewRules profile. */
+/** Staged mentor: assignment by employee number before mentor has a CrewRules™ profile. */
 function StagedMentorPlaceholderCard({ a }: { a: MentorAssignmentRow }) {
   const title = a.staged_mentor_full_name?.trim() || "Assigned mentor";
   const phone = formatUsPhoneStored(a.staged_mentor_phone);
@@ -225,7 +225,7 @@ function StagedMentorPlaceholderCard({ a }: { a: MentorAssignmentRow }) {
         <p className="mt-1 text-xs font-medium uppercase tracking-wide text-amber-200/90">Assigned mentor</p>
       </div>
       <p className="text-sm text-slate-300 leading-relaxed">
-        Your mentor has been assigned, but they have not created a CrewRules account yet.
+        Your mentor has been assigned, but they have not created a CrewRules™ account yet.
       </p>
       {phone || email ? (
         <div className="space-y-1.5 text-sm text-slate-400">
@@ -244,7 +244,7 @@ function StagedMentorPlaceholderCard({ a }: { a: MentorAssignmentRow }) {
         </div>
       ) : null}
       <p className="text-xs text-slate-500 leading-relaxed">
-        You will see their full mentoring profile here once they join CrewRules.
+        You will see their full mentoring profile here once they join CrewRules™.
       </p>
     </div>
   );
@@ -273,7 +273,7 @@ function MenteeCard({ a }: { a: MentorAssignmentRow }) {
   const militaryLeavePausedMilestone =
     a.isMentorView && a.mentor_workspace_mentoring_status?.trim() === "Military Leave";
 
-  /** Subtle left accent: amber when workspace = Military Leave; else CrewRules / active green. */
+  /** Subtle left accent: amber when workspace = Military Leave; else CrewRules™ / active green. */
   const cardStateAccentClass = militaryLeavePausedMilestone
     ? "border-l-[3px] border-l-amber-400/50"
     : "border-l-[3px] border-l-emerald-500/45";

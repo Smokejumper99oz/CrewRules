@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       const message =
         error.message === "Invalid login credentials"
-          ? "Invalid login credentials. Use Forgot User ID or Password if you already signed up, or Create account if you're new to CrewRules."
+          ? "Invalid login credentials. Use Forgot User ID or Password if you already signed up, or Create account if you're new to CrewRules™."
           : error.message;
       return NextResponse.json({ error: message }, { status: 401 });
     }

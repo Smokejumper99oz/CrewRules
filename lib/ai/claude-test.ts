@@ -8,7 +8,7 @@ export async function testClaude() {
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
-    messages: [{ role: "user", content: "Hello from CrewRules" }],
+    messages: [{ role: "user", content: "Hello from CrewRules™" }],
   });
 
   const text = message.content

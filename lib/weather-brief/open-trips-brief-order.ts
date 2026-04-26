@@ -33,7 +33,7 @@ function pickOpenTripOrderingInstant(
 }
 
 /**
- * CrewRules Weather Brief rule: attempt EVERY open trip in priority order before giving up.
+ * CrewRules™ Weather Brief rule: attempt EVERY open trip in priority order before giving up.
  * Do not regress to “try one row then return empty state” — a bad or unbriefable earlier row
  * must never block a valid later trip (e.g. red-eye S3090 after an earlier pairing row fails).
  */

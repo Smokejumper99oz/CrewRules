@@ -44,7 +44,7 @@ export async function createInvitedUser(
   }
 
   const appUrl = getAppOriginForAuthInvites();
-  // Generic CrewRules password page — not airline-specific (contrast: Frontier admin invite uses
+  // Generic CrewRules™ password page — not airline-specific (contrast: Frontier admin invite uses
   // /frontier/pilots/reset-password). Must be listed in Supabase Auth redirect allow list.
   const redirectTo = `${appUrl}/auth/reset-password`;
 

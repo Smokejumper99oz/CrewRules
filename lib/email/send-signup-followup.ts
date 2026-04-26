@@ -28,7 +28,7 @@ export async function sendSignupFollowupEmail(params: {
     return { ok: false, error: "RESEND_API_KEY not configured" };
   }
 
-  const subject = "Need help finishing your CrewRules signup?";
+  const subject = "Need help finishing your CrewRules™ signup?";
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -46,8 +46,8 @@ export async function sendSignupFollowupEmail(params: {
               <td style="padding:26px 28px;background:#ffffff;">
                 <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:16px;color:#111827;line-height:1.6;">
                   <p style="margin:0 0 16px 0;">Hi,</p>
-                  <p style="margin:0 0 16px 0;">We noticed you started signing up for CrewRules but have not confirmed your email yet.</p>
-                  <p style="margin:0 0 16px 0;">Check your inbox (and spam) for the confirmation message from CrewRules, or sign in to request a new code if you use email verification.</p>
+                  <p style="margin:0 0 16px 0;">We noticed you started signing up for CrewRules™ but have not confirmed your email yet.</p>
+                  <p style="margin:0 0 16px 0;">Check your inbox (and spam) for the confirmation message from CrewRules™, or sign in to request a new code if you use email verification.</p>
                   <p style="margin:0 0 20px 0;">
                     <a href="${escapeHtml(LOGIN_URL)}" style="display:inline-block;background:#75C043;color:#0f172a;text-decoration:none;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-weight:700;font-size:14px;padding:10px 16px;border-radius:12px;">Go to login</a>
                   </p>
@@ -69,7 +69,7 @@ export async function sendSignupFollowupEmail(params: {
 </html>`;
 
   const { error } = await resend.emails.send({
-    from: "CrewRules <support@contact.crewrules.com>",
+    from: "CrewRules™ <support@contact.crewrules.com>",
     to,
     subject,
     html,

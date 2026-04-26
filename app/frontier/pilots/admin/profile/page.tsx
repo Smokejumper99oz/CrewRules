@@ -22,7 +22,7 @@ export default async function AdminProfilePage() {
         </h1>
         <p className="mt-3 text-sm text-slate-600">
           Sign-in, security, and account-level controls for <strong className="font-medium text-slate-800">your</strong>{" "}
-          CrewRules admin user. Tenant-wide options (FLICA onboarding, pay scale seeding, etc.) are under{" "}
+          CrewRules™ admin user. Tenant-wide options (FLICA onboarding, pay scale seeding, etc.) are under{" "}
           <span className="text-slate-800">Settings</span>.
         </p>
       </div>

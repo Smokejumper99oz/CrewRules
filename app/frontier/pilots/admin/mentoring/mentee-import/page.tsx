@@ -101,7 +101,7 @@ export default async function FrontierPilotAdminMentoringMenteeImportPage() {
             <li>Mentor employee number is optional; blank imports as Unassigned</li>
             <li>Existing assignments update automatically by employee number</li>
             <li>Duplicate mentee employee numbers in the same file are flagged</li>
-            <li>Mentees can be imported before creating a CrewRules account</li>
+            <li>Mentees can be imported before creating a CrewRules™ account</li>
             <li>Data can be corrected later by the mentee after signup</li>
           </ul>
 

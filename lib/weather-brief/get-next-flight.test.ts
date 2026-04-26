@@ -39,7 +39,7 @@ function flightStub(eventId: string): NextFlightResult {
 
 console.log("get-next-flight / open-trips-brief-order tests\n");
 
-test("CrewRules: single valid open trip → briefs that trip", () => {
+test("CrewRules™: single valid open trip → briefs that trip", () => {
   const rows = [{ id: "only-trip", start_time: "2026-04-06T10:00:00.000Z" }];
   const brief = briefOpenTripsInPriorityOrder(rows, NOW_ISO, TZ, (ev) =>
     ev.id === "only-trip" ? flightStub(ev.id) : null
@@ -48,7 +48,7 @@ test("CrewRules: single valid open trip → briefs that trip", () => {
   assert.equal(brief.eventId, "only-trip");
 });
 
-test("CrewRules: FLICA HH:MM report_time does not throw; ordering falls back to start_time", () => {
+test("CrewRules™: FLICA HH:MM report_time does not throw; ordering falls back to start_time", () => {
   const rows = [
     {
       id: "flica-trip",
@@ -63,7 +63,7 @@ test("CrewRules: FLICA HH:MM report_time does not throw; ordering falls back to 
   assert.equal(brief.eventId, "flica-trip");
 });
 
-test("CrewRules: first open trip fails tryFlight, second is valid → second trip (not no_upcoming_trip)", () => {
+test("CrewRules™: first open trip fails tryFlight, second is valid → second trip (not no_upcoming_trip)", () => {
   const rows = [
     { id: "earlier-bad", start_time: "2026-04-05T12:00:00.000Z" },
     { id: "S3090", start_time: "2026-04-06T05:00:00.000Z" },
@@ -77,7 +77,7 @@ test("CrewRules: first open trip fails tryFlight, second is valid → second tri
   assert.equal(brief.eventId, "S3090");
 });
 
-test("CrewRules: in-progress trip fails, later red-eye-style future trip valid → returns later trip", () => {
+test("CrewRules™: in-progress trip fails, later red-eye-style future trip valid → returns later trip", () => {
   const rows = [
     { id: "in-progress-bad", start_time: "2026-04-05T08:00:00.000Z" },
     { id: "S3090-redeye", start_time: "2026-04-06T06:00:00.000Z" },
@@ -91,7 +91,7 @@ test("CrewRules: in-progress trip fails, later red-eye-style future trip valid �
   assert.equal(brief.eventId, "S3090-redeye");
 });
 
-test("CrewRules: all open trips fail tryFlight → null (non-reserve caller shows no_upcoming_trip)", () => {
+test("CrewRules™: all open trips fail tryFlight → null (non-reserve caller shows no_upcoming_trip)", () => {
   const rows = [
     { id: "a", start_time: "2026-04-05T10:00:00.000Z" },
     { id: "b", start_time: "2026-04-07T10:00:00.000Z" },
@@ -104,7 +104,7 @@ test("CrewRules: all open trips fail tryFlight → null (non-reserve caller show
   assert.deepEqual(outcome, { status: "no_upcoming_trip" });
 });
 
-test("CrewRules: all open trips fail + user on reserve → empty brief maps to reserve (matches getNextFlight tail)", () => {
+test("CrewRules™: all open trips fail + user on reserve → empty brief maps to reserve (matches getNextFlight tail)", () => {
   const rows = [{ id: "dead", start_time: "2026-04-06T10:00:00.000Z" }];
   const brief = briefOpenTripsInPriorityOrder(rows, NOW_ISO, TZ, () => null);
   assert.equal(brief, null);
@@ -114,7 +114,7 @@ test("CrewRules: all open trips fail + user on reserve → empty brief maps to r
   assert.deepEqual(outcome, { status: "reserve" });
 });
 
-test("CrewRules: priority order — all in-progress rows before future; shuffled input still tries in-progress first", () => {
+test("CrewRules™: priority order — all in-progress rows before future; shuffled input still tries in-progress first", () => {
   const inProgressId = "on-block-now";
   const futureId = "S3090-later";
   // Intentionally future row first (would be invalid DB order; ensures partition fixes priority).
@@ -130,7 +130,7 @@ test("CrewRules: priority order — all in-progress rows before future; shuffled
   assert.deepEqual(attempts, [inProgressId, futureId]);
 });
 
-test("CrewRules: within in-progress group preserves ascending start_time (query order)", () => {
+test("CrewRules™: within in-progress group preserves ascending start_time (query order)", () => {
   const rows = [
     { id: "ip-earlier", start_time: "2026-04-05T08:00:00.000Z" },
     { id: "ip-later", start_time: "2026-04-05T16:00:00.000Z" },
@@ -143,7 +143,7 @@ test("CrewRules: within in-progress group preserves ascending start_time (query 
   assert.deepEqual(attempts, ["ip-earlier", "ip-later"]);
 });
 
-test("CrewRules: within future-only group preserves ascending start_time (query order)", () => {
+test("CrewRules™: within future-only group preserves ascending start_time (query order)", () => {
   const rows = [
     { id: "fut-b", start_time: "2026-04-08T10:00:00.000Z" },
     { id: "fut-a", start_time: "2026-04-07T10:00:00.000Z" },
@@ -158,7 +158,7 @@ test("CrewRules: within future-only group preserves ascending start_time (query 
   assert.deepEqual(attempts, ["fut-a", "fut-b"]);
 });
 
-test("CrewRules: duplicate schedule row ids → tryFlight runs once per id", () => {
+test("CrewRules™: duplicate schedule row ids → tryFlight runs once per id", () => {
   const rows = [
     { id: "dup", start_time: "2026-04-05T12:00:00.000Z" },
     { id: "dup", start_time: "2026-04-05T12:00:00.000Z" },

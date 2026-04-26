@@ -14,8 +14,8 @@ const PORTAL = "pilots";
 const GATE_ERROR_MESSAGES: Record<string, string> = {
   not_signed_in: "Your session expired. Please sign in again.",
   company_email_required: "Use your Frontier company email to sign in to this portal.",
-  profile_missing: "Your account exists but your CrewRules profile is missing. Contact an admin.",
-  profile_missing_contact_admin: "Your account exists but your CrewRules profile is missing. Contact an admin.",
+  profile_missing: "Your account exists but your CrewRules™ profile is missing. Contact an admin.",
+  profile_missing_contact_admin: "Your account exists but your CrewRules™ profile is missing. Contact an admin.",
   tenant_mismatch: "This account is not authorized for this airline portal.",
   portal_mismatch: "This account is not authorized for this portal.",
   role_not_allowed: "Your role does not allow access. Contact an admin.",

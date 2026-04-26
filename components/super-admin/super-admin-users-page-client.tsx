@@ -476,7 +476,7 @@ export function SuperAdminUsersPageClient({
                     {isFrontier && u.mentoring_first_year_hire && !u.isMentee ? (
                       <span
                         className={unassignedMentoringPillClass(lightUsersTable)}
-                        title="First-year hire; no active mentor assignment in CrewRules yet"
+                        title="First-year hire; no active mentor assignment in CrewRules™ yet"
                       >
                         Unassigned
                       </span>

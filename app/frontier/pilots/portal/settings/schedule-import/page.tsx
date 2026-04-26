@@ -50,7 +50,7 @@ export default async function ScheduleImportSettingsPage() {
     return (
       <PortalSettingsPlaceholder
         title="FLICA"
-        description="Connections and options for bringing your schedule into CrewRules."
+        description="Connections and options for bringing your schedule into CrewRules™."
       />
     );
   }

@@ -19,7 +19,7 @@ function normalizeAirportName(name: string | null | undefined): string | null {
     .replace(/, US\b/g, ", USA");
 }
 const FETCH_OPTS: RequestInit = {
-  headers: { "User-Agent": "CrewRules-WeatherBrief/1.0 (https://crewrules.com)" },
+  headers: { "User-Agent": "CrewRules™-WeatherBrief/1.0 (https://crewrules.com)" },
   next: { revalidate: 300 },
 };
 

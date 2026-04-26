@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const PROFILE_EMPLOYEE_NUMBER_TAKEN_ERROR =
-  "This employee number is already connected to another CrewRules account.";
+  "This employee number is already connected to another CrewRules™ account.";
 
 /** Same trim semantics as partial unique index: btrim(employee_number). */
 export async function isProfileEmployeeNumberTaken(

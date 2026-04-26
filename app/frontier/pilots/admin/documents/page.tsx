@@ -226,7 +226,7 @@ export default function DocumentsPage() {
               className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 bg-white text-[#75C043] focus:ring-[#75C043]/50"
             />
             <span>
-              Allow CrewRules AI to reference this document
+              Allow CrewRules™ AI to reference this document
             </span>
           </label>
           <p className="mt-2 text-xs text-slate-500">
