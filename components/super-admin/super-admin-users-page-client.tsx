@@ -275,23 +275,28 @@ export function SuperAdminUsersPageClient({
 
     const form = e.currentTarget;
     const formData = new FormData(form);
-    const roleRaw = formData.get("role")?.toString() ?? "pilot";
-    const resolvedRole: "pilot" | "flight_attendant" | "tenant_admin" =
-      roleRaw === "tenant_admin"
-        ? "tenant_admin"
-        : roleRaw === "flight_attendant"
-          ? "flight_attendant"
-          : "pilot";
-    let is_admin = formData.get("is_admin") === "on";
-    if (resolvedRole === "tenant_admin") {
-      is_admin = true;
-    }
+    const baseRole: "pilot" | "flight_attendant" =
+      formData.get("role") === "flight_attendant"
+        ? "flight_attendant"
+        : "pilot";
+    const platformOwner =
+      isCurrentSuperAdmin && !isFrontier && formData.get("super_admin") === "on";
+    const tenantAdminChecked = formData.get("is_admin") === "on";
+
+    const role =
+      platformOwner
+        ? "super_admin"
+        : tenantAdminChecked
+          ? "tenant_admin"
+          : baseRole;
+
+    const is_admin = platformOwner || tenantAdminChecked;
     const is_mentor = formData.get("is_mentor") === "on";
     const super_admin =
       isCurrentSuperAdmin && !isFrontier ? formData.get("super_admin") === "on" : undefined;
 
-    const data = {
-      role: resolvedRole,
+    const data: UpdateSuperAdminUserAccessInput = {
+      role,
       is_admin,
       is_mentor,
       super_admin,
@@ -302,7 +307,7 @@ export function SuperAdminUsersPageClient({
       employee_number: formData.get("employee_number")?.toString().trim() || null,
       mentee_employee_number:
         formData.get("mentee_employee_number")?.toString()?.trim() || null,
-    } as UpdateSuperAdminUserAccessInput;
+    };
 
     const result = await persistUserAccess(editing.id, data);
     setPending(false);
@@ -315,12 +320,8 @@ export function SuperAdminUsersPageClient({
     router.refresh();
   }
 
-  const baseRole =
-    editing?.role === "super_admin"
-      ? "pilot"
-      : editing?.role === "tenant_admin"
-        ? "tenant_admin"
-        : (editing?.role as "pilot" | "flight_attendant") ?? "pilot";
+  const baseRoleSelect: "pilot" | "flight_attendant" =
+    editing?.role === "flight_attendant" ? "flight_attendant" : "pilot";
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -544,16 +545,35 @@ export function SuperAdminUsersPageClient({
                 </p>
               )}
 
+              {(editing.tenant || editing.portal) && (
+                <div className="grid gap-3 rounded-lg border border-white/10 bg-slate-800/40 px-3 py-3 text-sm">
+                  {editing.tenant ? (
+                    <div>
+                      <span className="block text-xs font-medium text-slate-500">Tenant</span>
+                      <span className="text-slate-200">{tenantLabel(editing.tenant)}</span>
+                      <span className="ml-1 text-xs text-slate-500">({editing.tenant})</span>
+                    </div>
+                  ) : null}
+                  {editing.portal ? (
+                    <div>
+                      <span className="block text-xs font-medium text-slate-500">Portal</span>
+                      <span className="text-slate-200">{editing.portal}</span>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">Role</label>
+                <label className="mb-1 block text-xs font-medium text-slate-400">
+                  Base role
+                </label>
                 <select
                   name="role"
-                  defaultValue={baseRole}
+                  defaultValue={baseRoleSelect}
                   className="w-full rounded border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-200 focus:border-[#75C043]/50 focus:outline-none"
                 >
                   <option value="pilot">Pilot</option>
                   <option value="flight_attendant">Flight Attendant</option>
-                  <option value="tenant_admin">Tenant Admin</option>
                 </select>
               </div>
 
@@ -562,11 +582,11 @@ export function SuperAdminUsersPageClient({
                   type="checkbox"
                   id="edit-is_admin"
                   name="is_admin"
-                  defaultChecked={editing.is_admin || editing.role === "tenant_admin" || editing.role === "super_admin"}
+                  defaultChecked={editing.role === "tenant_admin"}
                   className="rounded border-slate-600 bg-slate-800 text-[#75C043] focus:ring-[#75C043]/50"
                 />
                 <label htmlFor="edit-is_admin" className="text-sm text-slate-300">
-                  Admin
+                  Tenant admin
                 </label>
               </div>
 

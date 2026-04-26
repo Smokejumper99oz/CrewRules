@@ -1441,6 +1441,8 @@ export type SuperAdminUserRow = {
   full_name: string | null;
   email: string | null;
   tenant: string;
+  /** From `profiles.portal` when the loader selects it (read-only context for admin scope). */
+  portal?: string | null;
   role: string;
   employee_number: string | null;
   phone: string | null;
@@ -1478,7 +1480,7 @@ export async function getAllUsersForSuperAdmin(): Promise<SuperAdminUserRow[]> {
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, email, tenant, role, employee_number, phone, is_admin, is_mentor, welcome_modal_version_seen, deleted_at, deletion_scheduled_for"
+      "id, full_name, email, tenant, portal, role, employee_number, phone, is_admin, is_mentor, welcome_modal_version_seen, deleted_at, deletion_scheduled_for"
     )
     .order("created_at", { ascending: false });
 
@@ -1505,6 +1507,7 @@ export async function getAllUsersForSuperAdmin(): Promise<SuperAdminUserRow[]> {
     full_name: p.full_name ?? null,
     email: p.email ?? null,
     tenant: p.tenant ?? "unknown",
+    portal: (p as { portal?: string | null }).portal ?? null,
     role: p.role ?? "pilot",
     employee_number: p.employee_number ?? null,
     phone: p.phone ?? null,
@@ -1522,8 +1525,14 @@ export async function getAllUsersForSuperAdmin(): Promise<SuperAdminUserRow[]> {
   }));
 }
 
+export type SuperAdminProfileRole =
+  | "pilot"
+  | "flight_attendant"
+  | "tenant_admin"
+  | "super_admin";
+
 export type UpdateSuperAdminUserAccessInput = {
-  role: "pilot" | "flight_attendant";
+  role: SuperAdminProfileRole;
   is_admin: boolean;
   is_mentor: boolean;
   super_admin?: boolean;
@@ -1571,7 +1580,17 @@ export async function updateSuperAdminUserAccess(
     }
   }
 
-  const effectiveRole =
+  const allowedRoles: SuperAdminProfileRole[] = [
+    "pilot",
+    "flight_attendant",
+    "tenant_admin",
+    "super_admin",
+  ];
+  if (!allowedRoles.includes(data.role)) {
+    return { error: "Invalid role" };
+  }
+
+  const effectiveRole: SuperAdminProfileRole =
     canChangeSuperAdmin && data.super_admin
       ? "super_admin"
       : canChangeSuperAdmin && !data.super_admin

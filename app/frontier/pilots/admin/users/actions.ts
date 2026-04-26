@@ -10,6 +10,7 @@ import { getMenteeUserIdsWithMilitaryLeaveWorkspace } from "@/lib/mentoring/ment
 import { fetchAuthLastSignInAtByUserId } from "@/lib/super-admin/auth-last-sign-in-map";
 import type {
   SuperAdminUserRow,
+  SuperAdminProfileRole,
   UpdateSuperAdminUserAccessInput,
 } from "@/lib/super-admin/actions";
 import {
@@ -80,6 +81,7 @@ export async function getFrontierPilotAdminUsers(): Promise<SuperAdminUserRow[]>
     full_name: (p as { full_name: string | null }).full_name ?? null,
     email: (p as { email: string | null }).email ?? null,
     tenant: (p as { tenant: string }).tenant ?? "unknown",
+    portal: PORTAL,
     role: (p as { role: string }).role ?? "pilot",
     employee_number: (p as { employee_number: string | null }).employee_number ?? null,
     phone: (p as { phone: string | null }).phone ?? null,
@@ -143,12 +145,15 @@ export async function updateFrontierPilotAdminUserAccess(
     return { error: "Only Platform Owner can edit tenant admin accounts." };
   }
 
-  let effectiveRole: string;
-  if (target.role === "tenant_admin") {
-    effectiveRole = "tenant_admin";
-  } else {
-    effectiveRole = data.role;
+  const frontierRoles: SuperAdminProfileRole[] = ["pilot", "flight_attendant", "tenant_admin"];
+  if (!frontierRoles.includes(data.role)) {
+    return { error: "Invalid role" };
   }
+  if (!actorIsSuperAdmin && data.role === "tenant_admin") {
+    return { error: "Only Platform Owner can assign tenant admin." };
+  }
+
+  const effectiveRole = data.role;
 
   const empTrimmedForCheck =
     data.employee_number != null && String(data.employee_number).trim() !== ""
