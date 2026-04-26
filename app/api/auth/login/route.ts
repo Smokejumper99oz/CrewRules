@@ -77,7 +77,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: message }, { status: 401 });
     }
 
-    // Route after login: super_admin → /super-admin, tenant_admin → /admin, everyone else → /portal
+    // Route after login: allowlisted/super_admin → /super-admin, tenant_admin → /admin,
+    // demo135/ops pilots → /demo135/ops/admin, other tenant+portal → /{tenant}/{portal}/portal,
+    // else Frontier pilots portal.
     const userId = signInData?.user?.id;
     let redirectTo = "/frontier/pilots/portal";
     if (userId) {
@@ -94,6 +96,10 @@ export async function POST(request: NextRequest) {
         redirectTo = "/super-admin";
       } else if (isTenantAdmin && profile?.tenant && profile?.portal) {
         redirectTo = `/${profile.tenant}/${profile.portal}/admin`;
+      } else if (profile?.tenant === "demo135" && profile?.portal === "ops") {
+        redirectTo = "/demo135/ops/admin";
+      } else if (profile?.tenant && profile?.portal) {
+        redirectTo = `/${profile.tenant}/${profile.portal}/portal`;
       }
     }
 
