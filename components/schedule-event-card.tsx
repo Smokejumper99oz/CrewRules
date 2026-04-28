@@ -8,6 +8,8 @@ import {
 } from "@/lib/schedule-report-night";
 import { getTripDateStrings } from "@/lib/leg-dates";
 
+import { LegGateFlightLineSuffix, type NextLegGateUiProps } from "@/components/next-leg-gate-display";
+
 /** Prefix flight number for display: carrierCode + number, or FLT + number. Does not change stored data.
  *  If the flight number already starts with its own IATA carrier code (e.g. "WN479"), use it as-is. */
 function formatFlightDisplay(flightNumber: string, carrierCode?: string | null): string {
@@ -83,6 +85,8 @@ type Props = {
    * When set (e.g. SIM release for deviated recurrent training), duty end display uses this instant instead of event.end_time.
    */
   displayEndTimeIso?: string | null;
+  /** Per-leg gate suffix (dashboard next-duty); index aligns with `legsToShow` / displayed leg rows. */
+  legGateUiByLegIndex?: (NextLegGateUiProps | null)[] | null;
 };
 
 export function ScheduleEventCard({
@@ -102,6 +106,7 @@ export function ScheduleEventCard({
   trainingCompanyCommuteToLegs,
   trainingCompanyCommuteFromLegs,
   displayEndTimeIso,
+  legGateUiByLegIndex,
 }: Props) {
   if (isRdPlaceholderEvent(event)) return null;
 
@@ -250,6 +255,8 @@ export function ScheduleEventCard({
       : null;
   const pairingLabelClass = compact ? "text-xs text-slate-500" : "text-sm text-slate-500";
 
+  const reportNightGateUi = legGateUiByLegIndex?.[0] ?? null;
+
   const reportNightBlock = isTripReportNightUi ? (
     <div className={`flex flex-col gap-0.5 ${compact ? "text-xs" : "text-sm"} text-amber-200/90`}>
       <span>
@@ -257,9 +264,15 @@ export function ScheduleEventCard({
         {formatReportNightEeeD(reportNightMeta.reportLocalDate!, tz)}
       </span>
       {firstLeg != null && (
-        <span>
+        <span className="whitespace-nowrap">
           DEPARTURE {firstLeg.origin} {firstLeg.depTime ?? "—"} → {firstLeg.destination} {firstLeg.arrTime ?? "—"} •{" "}
           {formatReportNightEeeD(reportNightMeta.firstDepartureLocalDate!, tz)}
+          {reportNightGateUi ? (
+            <>
+              {" "}
+              <LegGateFlightLineSuffix gateUi={reportNightGateUi} size={compact ? "xs" : "sm"} />
+            </>
+          ) : null}
         </span>
       )}
     </div>
@@ -309,12 +322,21 @@ export function ScheduleEventCard({
         {showRoute &&
           (hasLegs ? (
             <div className="text-xs space-y-0.5">
-              {effectiveLegs!.map((l, i) => (
-                <div key={i} className="font-normal text-slate-300 whitespace-nowrap">
-                  {l.flightNumber ? `${formatFlightDisplay(l.flightNumber, displaySettings.carrierCode)} ` : ""}
-                  {l.origin} → {l.destination}   {l.depTime ?? "—"} – {l.arrTime ?? "—"}
-                </div>
-              ))}
+              {effectiveLegs!.map((l, i) => {
+                const legGateUi = legGateUiByLegIndex?.[i] ?? null;
+                return (
+                  <div key={i} className={`font-normal text-slate-300 whitespace-nowrap ${compact ? "text-xs" : "text-sm"}`}>
+                    {l.flightNumber ? `${formatFlightDisplay(l.flightNumber, displaySettings.carrierCode)} ` : ""}
+                    {l.origin} → {l.destination}   {l.depTime ?? "—"} – {l.arrTime ?? "—"}
+                    {legGateUi ? (
+                      <>
+                        {" "}
+                        <LegGateFlightLineSuffix gateUi={legGateUi} size={compact ? "xs" : "sm"} />
+                      </>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             !headerTitleOverride?.trim() && (
@@ -385,12 +407,21 @@ export function ScheduleEventCard({
       {showRoute && (
         <div className="text-sm space-y-0.5">
           {hasLegs ? (
-            effectiveLegs!.map((l, i) => (
-              <div key={i} className="font-normal text-slate-300 whitespace-nowrap">
-                {l.flightNumber ? `${formatFlightDisplay(l.flightNumber, displaySettings.carrierCode)} ` : ""}
-                {l.origin} → {l.destination}   {l.depTime ?? "—"} – {l.arrTime ?? "—"}
-              </div>
-            ))
+            effectiveLegs!.map((l, i) => {
+              const legGateUi = legGateUiByLegIndex?.[i] ?? null;
+              return (
+                <div key={i} className="font-normal text-slate-300 whitespace-nowrap text-sm">
+                  {l.flightNumber ? `${formatFlightDisplay(l.flightNumber, displaySettings.carrierCode)} ` : ""}
+                  {l.origin} → {l.destination}   {l.depTime ?? "—"} – {l.arrTime ?? "—"}
+                  {legGateUi ? (
+                    <>
+                      {" "}
+                      <LegGateFlightLineSuffix gateUi={legGateUi} size="sm" />
+                    </>
+                  ) : null}
+                </div>
+              );
+            })
           ) : (
             <span className="text-slate-500 whitespace-nowrap">{event.route}   {dutyRange}</span>
           )}

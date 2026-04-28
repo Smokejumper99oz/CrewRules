@@ -33,6 +33,7 @@ export type ResolvedLegFlight = {
   durationMinutes: number;
   aircraft_type?: string | null;
   dep_gate?: string | null;
+  arr_gate?: string | null;
 };
 
 /** Extract numeric part of flight number for matching (e.g. "1440", "WN1440" → "1440"). */
@@ -193,6 +194,7 @@ export async function resolveLegIdentity(
       durationMinutes: match.durationMinutes,
       aircraft_type: match.aircraft_type,
       dep_gate: match.dep_gate,
+      arr_gate: match.arr_gate,
     };
 
     return {

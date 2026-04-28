@@ -17,8 +17,7 @@ type Props = {
 const PENDING_IN_FEED_COPY =
   "Route not yet available from FlightAware. Public route data may appear late even when flight status is available. Verify routing in dispatch release or ForeFlight.";
 
-const UNAVAILABLE_COPY =
-  "Unable to load route data. Please verify routing via dispatch or ForeFlight.";
+const UNAVAILABLE_COPY = "Filed route will appear closer to departure.";
 
 export default function FiledRouteCard({ flight, routeText, loading, filedRouteState = "unavailable" }: Props) {
   const [copied, setCopied] = useState(false);
@@ -76,9 +75,7 @@ export default function FiledRouteCard({ flight, routeText, loading, filedRouteS
           </span>
         )}
       </div>
-      <p className="mt-2 text-[11px] text-slate-500">
-        Route shown when available from FlightAware data.
-      </p>
+      <p className="mt-2 text-[11px] text-slate-500">Powered by FlightAware when available.</p>
     </div>
   );
 }

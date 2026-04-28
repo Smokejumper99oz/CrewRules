@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { HomeBaseMetar } from "@/lib/weather-brief/get-home-base-metar";
 import { DashboardWeatherWidget } from "@/components/dashboard-weather-widget";
 
@@ -113,7 +114,7 @@ export function DashboardWeatherWidgetClient({ fallbackMetar, weatherBriefHref }
         setMetar(data.metar);
         setGeoActive(true);
       } catch {
-        // Silent fallback: keep server METAR or stay hidden if none.
+        // Silent fallback: keep server METAR; placeholder link renders when still no metar.
       }
     })();
 
@@ -122,7 +123,17 @@ export function DashboardWeatherWidgetClient({ fallbackMetar, weatherBriefHref }
     };
   }, []);
 
-  if (!metar) return null;
+  if (!metar) {
+    return (
+      <Link
+        href={weatherBriefHref}
+        className="group w-full sm:shrink-0 sm:min-w-[260px] sm:w-auto flex flex-col gap-0.5 rounded-xl border border-white/5 bg-slate-900/40 px-4 py-2.5 transition hover:border-white/10 hover:bg-slate-900/60"
+      >
+        <span className="text-sm font-semibold text-slate-100">Weather Brief</span>
+        <span className="text-xs text-slate-500">Weather unavailable</span>
+      </Link>
+    );
+  }
 
   return (
     <DashboardWeatherWidget

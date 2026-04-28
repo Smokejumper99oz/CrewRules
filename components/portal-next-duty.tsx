@@ -10,7 +10,9 @@ import { getProfile, isProActive } from "@/lib/profile";
 import type { ActiveTrip } from "@/lib/trips/get-active-trip";
 import { formatLegLine } from "@/lib/trips/detect-trip-changes";
 import type { TripChangeSummary } from "@/lib/trips/detect-trip-changes";
-import { resolveLegIdentity, type ResolvedLegFlight } from "@/lib/trips/resolve-leg-identity";
+import { resolveLegIdentity, type ResolvedLegFlight, type ResolvedLegIdentity } from "@/lib/trips/resolve-leg-identity";
+import { mergeLegGatesForPortal } from "@/lib/trips/merge-leg-gates-for-portal";
+import { LegGateFlightLineSuffix, type NextLegGateUiProps } from "@/components/next-leg-gate-display";
 import {
   fetchFlightsFromAviationStack,
   parseAviationstackTs,
@@ -164,6 +166,27 @@ function matchCommuteFlightToScheduleLeg(
   return match ?? null;
 }
 
+function currentTripLegGateUi(
+  proActive: boolean,
+  legFlightNumber: string | null | undefined,
+  asLeg: CommuteFlight | null,
+  commuteMergedFlight: ResolvedLegFlight | null | undefined
+): NextLegGateUiProps | null {
+  if (!legFlightNumber?.trim()) return null;
+  const g = mergeLegGatesForPortal(asLeg ?? undefined, commuteMergedFlight ?? undefined);
+  if (!proActive) {
+    return { variant: "teaser" };
+  }
+  if (g.departure_gate || g.arrival_gate) {
+    return {
+      variant: "pro",
+      departureGate: g.departure_gate,
+      arrivalGate: g.arrival_gate,
+    };
+  }
+  return { variant: "proPlaceholder" };
+}
+
 function commuteFlightToResolvedLegFlight(match: CommuteFlight): ResolvedLegFlight {
   const depTz = match.origin_tz ?? "UTC";
   const arrTz = match.dest_tz ?? "UTC";
@@ -190,6 +213,7 @@ function commuteFlightToResolvedLegFlight(match: CommuteFlight): ResolvedLegFlig
     durationMinutes: match.durationMinutes,
     aircraft_type: match.aircraft_type,
     dep_gate: match.dep_gate,
+    arr_gate: match.arr_gate,
   };
 }
 
@@ -376,19 +400,31 @@ export async function PortalNextDuty({
 
   const firstLeg = (legsToShow && legsToShow.length > 0 ? legsToShow[0] : activeTrip?.todayLegs?.[0]) ?? null;
   const displayDateForResolve = (legsToShow && legsToShow.length > 0 ? displayDateStr : activeTrip?.displayDateStr) ?? formatInTimeZone(new Date(), displaySettings.baseTimezone, "yyyy-MM-dd");
-  const [resolvedFirstLeg, filedResult] = await Promise.all([
-    firstLeg && firstLeg.flightNumber && firstLeg.origin && firstLeg.destination && proActive
-      ? resolveLegIdentity(
-          {
-            flightNumber: firstLeg.flightNumber,
-            origin: firstLeg.origin,
-            destination: firstLeg.destination,
-            depTime: firstLeg.depTime,
-            date: displayDateForResolve,
-          },
-          { deadhead: firstLeg.deadhead === true }
+  const resolveAllLegs =
+    proActive && legsToShow && legsToShow.length > 0
+      ? Promise.all(
+          legsToShow.map((leg) =>
+            leg.flightNumber?.trim() && leg.origin && leg.destination
+              ? resolveLegIdentity(
+                  {
+                    flightNumber: leg.flightNumber,
+                    origin: leg.origin,
+                    destination: leg.destination,
+                    depTime: leg.depTime,
+                    date: currentTripLegDepartureDateYmd(
+                    leg as { departureDate?: string | null },
+                    displayDateForResolve
+                  ),
+                  },
+                  { deadhead: leg.deadhead === true }
+                )
+              : Promise.resolve(null)
+          )
         )
-      : null,
+      : Promise.resolve([] as (ResolvedLegIdentity | null)[]);
+
+  const [resolvedIdentities, filedResult] = await Promise.all([
+    resolveAllLegs,
     (async () => {
       if (!firstLeg?.flightNumber || !firstLeg.origin || !firstLeg.destination) return { filedResult: null, departureIso: null, arrivalIso: null };
       const depDateStr = ("departureDate" in firstLeg && firstLeg.departureDate) ? firstLeg.departureDate : displayDateForResolve;
@@ -415,6 +451,9 @@ export async function PortalNextDuty({
       return { filedResult, departureIso: depUtc.toISOString(), arrivalIso: arrUtc.toISOString() };
     })(),
   ]);
+
+  const resolvedFirstLeg = resolvedIdentities[0] ?? null;
+
   const firstLegLiveStatus = filedResult?.filedResult?.status ?? null;
   const firstLegDepIso = filedResult?.departureIso ?? null;
   const firstLegArrIso = filedResult?.arrivalIso ?? null;
@@ -550,6 +589,29 @@ export async function PortalNextDuty({
 
           return { remainingMinutes: remaining, maxFdpMinutes: maxFdp };
         })()
+      : null;
+
+  const scheduleLegGateUiByLegIndex: (NextLegGateUiProps | null)[] | null =
+    !activeTrip && event?.event_type === "trip" && legsToShow && legsToShow.length > 0
+      ? legsToShow.map((leg, i) => {
+          const hasRealFlightLine =
+            Boolean(leg.flightNumber?.trim()) &&
+            Boolean(leg.origin?.trim()) &&
+            Boolean(leg.destination?.trim());
+          if (!hasRealFlightLine) return null;
+          const g = mergeLegGatesForPortal(undefined, resolvedIdentities[i]?.flight ?? undefined);
+          if (!proActive) {
+            return { variant: "teaser" as const };
+          }
+          if (g.departure_gate || g.arrival_gate) {
+            return {
+              variant: "pro" as const,
+              departureGate: g.departure_gate,
+              arrivalGate: g.arrival_gate,
+            };
+          }
+          return { variant: "proPlaceholder" as const };
+        })
       : null;
 
   return (
@@ -740,12 +802,18 @@ export async function PortalNextDuty({
                           <span className="tabular-nums">{effectiveAircraftType}</span>
                         </>
                       )}
-                      {f?.dep_gate && (
-                        <>
-                          <span className="text-slate-600">•</span>
-                          <span className="tabular-nums">Gate {f.dep_gate}</span>
-                        </>
-                      )}
+                      {(() => {
+                        const ui = currentTripLegGateUi(
+                          proActive,
+                          leg.flightNumber,
+                          asLeg,
+                          resolvedIdentities[i]?.flight ?? null
+                        );
+                        if (!ui) return null;
+                        return (
+                          <LegGateFlightLineSuffix gateUi={ui} size="xs" />
+                        );
+                      })()}
                     </div>
                   </div>
                 );
@@ -806,6 +874,16 @@ export async function PortalNextDuty({
                           <span className="tabular-nums">{fbAcType}</span>
                         </>
                       );
+                    })()}
+                    {(() => {
+                      const ui = currentTripLegGateUi(
+                        proActive,
+                        leg.flightNumber,
+                        asLeg,
+                        resolvedIdentities[i]?.flight ?? null
+                      );
+                      if (!ui) return null;
+                      return <LegGateFlightLineSuffix gateUi={ui} size="xs" />;
                     })()}
                   </div>
                 </div>
@@ -898,6 +976,7 @@ export async function PortalNextDuty({
                       ? trainingCompanyCommuteFromLegs
                       : undefined
                   }
+                  legGateUiByLegIndex={scheduleLegGateUiByLegIndex ?? undefined}
                 />
               </div>
             ) : (
@@ -922,6 +1001,7 @@ export async function PortalNextDuty({
                     ? trainingCompanyCommuteFromLegs
                     : undefined
                 }
+                legGateUiByLegIndex={scheduleLegGateUiByLegIndex ?? undefined}
               />
             ))}
           {far117Result && !activeTrip && (

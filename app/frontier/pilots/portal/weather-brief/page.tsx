@@ -176,6 +176,8 @@ export default async function WeatherBriefPage() {
           updatedAt={depWeather.updatedAt}
           metarRaw={depWeather.metarRaw}
           tafRaw={depWeather.tafRaw}
+          metarError={depWeather.metarError}
+          tafError={depWeather.tafError}
           sourceUrl={depWeather.sourceLinks.metarTaf}
           decodedCurrent={depWeather.decodedCurrent}
           operationalNoteCurrent={depWeather.decodedCurrent?.operationalNote}
@@ -195,6 +197,8 @@ export default async function WeatherBriefPage() {
           updatedAt={arrWeather.updatedAt}
           metarRaw={arrWeather.metarRaw}
           tafRaw={arrWeather.tafRaw}
+          metarError={arrWeather.metarError}
+          tafError={arrWeather.tafError}
           sourceUrl={arrWeather.sourceLinks.metarTaf}
           decodedCurrent={arrWeather.decodedCurrent}
           operationalNoteCurrent={arrWeather.decodedCurrent?.operationalNote}

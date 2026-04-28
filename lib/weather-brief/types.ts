@@ -68,6 +68,12 @@ export type DecodedWeather = {
   operationalCeilingFt?: number | null;
 };
 
+/** AWC METAR/TAF pipeline failure, distinct from “decoded OK”. */
+export type WeatherBriefProductError =
+  | { error: "fetch_failed"; source: "metar" | "taf" }
+  | { error: "http_error"; status: number }
+  | { error: "no_data" };
+
 export type AirportWeather = {
   airport: string;
   airportName?: string | null;
@@ -76,6 +82,10 @@ export type AirportWeather = {
   updatedAt?: string | null;
   metarRaw?: string | null;
   tafRaw?: string | null;
+  /** When set, Observed (METAR) block shows a specific failure message. */
+  metarError?: WeatherBriefProductError | null;
+  /** When set, TAF-time block shows a specific failure message. */
+  tafError?: WeatherBriefProductError | null;
   decodedCurrent?: DecodedWeather | null;
   decodedForecast?: DecodedWeather | null;
   forecastWindowLabel?: string | null;

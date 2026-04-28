@@ -21,7 +21,7 @@ function briefCondition(weather: AirportWeather, role: "dep" | "arr"): string {
   const fcstCat = fcst?.flightCategory ?? "UNKNOWN";
 
   const parts: string[] = [];
-  if (cur && curCat !== "UNKNOWN") parts.push(`${curCat} observed`);
+  if (cur && curCat !== "UNKNOWN") parts.push(`${curCat} Observed`);
   if (fcst && fcstCat !== "UNKNOWN" && fcstCat !== curCat) parts.push(`${fcstCat} in TAF window`);
   else if (fcst && fcstCat !== "UNKNOWN" && !cur) parts.push(`${fcstCat} (TAF for flight time)`);
 

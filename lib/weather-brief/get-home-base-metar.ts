@@ -8,8 +8,8 @@ import { resolveStationCode } from "./resolve-station-code";
 
 const AWC_BASE = "https://aviationweather.gov/api/data";
 const FETCH_OPTS: RequestInit = {
-  headers: { "User-Agent": "CrewRules™-WeatherBrief/1.0 (https://crewrules.com)" },
-  next: { revalidate: 300 },
+  headers: { "User-Agent": "CrewRules-WeatherBrief/1.0 (https://crewrules.com)" },
+  cache: "no-store",
 };
 
 type MetarRecord = {
@@ -120,18 +120,31 @@ export async function getHomeBaseMetar(
   const code = airport?.trim();
   if (!code) return null;
 
+  const icao = resolveStationCode(code);
+
   try {
-    const icao = resolveStationCode(code);
     const url = `${AWC_BASE}/metar?ids=${icao}&format=json`;
     const res = await fetch(url, FETCH_OPTS);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn("[getHomeBaseMetar] METAR fetch not OK", {
+        station: icao,
+        status: res.status,
+      });
+      return null;
+    }
 
     const text = await res.text();
-    if (!text?.trim()) return null;
+    if (!text?.trim()) {
+      console.warn("[getHomeBaseMetar] METAR empty response body", { station: icao });
+      return null;
+    }
 
     const parsed: MetarRecord[] = JSON.parse(text);
     const metar = Array.isArray(parsed) ? parsed[0] : null;
-    if (!metar) return null;
+    if (!metar) {
+      console.warn("[getHomeBaseMetar] METAR invalid or empty after parse", { station: icao });
+      return null;
+    }
 
     const tempC = metar.temp ?? null;
     const tempF = tempC != null ? toF(tempC) : null;
@@ -157,7 +170,9 @@ export async function getHomeBaseMetar(
       windDir,
       gustKt,
     };
-  } catch {
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn("[getHomeBaseMetar] METAR fetch/parse error", { station: icao, error: msg });
     return null;
   }
 }

@@ -310,7 +310,7 @@ async function fetchTimetable(
     const res = await fetch(url.toString(), {
       method: "GET",
       cache: "no-store",
-      headers: { "User-Agent": "CrewRules™/1.0 (CommuteAssist)" },
+      headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist; https://crewrules.com)" },
     });
 
     if (!res.ok) {
@@ -412,7 +412,7 @@ async function fetchFlightsSameDay(
     const res = await aviationstackFetch(url.toString(), {
       method: "GET",
       cache: "no-store",
-      headers: { "User-Agent": "CrewRules™/1.0 (CommuteAssist)" },
+      headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist; https://crewrules.com)" },
     });
 
     if (res == null || typeof res.ok !== "boolean") {
@@ -608,7 +608,7 @@ async function fetchFlightsFuture(
   const res = await aviationstackFetch(url.toString(), {
     method: "GET",
     cache: "no-store",
-    headers: { "User-Agent": "CrewRules™/1.0 (CommuteAssist)" },
+    headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist; https://crewrules.com)" },
   });
 
   if (res == null || typeof res.ok !== "boolean") {
@@ -753,7 +753,7 @@ async function fetchFlightsHistorical(
   const res = await aviationstackFetch(url.toString(), {
     method: "GET",
     cache: "no-store",
-    headers: { "User-Agent": "CrewRules™/1.0 (CommuteAssist)" },
+    headers: { "User-Agent": "CrewRules/1.0 (CommuteAssist; https://crewrules.com)" },
   });
 
   if (res == null || typeof res.ok !== "boolean") {
