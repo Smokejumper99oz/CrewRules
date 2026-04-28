@@ -60,6 +60,8 @@ export type Profile = {
   family_view_show_commute_estimates?: boolean;
   color_mode?: "dark" | "light" | "system";
   welcome_modal_version_seen?: number | null;
+  bid_reminder_snoozed_until?: string | null;
+  bid_reminder_suppressed_month?: string | null;
   is_admin?: boolean;
   is_mentor?: boolean;
   /** Profile phone (e.g. Super Admin / mentee contact settings); distinct from `mentor_phone`. */

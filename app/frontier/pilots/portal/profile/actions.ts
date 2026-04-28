@@ -6,6 +6,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createActionClient } from "@/lib/supabase/server-action";
 import { getProfile } from "@/lib/profile";
 import { CURRENT_WELCOME_MODAL_VERSION } from "@/lib/welcome-modal";
+import {
+  getApplicablePbsBidOpeningUtc,
+  getBidReminderMonthKey,
+  isInPbsBidReminderWindow,
+  PBS_BID_REMINDER_FALLBACK_TZ,
+} from "@/lib/bid-reminder/pbs-monthly-bid-window";
 import { revalidatePath } from "next/cache";
 import { ensureInboundAliasIfMissing } from "@/lib/email/ensure-inbound-alias-if-missing";
 import { formatUsPhoneDisplay } from "@/lib/format-us-phone";
@@ -451,6 +457,70 @@ export async function markWelcomeModalSeen(): Promise<MarkWelcomeModalSeenResult
     .update({
       welcome_modal_version_seen: CURRENT_WELCOME_MODAL_VERSION,
       updated_at: new Date().toISOString(),
+    })
+    .eq("id", profile.id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/frontier/pilots/portal");
+  return { success: true };
+}
+
+export type BidReminderPrefsResult = { success: true } | { error: string };
+
+const BID_REMINDER_SNOOZE_HOURS = 6;
+
+/**
+ * Snooze PBS bid reminder for six hours (Phase 1). No-op when outside the 24h pre-open window.
+ */
+export async function snoozeBidReminderSixHours(): Promise<BidReminderPrefsResult> {
+  const profile = await getProfile();
+  if (!profile) return { error: "Not signed in" };
+
+  const now = new Date();
+  const tz = profile.base_timezone?.trim() || PBS_BID_REMINDER_FALLBACK_TZ;
+  const openingUtc = getApplicablePbsBidOpeningUtc(now, tz);
+  if (!isInPbsBidReminderWindow(now, openingUtc)) {
+    return { error: "Reminder is not active" };
+  }
+
+  const snoozedUntil = new Date(now.getTime() + BID_REMINDER_SNOOZE_HOURS * 60 * 60 * 1000).toISOString();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      bid_reminder_snoozed_until: snoozedUntil,
+      updated_at: now.toISOString(),
+    })
+    .eq("id", profile.id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/frontier/pilots/portal");
+  return { success: true };
+}
+
+/**
+ * Suppress PBS bid reminder for the current opening month (YYYY-MM). Only while the pre-open window is active.
+ */
+export async function suppressBidReminderForCurrentOpening(): Promise<BidReminderPrefsResult> {
+  const profile = await getProfile();
+  if (!profile) return { error: "Not signed in" };
+
+  const now = new Date();
+  const tz = profile.base_timezone?.trim() || PBS_BID_REMINDER_FALLBACK_TZ;
+  const openingUtc = getApplicablePbsBidOpeningUtc(now, tz);
+  if (!isInPbsBidReminderWindow(now, openingUtc)) {
+    return { error: "Reminder is not active" };
+  }
+
+  const reminderMonth = getBidReminderMonthKey(openingUtc, tz);
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      bid_reminder_suppressed_month: reminderMonth,
+      updated_at: now.toISOString(),
     })
     .eq("id", profile.id);
 

@@ -8,6 +8,9 @@ import { PortalMonthStats } from "@/components/portal-month-stats-wrapper";
 import { DashboardAskBox } from "@/components/dashboard-ask-box";
 import { DashboardWeatherWidgetClient } from "@/components/dashboard-weather-widget-client";
 import { DashboardCrewRulesAnniversary } from "@/components/dashboard-crewrules-anniversary";
+import { BidReminderBanner } from "@/components/bid-reminder-banner";
+import { getNavbluePbsLoginUrl } from "@/lib/bid-reminder/navblue-pbs-login-url";
+import { shouldShowBidReminderBannerPhase1 } from "@/lib/bid-reminder/pbs-monthly-bid-window";
 import { getHomeBaseMetar } from "@/lib/weather-brief/get-home-base-metar";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +38,8 @@ export default async function PortalDashboard() {
     ? await getHomeBaseMetar(currentLocationAirport).catch(() => null)
     : null;
 
+  const bidReminder = shouldShowBidReminderBannerPhase1(profile ?? null, new Date());
+
   return (
     <div className="space-y-6">
       {/* Greeting + compact weather chip */}
@@ -50,6 +55,13 @@ export default async function PortalDashboard() {
       </div>
 
       <DashboardCrewRulesAnniversary />
+
+      {bidReminder ? (
+        <BidReminderBanner
+          openingLine={bidReminder.openingLine}
+          navbluePbsLoginHref={getNavbluePbsLoginUrl(TENANT)}
+        />
+      ) : null}
 
       {/* Next Duty */}
       <PortalNextDuty tenant={TENANT} portal={PORTAL} activeTrip={activeTrip} tripChangeSummaries={tripChangeSummaries} />
