@@ -6,12 +6,39 @@ import { DashboardWeatherWidget } from "@/components/dashboard-weather-widget";
 
 const GEO_TIMEOUT_MS = 10_000;
 
+/** Skip repeating geolocation prompts / reads when revisiting dashboard within this window. */
+const GEO_PROMPT_COOLDOWN_MS = 12 * 60 * 60 * 1000;
+
+const STORAGE_KEY = "crewrules_dashboard_geo_last_attempt_ms";
+
 const API_PATH = "/api/frontier/pilots/portal/dashboard-weather";
 
 type Props = {
   fallbackMetar: HomeBaseMetar | null;
   weatherBriefHref: string;
 };
+
+function readCooldownActive(): boolean {
+  try {
+    if (typeof window === "undefined") return false;
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const last = parseInt(raw, 10);
+    if (!Number.isFinite(last)) return false;
+    return Date.now() - last < GEO_PROMPT_COOLDOWN_MS;
+  } catch {
+    return false;
+  }
+}
+
+function markCooldown(): void {
+  try {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(STORAGE_KEY, String(Date.now()));
+  } catch {
+    // Storage unavailable (private mode, disabled, quota).
+  }
+}
 
 function readPosition(timeoutMs: number): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
@@ -43,7 +70,33 @@ export function DashboardWeatherWidgetClient({ fallbackMetar, weatherBriefHref }
 
     void (async () => {
       try {
-        const pos = await readPosition(GEO_TIMEOUT_MS);
+        if (readCooldownActive()) return;
+
+        try {
+          const pending = navigator.permissions?.query?.({
+            name: "geolocation" as PermissionName,
+          });
+          if (pending) {
+            const status = await pending;
+            if (status.state === "denied") {
+              markCooldown();
+              return;
+            }
+          }
+        } catch {
+          // Permissions API unsupported or throws — continue to getCurrentPosition path.
+        }
+
+        let pos: GeolocationPosition;
+        try {
+          pos = await readPosition(GEO_TIMEOUT_MS);
+        } catch {
+          markCooldown();
+          return;
+        }
+
+        markCooldown();
+
         if (dead) return;
         const res = await fetch(API_PATH, {
           method: "POST",

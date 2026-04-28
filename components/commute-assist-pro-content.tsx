@@ -1236,6 +1236,26 @@ export function CommuteAssistProContent({
     [direction, arriveByTimeForExpiry, commuteExpiryTick]
   );
 
+  /** When arrive-by has passed and pilot did not manually choose search day, use prior calendar day on routes (routes[0].commuteDate). */
+  const effectiveToBaseCommuteDateForRoutes = useMemo(() => {
+    if (
+      direction === "to_base" &&
+      !commuteTwoLegEnabled &&
+      isCommuteWindowExpired &&
+      toBaseCommuteDateOverride === null
+    ) {
+      return subtractDay(toBaseCommuteSearchDate);
+    }
+    return toBaseCommuteDateForSearch;
+  }, [
+    direction,
+    commuteTwoLegEnabled,
+    isCommuteWindowExpired,
+    toBaseCommuteDateOverride,
+    toBaseCommuteSearchDate,
+    toBaseCommuteDateForSearch,
+  ]);
+
   const dutyStartAirport = dutyStartAirportOverride?.trim() || parseDutyStartAirport(event.route);
   const dutyEndAirport = (dutyEndAirportOverride?.trim() || baseAirport) ?? null;
 
@@ -1272,7 +1292,7 @@ export function CommuteAssistProContent({
     if (commuteTwoLegEnabled) return [];
     const commuteDate =
       direction === "to_base"
-        ? toBaseCommuteDateForSearch
+        ? effectiveToBaseCommuteDateForRoutes
         : dutyEndDateBase ?? new Date().toISOString().slice(0, 10);
 
     if (direction === "to_base") {
@@ -1301,7 +1321,7 @@ export function CommuteAssistProContent({
     baseAirport,
     toBaseCommuteDestinationAirport,
     dutyEndAirport,
-    toBaseCommuteDateForSearch,
+    effectiveToBaseCommuteDateForRoutes,
     dutyEndDateBase,
   ]);
 
@@ -1316,7 +1336,7 @@ export function CommuteAssistProContent({
 
     const commuteDate =
       direction === "to_base"
-        ? toBaseCommuteDateForSearch
+        ? effectiveToBaseCommuteDateForRoutes
         : dutyEndDateBase ?? new Date().toISOString().slice(0, 10);
 
     const result: { origin: string; destination: string; routeKey: string; commuteDate: string }[] = [];
@@ -1338,7 +1358,7 @@ export function CommuteAssistProContent({
     homeAirport,
     alternateHomeAirport,
     direction,
-    toBaseCommuteDateForSearch,
+    effectiveToBaseCommuteDateForRoutes,
     dutyEndDateBase,
   ]);
 
@@ -1354,7 +1374,7 @@ export function CommuteAssistProContent({
 
     const commuteDate =
       direction === "to_base"
-        ? toBaseCommuteDateForSearch
+        ? effectiveToBaseCommuteDateForRoutes
         : dutyEndDateBase ?? new Date().toISOString().slice(0, 10);
 
     if (direction === "to_base") {
@@ -1389,7 +1409,7 @@ export function CommuteAssistProContent({
     return result;
   }, [
     direction,
-    toBaseCommuteDateForSearch,
+    effectiveToBaseCommuteDateForRoutes,
     dutyEndDateBase,
     homeAirport,
     alternateHomeAirport,
@@ -2284,7 +2304,7 @@ export function CommuteAssistProContent({
     ? (dutyOk
         ? isTrainingDeviationToBaseCommute
           ? "Same Day"
-          : toBaseCommuteDateForSearch === dutyDateBase
+          : effectiveToBaseCommuteDateForRoutes === dutyDateBase
             ? "Same Day"
             : "Day Prior"
         : "Same-day flights")

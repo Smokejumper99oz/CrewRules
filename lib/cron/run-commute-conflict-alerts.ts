@@ -1,3 +1,4 @@
+import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchFlightsFromAerodataBox } from "@/lib/aerodatabox";
@@ -55,6 +56,59 @@ function isNoSafeSameDay(flights: { arrivalTime: string }[], arriveByMs: number)
     if (Number.isNaN(arrMs)) return false;
     return arrMs > arriveByMs;
   });
+}
+
+/**
+ * Prefer active pairing (duty started, trip not ended), else smallest future duty instant.
+ * Mirrors commute-assist-pro-content.tsx search-day heuristic when paired with arrive-by hour rule below.
+ */
+function pickNextCommuteAlertEvent(
+  rows: ScheduleRow[] | null | undefined,
+  baseTz: string,
+  nowMs: number
+): { ev: ScheduleRow; dutyStartMs: number } | null {
+  const candidates = (rows ?? []).filter((e) => !isVacationCode(e.title));
+  let activePick: { ev: ScheduleRow; dutyStartMs: number; blockStartMs: number } | null = null;
+  let upcomingPick: { ev: ScheduleRow; dutyStartMs: number } | null = null;
+
+  for (const ev of candidates) {
+    const dutyStartMs = getScheduleEventDutyStartMs(ev, baseTz);
+    if (Number.isNaN(dutyStartMs)) continue;
+    const endMs = new Date(ev.end_time).getTime();
+    if (Number.isNaN(endMs)) continue;
+    const blockStartMs = new Date(ev.start_time).getTime();
+
+    if (dutyStartMs <= nowMs && nowMs < endMs) {
+      const orderKey = Number.isNaN(blockStartMs) ? Infinity : blockStartMs;
+      if (
+        !activePick ||
+        orderKey < activePick.blockStartMs ||
+        (orderKey === activePick.blockStartMs && ev.start_time < activePick.ev.start_time)
+      ) {
+        activePick = { ev, dutyStartMs, blockStartMs: orderKey };
+      }
+    } else if (dutyStartMs > nowMs) {
+      if (!upcomingPick || dutyStartMs < upcomingPick.dutyStartMs) {
+        upcomingPick = { ev, dutyStartMs };
+      }
+    }
+  }
+
+  if (activePick) return { ev: activePick.ev, dutyStartMs: activePick.dutyStartMs };
+  if (upcomingPick) return upcomingPick;
+  return null;
+}
+
+/** ADB calendar day: if arrive-by local hour &lt; 12 in base TZ, search previous calendar day (matches Commute Assist UI). */
+function commuteSearchDateStrFromArriveByMs(arriveByMs: number, baseTz: string): string {
+  const arriveByDate = new Date(arriveByMs);
+  const arriveByHour = parseInt(formatInTimeZone(arriveByDate, baseTz, "HH"), 10);
+  const searchDay = Number.isNaN(arriveByHour)
+    ? arriveByDate
+    : arriveByHour < 12
+      ? subDays(arriveByDate, 1)
+      : arriveByDate;
+  return formatInTimeZone(searchDay, baseTz, "yyyy-MM-dd");
 }
 
 type CommuteAlertRecipientSource = "personal_email" | "email";
@@ -177,13 +231,14 @@ export async function runCommuteConflictAlerts(): Promise<CommuteConflictAlertsR
     }
 
     try {
+      const nowMs = Date.now();
       const { data: upcoming, error: evErr } = await admin
         .from("schedule_events")
         .select("start_time, end_time, title, event_type, report_time")
         .eq("user_id", userId)
         .eq("source", FLICA_SOURCE)
         .or("is_muted.eq.false,is_muted.is.null")
-        .gt("start_time", nowIso)
+        .gt("end_time", nowIso)
         .order("start_time", { ascending: true })
         .limit(UPCOMING_EVENT_SCAN);
 
@@ -193,20 +248,25 @@ export async function runCommuteConflictAlerts(): Promise<CommuteConflictAlertsR
         continue;
       }
 
-      const nextEvent = (upcoming as ScheduleRow[] | null)?.find((e) => !isVacationCode(e.title)) ?? null;
-      if (!nextEvent) {
+      const picked = pickNextCommuteAlertEvent(upcoming as ScheduleRow[] | null, baseTz, nowMs);
+      if (!picked) {
         skippedNoDuty++;
         continue;
       }
 
-      const dutyStartMs = getScheduleEventDutyStartMs(nextEvent, baseTz);
-      if (Number.isNaN(dutyStartMs)) {
-        skippedNoDuty++;
-        continue;
-      }
+      const nextEvent = picked.ev;
+      const dutyStartMs = picked.dutyStartMs;
 
       const arriveByMs = dutyStartMs - arrivalBuffer * 60 * 1000;
-      const dutyDateStr = formatInTimeZone(new Date(dutyStartMs), baseTz, "yyyy-MM-dd");
+      const commuteSearchDateStr = commuteSearchDateStrFromArriveByMs(arriveByMs, baseTz);
+
+      console.log("[commute-conflict-alerts] selected commute event", {
+        userId,
+        start_time: nextEvent.start_time,
+        dutyStartMs,
+        arriveByIso: new Date(arriveByMs).toISOString(),
+        commuteSearchDate: commuteSearchDateStr,
+      });
 
       const tripKey = tripIdFor(userId, nextEvent.start_time);
       if (tripKey === lastTrip) {
@@ -223,7 +283,7 @@ export async function runCommuteConflictAlerts(): Promise<CommuteConflictAlertsR
         }
       }
 
-      const { flights } = await fetchFlightsFromAerodataBox(home, base, dutyDateStr);
+      const { flights } = await fetchFlightsFromAerodataBox(home, base, commuteSearchDateStr);
       if (flights.length === 0) {
         skippedNoFlights++;
         continue;
@@ -271,7 +331,7 @@ export async function runCommuteConflictAlerts(): Promise<CommuteConflictAlertsR
         console.log("[commute-conflict-alerts] sent (real)", {
           userId,
           tripKey,
-          dutyDateStr,
+          commuteSearchDate: commuteSearchDateStr,
           flightCount: flights.length,
         });
       } else if (emailEnv.testRecipient) {
@@ -300,7 +360,7 @@ export async function runCommuteConflictAlerts(): Promise<CommuteConflictAlertsR
         console.log("[commute-conflict-alerts] sent (dry-run preview)", {
           userId,
           tripKey,
-          dutyDateStr,
+          commuteSearchDate: commuteSearchDateStr,
           flightCount: flights.length,
         });
       } else {

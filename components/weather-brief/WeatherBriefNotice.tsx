@@ -3,11 +3,33 @@
 import { useState, useEffect } from "react";
 import { Info, FileText, Globe, Cloud, Radio } from "lucide-react";
 
-const STORAGE_PREFIX = "crewrules_weatherbrief_notice_";
+const STORAGE_KEY_LAST_SEEN = "crewrules_weather_brief_notice_last_seen";
+
+const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
 type Props = {
   departureIso: string | null | undefined;
 };
+
+function shouldShowNoticeFromStorage(): boolean {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_LAST_SEEN);
+    if (raw == null || String(raw).trim() === "") return true;
+    const lastSeen = parseInt(String(raw), 10);
+    if (!Number.isFinite(lastSeen)) return true;
+    return Date.now() - lastSeen > FOURTEEN_DAYS_MS;
+  } catch {
+    return true;
+  }
+}
+
+function persistLastSeenNow(): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_LAST_SEEN, String(Date.now()));
+  } catch {
+    // ignore — caller keeps UX consistent where possible
+  }
+}
 
 export function WeatherBriefNotice({ departureIso }: Props) {
   const [showModal, setShowModal] = useState(false);
@@ -18,27 +40,12 @@ export function WeatherBriefNotice({ departureIso }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!mounted || !departureIso) return;
-
-    const key = `${STORAGE_PREFIX}${departureIso}`;
-    try {
-      const acknowledged = localStorage.getItem(key);
-      if (!acknowledged) {
-        setShowModal(true);
-      }
-    } catch {
-      setShowModal(true);
-    }
-  }, [mounted, departureIso]);
+    if (!mounted) return;
+    setShowModal(shouldShowNoticeFromStorage());
+  }, [mounted]);
 
   const handleContinue = () => {
-    if (!departureIso) return;
-    const key = `${STORAGE_PREFIX}${departureIso}`;
-    try {
-      localStorage.setItem(key, "1");
-    } catch {
-      // ignore
-    }
+    persistLastSeenNow();
     setShowModal(false);
   };
 
@@ -144,7 +151,7 @@ export function WeatherBriefNotice({ departureIso }: Props) {
 
               {/* Footer note */}
               <p className="text-xs text-slate-500">
-                This notice will appear once per trip.
+                This notice will appear about once every 14 days.
               </p>
 
               {/* Continue button */}

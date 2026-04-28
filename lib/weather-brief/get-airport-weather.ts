@@ -25,7 +25,12 @@ const FETCH_OPTS: RequestInit = {
 
 async function safeParseJson<T>(res: Response, fallback: T): Promise<T> {
   if (!res.ok) return fallback;
-  const text = await res.text();
+  let text: string;
+  try {
+    text = await res.text();
+  } catch {
+    return fallback;
+  }
   if (!text?.trim()) return fallback;
   try {
     const parsed = JSON.parse(text);
@@ -33,6 +38,33 @@ async function safeParseJson<T>(res: Response, fallback: T): Promise<T> {
   } catch {
     return fallback;
   }
+}
+
+/** Same shape as empty METAR/TAF when AWC fetch rejects (network/timeout); avoids crashing Weather Brief. */
+function buildFetchFailureFallback(ids: string, timezone: string): AirportWeather {
+  const now = new Date();
+  const localTimeLabel = formatInTimeZone(now, timezone, "HH:mm zzz");
+  const zuluTimeLabel = formatInTimeZone(now, "UTC", "HH:mm 'Z'");
+  const baseUrl = "https://aviationweather.gov";
+  return {
+    airport: ids,
+    airportName: null,
+    localTimeLabel,
+    zuluTimeLabel,
+    updatedAt: now.toISOString(),
+    metarRaw: null,
+    tafRaw: null,
+    decodedCurrent: undefined,
+    decodedForecast: undefined,
+    forecastWindowLabel: undefined,
+    tafSelectedPeriodRawLine: null,
+    tafSelectedPeriodWxString: null,
+    sourceLinks: {
+      metarTaf: `${baseUrl}/metar?ids=${ids}`,
+      airportStatus: "https://nasstatus.faa.gov",
+      notams: "https://notams.aim.faa.gov",
+    },
+  };
 }
 
 type MetarRecord = {
@@ -391,10 +423,18 @@ export async function getAirportWeather(
   const metarUrl = `${AWC_BASE}/metar?ids=${ids}&format=json`;
   const tafUrl = `${AWC_BASE}/taf?ids=${ids}&format=json`;
 
-  const [metarRes, tafRes] = await Promise.all([
-    fetch(metarUrl, FETCH_OPTS),
-    fetch(tafUrl, FETCH_OPTS),
-  ]);
+  let metarRes: Response;
+  let tafRes: Response;
+  try {
+    [metarRes, tafRes] = await Promise.all([
+      fetch(metarUrl, FETCH_OPTS),
+      fetch(tafUrl, FETCH_OPTS),
+    ]);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn("[getAirportWeather] METAR/TAF fetch failed", { ids, error: msg });
+    return buildFetchFailureFallback(ids, timezone);
+  }
 
   const metarData = await safeParseJson<MetarRecord[]>(metarRes, []);
   const tafData = await safeParseJson<TafRecord[]>(tafRes, []);
