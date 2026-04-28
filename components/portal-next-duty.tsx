@@ -357,11 +357,17 @@ export async function PortalNextDuty({
   const isOnDuty = label === "on_duty";
   const proActive = isProActive(profile);
   const baseAirport = profile?.base_airport?.trim().toUpperCase() ?? displaySettings.baseAirport?.trim().toUpperCase() ?? "";
-  const firstLegOrigin = legsToShow?.[0]?.origin?.trim().toUpperCase();
-  const isOutOfBase = !!firstLegOrigin && !!baseAirport && firstLegOrigin !== baseAirport;
+  const currentLeg = legsToShow?.[0];
+  const isFirstLegOfTrip =
+    !!event?.legs &&
+    !!currentLeg &&
+    event.legs.indexOf(currentLeg) === 0;
+
+  const minutesBeforeDeparture = isFirstLegOfTrip ? 60 : 45;
+
   const reportTimeOverride =
-    isOutOfBase && legsToShow?.[0]?.depTime
-      ? subtractMinutesFromTime(legsToShow[0].depTime, 45)
+    currentLeg?.depTime
+      ? subtractMinutesFromTime(currentLeg.depTime, minutesBeforeDeparture)
       : undefined;
 
   /** Duty-day legs for the card; omit prop on report-night day so ScheduleEventCard keeps event.legs for firstLeg in report-night block. */

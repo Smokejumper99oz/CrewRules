@@ -17,6 +17,39 @@ export type SystemUpdateEntry = {
  */
 export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   {
+    date: "2026-04-28",
+    title: "Next Duty — Report Time Logic Corrected",
+    type: "fix",
+    bullets: [
+      "Report time on the Next Duty card now correctly reflects real-world operations.",
+      "First leg of a trip shows 1:00 prior to departure.",
+      "Subsequent legs during a trip show 0:45 prior to departure.",
+      "This replaces the previous behavior where all legs could display a 45-minute report regardless of trip start.",
+      "The update ensures pilots see accurate report times at a glance, especially for trip pickups and day-one departures.",
+    ],
+  },
+  {
+    date: "2026-04-28",
+    title: "Next Duty — Gate Information (PRO)",
+    type: "improvement",
+    bullets: [
+      "Gate information is now shown in the Next Duty card for PRO users when available.",
+      "Departure and arrival gates display alongside each leg for quick reference.",
+      "This gives PRO users a faster, all-in-one view of their next trip without needing external apps.",
+    ],
+  },
+  {
+    date: "2026-04-28",
+    title: "NAVBLUE — Bid Reminders Added To Dashboard",
+    type: "new_feature",
+    bullets: [
+      "Important NAVBLUE bid events now appear directly on your dashboard.",
+      "You’ll see reminders ahead of key bidding windows so you don’t miss important deadlines.",
+      "Includes quick actions: Remind me later (snooze) and Dismiss for this month.",
+      "Designed to give pilots better awareness of upcoming bid activity without needing to check multiple systems.",
+    ],
+  },
+  {
     date: "2026-04-24",
     title: "Commute Assist — clearer “previous day” when same-day looks bad",
     type: "improvement",
@@ -53,10 +86,11 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   },
   {
     date: "2026-04-24",
-    title: "Family View™ — training gets the hero when it should",
+    title: "Family View™ — training now shown as primary when active",
     type: "fix",
     bullets: [
-      "On the shared page, the main trip strip can prefer your recurrent training block over later line trips when both are in play, and training companion or overnight cases are combined more sensibly so the family does not see the wrong “next” focus.",
+      "When recurrent training and line trips overlap, training is now correctly shown as the main focus.",
+      "Prevents the dashboard from highlighting a later trip instead of current training.",
     ],
   },
   {

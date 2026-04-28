@@ -51,7 +51,7 @@ function groupByMonthNewestFirst(sortedNewestFirst: SystemUpdateEntry[]): MonthG
 function typeBadgeLabel(type: SystemUpdateType): string {
   switch (type) {
     case "new_feature":
-      return "New feature";
+      return "New Feature";
     case "improvement":
       return "Improvement";
     case "fix":
@@ -84,6 +84,32 @@ function formatDisplayDate(isoDate: string): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+/** After em dash (` — `): capitalize first letter of each word; hyphen splits get a cap too (e.g. same-day → Same-Day). */
+function formatChangelogCardTitle(title: string): string {
+  const sep = " — ";
+  const idx = title.indexOf(sep);
+  if (idx === -1) return title;
+  const head = title.slice(0, idx);
+  const tail = title.slice(idx + sep.length);
+
+  function capFirstLetterInSegment(segment: string): string {
+    for (let i = 0; i < segment.length; i++) {
+      const c = segment[i]!;
+      if (/[a-zA-Z]/.test(c)) {
+        return segment.slice(0, i) + c.toUpperCase() + segment.slice(i + 1);
+      }
+    }
+    return segment;
+  }
+
+  const tailOut = tail
+    .split(/\s+/)
+    .map((token) => token.split("-").map(capFirstLetterInSegment).join("-"))
+    .join(" ");
+
+  return `${head}${sep}${tailOut}`;
 }
 
 type Props = {
@@ -138,7 +164,9 @@ export function SystemUpdatesChangelog(props: Props) {
                             <span className="text-white">™ Initial Public Launch</span>
                           </h4>
                         ) : (
-                          <h4 className="mt-1 text-base font-semibold text-white tracking-tight">{entry.title}</h4>
+                          <h4 className="mt-1 text-base font-semibold text-white tracking-tight">
+                            {formatChangelogCardTitle(entry.title)}
+                          </h4>
                         )}
                       </div>
                       <span className={typeBadgeClass(entry.type)}>{typeBadgeLabel(entry.type)}</span>
