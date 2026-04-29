@@ -19,6 +19,7 @@ import { OperationalWatchItems } from "@/components/weather-brief/OperationalWat
 import { SourcesSection } from "@/components/weather-brief/SourcesSection";
 import { WeatherRefreshTrigger } from "@/components/weather-brief/WeatherRefreshTrigger";
 import { WeatherBriefNotice } from "@/components/weather-brief/WeatherBriefNotice";
+import { EnrouteIntelligenceCard } from "@/components/weather-brief/enroute-intelligence-card";
 
 export default async function WeatherBriefPage() {
   const profile = await getProfile();
@@ -152,7 +153,15 @@ export default async function WeatherBriefPage() {
       <WeatherRefreshTrigger departureIso={departureIso ?? null} />
       <FlightHeader flight={flightWithLiveStatus} />
       {nextFlight.status === "flight" && (
-        <FiledRouteCard flight={nextFlight} routeText={filedRoute} filedRouteState={filedRouteState} />
+        <>
+          <FiledRouteCard flight={nextFlight} routeText={filedRoute} filedRouteState={filedRouteState} />
+          <EnrouteIntelligenceCard
+            departureAirport={nextFlight.departureAirport}
+            arrivalAirport={nextFlight.arrivalAirport}
+            departureIso={nextFlight.departureIso}
+            blockMinutes={nextFlight.blockMinutes}
+          />
+        </>
       )}
       <PilotSummary lines={pilotSummary.lines} />
       <RiskSummary
