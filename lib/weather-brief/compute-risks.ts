@@ -278,7 +278,7 @@ export function computeOperationalWatch(
   if (convSigmet) {
     items.push({
       severity: "warning",
-      title: "Convective SIGMET (station mentioned in text)",
+      title: "Convective SIGMET",
       detail: advisoryDetail(
         convSigmet,
         "Text references your departure or arrival station — verify polygon and validity."
@@ -290,7 +290,7 @@ export function computeOperationalWatch(
   if (sigmet) {
     items.push({
       severity: "caution",
-      title: "SIGMET (station mentioned in text)",
+      title: "SIGMET",
       detail: advisoryDetail(sigmet, "Review raw text — station matched only by text search, not geometry."),
     });
   }
@@ -299,7 +299,7 @@ export function computeOperationalWatch(
   if (airmet) {
     items.push({
       severity: "info",
-      title: "AIRMET (station mentioned in text)",
+      title: "AIRMET",
       detail: advisoryDetail(airmet, "Moderate hazards — confirm relevance to your route."),
     });
   }

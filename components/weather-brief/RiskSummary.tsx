@@ -1,4 +1,5 @@
 import type { DelayRiskLevel } from "@/lib/weather-brief/types";
+import { formatOutOfServiceForWeatherBriefDisplay } from "@/lib/weather-brief/format-out-of-service-for-weather-brief-display";
 
 const NO_IMPACT = "No significant weather-related operational impacts identified.";
 const ADVISORIES_FALLBACK = "Enroute aviation weather advisories present";
@@ -68,11 +69,11 @@ export function RiskSummary({
     <div className={`rounded-2xl border p-4 ${style}`}>
       <p className="font-semibold">{label}</p>
       <p className="mt-1 text-sm opacity-90">
-        {reason || "Not available"}
+        {formatOutOfServiceForWeatherBriefDisplay(reason || "Not available")}
       </p>
       {categoryAlignmentNote?.trim() && (
         <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-snug text-amber-100/95">
-          {categoryAlignmentNote}
+          {formatOutOfServiceForWeatherBriefDisplay(categoryAlignmentNote)}
         </p>
       )}
       {showDrivers && (
@@ -97,7 +98,7 @@ export function RiskSummary({
                       <span aria-hidden className="text-xs opacity-80">
                         {getTriggerIcon(d)}
                       </span>
-                      {d}
+                      {formatOutOfServiceForWeatherBriefDisplay(d)}
                     </li>
                   ))}
                 </ul>
@@ -110,7 +111,7 @@ export function RiskSummary({
                       <span aria-hidden className="text-xs opacity-80">
                         {getTriggerIcon(d)}
                       </span>
-                      {d}
+                      {formatOutOfServiceForWeatherBriefDisplay(d)}
                     </li>
                   ))}
                 </ul>

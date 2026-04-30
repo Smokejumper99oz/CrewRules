@@ -3,6 +3,10 @@
  */
 
 import type { AirportWeather, DelayRiskLevel, EnrouteAdvisory, OperationalWatchItem } from "./types";
+import {
+  pilotSummaryEmptyEnrouteMessage,
+  type WeatherBriefRouteMessagingState,
+} from "./weather-brief-route-messaging";
 
 export type PilotSummaryLine = { label: string; text: string };
 
@@ -72,6 +76,8 @@ export function buildPilotSummary(params: {
   advisories: EnrouteAdvisory[];
   watchItems: OperationalWatchItem[];
   summaryLevel: DelayRiskLevel;
+  /** Display-only: empty enroute line reflects route/corridor certainty (not advisory fetch logic). */
+  routeMessaging: WeatherBriefRouteMessagingState;
 }): PilotSummaryResult {
   const depCode = params.departureWeather.airport?.trim() || params.departureAirport;
   const arrCode = params.arrivalWeather.airport?.trim() || params.arrivalAirport;
@@ -90,12 +96,11 @@ export function buildPilotSummary(params: {
   const warnTitles = params.watchItems.filter((w) => w.severity === "warning").map((w) => w.title);
   let enrouteText: string;
   if (params.advisories.length === 0) {
-    enrouteText =
-      "No SIGMET/AIRMET text in the current feed that references your departure or arrival stations — still review full products.";
+    enrouteText = pilotSummaryEmptyEnrouteMessage(params.routeMessaging);
   } else {
     const types = [...new Set(params.advisories.map((a) => a.type))];
     const typeLabel = types.map((t) => t.replace(/_/g, " ")).join(", ");
-    enrouteText = `${typeLabel} text mentions those stations — review Enroute Advisories below.`;
+    enrouteText = `${typeLabel} for your leg — See CrewRules™ Enroute Intelligence™ below.`;
   }
   if (warnTitles.length > 0) {
     enrouteText += ` Warning: ${warnTitles[0]}.${warnTitles.length > 1 ? " Additional watch items below." : ""}`;

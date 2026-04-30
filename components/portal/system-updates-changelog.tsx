@@ -52,6 +52,8 @@ function typeBadgeLabel(type: SystemUpdateType): string {
   switch (type) {
     case "new_feature":
       return "New Feature";
+    case "new_feature_beta":
+      return "New Feature (Beta)";
     case "improvement":
       return "Improvement";
     case "fix":
@@ -66,6 +68,8 @@ function typeBadgeClass(type: SystemUpdateType): string {
     "shrink-0 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold";
   switch (type) {
     case "new_feature":
+      return `${base} border-emerald-500/40 bg-emerald-500/15 text-emerald-300`;
+    case "new_feature_beta":
       return `${base} border-emerald-500/40 bg-emerald-500/15 text-emerald-300`;
     case "improvement":
       return `${base} border-sky-500/40 bg-sky-500/15 text-sky-200`;
@@ -110,6 +114,28 @@ function formatChangelogCardTitle(title: string): string {
     .join(" ");
 
   return `${head}${sep}${tailOut}`;
+}
+
+/** Only for entries with `titleCrewRulesBrand: true` — green Rules on `CrewRules™`. */
+const TITLE_CREWRULES_MARKER = "CrewRules™";
+
+function crewRulesBrandTitleContent(rawTitle: string) {
+  const formatted = formatChangelogCardTitle(rawTitle);
+  const idx = formatted.indexOf(TITLE_CREWRULES_MARKER);
+  if (idx < 0) {
+    return formatted;
+  }
+  const before = formatted.slice(0, idx);
+  const after = formatted.slice(idx + TITLE_CREWRULES_MARKER.length);
+  return (
+    <>
+      {before}
+      <span className="text-white">Crew</span>
+      <span className="text-[#75C043]">Rules</span>
+      <span className="text-white">™</span>
+      {after}
+    </>
+  );
 }
 
 type Props = {
@@ -162,6 +188,10 @@ export function SystemUpdatesChangelog(props: Props) {
                           <h4 className="mt-1 text-base font-bold text-white tracking-tight">
                             Crew<span className="text-[#75C043]">Rules</span>
                             <span className="text-white">™ Initial Public Launch</span>
+                          </h4>
+                        ) : entry.titleCrewRulesBrand ? (
+                          <h4 className="mt-1 text-base font-semibold text-white tracking-tight">
+                            {crewRulesBrandTitleContent(entry.title)}
                           </h4>
                         ) : (
                           <h4 className="mt-1 text-base font-semibold text-white tracking-tight">

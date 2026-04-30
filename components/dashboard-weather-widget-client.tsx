@@ -17,6 +17,8 @@ const API_PATH = "/api/frontier/pilots/portal/dashboard-weather";
 type Props = {
   fallbackMetar: HomeBaseMetar | null;
   weatherBriefHref: string;
+  /** Pro / Enterprise / active trial — link label matches Advanced Weather Brief. */
+  advancedWeatherBrief?: boolean;
 };
 
 function readCooldownActive(): boolean {
@@ -62,7 +64,12 @@ function readPosition(timeoutMs: number): Promise<GeolocationPosition> {
   });
 }
 
-export function DashboardWeatherWidgetClient({ fallbackMetar, weatherBriefHref }: Props) {
+export function DashboardWeatherWidgetClient({
+  fallbackMetar,
+  weatherBriefHref,
+  advancedWeatherBrief = false,
+}: Props) {
+  const widgetTitle = advancedWeatherBrief ? "Advanced Weather Brief" : "Weather Brief";
   const [metar, setMetar] = useState<HomeBaseMetar | null>(fallbackMetar);
   const [geoActive, setGeoActive] = useState(false);
 
@@ -127,9 +134,10 @@ export function DashboardWeatherWidgetClient({ fallbackMetar, weatherBriefHref }
     return (
       <Link
         href={weatherBriefHref}
+        aria-label={widgetTitle}
         className="group w-full sm:shrink-0 sm:min-w-[260px] sm:w-auto flex flex-col gap-0.5 rounded-xl border border-white/5 bg-slate-900/40 px-4 py-2.5 transition hover:border-white/10 hover:bg-slate-900/60"
       >
-        <span className="text-sm font-semibold text-slate-100">Weather Brief</span>
+        <span className="text-sm font-semibold text-slate-100">{widgetTitle}</span>
         <span className="text-xs text-slate-500">Weather unavailable</span>
       </Link>
     );
@@ -140,6 +148,7 @@ export function DashboardWeatherWidgetClient({ fallbackMetar, weatherBriefHref }
       metar={metar}
       weatherBriefHref={weatherBriefHref}
       sourceLabel={geoActive ? "Near you" : null}
+      linkAriaLabel={widgetTitle}
     />
   );
 }

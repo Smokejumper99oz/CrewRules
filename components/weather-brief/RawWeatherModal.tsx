@@ -28,10 +28,10 @@ export function RawWeatherModal({
       <div
         className="fixed inset-0 z-50 bg-black/60"
         aria-hidden
-        onClick={onClose}
+        onClick={() => onClose()}
       />
       <div
-        className="fixed left-4 right-4 top-1/2 z-50 max-h-[85vh] -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-xl md:left-1/2 md:right-auto md:w-full md:max-w-lg md:-translate-x-1/2 md:p-6"
+        className="fixed left-[max(1rem,env(safe-area-inset-left,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] top-1/2 z-50 max-h-[min(85dvh,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-1.5rem))] -translate-y-1/2 overflow-y-auto overscroll-contain rounded-2xl border border-white/10 bg-slate-900 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] shadow-xl md:left-1/2 md:right-auto md:w-full md:max-w-lg md:-translate-x-1/2 md:p-6 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]"
         role="dialog"
         aria-labelledby="raw-weather-title"
         aria-modal="true"
@@ -92,7 +92,7 @@ export function RawWeatherModal({
           </a>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => onClose()}
             className="min-h-[44px] touch-manipulation shrink-0 rounded-lg border border-white/20 px-5 py-3 text-sm font-medium text-slate-300 hover:bg-white/5 active:bg-white/10"
           >
             Close

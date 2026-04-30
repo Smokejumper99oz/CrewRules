@@ -1,12 +1,14 @@
-export type SystemUpdateType = "new_feature" | "improvement" | "fix" | "birthday";
+export type SystemUpdateType = "new_feature" | "new_feature_beta" | "improvement" | "fix" | "birthday";
 
 export type SystemUpdateEntry = {
   date: string;
   title: string;
   type: SystemUpdateType;
   bullets: readonly string[];
-  /** When true, System Updates renders title with Crew + logo-green Rules + rest, all bold. */
+  /** Rare: IPO card only — hardcoded Crew + green Rules headline. */
   titleWordmark?: boolean;
+  /** Rare: single-row opt-in — `CrewRules™` in `title` renders with green Rules only when true. */
+  titleCrewRulesBrand?: boolean;
 };
 
 /**
@@ -16,6 +18,50 @@ export type SystemUpdateEntry = {
  * Pilot-facing product updates only — do not add Admin or Super Admin–only changes here.
  */
 export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
+  {
+    date: "2026-04-30",
+    title: "Dashboard — Next Duty Leg Lines Show Airline Logo and Flight Number",
+    type: "improvement",
+    bullets: ["On the pilot dashboard, the Next Duty card now shows your airline's logo next to the flight number on each leg (for example: logo and 4092 before TPA → BWI)."],
+  },
+  {
+    date: "2026-04-30",
+    title: "Weather Brief — Operational NOTAMs, Now Live, Built for Pilots (PRO)",
+    type: "new_feature",
+    bullets: [
+      "NOTAMs are now sorted by operational importance, so you see what actually matters first.",
+      "Clean CrewRules™ summaries replace raw NOTAM clutter — no more digging through unreadable text.",
+      "Filter by category (Runway, ILS, Navaid, etc.) to quickly focus on what affects your flight.",
+      "Full official NOTAM text is still available when you need it.",
+      "Validity is clearly shown (Effective, Expires, or PERM), so you know exactly what's active.",
+    ],
+  },
+  {
+    date: "2026-04-30",
+    title: "Weather Brief — CrewRules™ Enroute Intelligence Now Live (PRO)",
+    type: "new_feature",
+    titleCrewRulesBrand: true,
+    bullets: [
+      "New Enroute Intelligence analyzes your route using real operational weather sources, including AIRMETs, SIGMETs, and PIREPs.",
+      "Identifies enroute weather risks before departure and highlights areas that may impact your flight.",
+      "Automatically builds from your filed route and live weather data to support better preflight decision-making.",
+      "When route data is not yet available, the system clearly indicates that analysis will populate once your route is received.",
+    ],
+  },
+  {
+    date: "2026-04-30",
+    title: "Weather Brief — CrewRules™ Enroute Performance™ Now Live (PRO)",
+    type: "new_feature_beta",
+    titleCrewRulesBrand: true,
+    bullets: [
+      "New CrewRules™ Enroute Performance™ provides insight into winds, altitude selection, and fuel impact before departure.",
+      "Compares altitude options to help identify more efficient cruise levels based on forecast winds.",
+      "Highlights potential fuel savings and performance differences across altitudes.",
+      "Currently optimized for Airbus A320/A321 aircraft using generalized performance assumptions.",
+      "This is an early beta version — results are intended for planning insight only and will continue to improve with more precise aircraft data.",
+      "When route data is not yet available, the system clearly indicates that performance analysis will populate once your route is received.",
+    ],
+  },
   {
     date: "2026-04-28",
     title: "Next Duty — Report Time Logic Corrected",
@@ -51,7 +97,7 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   },
   {
     date: "2026-04-24",
-    title: "Commute Assist — clearer “previous day” when same-day looks bad",
+    title: "Commute Assist™ — clearer “previous day” when same-day looks bad",
     type: "improvement",
     bullets: [
       "When you’re commuting to base and every same-day option misses your arrival buffer, the warning now says you have no safe same-day options, with “Consider previous day” on the right. One tap still searches the day before, same as before.",
@@ -60,7 +106,7 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   },
   {
     date: "2026-04-24",
-    title: "Commute Assist — completed flights are easier to read",
+    title: "Commute Assist™ — completed flights are easier to read",
     type: "improvement",
     bullets: [
       "Legs that have already landed or arrived can show as “Completed” with the same emerald styling as on-time, so your commute list is easier to scan at a glance.",
@@ -68,7 +114,7 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   },
   {
     date: "2026-04-24",
-    title: "Commute Assist — recurrent training deviation to base, fixed",
+    title: "Commute Assist™ — recurrent training deviation to base, fixed",
     type: "fix",
     bullets: [
       "When you use commute deviation for recurrent training (home to the training city), to-base search now uses the training city, time zone, and arrive-by context instead of defaulting to crew base or the wrong day window.",
@@ -127,7 +173,7 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
     bullets: [
       "For recurrent training on your schedule, you can now record whether you plan to commute on your own from your home airport to the training city instead of using company-provided travel from crew base.",
       "Your choice is saved with the training event and stays with the trip as your schedule updates.",
-      "When deviation is on, Commute Assist and Family View™ use home ↔ training-city routing for that block so suggested flights and shared wording match how you actually travel.",
+      "When deviation is on, Commute Assist™ and Family View™ use home ↔ training-city routing for that block so suggested flights and shared wording match how you actually travel.",
       "The dashboard Next Duty card can remind you to set or confirm this preference when training is coming up.",
     ],
   },
@@ -187,17 +233,17 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   },
   {
     date: "2026-04-07",
-    title: "Family View — Day Trip detection",
+    title: "Family View™ — Day Trip detection",
     type: "new_feature",
     bullets: [
-      "When a commuter pilot picks up a trip that both departs from and returns to their home airport, Family View now recognizes it as a Day Trip.",
+      "When a commuter pilot picks up a trip that both departs from and returns to their home airport, Family View™ now recognizes it as a Day Trip.",
       "Day Trip cards show the actual flight route and scheduled departure and arrival times (e.g. Departs 7:25 AM · Arrives 3:18 PM) instead of a vague time-of-day estimate.",
       "The 'won't make it home' warning no longer triggers for Day Trips or any trip that ends at the pilot's home airport — because they're already there.",
     ],
   },
   {
     date: "2026-04-07",
-    title: "Family View — cleaner, more honest schedule sharing",
+    title: "Family View™ — cleaner, more honest schedule sharing",
     type: "improvement",
     bullets: [
       "Removed the duplicate Trip Details card — everything it showed is now in the Current Trip Overview with better context.",
@@ -242,8 +288,8 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
     type: "improvement",
     bullets: [
       "Added a new Trip Complete state with a clear post-duty summary showing duty end time and the actual final airport of release.",
-      "Commute Assist now correctly switches to flights home after trip completion instead of continuing to show commute-to-duty results.",
-      "On the last day of reserve, Commute Assist now begins showing possible flights home within 4 hours of scheduled release for pilots who may be released early by Crew Scheduling.",
+      "Commute Assist™ now correctly switches to flights home after trip completion instead of continuing to show commute-to-duty results.",
+      "On the last day of reserve, Commute Assist™ now begins showing possible flights home within 4 hours of scheduled release for pilots who may be released early by Crew Scheduling.",
     ],
   },
   {
@@ -356,7 +402,7 @@ export const SYSTEM_UPDATES_CHANGELOG: readonly SystemUpdateEntry[] = [
   },
   {
     date: "2026-02-10",
-    title: "Commute Assist list consistency",
+    title: "Commute Assist™ list consistency",
     type: "improvement",
     bullets: [
       "Sort order matches the times shown on duty cards.",

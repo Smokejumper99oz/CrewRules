@@ -983,6 +983,7 @@ export async function PortalNextDuty({
                       : undefined
                   }
                   legGateUiByLegIndex={scheduleLegGateUiByLegIndex ?? undefined}
+                  showLegAirlineLogo
                 />
               </div>
             ) : (
@@ -1008,6 +1009,7 @@ export async function PortalNextDuty({
                     : undefined
                 }
                 legGateUiByLegIndex={scheduleLegGateUiByLegIndex ?? undefined}
+                showLegAirlineLogo
               />
             ))}
           {far117Result && !activeTrip && (

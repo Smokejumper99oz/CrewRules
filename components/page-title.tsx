@@ -38,9 +38,16 @@ type PageTitleProps = {
   isAdmin?: boolean;
   /** Frontier tenant admin light shell — avoids dark-mode title styles on pale background. */
   adminSurface?: boolean;
+  /** Pro / Enterprise / active trial: product name is Advanced Weather Brief. */
+  advancedWeatherBrief?: boolean;
 };
 
-export function PageTitle({ portalDisplayName = "", isAdmin = false, adminSurface = false }: PageTitleProps) {
+export function PageTitle({
+  portalDisplayName = "",
+  isAdmin = false,
+  adminSurface = false,
+  advancedWeatherBrief = false,
+}: PageTitleProps) {
   const pathname = usePathname();
 
   const parts = (pathname ?? "").split("/").filter(Boolean);
@@ -75,11 +82,12 @@ export function PageTitle({ portalDisplayName = "", isAdmin = false, adminSurfac
 
   // Weather Brief uses branded title with role context
   if (!inAdmin && currentSegment === "weather-brief") {
+    const briefProductName = advancedWeatherBrief ? "Advanced Weather Brief" : "Weather Brief";
     return (
-      <h1 className="min-w-0 truncate text-xl font-semibold tracking-normal border-b border-slate-200 pb-1 dark:border-white/5">
+      <h1 className="min-w-0 hyphens-auto break-words text-base font-semibold leading-snug tracking-normal border-b border-slate-200 pb-1 dark:border-white/5 sm:text-xl sm:leading-normal">
         Crew<span className="text-[#75C043]">Rules</span>
-        <span className="align-super text-xs">™</span> Weather Brief
-        {context && <span className="text-slate-500 font-normal mx-1.5 dark:text-slate-400">|</span>}
+        <span className="align-super text-xs">™</span> {briefProductName}
+        {context && <span className="text-slate-500 font-normal max-sm:block max-sm:mt-0.5 sm:mx-1.5 dark:text-slate-400">|</span>}
         {context && <span className="text-slate-500 font-normal dark:text-slate-400">{context}</span>}
       </h1>
     );

@@ -13,6 +13,10 @@ export type FlightLiveStatus = {
   cancelled?: boolean;
   departure_delay?: number | null;
   arrival_delay?: number | null;
+  /** AeroAPI `registration` when known (Weather Brief header). */
+  registration?: string | null;
+  gate_origin?: string | null;
+  gate_destination?: string | null;
 };
 
 export type NextFlight = {
@@ -111,12 +115,31 @@ export type SupplementalWeatherLayer = {
 
 export type DelayRiskLevel = "LOW" | "MODERATE" | "HIGH";
 
+/** Airport-relative usefulness for SIGMET/AIRMET card ordering and phrasing. */
+export type EnrouteAdvisoryRelevanceTag = "departure" | "arrival" | "regional";
+
 export type EnrouteAdvisory = {
   type: "SIGMET" | "AIRMET" | "CONVECTIVE_SIGMET" | "PIREP";
   title: string;
   description: string;
+  /** Short display line for cards; full text remains in rawText for dedupe / risk / links. */
+  pilotSummary?: string | null;
   rawText?: string | null;
   sourceUrl?: string | null;
+  /** Data lineage for SIGMET/AIRMET merge (AWC baseline + optional AVWX supplemental). */
+  provider?: "awc" | "avwx";
+  /** Best-effort tag after merge (departure/arrival/regional heuristics). */
+  relevanceTag?: EnrouteAdvisoryRelevanceTag;
+  /** AVWX area or short center hint — relevance only; not a second raw. */
+  areaHint?: string | null;
+  /** Short operational interpretation (rule-based now; AI-ready). */
+  operationalDecode?: string | null;
+  /** How strongly the relevance tag matches this leg (deterministic). */
+  relevanceConfidence?: "high" | "medium" | "low" | null;
+  /**
+   * Display-only: set after VALID UNTIL vs scheduled departure check — "near_term" sorts lower.
+   */
+  timeRelevance?: "active" | "near_term" | null;
 };
 
 export type OperationalWatchItem = {

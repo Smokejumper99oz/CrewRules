@@ -67,7 +67,7 @@ export function PortalSidebarContent({
                 <li key={item.label}>
                   <Link
                     href={item.href ? `${base}/${item.href}` : base}
-                    onClick={onLinkClick}
+                    onClick={onLinkClick ? () => onLinkClick() : undefined}
                     className={s.link}
                   >
                     <span>{item.label}</span>
@@ -93,7 +93,7 @@ export function PortalSidebarContent({
         {admin && (
           <Link
             href={`${base.replace("/portal", "/admin")}`}
-            onClick={onLinkClick}
+            onClick={onLinkClick ? () => onLinkClick() : undefined}
             className={`${s.adminLink} text-amber-600 hover:bg-slate-100 transition dark:text-amber-400/90 dark:hover:bg-white/5 dark:hover:text-amber-300`}
           >
             Admin →

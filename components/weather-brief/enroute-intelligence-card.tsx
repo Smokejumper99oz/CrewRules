@@ -1,15 +1,17 @@
 import { Sparkles } from "lucide-react";
 
 import { getWindsAloftSimple, type WindsAloftLevels } from "@/lib/weather-brief/get-winds-aloft";
-const CARD_CLASS =
-  "rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/60 to-slate-950/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] md:p-6";
+import type { EnrouteStation } from "@/lib/weather-brief/enroute/types";
+import type { WeatherBriefRouteMessagingState } from "@/lib/weather-brief/weather-brief-route-messaging";
+import { enroutePerformanceCertaintyMessage } from "@/lib/weather-brief/weather-brief-route-messaging";
+import { CollapsibleWeatherBriefSection } from "@/components/weather-brief/CollapsibleWeatherBriefSection";
 
-/** Mock comparison tiers for prototype UI only (no live fetch). */
+/** CrewRules™ Enroute Performance™: comparison flight levels (operational winds + fuel deltas). */
 const COMPARE_ALTITUDES = ["FL320", "FL340", "FL360", "FL380"] as const;
 
-/** OFP-style fallbacks when props are not supplied. */
-const FALLBACK_BASELINE_TRIP_FUEL_LBS = 12_195;
-const FALLBACK_BLOCK_MINUTES = 144;
+/** OFP-style defaults when trip fuel or block time props are omitted. */
+const DEFAULT_BASELINE_TRIP_FUEL_LBS = 12_195;
+const DEFAULT_BLOCK_MINUTES = 144;
 const FUEL_LBS_PER_KT_PER_HOUR = 8;
 
 type AltitudeTier = {
@@ -21,14 +23,14 @@ function resolvedBlockMinutes(blockMinutes?: number | null): number {
   if (blockMinutes != null && Number.isFinite(blockMinutes) && blockMinutes > 0) {
     return blockMinutes;
   }
-  return FALLBACK_BLOCK_MINUTES;
+  return DEFAULT_BLOCK_MINUTES;
 }
 
 function resolvedBaselineTripFuelLbs(baselineTripFuelLbs?: number | null): number {
   if (baselineTripFuelLbs != null && Number.isFinite(baselineTripFuelLbs) && baselineTripFuelLbs > 0) {
     return baselineTripFuelLbs;
   }
-  return FALLBACK_BASELINE_TRIP_FUEL_LBS;
+  return DEFAULT_BASELINE_TRIP_FUEL_LBS;
 }
 
 /** Table fuel (lb): OFP trip fuel minus wind delta vs planned FL340, scaled by route time. */
@@ -62,10 +64,14 @@ type Props = {
   departureAirport: string;
   arrivalAirport: string;
   departureIso?: string | null;
-  /** Schedule block minutes; when missing, 144 min OFP-style fallback is used. */
+  /** Schedule block minutes; when missing, a default block time is used for display math only. */
   blockMinutes?: number | null;
-  /** OFP enroute trip fuel (lb); when missing, 12195 lb fallback is used. */
+  /** OFP enroute trip fuel (lb); when missing, a default trip fuel is used for display math only. */
   baselineTripFuelLbs?: number | null;
+  /** Intermediate filed-route stations with METAR + optional NBM forecast (server-built). */
+  enrouteStations?: EnrouteStation[];
+  /** Display-only certainty for section-level context copy. */
+  routeMessaging: WeatherBriefRouteMessagingState;
 };
 
 export async function EnrouteIntelligenceCard({
@@ -74,7 +80,38 @@ export async function EnrouteIntelligenceCard({
   departureIso,
   blockMinutes: blockMinutesProp,
   baselineTripFuelLbs: baselineTripFuelLbsProp,
+  enrouteStations = [],
+  routeMessaging,
 }: Props) {
+  const certaintyBanner = enroutePerformanceCertaintyMessage(routeMessaging);
+
+  const headerTitle = (
+    <span className="flex flex-wrap items-center gap-2">
+      <span className="flex min-w-0 items-center gap-2">
+        <Sparkles className="h-5 w-5 shrink-0 text-[#75C043]" aria-hidden />
+        <span className="leading-snug">
+          <span className="text-white">Crew</span>
+          <span className="text-[#75C043]">Rules</span>
+          <span className="align-super text-xs font-normal text-white">™</span>
+          <span className="text-white"> Enroute Performance</span>
+          <span className="align-super text-xs font-normal text-white">™</span>
+        </span>
+      </span>
+    </span>
+  );
+
+  if (!routeMessaging.hasCorridorData) {
+    return (
+      <CollapsibleWeatherBriefSection title={headerTitle} defaultOpen={false}>
+        {certaintyBanner ? (
+          <p className="rounded-lg border border-amber-500/20 bg-amber-950/20 px-3 py-2.5 text-sm leading-relaxed text-amber-100/90">
+            {certaintyBanner}
+          </p>
+        ) : null}
+      </CollapsibleWeatherBriefSection>
+    );
+  }
+
   const { winds, source } = await getWindsAloftSimple({ departureAirport, arrivalAirport });
   const planned = PLANNED_LEVEL;
   const recommended = RECOMMENDED_LEVEL;
@@ -95,35 +132,37 @@ export async function EnrouteIntelligenceCard({
   const fuelSavedLbsRounded = Math.round(fuelSavedLbs);
   const dollarsSavedRounded = Math.round(dollarsSaved);
 
+  const pirepStationCount = enrouteStations.filter(
+    (s) => s.pirep.hasReports === true && s.pirep.headline.trim() !== ""
+  ).length;
+  const sectionSubtitle =
+    pirepStationCount === 0
+      ? "Fuel impact estimate · Operational weather analysis"
+      : pirepStationCount === 1
+        ? "Fuel impact estimate · Enroute Performance™ · PIREPs nearby"
+        : "Fuel impact estimate · Enroute Performance™ · PIREPs near route";
+
   return (
-    <div className={CARD_CLASS}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-2">
-          <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-[#75C043]" aria-hidden />
-          <div>
-            <h3 className="flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight text-white">
-              <span>
-                Preflight Enroute Intelligence<span className="align-super text-xs">™</span>
-              </span>
-              <span
-                aria-label="Beta"
-                className="inline-flex shrink-0 items-center rounded-full border border-fuchsia-500/40 bg-fuchsia-500/20 px-2 py-0.5 text-xs font-semibold text-fuchsia-400"
-              >
-                BETA
-              </span>
-            </h3>
-            <p className="mt-1 text-sm text-slate-400">
-              {departureAirport.replace(/^K/, "")} → {arrivalAirport.replace(/^K/, "")}
-              {departureIso ? (
-                <>
-                  {" "}
-                  <span className="text-slate-500">· Dep {new Date(departureIso).toISOString().slice(0, 16).replace("T", " ")}Z</span>
-                </>
-              ) : null}
-            </p>
-          </div>
-        </div>
-      </div>
+    <CollapsibleWeatherBriefSection
+      title={headerTitle}
+      subtitle={sectionSubtitle}
+      defaultOpen={false}
+    >
+      <p className="text-sm text-slate-400">
+        {departureAirport.replace(/^K/, "")} → {arrivalAirport.replace(/^K/, "")}
+        {departureIso ? (
+          <>
+            {" "}
+            <span className="text-slate-500">· Dep {new Date(departureIso).toISOString().slice(0, 16).replace("T", " ")}Z</span>
+          </>
+        ) : null}
+      </p>
+
+      {certaintyBanner ? (
+        <p className="mt-4 rounded-lg border border-amber-500/20 bg-amber-950/20 px-3 py-2.5 text-sm leading-relaxed text-amber-100/90">
+          {certaintyBanner}
+        </p>
+      ) : null}
 
       <dl className="mt-6 grid gap-4 sm:grid-cols-2">
         <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
@@ -137,11 +176,11 @@ export async function EnrouteIntelligenceCard({
       </dl>
 
       <div className="mt-6 border-t border-white/10 pt-5">
-        <p className="text-xs uppercase tracking-wide text-slate-500">Compared levels (prototype)</p>
+        <p className="text-xs uppercase tracking-wide text-slate-500">Operational altitude comparison</p>
         <p className="mt-1 text-xs text-slate-500">
           {source === "awc_fb"
-            ? "Winds: Forecast — High confidence within 12h of departure"
-            : "Winds: estimated fallback — Real winds unavailable"}
+            ? "Forecast winds for your departure region. Strongest fidelity inside about twelve hours of departure. Based on available route, forecast wind, and flight data."
+            : "Winds data is limited for this departure — verify with official FAA/AWC forecasts. Based on available route, forecast wind, and flight data."}
         </p>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[280px] text-left text-sm">
@@ -174,29 +213,32 @@ export async function EnrouteIntelligenceCard({
 
       <div className="mt-6 grid gap-5 sm:grid-cols-2">
         <div>
-          <h4 className="text-sm font-semibold text-white">Why</h4>
+          <h4 className="text-sm font-semibold text-white">Operational rationale</h4>
           <ul className="mt-2 list-inside list-disc space-y-1.5 text-sm leading-relaxed text-slate-300">
             <li>Better wind component</li>
-            <li>Estimated smoother ride</li>
-            <li>More efficient altitude</li>
+            <li>Potential ride-quality benefit versus planned altitude</li>
+            <li>More efficient cruise level</li>
           </ul>
         </div>
         <div>
-          <h4 className="text-sm font-semibold text-white">Impact</h4>
+          <h4 className="text-sm font-semibold text-white">Fuel impact estimate</h4>
           <ul className="mt-2 space-y-1.5 text-sm leading-relaxed text-slate-300">
             <li>{`~${fuelSavedLbsRounded} lbs fuel saved`}</li>
             <li>{`~$${dollarsSavedRounded} savings based on $${JET_FUEL_PRICE_PER_GALLON_LABEL}/gal`}</li>
           </ul>
           <p className="mt-2 text-xs text-slate-500">
-            Based on OFP trip fuel and route duration.
+            Based on available route, forecast wind, and flight data.
           </p>
-          <p className="mt-3 text-xs text-slate-500">Prototype estimate — not final performance data.</p>
+          <p className="mt-3 text-xs text-slate-500">
+            Estimated fuel impact based on available flight and wind data. Values may update as filed route,
+            winds, or flight data changes.
+          </p>
         </div>
       </div>
 
       <p className="mt-6 text-xs leading-relaxed text-slate-500">
-        Preflight recommendation based on forecast data. Confirm with Dispatch and ATC.
+        Filed-route based weather intelligence and operational analysis. Confirm with Dispatch and ATC.
       </p>
-    </div>
+    </CollapsibleWeatherBriefSection>
   );
 }

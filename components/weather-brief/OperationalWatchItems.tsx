@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { OperationalWatchItem } from "@/lib/weather-brief/types";
+import { formatOutOfServiceForWeatherBriefDisplay } from "@/lib/weather-brief/format-out-of-service-for-weather-brief-display";
 import { AlertTriangle, Cloud, Info } from "lucide-react";
 
 type Props = {
@@ -32,9 +33,11 @@ export function OperationalWatchItems({ items }: Props) {
           >
             <p className="flex items-center gap-2 font-semibold text-white">
               {SEVERITY_ICONS[item.severity] ?? <Info className="h-4 w-4 shrink-0" aria-hidden />}
-              {item.title || "Not available"}
+              {formatOutOfServiceForWeatherBriefDisplay(item.title || "Not available")}
             </p>
-            <p className="mt-2 break-words text-sm text-white/90">{item.detail || "Not available"}</p>
+            <p className="mt-2 break-words text-sm text-white/90">
+              {formatOutOfServiceForWeatherBriefDisplay(item.detail || "Not available")}
+            </p>
           </li>
         ))}
       </ul>

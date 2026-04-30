@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { getTenantPortalConfig } from "@/lib/tenant-config";
 import { gateUserForPortal } from "@/lib/portal-gate";
 import { getAccountRoleDisplay } from "@/lib/account-role-display";
-import { isAdmin, getDisplayName, getProTrialBannerStatus } from "@/lib/profile";
+import { isAdmin, getDisplayName, getProTrialBannerStatus, isProActive } from "@/lib/profile";
 import { FOUNDING_PILOT_CAP } from "@/lib/founding-pilot-constants";
 import { getFoundingPilotCount } from "@/lib/founding-pilot-count";
 import { signOut } from "./actions";
@@ -55,6 +55,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       trialBannerFoundingPilot={trialBannerFoundingPilot}
       isFoundingPilot={profile.is_founding_pilot === true}
       foundingPilotNumber={profile.founding_pilot_number ?? null}
+      advancedWeatherBrief={isProActive(profile)}
     >
       {children}
     </PortalLayoutShell>

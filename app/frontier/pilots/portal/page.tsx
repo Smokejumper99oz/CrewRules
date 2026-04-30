@@ -1,4 +1,4 @@
-import { getProfile, getDashboardGreeting } from "@/lib/profile";
+import { getProfile, getDashboardGreeting, isProActive } from "@/lib/profile";
 import { getActiveTrip } from "@/lib/trips/get-active-trip";
 import { getTripChangeSummariesForUser } from "@/app/frontier/pilots/portal/schedule/actions";
 import { PortalRecentQA } from "@/components/portal-recent-qa";
@@ -21,6 +21,7 @@ const ASK_HREF = `/${TENANT}/${PORTAL}/portal/ask`;
 
 export default async function PortalDashboard() {
   const profile = await getProfile();
+  const advancedWeatherBrief = isProActive(profile);
   const { greetingPart, namePart } = getDashboardGreeting(profile ?? null);
 
   const activeTrip = profile?.id ? await getActiveTrip(profile.id) : null;
@@ -51,6 +52,7 @@ export default async function PortalDashboard() {
         <DashboardWeatherWidgetClient
           fallbackMetar={homeBaseMetar}
           weatherBriefHref={`/${TENANT}/${PORTAL}/portal/weather-brief`}
+          advancedWeatherBrief={advancedWeatherBrief}
         />
       </div>
 

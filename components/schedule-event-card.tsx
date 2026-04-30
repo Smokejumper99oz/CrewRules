@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { formatScheduleTime, formatDayLabel, formatDayRangeLabel, computeTripCredit, formatMinutesToHhMm } from "@/lib/schedule-time";
 import type { ScheduleEvent, ScheduleEventLeg } from "@/app/frontier/pilots/portal/schedule/actions";
 import type { ScheduleDisplaySettings } from "@/app/frontier/pilots/portal/schedule/actions";
@@ -8,6 +10,7 @@ import {
 } from "@/lib/schedule-report-night";
 import { getTripDateStrings } from "@/lib/leg-dates";
 
+import { AirlineLogo } from "@/components/airline-logo";
 import { LegGateFlightLineSuffix, type NextLegGateUiProps } from "@/components/next-leg-gate-display";
 
 /** Prefix flight number for display: carrierCode + number, or FLT + number. Does not change stored data.
@@ -19,6 +22,63 @@ function formatFlightDisplay(flightNumber: string, carrierCode?: string | null):
   if (/^[A-Z]{2}\d/i.test(num)) return num;
   const prefix = carrierCode?.trim() || "FLT";
   return `${prefix}${num}`;
+}
+
+/** Matches tenant display semantics: alphanumeric IATA (e.g. F9) + digits, else numeric-only + carrier for logo. */
+function legFlightLogoAndNumeric(flightNumber: string, carrierCode?: string | null): { carrier: string; numeric: string } | null {
+  const raw = (flightNumber ?? "").trim();
+  if (!raw) return null;
+
+  const allDigits = /^\d+$/.test(raw);
+  if (!allDigits) {
+    const m = /^([A-Za-z0-9]{2})(\d+)$/i.exec(raw);
+    if (m?.[1] && m[2] && /[A-Za-z]/.test(m[1])) {
+      return { carrier: m[1].toUpperCase(), numeric: m[2] };
+    }
+    return null;
+  }
+
+  const cc = (carrierCode ?? "").trim().toUpperCase();
+  if (!cc || cc.length < 2 || !/[A-Za-z]/.test(cc)) return null;
+  return { carrier: cc.slice(0, 2), numeric: raw };
+}
+
+function LegFlightLead({
+  flightNumber,
+  carrierCode,
+  compact,
+  showLegAirlineLogo,
+}: {
+  flightNumber: string | null | undefined;
+  carrierCode?: string | null;
+  compact?: boolean;
+  showLegAirlineLogo?: boolean;
+}): ReactNode {
+  if (!flightNumber?.trim()) return null;
+  if (!showLegAirlineLogo) {
+    return (
+      <>
+        {formatFlightDisplay(flightNumber, carrierCode)}{" "}
+      </>
+    );
+  }
+  const parsed = legFlightLogoAndNumeric(flightNumber, carrierCode);
+  if (!parsed) {
+    return (
+      <>
+        {formatFlightDisplay(flightNumber, carrierCode)}{" "}
+      </>
+    );
+  }
+  const logoSize = compact ? 18 : 20;
+  return (
+    <>
+      <span className="inline-flex items-center gap-1.5 align-middle">
+        <AirlineLogo carrier={parsed.carrier} size={logoSize} className="align-middle" />
+        <span className="tabular-nums">{parsed.numeric}</span>
+      </span>{" "}
+    </>
+  );
 }
 
 function pairingLengthLabel(pairingDays: number | null | undefined): string | null {
@@ -87,6 +147,8 @@ type Props = {
   displayEndTimeIso?: string | null;
   /** Per-leg gate suffix (dashboard next-duty); index aligns with `legsToShow` / displayed leg rows. */
   legGateUiByLegIndex?: (NextLegGateUiProps | null)[] | null;
+  /** When true, leg lines show airline logo + numeric flight number only (dashboard Next Duty only). */
+  showLegAirlineLogo?: boolean;
 };
 
 export function ScheduleEventCard({
@@ -107,6 +169,7 @@ export function ScheduleEventCard({
   trainingCompanyCommuteFromLegs,
   displayEndTimeIso,
   legGateUiByLegIndex,
+  showLegAirlineLogo = false,
 }: Props) {
   if (isRdPlaceholderEvent(event)) return null;
 
@@ -305,7 +368,12 @@ export function ScheduleEventCard({
           DH
         </span>
       ) : null}
-      {l.flightNumber ? `${formatFlightDisplay(l.flightNumber, displaySettings.carrierCode)} ` : ""}
+      <LegFlightLead
+        flightNumber={l.flightNumber}
+        carrierCode={displaySettings.carrierCode}
+        compact={compact}
+        showLegAirlineLogo={showLegAirlineLogo}
+      />
       {l.origin} → {l.destination}   {l.depTime ?? "—"} – {l.arrTime ?? "—"}
     </div>
   );
@@ -326,7 +394,12 @@ export function ScheduleEventCard({
                 const legGateUi = legGateUiByLegIndex?.[i] ?? null;
                 return (
                   <div key={i} className={`font-normal text-slate-300 whitespace-nowrap ${compact ? "text-xs" : "text-sm"}`}>
-                    {l.flightNumber ? `${formatFlightDisplay(l.flightNumber, displaySettings.carrierCode)} ` : ""}
+                    <LegFlightLead
+                      flightNumber={l.flightNumber}
+                      carrierCode={displaySettings.carrierCode}
+                      compact
+                      showLegAirlineLogo={showLegAirlineLogo}
+                    />
                     {l.origin} → {l.destination}   {l.depTime ?? "—"} – {l.arrTime ?? "—"}
                     {legGateUi ? (
                       <>
@@ -411,7 +484,12 @@ export function ScheduleEventCard({
               const legGateUi = legGateUiByLegIndex?.[i] ?? null;
               return (
                 <div key={i} className="font-normal text-slate-300 whitespace-nowrap text-sm">
-                  {l.flightNumber ? `${formatFlightDisplay(l.flightNumber, displaySettings.carrierCode)} ` : ""}
+                  <LegFlightLead
+                    flightNumber={l.flightNumber}
+                    carrierCode={displaySettings.carrierCode}
+                    compact={false}
+                    showLegAirlineLogo={showLegAirlineLogo}
+                  />
                   {l.origin} → {l.destination}   {l.depTime ?? "—"} – {l.arrTime ?? "—"}
                   {legGateUi ? (
                     <>

@@ -6,6 +6,8 @@ type Props = {
   weatherBriefHref: string;
   /** Shown when weather comes from device geolocation (e.g. "Near you"). */
   sourceLabel?: string | null;
+  /** Accessible name for the weather chip link. */
+  linkAriaLabel?: string;
 };
 
 function formatWind(
@@ -20,13 +22,19 @@ function formatWind(
   return `${dir} / ${windKt}${gust} kt`;
 }
 
-export function DashboardWeatherWidget({ metar, weatherBriefHref, sourceLabel }: Props) {
+export function DashboardWeatherWidget({
+  metar,
+  weatherBriefHref,
+  sourceLabel,
+  linkAriaLabel = "Weather Brief",
+}: Props) {
   const wind = formatWind(metar.windKt, metar.windDir, metar.gustKt);
   const hasFeelsLike = metar.feelsLikeF != null;
 
   return (
     <Link
       href={weatherBriefHref}
+      aria-label={linkAriaLabel}
       className="group w-full sm:shrink-0 sm:min-w-[260px] sm:w-auto flex items-start gap-3 rounded-xl border border-white/5 bg-slate-900/40 px-4 py-2.5 transition hover:border-white/10 hover:bg-slate-900/60"
     >
       {/* Weather emoji */}

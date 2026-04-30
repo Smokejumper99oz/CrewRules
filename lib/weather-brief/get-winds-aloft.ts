@@ -1,5 +1,5 @@
 /**
- * Lightweight winds aloft for Enroute Intelligence (v1): one reference point (departure).
+ * Lightweight winds aloft for CrewRules™ Enroute Performance™ (v1): one reference point (departure).
  * Uses AWC FB wind/temp bulletin; parses text (server often returns plaintext even when format=json requested).
  */
 

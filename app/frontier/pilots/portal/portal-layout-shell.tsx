@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import { MessageSquare } from "lucide-react";
 import { PortalMobileNav } from "@/components/portal-mobile-nav";
@@ -30,37 +30,39 @@ function portalFeedbackSuccessMessage(kind: FeedbackType): string {
 }
 import { CURRENT_WELCOME_MODAL_VERSION } from "@/lib/welcome-modal";
 
-const NAV_GROUPS = [
-  {
-    title: "Core",
-    items: [
-      { label: "Dashboard", href: "" },
-      { label: "Weather Brief", href: "weather-brief", badge: "BETA" },
-      { label: "My Schedule", href: "schedule" },
-      { label: "Family View", href: "family-view", badge: "BETA" },
-      { label: "Ask", href: "ask" },
-      { label: "Library", href: "library" },
-      { label: "Guides", href: "guides" },
-    ],
-  },
-  {
-    title: "Community",
-    items: [
-      // Forum: hidden from nav until membership supports it (route /forum still exists).
-      { label: "Notes", href: "notes" },
-      { label: "Mentoring", href: "mentoring", badge: "BETA" },
-    ],
-  },
-  {
-    title: "System",
-    items: [
-      { label: "Settings", href: "settings/pilot" },
-      { label: "System Updates", href: "updates" },
-      { label: "About", href: "profile/about" },
-      { label: "Archive", href: "archive" },
-    ],
-  },
-] as const;
+function buildPilotNavGroups(weatherBriefLabel: string) {
+  return [
+    {
+      title: "Core",
+      items: [
+        { label: "Dashboard", href: "" },
+        { label: weatherBriefLabel, href: "weather-brief", badge: "BETA" as const },
+        { label: "My Schedule", href: "schedule" },
+        { label: "Family View", href: "family-view", badge: "BETA" as const },
+        { label: "Ask", href: "ask" },
+        { label: "Library", href: "library" },
+        { label: "Guides", href: "guides" },
+      ],
+    },
+    {
+      title: "Community",
+      items: [
+        // Forum: hidden from nav until membership supports it (route /forum still exists).
+        { label: "Notes", href: "notes" },
+        { label: "Mentoring", href: "mentoring", badge: "BETA" as const },
+      ],
+    },
+    {
+      title: "System",
+      items: [
+        { label: "Settings", href: "settings/pilot" },
+        { label: "System Updates", href: "updates" },
+        { label: "About", href: "profile/about" },
+        { label: "Archive", href: "archive" },
+      ],
+    },
+  ] as const;
+}
 
 type TrialBannerStatus =
   | { status: "expiring_soon"; daysRemaining: number }
@@ -84,6 +86,8 @@ type Props = {
   } | null;
   isFoundingPilot: boolean;
   foundingPilotNumber: number | null;
+  /** Pro / Enterprise / active trial — nav + page title use Advanced Weather Brief. */
+  advancedWeatherBrief: boolean;
 };
 
 export function PortalLayoutShell({
@@ -100,6 +104,7 @@ export function PortalLayoutShell({
   trialBannerFoundingPilot,
   isFoundingPilot,
   foundingPilotNumber,
+  advancedWeatherBrief,
 }: Props) {
   const [tabletNavOpen, setTabletNavOpen] = useState(false);
   const [welcomeModalDismissed, setWelcomeModalDismissed] = useState(false);
@@ -117,6 +122,12 @@ export function PortalLayoutShell({
     profile &&
     ((profile.welcome_modal_version_seen ?? null) === null ||
       (profile.welcome_modal_version_seen ?? 0) < CURRENT_WELCOME_MODAL_VERSION);
+
+  const navGroups = useMemo(
+    () =>
+      buildPilotNavGroups(advancedWeatherBrief ? "Advanced Weather Brief" : "Weather Brief"),
+    [advancedWeatherBrief]
+  );
 
   return (
     <PortalFadeIn>
@@ -149,7 +160,7 @@ export function PortalLayoutShell({
             <nav className="px-4 pb-6 pt-2">
               <PortalSidebarContent
                 base={base}
-                navGroups={NAV_GROUPS}
+                navGroups={navGroups}
                 admin={admin}
                 displayName={displayName}
                 roleLabel={roleLabel}
@@ -175,7 +186,7 @@ export function PortalLayoutShell({
               <nav className="sidebar-scrollbar-hide flex-1 overflow-y-auto px-3 pb-6 pt-2">
                 <PortalSidebarContent
                   base={base}
-                  navGroups={NAV_GROUPS}
+                  navGroups={navGroups}
                   admin={admin}
                   displayName={displayName}
                   roleLabel={roleLabel}
@@ -203,7 +214,7 @@ export function PortalLayoutShell({
                 <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                   <PortalMobileNav
                     base={base}
-                    navGroups={NAV_GROUPS}
+                    navGroups={navGroups}
                     admin={admin ?? false}
                     signOut={signOut}
                     portalName={cfg.portal.displayName}
@@ -212,7 +223,11 @@ export function PortalLayoutShell({
                     tabletNavOpen={tabletNavOpen}
                     setTabletNavOpen={setTabletNavOpen}
                   />
-                  <PageTitle portalDisplayName={cfg.portal.displayName} isAdmin={false} />
+                  <PageTitle
+                    portalDisplayName={cfg.portal.displayName}
+                    isAdmin={false}
+                    advancedWeatherBrief={advancedWeatherBrief}
+                  />
                 </div>
 
                 <div className="flex shrink-0 items-center gap-1 sm:gap-2">

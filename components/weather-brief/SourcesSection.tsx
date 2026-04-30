@@ -2,7 +2,8 @@ const SOURCES = [
   { label: "METAR / TAF", url: "https://aviationweather.gov" },
   { label: "NOTAMs", url: "https://notams.aim.faa.gov/notamSearch" },
   { label: "FAA NAS Status", url: "https://nasstatus.faa.gov" },
-  { label: "SIGMETs / AIRMETs", url: "https://aviationweather.gov/sigmet" },
+  { label: "SIGMETs / AIRMETs (AWC baseline)", url: "https://aviationweather.gov/sigmet" },
+  { label: "AVWX (supplemental decode / APIs)", url: "https://avwx.rest" },
   { label: "PIREPs", url: "https://aviationweather.gov/data/pirep/" },
   { label: "Radar", url: "https://radar.weather.gov/" },
 ];

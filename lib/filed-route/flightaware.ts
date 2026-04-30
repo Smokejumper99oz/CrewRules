@@ -46,6 +46,12 @@ async function fetchFlightsForIdent(
   return { data, flights };
 }
 
+function stringField(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  return t.length > 0 ? t : null;
+}
+
 /** Log FlightAware usage for Super Admin cost reporting. Never throws. */
 function logFlightAwareUsage(lookup: RouteLookup, ident: string): void {
   void (async () => {
@@ -229,6 +235,9 @@ export async function fetchFiledRouteFromFlightAware(
           cancelled: (matched.cancelled as boolean) ?? false,
           departure_delay: (matched.departure_delay as number) ?? null,
           arrival_delay: (matched.arrival_delay as number) ?? null,
+          registration: stringField(matched.registration),
+          gate_origin: stringField(matched.gate_origin),
+          gate_destination: stringField(matched.gate_destination),
         }
       : null;
 

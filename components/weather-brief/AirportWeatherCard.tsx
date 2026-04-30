@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Wind, Gauge, Eye, Thermometer, Cloud } from "lucide-react";
 import type { DecodedWeather, WeatherBriefProductError } from "@/lib/weather-brief/types";
 import { resolveStationCode } from "@/lib/weather-brief/resolve-station-code";
+import { formatOutOfServiceForWeatherBriefDisplay } from "@/lib/weather-brief/format-out-of-service-for-weather-brief-display";
 import { formatLastImport } from "@/components/schedule-status-chip";
 import { RawWeatherModal } from "./RawWeatherModal";
 
@@ -37,7 +38,9 @@ const CATEGORY_STYLES: Record<string, string> = {
 };
 
 function fallback(s: string | null | undefined): string {
-  return (s ?? "").trim() || "Not available";
+  const v = (s ?? "").trim() || "Not available";
+  if (v === "Not available") return v;
+  return formatOutOfServiceForWeatherBriefDisplay(v);
 }
 
 function productErrorMessage(err: WeatherBriefProductError | null | undefined): string | null {
@@ -155,7 +158,7 @@ function buildTafSummaryLine(decoded: DecodedWeather): string {
   if (vis) parts.push(withTafSeverityIcon(vis, "visibility"));
   if (sky) parts.push(withTafSeverityIcon(sky, "sky"));
   if (wx) parts.push(withTafSeverityIcon(wx, "weather"));
-  return parts.join(" · ");
+  return formatOutOfServiceForWeatherBriefDisplay(parts.join(" · "));
 }
 
 function TafSummaryRow({
@@ -167,14 +170,14 @@ function TafSummaryRow({
 }) {
   const errMsg = productErrorMessage(tafError);
   if (errMsg) {
-    return <p className="text-sm leading-snug text-slate-500">{errMsg}</p>;
+    return <p className="text-sm leading-snug text-slate-500">TAF unavailable</p>;
   }
   if (!decoded) {
-    return <p className="text-sm leading-snug text-slate-500">Not available</p>;
+    return <p className="text-sm leading-snug text-slate-500">TAF unavailable</p>;
   }
   const line = buildTafSummaryLine(decoded);
   if (!line) {
-    return <p className="text-sm leading-snug text-slate-500">Not available</p>;
+    return <p className="text-sm leading-snug text-slate-500">TAF unavailable</p>;
   }
   return (
     <p className="break-words font-mono text-sm font-semibold leading-snug text-white">{line}</p>
@@ -193,10 +196,10 @@ function WeatherGrid({
 }) {
   const errMsg = productErrorMessage(productError);
   if (errMsg) {
-    return <p className="text-sm leading-snug text-slate-500">{errMsg}</p>;
+    return <p className="text-sm leading-snug text-slate-500">METAR unavailable</p>;
   }
   if (!decoded) {
-    return <p className="text-sm leading-snug text-slate-500">Not available</p>;
+    return <p className="text-sm leading-snug text-slate-500">METAR unavailable</p>;
   }
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:gap-x-4 sm:gap-y-2">
@@ -329,7 +332,9 @@ export function AirportWeatherCard({
           </p>
           <WeatherGrid decoded={decodedCurrent} productError={metarError} />
           {operationalNoteCurrent?.trim() && (
-            <p className="mt-1.5 text-xs leading-snug text-amber-400/90">{operationalNoteCurrent}</p>
+            <p className="mt-1.5 text-xs leading-snug text-amber-400/90">
+              {formatOutOfServiceForWeatherBriefDisplay(operationalNoteCurrent.trim())}
+            </p>
           )}
         </div>
 
@@ -343,7 +348,9 @@ export function AirportWeatherCard({
             </p>
             <TafSummaryRow decoded={decodedForecast} tafError={tafError} />
             {operationalNoteForecast?.trim() && (
-              <p className="mt-1.5 text-xs leading-snug text-amber-400/90">{operationalNoteForecast}</p>
+              <p className="mt-1.5 text-xs leading-snug text-amber-400/90">
+                {formatOutOfServiceForWeatherBriefDisplay(operationalNoteForecast.trim())}
+              </p>
             )}
           </div>
         </div>

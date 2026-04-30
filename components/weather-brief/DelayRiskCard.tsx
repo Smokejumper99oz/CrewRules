@@ -1,5 +1,6 @@
 import type { DelayRiskLevel } from "@/lib/weather-brief/types";
 import { resolveStationCode } from "@/lib/weather-brief/resolve-station-code";
+import { formatOutOfServiceForWeatherBriefDisplay } from "@/lib/weather-brief/format-out-of-service-for-weather-brief-display";
 
 type Props = {
   departureAirport?: string | null;
@@ -38,7 +39,9 @@ export function DelayRiskCard({
           <p className={`mt-1 font-semibold ${LEVEL_STYLES[departureRisk] ?? LEVEL_STYLES.LOW}`}>
             {departureRisk}
           </p>
-          <p className="mt-1 text-sm text-slate-400">{departureReason || "Not available"}</p>
+          <p className="mt-1 text-sm text-slate-400">
+            {formatOutOfServiceForWeatherBriefDisplay(departureReason || "Not available")}
+          </p>
         </div>
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
@@ -47,7 +50,9 @@ export function DelayRiskCard({
           <p className={`mt-1 font-semibold ${LEVEL_STYLES[arrivalRisk] ?? LEVEL_STYLES.LOW}`}>
             {arrivalRisk}
           </p>
-          <p className="mt-1 text-sm text-slate-400">{arrivalReason || "Not available"}</p>
+          <p className="mt-1 text-sm text-slate-400">
+            {formatOutOfServiceForWeatherBriefDisplay(arrivalReason || "Not available")}
+          </p>
         </div>
       </div>
     </div>

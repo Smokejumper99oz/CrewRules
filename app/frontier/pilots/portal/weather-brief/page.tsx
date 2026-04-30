@@ -1,4 +1,4 @@
-import { getProfile } from "@/lib/profile";
+import { getProfile, isProActive } from "@/lib/profile";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
 import { getTenantSourceTimezone } from "@/lib/tenant-config";
 import { getNextFlight } from "@/lib/weather-brief/get-next-flight";
@@ -20,9 +20,16 @@ import { SourcesSection } from "@/components/weather-brief/SourcesSection";
 import { WeatherRefreshTrigger } from "@/components/weather-brief/WeatherRefreshTrigger";
 import { WeatherBriefNotice } from "@/components/weather-brief/WeatherBriefNotice";
 import { EnrouteIntelligenceCard } from "@/components/weather-brief/enroute-intelligence-card";
+import { OperationalNotamsCard } from "@/components/weather-brief/OperationalNotamsCard";
+import { getOperationalNotamsForBrief } from "@/lib/weather-brief/notams/get-operational-notams-for-brief";
+import { buildNotamSummaryLine } from "@/lib/weather-brief/build-notam-summary-line";
+import { buildEnrouteStationsForWeatherBrief } from "@/lib/weather-brief/enroute/build-enroute-stations-for-weather-brief";
+import { computeWeatherBriefRouteMessagingState } from "@/lib/weather-brief/weather-brief-route-messaging";
 
 export default async function WeatherBriefPage() {
   const profile = await getProfile();
+  const proActive = isProActive(profile);
+  const briefProductName = proActive ? "Advanced Weather Brief" : "Weather Brief";
   const timezone =
     profile?.base_timezone?.trim() ??
     (profile?.base_airport ? getTimezoneFromAirport(profile.base_airport) : getTenantSourceTimezone(profile?.tenant ?? "frontier"));
@@ -31,15 +38,15 @@ export default async function WeatherBriefPage() {
 
   if (nextFlight.status === "reserve") {
     return (
-      <div className="space-y-6 md:space-y-8">
-        <WeatherBriefNotice departureIso={null} />
+      <div className="min-w-0 space-y-6 md:space-y-8">
+        <WeatherBriefNotice departureIso={null} advancedWeatherBrief={proActive} />
         <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/60 to-slate-950/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] md:p-6 lg:p-8">
           <h2 className="text-lg font-semibold text-white">No Flight Assigned</h2>
           <p className="mt-3 text-slate-300">
             No current flights are scheduled.
           </p>
           <p className="mt-2 text-sm text-slate-400">
-            Your Weather Brief will populate automatically once a trip is assigned.
+            Your {briefProductName} will populate automatically once a trip is assigned.
           </p>
         </div>
         <SourcesSection />
@@ -49,15 +56,15 @@ export default async function WeatherBriefPage() {
 
   if (nextFlight.status === "no_upcoming_trip") {
     return (
-      <div className="space-y-6 md:space-y-8">
-        <WeatherBriefNotice departureIso={null} />
+      <div className="min-w-0 space-y-6 md:space-y-8">
+        <WeatherBriefNotice departureIso={null} advancedWeatherBrief={proActive} />
         <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/60 to-slate-950/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] md:p-6 lg:p-8">
           <h2 className="text-lg font-semibold text-white">No upcoming trip</h2>
           <p className="mt-3 text-slate-300">
             There isn&apos;t a trip on your schedule we can brief yet.
           </p>
           <p className="mt-2 text-sm text-slate-400">
-            After your next pairing appears in CrewRules™, Weather Brief will show weather for that flight automatically.
+            After your next pairing appears in CrewRules™, {briefProductName} will show weather for that flight automatically.
           </p>
         </div>
         <SourcesSection />
@@ -104,7 +111,15 @@ export default async function WeatherBriefPage() {
 
   const depTz = getTimezoneFromAirport(departureAirport);
   const arrTz = getTimezoneFromAirport(arrivalAirport);
-  const [depWeather, arrWeather, advisories] = await Promise.all([
+  const [
+    depWeather,
+    arrWeather,
+    {
+      timeRelevantOperational: enrouteAdvisoriesTimeRelevant,
+      display: enrouteAdvisoriesDisplay,
+    },
+    operationalNotams,
+  ] = await Promise.all([
     getAirportWeather(departureAirport, depTz, {
       departureIso: departureIso ?? undefined,
       label: "departure",
@@ -113,17 +128,43 @@ export default async function WeatherBriefPage() {
       arrivalIso: arrivalIso ?? undefined,
       label: "arrival",
     }),
-    getEnrouteAdvisories(departureAirport, arrivalAirport),
+    getEnrouteAdvisories(departureAirport, arrivalAirport, {
+      filedRouteAvailable: Boolean(filedRoute?.trim()),
+      departureUtc: departureIso ? new Date(departureIso) : null,
+    }),
+    getOperationalNotamsForBrief(departureAirport, arrivalAirport),
   ]);
 
+  const notamSummaryLine = buildNotamSummaryLine(operationalNotams);
+
+  const enrouteStations =
+    nextFlight.status === "flight" && departureIso && arrivalIso
+      ? await buildEnrouteStationsForWeatherBrief({
+          filedRouteText: filedRoute ?? "",
+          originIcao: nextFlight.departureAirport,
+          destinationIcao: nextFlight.arrivalAirport,
+          departureIso,
+          arrivalIso,
+        })
+      : [];
+
+  const routeMessaging = computeWeatherBriefRouteMessagingState(
+    filedRoute,
+    enrouteStations.length
+  );
+
   const delayRisks = computeDelayRisk(depWeather, arrWeather);
-  const watchItems = computeOperationalWatch(depWeather, arrWeather, advisories);
+  const watchItems = computeOperationalWatch(
+    depWeather,
+    arrWeather,
+    enrouteAdvisoriesTimeRelevant
+  );
   const riskSummary = computeRiskSummary(
     delayRisks.departure.level,
     delayRisks.arrival.level,
     delayRisks.departure.reason,
     delayRisks.arrival.reason,
-    advisories,
+    enrouteAdvisoriesTimeRelevant,
     watchItems
   );
   const pilotSummary = buildPilotSummary({
@@ -133,37 +174,37 @@ export default async function WeatherBriefPage() {
     arrivalWeather: arrWeather,
     departureRisk: delayRisks.departure.level,
     arrivalRisk: delayRisks.arrival.level,
-    advisories,
+    advisories: enrouteAdvisoriesTimeRelevant,
     watchItems,
     summaryLevel: riskSummary.level,
-  });
-
-  console.log("[weather-brief-debug] nextFlight before FlightHeader:", {
-    flightNumber: flightWithLiveStatus.status === "flight" ? flightWithLiveStatus.flightNumber : null,
-    origin: flightWithLiveStatus.status === "flight" ? flightWithLiveStatus.departureAirport : null,
-    destination: flightWithLiveStatus.status === "flight" ? flightWithLiveStatus.arrivalAirport : null,
-    departureIso: flightWithLiveStatus.status === "flight" ? flightWithLiveStatus.departureIso : null,
-    arrivalIso: flightWithLiveStatus.status === "flight" ? flightWithLiveStatus.arrivalIso : null,
-    liveStatus: flightWithLiveStatus.status === "flight" ? flightWithLiveStatus.liveStatus : null,
+    routeMessaging,
   });
 
   return (
-    <div className="space-y-6 md:space-y-8">
-      <WeatherBriefNotice departureIso={departureIso ?? null} />
+    <div className="min-w-0 space-y-6 md:space-y-8">
+      <WeatherBriefNotice departureIso={departureIso ?? null} advancedWeatherBrief={proActive} />
       <WeatherRefreshTrigger departureIso={departureIso ?? null} />
-      <FlightHeader flight={flightWithLiveStatus} />
+      <FlightHeader flight={flightWithLiveStatus} proActive={proActive} />
       {nextFlight.status === "flight" && (
         <>
-          <FiledRouteCard flight={nextFlight} routeText={filedRoute} filedRouteState={filedRouteState} />
+          <FiledRouteCard flight={nextFlight} routeText={filedRoute} filedRouteState={filedRouteState} hasFiledRoute={routeMessaging.hasFiledRoute} />
           <EnrouteIntelligenceCard
             departureAirport={nextFlight.departureAirport}
             arrivalAirport={nextFlight.arrivalAirport}
             departureIso={nextFlight.departureIso}
             blockMinutes={nextFlight.blockMinutes}
+            enrouteStations={enrouteStations}
+            routeMessaging={routeMessaging}
           />
         </>
       )}
-      <PilotSummary lines={pilotSummary.lines} />
+      <PilotSummary
+        lines={pilotSummary.lines}
+        notamSummaryLine={notamSummaryLine}
+      />
+      <div id="weather-brief-operational-notams" className="scroll-mt-6">
+        <OperationalNotamsCard result={operationalNotams} proActive={proActive} />
+      </div>
       <RiskSummary
         level={riskSummary.level}
         reason={riskSummary.reason}
@@ -171,7 +212,7 @@ export default async function WeatherBriefPage() {
         arrivalTriggers={delayRisks.arrival.triggers ?? []}
         departureReason={delayRisks.departure.reason}
         arrivalReason={delayRisks.arrival.reason}
-        hasAdvisories={advisories.length > 0}
+        hasAdvisories={enrouteAdvisoriesTimeRelevant.length > 0}
         categoryAlignmentNote={pilotSummary.categoryAlignmentNote}
       />
 
@@ -193,6 +234,17 @@ export default async function WeatherBriefPage() {
           decodedForecast={depWeather.decodedForecast}
           forecastWindowLabel={depWeather.forecastWindowLabel ?? "Expected near departure"}
           operationalNoteForecast={depWeather.decodedForecast?.operationalNote}
+        />
+      </section>
+
+      <section className="border-t border-white/5 pt-6">
+        <EnrouteWeatherCard
+          advisories={enrouteAdvisoriesDisplay}
+          enrouteStations={enrouteStations}
+          departureAirport={nextFlight.departureAirport}
+          arrivalAirport={nextFlight.arrivalAirport}
+          routeMessaging={routeMessaging}
+          proActive={proActive}
         />
       </section>
 
@@ -226,7 +278,6 @@ export default async function WeatherBriefPage() {
         arrivalReason={delayRisks.arrival.reason}
       />
 
-      <EnrouteWeatherCard advisories={advisories} />
       <OperationalWatchItems items={watchItems} />
       <SourcesSection />
     </div>

@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { Lock } from "lucide-react";
+
 import type { NextFlight } from "@/lib/weather-brief/types";
 import { AirlineLogo } from "@/components/airline-logo";
 import { getTimezoneFromAirport } from "@/lib/airport-timezone";
@@ -6,6 +9,8 @@ import { formatInTimeZone } from "date-fns-tz";
 
 type Props = {
   flight: NextFlight;
+  /** Pro / Enterprise / active trial — show tail and gate rows from live status */
+  proActive: boolean;
 };
 
 function fmtFlightTime(minutes: number): string {
@@ -14,7 +19,7 @@ function fmtFlightTime(minutes: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-export function FlightHeader({ flight }: Props) {
+export function FlightHeader({ flight, proActive }: Props) {
   const dep = (flight.departureAirport ?? "").replace(/^K/, "") || "—";
   const arr = (flight.arrivalAirport ?? "").replace(/^K/, "") || "—";
 
@@ -99,17 +104,17 @@ export function FlightHeader({ flight }: Props) {
   const statusLabel = ls && delayInfo ? getDelayStatusLabel(delayInfo) : null;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/60 to-slate-950/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] md:p-6">
-      <div className="flex flex-wrap items-center gap-4">
+    <div className="min-w-0 rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/60 to-slate-950/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] md:p-6">
+      <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-4">
         {displayFlightNumber && (
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 shrink-0 items-center gap-2">
             <AirlineLogo carrier="F9" size={28} />
-            <span className="font-mono text-xl font-bold text-white">
+            <span className="font-mono text-lg font-bold text-white sm:text-xl">
               {displayFlightNumber}
             </span>
           </div>
         )}
-        <div className="font-mono text-xl font-bold text-white">
+        <div className="min-w-0 break-words font-mono text-lg font-bold text-white sm:text-xl">
           {dep} → {arr}
         </div>
         {statusLabel && (
@@ -126,10 +131,10 @@ export function FlightHeader({ flight }: Props) {
           </span>
         )}
       </div>
-      <div className="mt-4 flex flex-wrap gap-6 text-sm">
-        <div>
+      <div className="mt-4 flex flex-col gap-4 text-sm sm:flex-row sm:flex-wrap sm:gap-x-6 sm:gap-y-2">
+        <div className="min-w-0 max-w-full">
           <span className="text-slate-500">Departure (local)</span>
-          <span className="ml-2 font-mono text-slate-200">
+          <span className="mt-0.5 block font-mono text-slate-200 break-words sm:mt-0 sm:ml-2 sm:inline">
             {delayInfo?.cancelled ? (
               <span className="text-red-400">Cancelled</span>
             ) : delayInfo?.dep ? (
@@ -140,9 +145,9 @@ export function FlightHeader({ flight }: Props) {
           </span>
         </div>
         {(flight.arrivalIso != null || flight.arrivalTime != null) && (
-          <div>
+          <div className="min-w-0 max-w-full">
             <span className="text-slate-500">Arrival (local)</span>
-            <span className="ml-2 font-mono text-slate-200">
+            <span className="mt-0.5 block font-mono text-slate-200 break-words sm:mt-0 sm:ml-2 sm:inline">
               {delayInfo?.cancelled ? (
                 <span className="text-red-400">Cancelled</span>
               ) : delayInfo?.arr ? (
@@ -153,18 +158,57 @@ export function FlightHeader({ flight }: Props) {
             </span>
           </div>
         )}
-        {flight.tripNumber && (
-          <div>
-            <span className="text-slate-500">Trip Pairing:</span>
-            <span className="ml-2 font-mono text-slate-200">{flight.tripNumber}</span>
-          </div>
-        )}
         {flightTimeMinutes != null && flightTimeMinutes > 0 && (
-          <div>
+          <div className="min-w-0 max-w-full">
             <span className="text-slate-500">Flight Time:</span>
-            <span className="ml-2 font-mono text-slate-200">
+            <span className="mt-0.5 block font-mono text-slate-200 break-words sm:mt-0 sm:ml-2 sm:inline">
               {fmtFlightTime(flightTimeMinutes)}
             </span>
+          </div>
+        )}
+        {proActive ? (
+          <>
+            <div className="min-w-0 max-w-full">
+              <span className="text-slate-500">Tail</span>
+              <span className="mt-0.5 block font-mono text-slate-200 break-words sm:mt-0 sm:ml-2 sm:inline">
+                {ls?.registration?.trim() ? ls.registration.trim() : "—"}
+              </span>
+            </div>
+            <div className="min-w-0 max-w-full">
+              <span className="text-slate-500">Departure Gate</span>
+              <span className="mt-0.5 block font-mono text-slate-200 break-words sm:mt-0 sm:ml-2 sm:inline">
+                {ls?.gate_origin?.trim() ? ls.gate_origin.trim() : "—"}
+              </span>
+            </div>
+            <div className="min-w-0 max-w-full">
+              <span className="text-slate-500">Arrival Gate</span>
+              <span className="mt-0.5 block font-mono text-slate-200 break-words sm:mt-0 sm:ml-2 sm:inline">
+                {ls?.gate_destination?.trim() ? ls.gate_destination.trim() : "—"}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="min-w-0 max-w-full sm:max-w-[min(100%,24rem)]">
+            <div className="rounded-lg border border-amber-500/25 bg-amber-950/15 px-3 py-2.5">
+              <p className="flex items-start gap-2 text-xs leading-relaxed text-amber-200/95">
+                <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden />
+                <span>
+                  Aircraft and gate details are included with Advanced Weather Brief.
+                </span>
+              </p>
+              <Link
+                href="/frontier/pilots/portal/settings/subscription"
+                className="mt-2 inline-block text-xs font-medium text-amber-300 underline-offset-2 transition hover:text-amber-200 hover:underline focus-visible:outline focus-visible:ring-2 focus-visible:ring-amber-500/40 rounded-sm"
+              >
+                View Pro trial
+              </Link>
+            </div>
+          </div>
+        )}
+        {flight.tripNumber && (
+          <div className="min-w-0 max-w-full">
+            <span className="text-slate-500">Trip Pairing:</span>
+            <span className="mt-0.5 block font-mono text-slate-200 break-words sm:mt-0 sm:ml-2 sm:inline">{flight.tripNumber}</span>
           </div>
         )}
       </div>
